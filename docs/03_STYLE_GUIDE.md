@@ -3,9 +3,14 @@
 ## 1. Palette Colori
 ```css
 :root {
-  --color-background: #F8F9FA; --color-surface: #FFFFFF; --color-border: #E9ECEF;
-  --color-text-primary: #212529; --color-text-secondary: #6C757D;
-  --color-primary: #28a745; --color-error: #dc3545; --color-warning: #ffc107;
+  --color-background: #F8F9FA;
+  --color-surface: #FFFFFF;
+  --color-border: #E9ECEF;
+  --color-text-primary: #212529;
+  --color-text-secondary: #6C757D;
+  --color-primary: #28a745;
+  --color-error: #dc3545;
+  --color-warning: #ffc107;
 }
 ```
 

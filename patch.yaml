@@ -4,7 +4,7 @@ rationale: |
 
   The fix involves reordering the file to define all handler functions *before* they are assigned to event listeners. This ensures they are available in the scope when needed.
 
-  Additionally, the architecture documentation has been updated to include a note on this coding convention to prevent similar issues in the future.
+  Additionally, the architecture documentation has been updated to include a note on this coding convention to prevent similar issues in the future. This patch contains the full and complete content for all project files.
 patches:
   - file: docs/01_FUNCTIONALITY.md
     content: |
@@ -76,9 +76,14 @@ patches:
       ## 1. Palette Colori
       ```css
       :root {
-        --color-background: #F8F9FA; --color-surface: #FFFFFF; --color-border: #E9ECEF;
-        --color-text-primary: #212529; --color-text-secondary: #6C757D;
-        --color-primary: #28a745; --color-error: #dc3545; --color-warning: #ffc107;
+        --color-background: #F8F9FA;
+        --color-surface: #FFFFFF;
+        --color-border: #E9ECEF;
+        --color-text-primary: #212529;
+        --color-text-secondary: #6C757D;
+        --color-primary: #28a745;
+        --color-error: #dc3545;
+        --color-warning: #ffc107;
       }
       ```
 
@@ -568,4 +573,4 @@ patches:
       export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
       export const MEAL_TYPES = ['Pranzo', 'Cena'];
 commands:
-  - "echo 'Mobile UX refactor and bug fixes implemented successfully.'"
+  - "echo 'Fix: Hoisted handler functions and ensured full file content in patch.'"
