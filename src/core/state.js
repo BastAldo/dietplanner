@@ -1,5 +1,5 @@
 import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL } from '../utils/constants.js';
-let state = { rules: [], masterMealList: [], weeklyPlan: {}, configUrl: '', activeFilter: 'all' };
+let state = { rules: [], masterMealList: [], weeklyPlan: {}, configUrl: '' };
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
 export const getState = () => ({ ...state });
 export function setPlannerConfig(config) {
@@ -22,4 +22,3 @@ export function updateWeeklyPlan(slotId, mealId) {
   notify();
 }
 export function resetWeeklyPlan() { state.weeklyPlan = {}; saveStateToLocalStorage(); notify(); }
-export function setActiveFilter(filter) { state.activeFilter = filter; notify(); }

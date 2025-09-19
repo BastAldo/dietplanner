@@ -1,4 +1,4 @@
-# Guida di Stile: Protocollo Dinamico v1.2
+# Guida di Stile: Protocollo Dinamico v1.3
 
 ## 1. Palette Colori
 ```css
@@ -19,16 +19,9 @@
 * **Body Text:** `16px`
 
 ## 3. Stile dei Componenti
-### 3.1 Card del Pasto
-* **Stato Mismatch:** Classe `.is-mismatched` con bordo giallo (`--color-warning`).
-### 3.2 Pulsante di Cancellazione
-* Icona (`&times;`) visibile solo al passaggio del mouse sulla card.
-### 3.3 Pulsanti Filtro
-* Classe `.is-active` per indicare lo stato corrente.
-### 3.4 Modale di Notifica
-* Classe `.is-error` per bordo rosso, `.is-success` per bordo verde.
+* **Card Pasto:** Include uno stato `.is-mismatched` con bordo giallo.
+* **Pulsante Cancellazione:** Visibile al passaggio del mouse sulla card.
+* **Modali:** L'applicazione utilizza tre modali per Info, Notifiche e Selezione Pasti.
 
-## 4. Breakpoints e Layout Responsivo
-* **Breakpoint principale:** `768px`.
-* **Sotto i 768px (Mobile):** Layout a colonna singola, vista ad agenda.
-* **Sopra i 768px (Desktop):** Layout a griglia a due colonne.
+## 4. Breakpoints
+* **Breakpoint principale:** `992px`.

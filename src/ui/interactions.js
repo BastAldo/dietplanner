@@ -1,11 +1,7 @@
-import { getState, updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, setActiveFilter } from '../core/state.js';
-import { isPlacementValid } from '../core/validation.js';
+import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openSelectionModal } from './renderer.js';
-
-const IS_DESKTOP = window.matchMedia('(min-width: 768px)').matches;
-let draggedMealId = null;
 
 async function handleLoadConfig() {
   const url = document.getElementById('config-url-input').value.trim();
@@ -19,36 +15,19 @@ async function handleLoadConfig() {
   }
 }
 
-function handleFilterClick(e) {
-  if (e.target.matches('.filter-btn')) {
-    setActiveFilter(e.target.dataset.filter);
-  }
-}
-
 function handleCalendarClick(e) {
-  if (e.target.matches('.delete-meal-btn')) {
-    updateWeeklyPlan(e.target.dataset.slotId, null);
+  const slot = e.target.closest('.calendar-slot');
+  if (!slot) return;
+  
+  const deleteButton = e.target.closest('.delete-meal-btn');
+  if (deleteButton) {
+    updateWeeklyPlan(deleteButton.dataset.slotId, null);
     return;
   }
-  if (!IS_DESKTOP && e.target.matches('.calendar-slot:empty')) {
-    openSelectionModal(e.target.dataset.slotId);
-  }
-}
 
-function handleDrop(e) {
-  e.preventDefault();
-  const slot = e.target.closest('.calendar-slot');
-  if (!slot || !draggedMealId) return;
-  const state = getState();
-  const mealToAdd = state.masterMealList.find(m => m.id === draggedMealId);
-  if (!mealToAdd) return;
-  const validationResult = isPlacementValid(mealToAdd, slot.dataset.slotId, state.weeklyPlan, state.masterMealList, state.rules);
-  if (validationResult.isValid) {
-    updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
-  } else {
-    showNotification(validationResult.message, 'error');
+  if (slot.childElementCount === 0) {
+    openSelectionModal(slot.dataset.slotId);
   }
-  draggedMealId = null;
 }
 
 export function initializeEventListeners() {
@@ -59,15 +38,5 @@ export function initializeEventListeners() {
   document.querySelectorAll('.modal-close-btn').forEach(btn => {
     btn.addEventListener('click', (e) => document.getElementById(e.target.dataset.target).classList.add('modal-hidden'));
   });
-  document.getElementById('filter-container').addEventListener('click', handleFilterClick);
-  const calendar = document.getElementById('calendar-grid');
-  calendar.addEventListener('click', handleCalendarClick);
-
-  if (IS_DESKTOP) {
-      const library = document.getElementById('meal-library');
-      library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) { draggedMealId = e.target.dataset.mealId; e.target.classList.add('dragging') }});
-      library.addEventListener('dragend', e => e.target.classList.remove('dragging'));
-      calendar.addEventListener('drop', handleDrop);
-      calendar.addEventListener('dragover', e => { if(e.target.closest('.calendar-slot')) e.preventDefault(); });
-  }
+  document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
 }
