@@ -1,15 +1,20 @@
 import { getState, updateWeeklyPlan, resetWeeklyPlan, setMasterMealList, setCsvUrl } from '../core/state.js';
 import { isSoyMealAllowed } from '../core/validation.js';
 import { fetchAndParseMeals } from '../api/mealService.js';
+import { showNotification } from './notifications.js';
+
 let draggedMealId = null;
+
 export function initializeEventListeners() {
   document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
   document.getElementById('print-btn').addEventListener('click', () => window.print());
   document.getElementById('load-csv-btn').addEventListener('click', handleLoadCsv);
-  const modal = document.getElementById('info-modal');
-  document.getElementById('info-icon').addEventListener('click', () => modal.classList.remove('modal-hidden'));
-  document.getElementById('modal-close-btn').addEventListener('click', () => modal.classList.add('modal-hidden'));
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('modal-hidden'); });
+  
+  document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+  document.querySelectorAll('.modal-close-btn').forEach(btn => {
+    btn.addEventListener('click', () => document.getElementById(btn.dataset.target).classList.add('modal-hidden'));
+  });
+
   const library = document.getElementById('meal-library');
   const calendar = document.getElementById('calendar-grid');
   library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) { draggedMealId = e.target.dataset.mealId; e.target.classList.add('dragging'); }});
@@ -18,14 +23,19 @@ export function initializeEventListeners() {
   calendar.addEventListener('dragleave', e => e.target.closest('.calendar-slot')?.classList.remove('drop-target'));
   calendar.addEventListener('drop', handleDrop);
 }
+
 async function handleLoadCsv() {
   const url = document.getElementById('csv-url-input').value.trim();
   setCsvUrl(url);
-  const meals = await fetchAndParseMeals(url);
-  if (meals.length > 0) {
+  try {
+    const meals = await fetchAndParseMeals(url);
     setMasterMealList(meals);
+    showNotification('Pasti caricati con successo!', 'success');
+  } catch (error) {
+    showNotification(error.message, 'error');
   }
 }
+
 function handleDrop(e) {
   e.preventDefault();
   const slot = e.target.closest('.calendar-slot');
@@ -38,6 +48,6 @@ function handleDrop(e) {
   if (isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList)) {
     updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
   } else {
-    alert('Regola violata: Non è possibile consumare due pasti con soia nello stesso giorno.');
+    showNotification('Regola violata: Non è possibile consumare due pasti con soia nello stesso giorno.', 'error');
   }
 }

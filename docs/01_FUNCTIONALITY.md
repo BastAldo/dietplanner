@@ -1,38 +1,19 @@
 # Funzionalità: Protocollo Dinamico v1.0
 
 ## 1. Visione Generale
-Una web app frontend-only, responsiva, che permette a un utente di pianificare il proprio protocollo alimentare settimanale usando una fonte dati CSV personalizzata.
+Una web app frontend-only, responsiva, che permette a un utente di pianificare il proprio protocollo alimentare settimanale usando una fonte dati CSV personalizzata (con separatore ';').
 
 ## 2. User Stories (Cosa l'utente può fare)
-
-* **US-1 (Caricamento Dati):** Come utente, al primo avvio, voglio che l'app carichi automaticamente l'elenco completo dei pasti da una fonte dati remota (CSV), in modo da avere sempre la versione più aggiornata.
-* **US-2 (Visualizzazione):** Come utente, voglio vedere una griglia chiara del calendario settimanale (Lunedì-Domenica) e una libreria laterale con tutti i pasti disponibili, filtrabili per tipo (Pranzo, Cena).
-* **US-3 (Pianificazione):** Come utente, voglio poter trascinare un pasto dalla libreria e rilasciarlo in uno slot specifico del calendario (es. "Pranzo" di Lunedì).
-* **US-4 (Validazione Soia):** Come utente, quando inserisco un pasto contenente soia a pranzo, voglio che l'app mi impedisca visivamente (es. rendendolo non selezionabile) di aggiungere un altro pasto con soia a cena nello stesso giorno, per rispettare le regole del protocollo.
-* **US-5 (Persistenza):** Come utente, voglio che il mio piano settimanale venga salvato automaticamente, in modo che ricaricando la pagina io possa ritrovare la mia pianificazione.
-* **US-6 (Pasto Libero):** Come utente, voglio poter contrassegnare un pasto qualsiasi nel mio calendario come "Pasto Libero", per gestire le eccezioni settimanali.
-* **US-7 (Reset):** Come utente, voglio un pulsante "Reset Settimana" per svuotare rapidamente tutto il calendario e ricominciare da capo.
-* **US-8 (Stampa):** Come utente, voglio un pulsante "Stampa" che generi una versione pulita e stampabile del mio piano settimanale.
+* **US-1 (Caricamento Dati):** Come utente, voglio poter caricare un elenco di pasti da un file CSV remoto usando il punto e virgola (;) come separatore.
+* **US-2 (Visualizzazione):** Come utente, voglio vedere una griglia chiara del calendario settimanale e una libreria laterale con tutti i pasti disponibili.
+* **US-3 (Pianificazione):** Come utente, voglio poter trascinare un pasto dalla libreria e rilasciarlo in uno slot specifico del calendario.
+* **US-4 (Validazione Soia):** Come utente, quando inserisco un pasto contenente soia, voglio che l'app mi impedisca di aggiungerne un altro nello stesso giorno, comunicandomelo tramite una notifica non bloccante.
+* **US-5 (Persistenza):** Come utente, voglio che il mio piano settimanale e l'URL del CSV vengano salvati automaticamente.
+* **US-6 (Pasto Libero):** Come utente, voglio poter contrassegnare un pasto come "Libero".
+* **US-7 (Reset):** Come utente, voglio un pulsante "Reset" per svuotare rapidamente il calendario.
+* **US-8 (Stampa):** Come utente, voglio un pulsante "Stampa" per una versione pulita del mio piano.
 * **US-9 (Data Source Configurabile):** Come utente, voglio poter inserire l'URL di un mio file CSV per caricare un set di pasti personalizzato.
-* **US-10 (UI Responsiva):** Come utente, voglio poter usare l'applicazione in modo efficace sia su desktop che su dispositivi mobili (tablet/smartphone).
+* **US-10 (UI Responsiva):** Come utente, voglio poter usare l'applicazione in modo efficace sia su desktop che su dispositivi mobili.
 
 ## 3. Mockup ASCII dell'Interfaccia
-
-Questo mockup definisce la struttura di base dell'interfaccia.
-
-+----------------------------------------------------+--------------------------+
-|  **🗓️ Protocollo Dinamico** |  **📚 Libreria Pasti** |
-|                                                    |                          |
-|         LUN      MAR      MER      GIO      VEN ... |  [Filtro: Pranzo/Cena ]  |
-|                                                    |                          |
-| **Pranzo** [slot vuoto] [slot vuoto] [slot vuoto] ... |  +--------------------+  |
-|         +------------+                              |  | draggable-pasto-1  |  |
-| **Cena** | Riso+Tonno | [slot vuoto] [slot vuoto] ... |  +--------------------+  |
-|         +------------+                              |  | draggable-pasto-2  |  |
-|                                                    |  +--------------------+  |
-|         ...etc...                                  |  | draggable-pasto-3  |  |
-|                                                    |  +--------------------+  |
-|                                                    |                          |
-+----------------------------------------------------+--------------------------+
-| [ Reset Settimana ]                           [ Stampa 🖨️ ]                  |
-+------------------------------------------------------------------------------+
+(invariato)

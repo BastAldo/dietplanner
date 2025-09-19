@@ -11,48 +11,43 @@
     <script src="src/main.js" type="module" defer></script>
 </head>
 <body>
-    <header>
-        <h1>🗓️ Protocollo Dinamico</h1>
-    </header>
-    
+    <header> <h1>🗓️ Protocollo Dinamico</h1> </header>
     <section class="data-source-container">
-        <input type="url" id="csv-url-input" placeholder="URL del tuo file CSV...">
+        <input type="url" id="csv-url-input" placeholder="URL del tuo file CSV (con separatore ';')...">
         <button id="load-csv-btn" class="btn btn-primary">Carica</button>
         <span id="info-icon" title="Mostra formato CSV richiesto">ℹ️</span>
     </section>
-
     <main class="main-container">
-        <section id="calendar-view" class="calendar-container" aria-labelledby="calendar-title">
+        <section id="calendar-view" class="calendar-container">
             <h2 id="calendar-title">Piano Settimanale</h2>
             <div id="calendar-grid" class="calendar-grid"></div>
         </section>
-        <aside class="library-container" aria-labelledby="library-title">
+        <aside class="library-container">
             <h2 id="library-title">📚 Libreria Pasti</h2>
-            <div id="meal-library" class="meal-library">
-                <p>Inserisci un URL e clicca "Carica" per iniziare.</p>
-            </div>
+            <div id="meal-library" class="meal-library"><p>Inserisci un URL e clicca "Carica".</p></div>
         </aside>
     </main>
     <footer>
         <button id="reset-btn" class="btn btn-secondary">Reset</button>
         <button id="print-btn" class="btn btn-primary">Stampa 🖨️</button>
     </footer>
-
     <div id="info-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            <button class="modal-close-btn" data-target="info-modal">&times;</button>
             <h3>Formato CSV Richiesto</h3>
-            <p>Il file deve usare il <strong>Tabulatore</strong> come separatore e avere questa intestazione:</p>
-            <pre><code>id	nomePasto	tipoPasto	ingredienti	etichette</code></pre>
-            <h4>Esempio:</h4>
-            <pre>
-              <code>
-                        id nomePasto  tipoPasto ingrediente etichette
-                        1  Pranzo: Riso+Tonno   Pranzo    "Riso: 80g, Tonno: 112g"      pesce
-                        2  Pranzo: Piadina+Tofu Pranzo    "Piadina: 80g, Tofu: 125g"    contiene-soia,vegetale
-                        3  Cena: B. di Soia     Cena      "Soia: 70g, Pane: 40g"        contiene-soia,vegetale
-              </code>
-            </pre>
+            <p>Usa il <strong>punto e virgola (;)</strong> come separatore. L'header deve essere:</p>
+            <pre><code>id;nomePasto;tipoPasto;ingredienti;etichette</code></pre>
+            <h4>Esempio da copiare:</h4>
+            <pre><code>id;nomePasto;tipoPasto;ingredienti;etichette
+1;Pranzo: Riso+Tonno;Pranzo;"Riso: 80g, Tonno: 112g";pesce
+2;Pranzo: Piadina+Tofu;Pranzo;"Piadina: 80g, Tofu: 125g";contiene-soia,vegetale
+3;Cena: B. di Soia;Cena;"Soia: 70g, Pane: 40g";contiene-soia,vegetale</code></pre>
+        </div>
+    </div>
+    <div id="notification-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content notification-box">
+            <button class="modal-close-btn" data-target="notification-modal">&times;</button>
+            <p id="notification-message"></p>
         </div>
     </div>
 </body>

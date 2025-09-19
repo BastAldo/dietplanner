@@ -4,16 +4,13 @@ import { renderMealLibrary } from './ui/library.js';
 import { initializeEventListeners } from './ui/interactions.js';
 import { DEFAULT_CSV_URL } from './utils/constants.js';
 
-const calendarGridElement = document.getElementById('calendar-grid');
-const mealLibraryElement = document.getElementById('meal-library');
-const csvUrlInputElement = document.getElementById('csv-url-input');
-
 function renderApp() {
   const currentState = getState();
-  renderCalendar(calendarGridElement, currentState);
-  renderMealLibrary(mealLibraryElement, currentState);
-  if (document.activeElement !== csvUrlInputElement) {
-    csvUrlInputElement.value = currentState.csvUrl;
+  renderCalendar(document.getElementById('calendar-grid'), currentState);
+  renderMealLibrary(document.getElementById('meal-library'), currentState);
+  const urlInput = document.getElementById('csv-url-input');
+  if (document.activeElement !== urlInput) {
+    urlInput.value = currentState.csvUrl;
   }
 }
 
@@ -21,7 +18,7 @@ function init() {
   document.addEventListener('stateChange', renderApp);
   loadStateFromLocalStorage();
   const initialState = getState();
-  csvUrlInputElement.value = initialState.csvUrl || DEFAULT_CSV_URL;
+  document.getElementById('csv-url-input').value = initialState.csvUrl || DEFAULT_CSV_URL;
   initializeEventListeners();
   renderApp();
 }

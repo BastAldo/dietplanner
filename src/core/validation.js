@@ -6,11 +6,11 @@ export function isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList) {
   const dinnerSlotId = `${day}-Cena`;
   const lunchMealId = weeklyPlan[lunchSlotId];
   const dinnerMealId = weeklyPlan[dinnerSlotId];
-  if (lunchMealId) {
+  if (lunchMealId && lunchMealId !== mealToAdd.id) {
       const meal = masterMealList.find(m => m.id === lunchMealId);
       if (meal && meal.etichette && meal.etichette.includes('contiene-soia')) return false;
   }
-  if (dinnerMealId) {
+  if (dinnerMealId && dinnerMealId !== mealToAdd.id) {
       const meal = masterMealList.find(m => m.id === dinnerMealId);
       if (meal && meal.etichette && meal.etichette.includes('contiene-soia')) return false;
   }

@@ -1,5 +1,6 @@
 export function renderMealLibrary(element, state) {
   if (state.masterMealList.length === 0) {
+    element.innerHTML = '<p>Nessun pasto caricato.</p>';
     return;
   }
   element.innerHTML = state.masterMealList.map(meal => `
