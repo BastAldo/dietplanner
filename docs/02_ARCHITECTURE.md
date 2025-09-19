@@ -78,3 +78,8 @@ L'intero stato dell'applicazione sarà gestito da un singolo oggetto JavaScript 
 }
 ```
 Ogni funzione che modifica lo stato (es. `addMealToPlan`, `clearPlan`) dovrà essere definita in `state.js` e dovrà essere l'unica a poter mutare questo oggetto. Dopo ogni modifica, verrà emesso un evento custom per notificare all'UI di ri-renderizzarsi.
+
+## 5. Design Responsivo
+L'applicazione adotta un approccio **"Mobile First"**.
+* **Default (Mobile):** Il layout di base è a singola colonna, con i moduli (calendario, libreria) impilati verticalmente per una leggibilità ottimale su schermi stretti.
+* **Tablet/Desktop:** Una media query CSS (`@media (min-width: 768px)`) attiva il layout a due colonne, affiancando il calendario e la libreria per sfruttare lo spazio orizzontale disponibile.

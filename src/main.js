@@ -12,24 +12,17 @@ function renderApp() {
   const currentState = getState();
   renderCalendar(calendarGridElement, currentState);
   renderMealLibrary(mealLibraryElement, currentState);
-  // Assicura che l'input rifletta l'URL caricato
   if (document.activeElement !== csvUrlInputElement) {
     csvUrlInputElement.value = currentState.csvUrl;
   }
 }
 
-async function init() {
+function init() {
   document.addEventListener('stateChange', renderApp);
-
   loadStateFromLocalStorage();
-  
-  // Popola l'input con l'URL salvato o quello di default
   const initialState = getState();
   csvUrlInputElement.value = initialState.csvUrl || DEFAULT_CSV_URL;
-
   initializeEventListeners();
-  
   renderApp();
 }
-
 document.addEventListener('DOMContentLoaded', init);

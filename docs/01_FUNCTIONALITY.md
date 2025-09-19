@@ -1,7 +1,7 @@
 # Funzionalità: Protocollo Dinamico v1.0
 
 ## 1. Visione Generale
-Una web app frontend-only che permette a un utente di pianificare il proprio protocollo alimentare settimanale trascinando pasti predefiniti da una libreria a un calendario, con logiche di validazione in tempo reale.
+Una web app frontend-only, responsiva, che permette a un utente di pianificare il proprio protocollo alimentare settimanale usando una fonte dati CSV personalizzata.
 
 ## 2. User Stories (Cosa l'utente può fare)
 
@@ -13,6 +13,8 @@ Una web app frontend-only che permette a un utente di pianificare il proprio pro
 * **US-6 (Pasto Libero):** Come utente, voglio poter contrassegnare un pasto qualsiasi nel mio calendario come "Pasto Libero", per gestire le eccezioni settimanali.
 * **US-7 (Reset):** Come utente, voglio un pulsante "Reset Settimana" per svuotare rapidamente tutto il calendario e ricominciare da capo.
 * **US-8 (Stampa):** Come utente, voglio un pulsante "Stampa" che generi una versione pulita e stampabile del mio piano settimanale.
+* **US-9 (Data Source Configurabile):** Come utente, voglio poter inserire l'URL di un mio file CSV per caricare un set di pasti personalizzato.
+* **US-10 (UI Responsiva):** Come utente, voglio poter usare l'applicazione in modo efficace sia su desktop che su dispositivi mobili (tablet/smartphone).
 
 ## 3. Mockup ASCII dell'Interfaccia
 

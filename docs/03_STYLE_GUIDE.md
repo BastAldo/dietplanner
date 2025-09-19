@@ -45,3 +45,8 @@ Useremo un font sans-serif pulito e leggibile, importato da Google Fonts.
 ### Pulsanti
 * **Pulsante Primario (Stampa):** `background-color: var(--color-primary);`, `color: white;`
 * **Pulsante Secondario (Reset):** `background-color: transparent;`, `color: var(--color-text-secondary);`, `border: 1px solid var(--color-border);`
+
+## 4. Breakpoints e Layout Responsivo
+* **Breakpoint principale:** `768px`.
+* **Sotto i 768px:** Layout a colonna singola. Il `.main-container` usa `display: flex` con `flex-direction: column`.
+* **Sopra i 768px:** Layout a griglia (`display: grid`) con due colonne (`3fr 1fr`).
