@@ -20,7 +20,7 @@
 
 ## 3. Stile dei Componenti
 * **Header:** Include titolo e sottotitolo.
-* **Totalizzatore Calorie:** Mostra un range o un valore singolo.
+* **Totalizzatore Calorie:** Un elemento testuale (`.daily-calories`).
 * **Footer:** Contiene solo il pulsante "Reset".
 
 ## 4. Breakpoints

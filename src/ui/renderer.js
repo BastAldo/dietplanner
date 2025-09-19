@@ -37,7 +37,7 @@ function createMealCardHTML(meal, slotId, mealType) {
 
 function renderDesktopCalendar(element, state) {
   element.innerHTML = '';
-  const dayHeaders = DAYS.map(day => `<div class="grid-header">${day}<div class="daily-calories">${calculateDailyCalories(day, state)}</div></div>`).join('');
+  const dayHeaders = DAYS.map(day => `<div class="grid-header"><span>${day}</span><div class="daily-calories">${calculateDailyCalories(day, state)}</div></div>`).join('');
   element.insertAdjacentHTML('beforeend', '<div class="meal-type-label"></div>' + dayHeaders);
   MEAL_TYPES.forEach(mealType => {
     element.insertAdjacentHTML('beforeend', `<div class="meal-type-label">${mealType}</div>`);
