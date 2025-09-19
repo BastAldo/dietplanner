@@ -1,16 +1,17 @@
-import { loadStateFromLocalStorage, getState } from './core/state.js';
-import { renderCalendar } from './ui/calendar.js';
-import { renderMealLibrary } from './ui/library.js';
+import { loadStateFromLocalStorage, getState, setPlannerConfig } from './core/state.js';
+import { renderApp } from './ui/renderer.js';
 import { initializeEventListeners } from './ui/interactions.js';
-import { DEFAULT_CSV_URL } from './utils/constants.js';
+import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+import { fetchAndParseConfig } from './api/configService.js';
+import { showNotification } from './ui/notifications.js';
 
-function renderApp() {
-  const currentState = getState();
-  renderCalendar(document.getElementById('calendar-grid'), currentState);
-  renderMealLibrary(document.getElementById('meal-library'), currentState);
-  const urlInput = document.getElementById('csv-url-input');
-  if (document.activeElement !== urlInput) {
-    urlInput.value = currentState.csvUrl;
+async function loadInitialConfig(url) {
+  if (!url) return;
+  try {
+    const config = await fetchAndParseConfig(url);
+    setPlannerConfig(config);
+  } catch (error) {
+    showNotification(error.message, 'error');
   }
 }
 
@@ -18,8 +19,9 @@ function init() {
   document.addEventListener('stateChange', renderApp);
   loadStateFromLocalStorage();
   const initialState = getState();
-  document.getElementById('csv-url-input').value = initialState.csvUrl || DEFAULT_CSV_URL;
+  document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
   initializeEventListeners();
   renderApp();
+  loadInitialConfig(initialState.configUrl);
 }
 document.addEventListener('DOMContentLoaded', init);

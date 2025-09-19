@@ -1,18 +1,43 @@
-export function isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList) {
-  if (!mealToAdd.etichette || !mealToAdd.etichette.includes('contiene-soia')) {
-    return true;
+/**
+ * Motore di validazione generico.
+ * @returns {{isValid: boolean, message: string|null}}
+ */
+export function isPlacementValid(mealToAdd, slotId, weeklyPlan, masterMealList, rules) {
+  for (const rule of rules) {
+    if (mealToAdd.etichette && mealToAdd.etichette.includes(rule.tag)) {
+      const result = applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList);
+      if (!result.isValid) {
+        return result;
+      }
+    }
   }
-  const lunchSlotId = `${day}-Pranzo`;
-  const dinnerSlotId = `${day}-Cena`;
-  const lunchMealId = weeklyPlan[lunchSlotId];
-  const dinnerMealId = weeklyPlan[dinnerSlotId];
-  if (lunchMealId && lunchMealId !== mealToAdd.id) {
-      const meal = masterMealList.find(m => m.id === lunchMealId);
-      if (meal && meal.etichette && meal.etichette.includes('contiene-soia')) return false;
+  return { isValid: true, message: null };
+}
+
+function applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
+  switch (rule.type) {
+    case 'daily-block':
+      return validateDailyBlock(rule, mealToAdd, slotId, weeklyPlan, masterMealList);
+    // Altri tipi di regole possono essere aggiunti qui
+    default:
+      return { isValid: true, message: null };
   }
-  if (dinnerMealId && dinnerMealId !== mealToAdd.id) {
-      const meal = masterMealList.find(m => m.id === dinnerMealId);
-      if (meal && meal.etichette && meal.etichette.includes('contiene-soia')) return false;
+}
+
+function validateDailyBlock(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
+  const day = slotId.split('-')[0];
+  let count = 0;
+  for (const key in weeklyPlan) {
+    if (key.startsWith(day) && key !== slotId) {
+      const mealId = weeklyPlan[key];
+      const meal = masterMealList.find(m => m.id === mealId);
+      if (meal && meal.etichette && meal.etichette.includes(rule.tag)) {
+        count++;
+      }
+    }
   }
-  return true;
+  if (count >= rule.limit) {
+    return { isValid: false, message: rule.message };
+  }
+  return { isValid: true, message: null };
 }

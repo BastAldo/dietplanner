@@ -11,20 +11,27 @@
     <script src="src/main.js" type="module" defer></script>
 </head>
 <body>
-    <header> <h1>🗓️ Protocollo Dinamico</h1> </header>
+    <header><h1>🗓️ Protocollo Dinamico</h1></header>
     <section class="data-source-container">
-        <input type="url" id="csv-url-input" placeholder="URL del tuo file CSV (con separatore ';')...">
-        <button id="load-csv-btn" class="btn btn-primary">Carica</button>
-        <span id="info-icon" title="Mostra formato CSV richiesto">ℹ️</span>
+        <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+        <button id="load-config-btn" class="btn btn-primary">Carica</button>
+        <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
     </section>
     <main class="main-container">
         <section id="calendar-view" class="calendar-container">
-            <h2 id="calendar-title">Piano Settimanale</h2>
+            <h2>Piano Settimanale</h2>
             <div id="calendar-grid" class="calendar-grid"></div>
         </section>
         <aside class="library-container">
-            <h2 id="library-title">📚 Libreria Pasti</h2>
-            <div id="meal-library" class="meal-library"><p>Inserisci un URL e clicca "Carica".</p></div>
+            <div class="library-header">
+                <h2>📚 Libreria Pasti</h2>
+                <div id="filter-container" class="filter-container">
+                    <button class="filter-btn is-active" data-filter="all">Tutti</button>
+                    <button class="filter-btn" data-filter="Pranzo">Pranzo</button>
+                    <button class="filter-btn" data-filter="Cena">Cena</button>
+                </div>
+            </div>
+            <div id="meal-library" class="meal-library"><p>Carica una configurazione per iniziare.</p></div>
         </aside>
     </main>
     <footer>
@@ -34,14 +41,35 @@
     <div id="info-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
             <button class="modal-close-btn" data-target="info-modal">&times;</button>
-            <h3>Formato CSV Richiesto</h3>
-            <p>Usa il <strong>punto e virgola (;)</strong> come separatore. L'header deve essere:</p>
-            <pre><code>id;nomePasto;tipoPasto;ingredienti;etichette</code></pre>
+            <h3>Formato `config.json` Richiesto</h3>
+            <p>Il file deve essere un JSON con due chiavi principali: <strong>rules</strong> e <strong>meals</strong>.</p>
             <h4>Esempio da copiare:</h4>
-            <pre><code>id;nomePasto;tipoPasto;ingredienti;etichette
-1;Pranzo: Riso+Tonno;Pranzo;"Riso: 80g, Tonno: 112g";pesce
-2;Pranzo: Piadina+Tofu;Pranzo;"Piadina: 80g, Tofu: 125g";contiene-soia,vegetale
-3;Cena: B. di Soia;Cena;"Soia: 70g, Pane: 40g";contiene-soia,vegetale</code></pre>
+            <pre><code>{
+"rules": [
+  {
+    "tag": "contiene-soia",
+    "type": "daily-block",
+    "limit": 1,
+    "message": "Non puoi consumare più di un pasto con soia al giorno."
+  }
+],
+"meals": [
+  {
+    "id": "1",
+    "nomePasto": "Pranzo: Riso+Tonno",
+    "tipoPasto": "Pranzo",
+    "ingredienti": "Riso: 80g, Tonno: 112g",
+    "etichette": ["pesce"]
+  },
+  {
+    "id": "2",
+    "nomePasto": "Cena: B. di Soia",
+    "tipoPasto": "Cena",
+    "ingredienti": "Soia: 70g, Pane: 40g",
+    "etichette": ["contiene-soia", "vegetale"]
+  }
+]
+}</code></pre>
         </div>
     </div>
     <div id="notification-modal" class="modal-overlay modal-hidden">

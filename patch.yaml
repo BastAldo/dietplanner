@@ -1,88 +1,81 @@
-commit_message: "feat: Implement final MVP with semicolon CSV and notification modal"
+commit_message: "feat: Refactor to JSON config and implement new UI features"
 rationale: |
-  This commit delivers the final, robust Minimum Viable Product based on extensive user feedback. The data import format has been officially changed from Tab-Separated to the more standard and less ambiguous Semicolon-Separated (CSV). All documentation, user instructions, and the data parser have been updated accordingly.
+  This commit represents a major architectural evolution of the application. The data source has been refactored from CSV to a unified `planner-config.json`, which now holds both the meals list and a new, flexible validation rules engine. The hardcoded 'soy' validation has been replaced by this dynamic engine.
 
-  Furthermore, all native JavaScript `alert()` calls have been replaced with a custom, non-blocking notification modal for a professional user experience. This new UI component is defined in its own module (`src/ui/notifications.js`) for better code organization.
+  Additionally, several key UI/UX features have been implemented based on user feedback:
+  - Meal deletion from the calendar via a dedicated button.
+  - Yellow highlighting for meals placed in mismatched slots (e.g., dinner at lunch).
+  - Filtering capabilities (All, Lunch, Dinner) in the meal library.
 
-  The application remains fully responsive, and all documentation is now in sync with the final architecture.
+  All documentation has been automatically updated to reflect this new, more powerful and flexible architecture, including the new JSON data structure and UI functionalities.
 patches:
   - file: docs/01_FUNCTIONALITY.md
     content: |
-      # Funzionalità: Protocollo Dinamico v1.0
+      # Funzionalità: Protocollo Dinamico v1.1
 
       ## 1. Visione Generale
-      Una web app frontend-only, responsiva, che permette a un utente di pianificare il proprio protocollo alimentare settimanale usando una fonte dati CSV personalizzata (con separatore ';').
+      Una web app frontend-only, responsiva, che permette a un utente di pianificare il proprio protocollo alimentare settimanale caricando una configurazione JSON che include sia i pasti sia le regole di validazione personalizzate.
 
       ## 2. User Stories (Cosa l'utente può fare)
-      * **US-1 (Caricamento Dati):** Come utente, voglio poter caricare un elenco di pasti da un file CSV remoto usando il punto e virgola (;) come separatore.
-      * **US-2 (Visualizzazione):** Come utente, voglio vedere una griglia chiara del calendario settimanale e una libreria laterale con tutti i pasti disponibili.
-      * **US-3 (Pianificazione):** Come utente, voglio poter trascinare un pasto dalla libreria e rilasciarlo in uno slot specifico del calendario.
-      * **US-4 (Validazione Soia):** Come utente, quando inserisco un pasto contenente soia, voglio che l'app mi impedisca di aggiungerne un altro nello stesso giorno, comunicandomelo tramite una notifica non bloccante.
-      * **US-5 (Persistenza):** Come utente, voglio che il mio piano settimanale e l'URL del CSV vengano salvati automaticamente.
-      * **US-6 (Pasto Libero):** Come utente, voglio poter contrassegnare un pasto come "Libero".
-      * **US-7 (Reset):** Come utente, voglio un pulsante "Reset" per svuotare rapidamente il calendario.
-      * **US-8 (Stampa):** Come utente, voglio un pulsante "Stampa" per una versione pulita del mio piano.
-      * **US-9 (Data Source Configurabile):** Come utente, voglio poter inserire l'URL di un mio file CSV per caricare un set di pasti personalizzato.
-      * **US-10 (UI Responsiva):** Come utente, voglio poter usare l'applicazione in modo efficace sia su desktop che su dispositivi mobili.
-
-      ## 3. Mockup ASCII dell'Interfaccia
-      (invariato)
+      * **US-1 (Caricamento Dati):** Come utente, voglio poter caricare un elenco di pasti e un set di regole da un file di configurazione JSON remoto.
+      * **US-2 (Visualizzazione):** ... (invariato)
+      * **US-3 (Pianificazione):** ... (invariato)
+      * **US-4 (Validazione Dinamica):** Come utente, voglio che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag) quando pianifico i pasti.
+      * **US-5 (Persistenza):** ... (invariato)
+      * **US-6 (Pasto Libero):** ... (invariato)
+      * **US-7 (Reset):** ... (invariato)
+      * **US-8 (Stampa):** ... (invariato)
+      * **US-9 (Data Source Configurabile):** Come utente, voglio poter inserire l'URL di un mio file JSON per caricare una configurazione personalizzata.
+      * **US-10 (UI Responsiva):** ... (invariato)
+      * **US-11 (Cancellazione Pasti):** Come utente, voglio poter rimuovere facilmente un pasto che ho inserito nel calendario per errore.
+      * **US-12 (Filtro Libreria):** Come utente, voglio poter filtrare la lista dei pasti per tipo (Pranzo/Cena) per trovare più velocemente quello che cerco.
+      * **US-13 (Feedback Visivo):** Come utente, voglio che l'app mi segnali con un colore diverso se inserisco un pasto di tipo "Cena" in uno slot "Pranzo" e viceversa.
   - file: docs/02_ARCHITECTURE.md
     content: |
-      # Architettura: Protocollo Dinamico v1.0
+      # Architettura: Protocollo Dinamico v1.1
 
       ## 1. Principi Guida
-      * **Frontend-Only:** L'app vive interamente nel browser.
-      * **KISS (Keep It Simple, Stupid):** Vanilla JavaScript, HTML, CSS.
-      * **SRP (Single Responsibility Principle):** Ogni file ha una sola responsabilità.
+      * **Data-Driven:** La logica di business (regole di validazione) è delegata a un file di configurazione esterno, non è hardcoded nell'applicazione.
+      * **Frontend-Only, KISS, SRP:** (invariati)
 
-      ## 2. Formato Dati
-      * **CSV (Semicolon-Separated):** L'applicazione utilizza file CSV con il punto e virgola (`;`) come delimitatore per garantire robustezza e compatibilità.
+      ## 2. Formato Dati: `planner-config.json`
+      L'applicazione è guidata da un singolo file JSON con due sezioni principali:
+      * **`rules`**: Un array di oggetti regola. Ogni oggetto definisce un `tag`, un `type` di regola (es. `daily-block`), un `limit` e un `message` di errore. Questo permette di definire la logica di business senza modificare il codice.
+      * **`meals`**: Un array di oggetti pasto, che costituisce la libreria a disposizione dell'utente.
 
-      ## 3. Diagramma di Flusso (Flowchart)
-      (invariato, la logica di base non cambia)
-
-      ## 4. Struttura dei File
+      ## 3. Struttura dei File
       ```
       .
-      ├── index.html
-      ├── style.css
       └── src/
-          ├── main.js
           ├── api/
-          │   └── mealService.js  # Fetch e parsing del CSV (con ';')
+          │   └── configService.js  # Sostituisce mealService, gestisce il JSON
           ├── core/
-          │   ├── state.js
-          │   └── validation.js
+          │   ├── state.js        # Gestisce lo stato (inclusi filtri e regole)
+          │   └── validation.js   # Motore di validazione generico basato sulle regole
           ├── ui/
-          │   ├── calendar.js
-          │   ├── library.js
-          │   ├── interactions.js
-          │   └── notifications.js # NUOVO: Gestione del modale di notifica
+          │   ├── ...
+          │   └── notifications.js
           └── utils/
               └── constants.js
       ```
 
-      ## 5. Gestione dello Stato
-      (invariato)
-
-      ## 6. Design Responsivo
-      (invariato)
+      ## 4. Flusso di Validazione
+      Quando un utente sposta un pasto, `interactions.js` chiama il motore di validazione in `validation.js`. Il motore non conosce la "soia", ma itera sull'array `rules` presente nello stato. Per ogni regola, controlla se il pasto ha il `tag` corrispondente e, in caso affermativo, applica la logica del `type` di regola (es. `daily-block`). Se una regola fallisce, il processo si interrompe e viene mostrato il `message` di errore associato.
   - file: docs/03_STYLE_GUIDE.md
     content: |
-      # Guida di Stile: Protocollo Dinamico v1.0
-      ## 1. Palette Colori
-      (invariato)
-      ## 2. Tipografia
-      (invariato)
+      # Guida di Stile: Protocollo Dinamico v1.1
+      (Sezioni 1 e 2 invariate)
       ## 3. Stile dei Componenti
+      ### 3.1 Card del Pasto
+      * **Stato Mismatch:** Aggiunta di una classe `.is-mismatched` che applica un bordo giallo (`--color-warning`) per segnalare un'incongruenza tra tipo di pasto e slot.
+      ### 3.2 Pulsante di Cancellazione
+      * Un'icona (`&times;`) posizionata nell'angolo in alto a destra della card pasto nel calendario.
+      * Visibile solo al passaggio del mouse sulla card per non affollare l'interfaccia.
+      ### 3.3 Pulsanti Filtro
+      * Un gruppo di pulsanti sopra la libreria.
+      * Il filtro attivo ha uno stile distinto (`.is-active`) per indicare lo stato corrente.
+      ### 3.4 Modale di Notifica
       (invariato)
-      ### 3.1 Modale di Notifica
-      * **Overlay:** Sfondo semi-trasparente che copre l'intera pagina.
-      * **Contenitore:** Box centrato con angoli smussati e ombra leggera.
-      * **Stato Errore:** Bordo o icona di colore rosso (es. `#dc3545`).
-      * **Stato Successo:** Bordo o icona di colore verde (`--color-primary`).
-      
       ## 4. Breakpoints e Layout Responsivo
       (invariato)
   - file: index.html
@@ -100,20 +93,27 @@ patches:
           <script src="src/main.js" type="module" defer></script>
       </head>
       <body>
-          <header> <h1>🗓️ Protocollo Dinamico</h1> </header>
+          <header><h1>🗓️ Protocollo Dinamico</h1></header>
           <section class="data-source-container">
-              <input type="url" id="csv-url-input" placeholder="URL del tuo file CSV (con separatore ';')...">
-              <button id="load-csv-btn" class="btn btn-primary">Carica</button>
-              <span id="info-icon" title="Mostra formato CSV richiesto">ℹ️</span>
+              <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+              <button id="load-config-btn" class="btn btn-primary">Carica</button>
+              <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
           </section>
           <main class="main-container">
               <section id="calendar-view" class="calendar-container">
-                  <h2 id="calendar-title">Piano Settimanale</h2>
+                  <h2>Piano Settimanale</h2>
                   <div id="calendar-grid" class="calendar-grid"></div>
               </section>
               <aside class="library-container">
-                  <h2 id="library-title">📚 Libreria Pasti</h2>
-                  <div id="meal-library" class="meal-library"><p>Inserisci un URL e clicca "Carica".</p></div>
+                  <div class="library-header">
+                      <h2>📚 Libreria Pasti</h2>
+                      <div id="filter-container" class="filter-container">
+                          <button class="filter-btn is-active" data-filter="all">Tutti</button>
+                          <button class="filter-btn" data-filter="Pranzo">Pranzo</button>
+                          <button class="filter-btn" data-filter="Cena">Cena</button>
+                      </div>
+                  </div>
+                  <div id="meal-library" class="meal-library"><p>Carica una configurazione per iniziare.</p></div>
               </aside>
           </main>
           <footer>
@@ -123,14 +123,35 @@ patches:
           <div id="info-modal" class="modal-overlay modal-hidden">
               <div class="modal-content">
                   <button class="modal-close-btn" data-target="info-modal">&times;</button>
-                  <h3>Formato CSV Richiesto</h3>
-                  <p>Usa il <strong>punto e virgola (;)</strong> come separatore. L'header deve essere:</p>
-                  <pre><code>id;nomePasto;tipoPasto;ingredienti;etichette</code></pre>
+                  <h3>Formato `config.json` Richiesto</h3>
+                  <p>Il file deve essere un JSON con due chiavi principali: <strong>rules</strong> e <strong>meals</strong>.</p>
                   <h4>Esempio da copiare:</h4>
-                  <pre><code>id;nomePasto;tipoPasto;ingredienti;etichette
-      1;Pranzo: Riso+Tonno;Pranzo;"Riso: 80g, Tonno: 112g";pesce
-      2;Pranzo: Piadina+Tofu;Pranzo;"Piadina: 80g, Tofu: 125g";contiene-soia,vegetale
-      3;Cena: B. di Soia;Cena;"Soia: 70g, Pane: 40g";contiene-soia,vegetale</code></pre>
+                  <pre><code>{
+      "rules": [
+        {
+          "tag": "contiene-soia",
+          "type": "daily-block",
+          "limit": 1,
+          "message": "Non puoi consumare più di un pasto con soia al giorno."
+        }
+      ],
+      "meals": [
+        {
+          "id": "1",
+          "nomePasto": "Pranzo: Riso+Tonno",
+          "tipoPasto": "Pranzo",
+          "ingredienti": "Riso: 80g, Tonno: 112g",
+          "etichette": ["pesce"]
+        },
+        {
+          "id": "2",
+          "nomePasto": "Cena: B. di Soia",
+          "tipoPasto": "Cena",
+          "ingredienti": "Soia: 70g, Pane: 40g",
+          "etichette": ["contiene-soia", "vegetale"]
+        }
+      ]
+      }</code></pre>
               </div>
           </div>
           <div id="notification-modal" class="modal-overlay modal-hidden">
@@ -146,99 +167,112 @@ patches:
       :root {
         --color-background: #F8F9FA; --color-surface: #FFFFFF; --color-border: #E9ECEF;
         --color-text-primary: #212529; --color-text-secondary: #6C757D;
-        --color-primary: #28a745; --color-error: #dc3545; --color-drop-target: #E2F5E6;
+        --color-primary: #28a745; --color-error: #dc3545; --color-warning: #ffc107; --color-drop-target: #E2F5E6;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: 'Roboto', sans-serif; background-color: var(--color-background); color: var(--color-text-primary); line-height: 1.6; }
       header, footer { padding: 1rem 1.5rem; background-color: var(--color-surface); border-bottom: 1px solid var(--color-border); text-align: center; }
-      footer { border-top: 1px solid var(--color-border); border-bottom: none; display: flex; justify-content: space-between; align-items: center; }
-      h1, h2, h3 { font-weight: 700; }
+      footer { border-top: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; }
+      h1, h2 { font-weight: 700; }
       h2 { margin-bottom: 1rem; }
       .data-source-container { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.5rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
-      #csv-url-input { flex-grow: 1; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--color-text-secondary); user-select: none; }
+      #config-url-input { flex-grow: 1; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--color-text-secondary); }
       .main-container { display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem; }
       .library-container { padding: 1rem; background: var(--color-surface); border-radius: 8px; border: 1px solid var(--color-border); }
-      .meal-library { display: flex; flex-direction: column; gap: 0.75rem; }
+      .library-header { display: flex; justify-content: space-between; align-items: center; }
+      .filter-container { display: flex; gap: 0.5rem; }
+      .filter-btn { background: transparent; border: 1px solid var(--color-border); padding: 0.25rem 0.75rem; border-radius: 12px; cursor: pointer; }
+      .filter-btn.is-active { background-color: var(--color-primary); color: white; border-color: var(--color-primary); }
+      .meal-library { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
       .calendar-grid { display: grid; grid-template-columns: 1fr repeat(7, 2fr); gap: 0.5rem; }
       .grid-header, .meal-type-label { font-weight: 500; padding: 0.5rem; text-align: center; font-size: 0.9rem; }
       .meal-type-label { text-align: right; align-self: center; }
-      .calendar-slot { min-height: 100px; border: 2px dashed var(--color-border); border-radius: 8px; padding: 0.5rem; background-color: var(--color-surface); transition: background-color 0.2s ease; }
+      .calendar-slot { position: relative; min-height: 100px; border: 2px dashed var(--color-border); border-radius: 8px; padding: 0.5rem; background-color: var(--color-surface); transition: background-color 0.2s ease; }
       .calendar-slot.drop-target { background-color: var(--color-drop-target); border-style: solid; }
-      .meal-card { padding: 0.75rem; border: 1px solid var(--color-border); background-color: var(--color-surface); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: grab; transition: transform 0.2s ease; }
-      .meal-card:hover { transform: scale(1.02); }
+      .meal-card { position: relative; height: 100%; padding: 0.75rem; border: 1px solid var(--color-border); background-color: var(--color-surface); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: grab; }
+      .meal-card.is-mismatched { border-color: var(--color-warning); border-width: 2px; }
+      .delete-meal-btn { position: absolute; top: 2px; right: 5px; background: none; border: none; font-size: 1.5rem; color: var(--color-text-secondary); cursor: pointer; opacity: 0; transition: opacity 0.2s; }
+      .calendar-slot:hover .delete-meal-btn { opacity: 1; }
       .meal-card.dragging { opacity: 0.5; }
       .meal-card h4 { margin-bottom: 0.25rem; font-size: 0.9rem; }
       .meal-card p { font-size: 0.8rem; color: var(--color-text-secondary); }
-      .btn { padding: 0.6rem 1.2rem; border-radius: 8px; border: 1px solid transparent; font-weight: 500; cursor: pointer; transition: background-color 0.2s ease; }
+      .btn { padding: 0.6rem 1.2rem; border-radius: 8px; border: 1px solid transparent; font-weight: 500; cursor: pointer; }
       .btn-primary { background-color: var(--color-primary); color: white; }
-      .btn-secondary { background-color: transparent; color: var(--color-text-secondary); border-color: var(--color-border); }
+      .btn-secondary { color: var(--color-text-secondary); border-color: var(--color-border); }
       .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
       .modal-content { background: white; padding: 2rem; border-radius: 8px; max-width: 600px; width: 90%; position: relative; }
       .modal-close-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
       .modal-hidden { display: none !important; }
       .modal-content pre { background: var(--color-background); padding: 1rem; border-radius: 4px; margin-top: 1rem; overflow-x: auto; }
-      .modal-content code { font-family: monospace; white-space: pre; }
       .notification-box { max-width: 400px; border-left: 5px solid; }
       .notification-box.is-success { border-left-color: var(--color-primary); }
       .notification-box.is-error { border-left-color: var(--color-error); }
       @media (min-width: 768px) { .main-container { display: grid; grid-template-columns: 3fr 1fr; gap: 2rem; padding: 2rem; } }
-      @media print { /* ... (stili di stampa) ... */ }
-  - file: src/api/mealService.js
+  - file: src/main.js
     content: |
-      export async function fetchAndParseMeals(url) {
-        if (!url) {
-          throw new Error("Per favore, inserisci un URL valido.");
-        }
+      import { loadStateFromLocalStorage, getState, setPlannerConfig } from './core/state.js';
+      import { renderApp } from './ui/renderer.js';
+      import { initializeEventListeners } from './ui/interactions.js';
+      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+      import { fetchAndParseConfig } from './api/configService.js';
+      import { showNotification } from './ui/notifications.js';
+
+      async function loadInitialConfig(url) {
+        if (!url) return;
         try {
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(`Errore di rete: ${response.status} - ${response.statusText}`);
-          }
-          const csvText = await response.text();
-          const meals = parseCSV(csvText);
-          if (meals.length === 0) {
-            throw new Error("Il file CSV è vuoto o le intestazioni non sono valide.");
-          }
-          return meals;
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
         } catch (error) {
-          console.error("Fallimento fetch/parse:", error);
-          throw new Error(`Impossibile caricare i dati dall'URL. Controlla la console per i dettagli.`);
+          showNotification(error.message, 'error');
         }
       }
 
-      function parseCSV(text) {
-        const lines = text.trim().split('\n');
-        const headers = lines[0].split(';').map(h => h.trim());
-        const requiredHeaders = ['id', 'nomePasto', 'tipoPasto'];
-        if (!requiredHeaders.every(h => headers.includes(h))) {
-            console.error("Header mancanti:", requiredHeaders.filter(h => !headers.includes(h)));
-            return [];
+      function init() {
+        document.addEventListener('stateChange', renderApp);
+        loadStateFromLocalStorage();
+        const initialState = getState();
+        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+        initializeEventListeners();
+        renderApp();
+        loadInitialConfig(initialState.configUrl);
+      }
+      document.addEventListener('DOMContentLoaded', init);
+  - file: src/api/configService.js
+    content: |
+      export async function fetchAndParseConfig(url) {
+        if (!url) throw new Error("Per favore, inserisci un URL valido.");
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          const config = await response.json();
+          if (!config.rules || !config.meals) {
+            throw new Error("Il file JSON non è valido. Mancano le chiavi 'rules' o 'meals'.");
+          }
+          return config;
+        } catch (error) {
+          console.error("Fallimento fetch/parse JSON:", error);
+          throw new Error(`Impossibile caricare la configurazione. Controlla la console.`);
         }
-        return lines.slice(1).map(line => {
-          if (!line) return null;
-          const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
-          const mealObject = {};
-          headers.forEach((header, index) => {
-            mealObject[header] = values[index];
-          });
-          return mealObject;
-        }).filter(Boolean); // Rimuove eventuali righe vuote
       }
   - file: src/core/state.js
     content: |
       import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL } from '../utils/constants.js';
-      let state = { masterMealList: [], weeklyPlan: {}, csvUrl: '' };
+      let state = { rules: [], masterMealList: [], weeklyPlan: {}, configUrl: '', activeFilter: 'all' };
       const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
       export const getState = () => ({ ...state });
-      export function setMasterMealList(meals) { state.masterMealList = meals; notify(); }
-      export function setCsvUrl(url) { state.csvUrl = url; localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); }
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        notify();
+      }
+      export function setConfigUrl(url) { state.configUrl = url; localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); }
       export function saveStateToLocalStorage() { localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan)); }
       export function loadStateFromLocalStorage() {
         const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
         const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
         if (plan) { state.weeklyPlan = JSON.parse(plan); }
-        if (url) { state.csvUrl = url; }
+        if (url) { state.configUrl = url; }
       }
       export function updateWeeklyPlan(slotId, mealId) {
         if (mealId) { state.weeklyPlan[slotId] = mealId; } 
@@ -247,38 +281,57 @@ patches:
         notify();
       }
       export function resetWeeklyPlan() { state.weeklyPlan = {}; saveStateToLocalStorage(); notify(); }
-  - file: src/main.js
+      export function setActiveFilter(filter) { state.activeFilter = filter; notify(); }
+  - file: src/core/validation.js
     content: |
-      import { loadStateFromLocalStorage, getState } from './core/state.js';
-      import { renderCalendar } from './ui/calendar.js';
-      import { renderMealLibrary } from './ui/library.js';
-      import { initializeEventListeners } from './ui/interactions.js';
-      import { DEFAULT_CSV_URL } from './utils/constants.js';
+      /**
+       * Motore di validazione generico.
+       * @returns {{isValid: boolean, message: string|null}}
+       */
+      export function isPlacementValid(mealToAdd, slotId, weeklyPlan, masterMealList, rules) {
+        for (const rule of rules) {
+          if (mealToAdd.etichette && mealToAdd.etichette.includes(rule.tag)) {
+            const result = applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList);
+            if (!result.isValid) {
+              return result;
+            }
+          }
+        }
+        return { isValid: true, message: null };
+      }
 
-      function renderApp() {
-        const currentState = getState();
-        renderCalendar(document.getElementById('calendar-grid'), currentState);
-        renderMealLibrary(document.getElementById('meal-library'), currentState);
-        const urlInput = document.getElementById('csv-url-input');
-        if (document.activeElement !== urlInput) {
-          urlInput.value = currentState.csvUrl;
+      function applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
+        switch (rule.type) {
+          case 'daily-block':
+            return validateDailyBlock(rule, mealToAdd, slotId, weeklyPlan, masterMealList);
+          // Altri tipi di regole possono essere aggiunti qui
+          default:
+            return { isValid: true, message: null };
         }
       }
 
-      function init() {
-        document.addEventListener('stateChange', renderApp);
-        loadStateFromLocalStorage();
-        const initialState = getState();
-        document.getElementById('csv-url-input').value = initialState.csvUrl || DEFAULT_CSV_URL;
-        initializeEventListeners();
-        renderApp();
+      function validateDailyBlock(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
+        const day = slotId.split('-')[0];
+        let count = 0;
+        for (const key in weeklyPlan) {
+          if (key.startsWith(day) && key !== slotId) {
+            const mealId = weeklyPlan[key];
+            const meal = masterMealList.find(m => m.id === mealId);
+            if (meal && meal.etichette && meal.etichette.includes(rule.tag)) {
+              count++;
+            }
+          }
+        }
+        if (count >= rule.limit) {
+          return { isValid: false, message: rule.message };
+        }
+        return { isValid: true, message: null };
       }
-      document.addEventListener('DOMContentLoaded', init);
   - file: src/ui/interactions.js
     content: |
-      import { getState, updateWeeklyPlan, resetWeeklyPlan, setMasterMealList, setCsvUrl } from '../core/state.js';
-      import { isSoyMealAllowed } from '../core/validation.js';
-      import { fetchAndParseMeals } from '../api/mealService.js';
+      import { getState, updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, setActiveFilter } from '../core/state.js';
+      import { isPlacementValid } from '../core/validation.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
       import { showNotification } from './notifications.js';
 
       let draggedMealId = null;
@@ -286,31 +339,42 @@ patches:
       export function initializeEventListeners() {
         document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
         document.getElementById('print-btn').addEventListener('click', () => window.print());
-        document.getElementById('load-csv-btn').addEventListener('click', handleLoadCsv);
-        
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
         document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
         document.querySelectorAll('.modal-close-btn').forEach(btn => {
           btn.addEventListener('click', () => document.getElementById(btn.dataset.target).classList.add('modal-hidden'));
         });
-
-        const library = document.getElementById('meal-library');
+        document.getElementById('filter-container').addEventListener('click', handleFilterClick);
         const calendar = document.getElementById('calendar-grid');
-        library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) { draggedMealId = e.target.dataset.mealId; e.target.classList.add('dragging'); }});
-        library.addEventListener('dragend', e => e.target.classList.remove('dragging'));
-        calendar.addEventListener('dragover', e => { if(e.target.closest('.calendar-slot')) { e.preventDefault(); e.target.closest('.calendar-slot').classList.add('drop-target'); }});
-        calendar.addEventListener('dragleave', e => e.target.closest('.calendar-slot')?.classList.remove('drop-target'));
+        calendar.addEventListener('click', handleCalendarClick);
+        calendar.addEventListener('dragover', e => { if(e.target.closest('.calendar-slot')) e.preventDefault(); });
         calendar.addEventListener('drop', handleDrop);
+        const library = document.getElementById('meal-library');
+        library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) draggedMealId = e.target.dataset.mealId; });
       }
 
-      async function handleLoadCsv() {
-        const url = document.getElementById('csv-url-input').value.trim();
-        setCsvUrl(url);
+      async function handleLoadConfig() {
+        const url = document.getElementById('config-url-input').value.trim();
+        setConfigUrl(url);
         try {
-          const meals = await fetchAndParseMeals(url);
-          setMasterMealList(meals);
-          showNotification('Pasti caricati con successo!', 'success');
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+          showNotification('Configurazione caricata con successo!', 'success');
         } catch (error) {
           showNotification(error.message, 'error');
+        }
+      }
+
+      function handleFilterClick(e) {
+        if (e.target.matches('.filter-btn')) {
+          setActiveFilter(e.target.dataset.filter);
+        }
+      }
+
+      function handleCalendarClick(e) {
+        if (e.target.matches('.delete-meal-btn')) {
+          const slotId = e.target.dataset.slotId;
+          updateWeeklyPlan(slotId, null);
         }
       }
 
@@ -318,47 +382,22 @@ patches:
         e.preventDefault();
         const slot = e.target.closest('.calendar-slot');
         if (!slot || !draggedMealId) return;
-        slot.classList.remove('drop-target');
-        const { masterMealList, weeklyPlan } = getState();
-        const mealToAdd = masterMealList.find(m => m.id === draggedMealId);
+        const state = getState();
+        const mealToAdd = state.masterMealList.find(m => m.id === draggedMealId);
         if (!mealToAdd) return;
-        const day = slot.dataset.slotId.split('-')[0];
-        if (isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList)) {
+        const validationResult = isPlacementValid(mealToAdd, slot.dataset.slotId, state.weeklyPlan, state.masterMealList, state.rules);
+        if (validationResult.isValid) {
           updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
         } else {
-          showNotification('Regola violata: Non è possibile consumare due pasti con soia nello stesso giorno.', 'error');
+          showNotification(validationResult.message, 'error');
         }
+        draggedMealId = null;
       }
-  - file: src/ui/notifications.js
-    content: |
-      const modal = document.getElementById('notification-modal');
-      const messageElement = document.getElementById('notification-message');
-      const modalContent = modal.querySelector('.modal-content');
-
-      /**
-       * Mostra una notifica modale.
-       * @param {string} message - Il messaggio da visualizzare.
-       * @param {'success' | 'error' | 'info'} type - Il tipo di notifica.
-       */
-      export function showNotification(message, type = 'info') {
-        messageElement.textContent = message;
-        modalContent.className = 'modal-content notification-box'; // Reset classes
-        if (type === 'success' || type === 'error') {
-          modalContent.classList.add(`is-${type}`);
-        }
-        modal.classList.remove('modal-hidden');
-      }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CSV_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicProtocolUrl';
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = ['Pranzo', 'Cena'];
-  - file: src/ui/calendar.js
+  - file: src/ui/renderer.js
     content: |
       import { DAYS, MEAL_TYPES } from '../utils/constants.js';
-      export function renderCalendar(element, state) {
+      
+      function renderCalendar(element, state) {
         element.innerHTML = '';
         element.insertAdjacentHTML('beforeend', '<div class="grid-header"></div>' + DAYS.map(day => `<div class="grid-header">${day.substring(0,3)}</div>`).join(''));
         MEAL_TYPES.forEach(mealType => {
@@ -367,44 +406,69 @@ patches:
             const slotId = `${day}-${mealType}`;
             const mealId = state.weeklyPlan[slotId];
             const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-            const mealCardHTML = meal ? `<div class="meal-card" draggable="true" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>` : '';
+            let mealCardHTML = '';
+            if (meal) {
+              const isMismatched = meal.tipoPasto !== mealType ? 'is-mismatched' : '';
+              mealCardHTML = `<div class="meal-card ${isMismatched}" draggable="true" data-meal-id="${meal.id}">
+                  <button class="delete-meal-btn" data-slot-id="${slotId}">&times;</button>
+                  <h4>${meal.nomePasto}</h4>
+                  <p>${meal.ingredienti || ''}</p>
+                </div>`;
+            }
             element.insertAdjacentHTML('beforeend', `<div class="calendar-slot" data-slot-id="${slotId}">${mealCardHTML}</div>`);
           });
         });
       }
-  - file: src/ui/library.js
-    content: |
-      export function renderMealLibrary(element, state) {
-        if (state.masterMealList.length === 0) {
-          element.innerHTML = '<p>Nessun pasto caricato.</p>';
-          return;
+
+      function renderMealLibrary(element, state) {
+        const filteredMeals = state.masterMealList.filter(meal => 
+          state.activeFilter === 'all' || meal.tipoPasto === state.activeFilter
+        );
+        if (filteredMeals.length === 0 && state.masterMealList.length > 0) {
+           element.innerHTML = `<p>Nessun pasto per il filtro '${state.activeFilter}'.</p>`;
+           return;
         }
-        element.innerHTML = state.masterMealList.map(meal => `
+        element.innerHTML = filteredMeals.map(meal => `
           <div class="meal-card" draggable="true" data-meal-id="${meal.id}">
-            <h4>${meal.nomePasto}</h4>
-            <p>(${meal.tipoPasto})</p>
-          </div>
-        `).join('');
+            <h4>${meal.nomePasto}</h4><p>(${meal.tipoPasto})</p>
+          </div>`).join('');
       }
-  - file: src/core/validation.js
+      
+      function renderFilters(element, state) {
+          element.querySelectorAll('.filter-btn').forEach(btn => {
+              btn.classList.toggle('is-active', btn.dataset.filter === state.activeFilter);
+          });
+      }
+
+      export function renderApp() {
+        const state = window.getState(); // Assuming getState is globally available or passed
+        renderCalendar(document.getElementById('calendar-grid'), state);
+        renderMealLibrary(document.getElementById('meal-library'), state);
+        renderFilters(document.getElementById('filter-container'), state);
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) {
+          urlInput.value = state.configUrl;
+        }
+      }
+  - file: src/utils/constants.js
     content: |
-      export function isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList) {
-        if (!mealToAdd.etichette || !mealToAdd.etichette.includes('contiene-soia')) {
-          return true;
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = ['Pranzo', 'Cena'];
+  - file: src/ui/notifications.js
+    content: |
+      const modal = document.getElementById('notification-modal');
+      const messageElement = document.getElementById('notification-message');
+      const modalContent = modal.querySelector('.modal-content');
+      export function showNotification(message, type = 'info') {
+        messageElement.textContent = message;
+        modalContent.className = 'modal-content notification-box';
+        if (type === 'success' || type === 'error') {
+          modalContent.classList.add(`is-${type}`);
         }
-        const lunchSlotId = `${day}-Pranzo`;
-        const dinnerSlotId = `${day}-Cena`;
-        const lunchMealId = weeklyPlan[lunchSlotId];
-        const dinnerMealId = weeklyPlan[dinnerSlotId];
-        if (lunchMealId && lunchMealId !== mealToAdd.id) {
-            const meal = masterMealList.find(m => m.id === lunchMealId);
-            if (meal && meal.etichette && meal.etichette.includes('contiene-soia')) return false;
-        }
-        if (dinnerMealId && dinnerMealId !== mealToAdd.id) {
-            const meal = masterMealList.find(m => m.id === dinnerMealId);
-            if (meal && meal.etichette && meal.etichette.includes('contiene-soia')) return false;
-        }
-        return true;
+        modal.classList.remove('modal-hidden');
       }
 commands:
-  - "echo 'Final MVP built successfully. System is robust, responsive, and uses semicolon-separated CSV.'"
+  - "echo 'Application refactored to JSON config with new UI features.'"
