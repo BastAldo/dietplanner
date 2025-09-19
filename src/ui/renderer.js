@@ -73,6 +73,7 @@ export function openSelectionModal(slotId) {
       selectionModal.classList.add('modal-hidden');
     }
   };
+
   selectionModal.classList.remove('modal-hidden');
 }
 
