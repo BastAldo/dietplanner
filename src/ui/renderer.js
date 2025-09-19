@@ -6,18 +6,24 @@ const selectionModalTitle = document.getElementById('selection-modal-title');
 const selectionModalList = document.getElementById('selection-modal-list');
 
 function calculateDailyCalories(day, state) {
-  let min = 0, max = 0;
+  let min = 0;
+  let max = 0;
   MEAL_TYPES.forEach(type => {
     const mealId = state.weeklyPlan[`${day}-${type}`];
     if (mealId) {
       const meal = state.masterMealList.find(m => m.id === mealId);
-      if (meal && meal.calories_min && meal.calories_max) {
-        min += Number(meal.calories_min);
-        max += Number(meal.calories_max);
+      if (meal && meal.calories_min) {
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        min += minCals;
+        max += maxCals;
       }
     }
   });
-  return (min === 0 && max === 0) ? '' : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+
+  if (min === 0 && max === 0) return '';
+  if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
+  return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
 function createMealCardHTML(meal, slotId, mealType) {
@@ -96,6 +102,7 @@ export function openSelectionModal(slotId) {
 }
 
 export function populateInitialText() {
+  document.title = UI_TEXT.MAIN_TITLE;
   document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
   document.getElementById('subtitle').textContent = UI_TEXT.SUBTITLE;
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;

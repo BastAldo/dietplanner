@@ -16,11 +16,11 @@
 
 ## 2. Tipografia
 * **Font Family:** `Roboto`, `sans-serif`
-* **Body Text:** `16px`
+* **Body Text:** `15px`
 
 ## 3. Stile dei Componenti
-* **Header:** Include un titolo `h1` e un sottotitolo `p`.
-* **Totalizzatore Calorie:** Un elemento testuale (`.daily-calories`).
+* **Header:** Include titolo e sottotitolo.
+* **Totalizzatore Calorie:** Mostra un range o un valore singolo.
 * **Footer:** Contiene solo il pulsante "Reset".
 
 ## 4. Breakpoints

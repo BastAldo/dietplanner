@@ -1,16 +1,39 @@
 # Architettura: NutriPlan v1.6
 
 ## 1. Principi Guida
-* **Minimalism:** L'interfaccia è ridotta all'essenziale.
-* **Data-Driven:** La logica di business è definita nel file JSON.
-* **Maintainability:** I testi dell'interfaccia (stringhe) sono centralizzati in un file di costanti per facilitare future modifiche e traduzioni (i18n).
+* **Minimalism:** L'interfaccia utente è ridotta all'essenziale.
+* **Data-Driven:** La logica di business (regole) è definita nel file JSON.
+* **Maintainability:** I testi dell'interfaccia (stringhe) sono centralizzati (i18n).
 * **Frontend-Only, KISS, SRP:** L'app vive nel browser, usa Vanilla JS e ogni file ha una sola responsabilità.
 
 ## 2. Formato Dati: `planner-config.json`
-Il file JSON richiede campi `calories_min` e `calories_max` per ogni pasto.
+Il file JSON è composto da due chiavi principali: `rules` e `meals`. `calories_max` è opzionale per i pasti.
+```json
+{
+  "rules": [ { "tag": "...", "type": "...", "limit": 1 } ],
+  "meals": [
+    { "id": "1", "calories_min": 550, "calories_max": 600 },
+    { "id": "2", "calories_min": 300 }
+  ]
+}
+```
 
 ## 3. Struttura dei File
-Il file `src/utils/constants.js` ora esporta anche un oggetto `UI_TEXT` contenente tutte le stringhe testuali dell'applicazione.
+```
+.
+└── src/
+    ├── api/
+    │   └── configService.js
+    ├── core/
+    │   ├── state.js
+    │   └── validation.js
+    ├── ui/
+    │   ├── renderer.js
+    │   ├── interactions.js
+    │   └── notifications.js
+    └── utils/
+        └── constants.js
+```
 
 ## 4. Flusso di Interazione Utente
 Il flusso è unificato: l'utente clicca su uno slot vuoto e un modale si apre per la selezione del pasto.

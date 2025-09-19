@@ -12,7 +12,7 @@ export const UI_TEXT = {
   CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
   RESET_BUTTON: 'Reset Piano',
   INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
-  INFO_MODAL_DESC: 'Includi `calories_min` e `calories_max` per ogni pasto.',
+  INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
   SELECT_MEAL_TITLE: 'Scegli',
   FOR_DAY_PREFIX: 'per',
   NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
