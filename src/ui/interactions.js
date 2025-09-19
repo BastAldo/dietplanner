@@ -1,71 +1,87 @@
-import { getState, updateWeeklyPlan, resetWeeklyPlan } from '../core/state.js';
+import { getState, updateWeeklyPlan, resetWeeklyPlan, setMasterMealList, setCsvUrl } from '../core/state.js';
 import { isSoyMealAllowed } from '../core/validation.js';
+import { fetchAndParseMeals } from '../api/mealService.js';
 
 let draggedMealId = null;
 
-/**
- * Inizializza tutti gli event listener dell'interfaccia.
- */
 export function initializeEventListeners() {
+  // Pulsanti Principali
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    if(confirm('Sei sicuro di voler svuotare l\'intero piano settimanale?')) resetWeeklyPlan();
+  });
+  document.getElementById('print-btn').addEventListener('click', () => window.print());
+  document.getElementById('load-csv-btn').addEventListener('click', handleLoadCsv);
+  
+  // Modal
+  document.getElementById('info-icon').addEventListener('click', toggleModal);
+  document.getElementById('modal-close-btn').addEventListener('click', toggleModal);
+  document.getElementById('info-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'info-modal') toggleModal(); // Chiude se si clicca sull'overlay
+  });
+
+  // Drag & Drop
   const mealLibrary = document.getElementById('meal-library');
   const calendarGrid = document.getElementById('calendar-grid');
-  const resetBtn = document.getElementById('reset-btn');
-  const printBtn = document.getElementById('print-btn');
 
-  // Eventi Drag & Drop sulla libreria
-  mealLibrary.addEventListener('dragstart', (e) => {
-    if (e.target.classList.contains('meal-card')) {
-      draggedMealId = e.target.dataset.mealId;
-      e.target.classList.add('dragging');
-    }
-  });
+  mealLibrary.addEventListener('dragstart', handleDragStart);
+  mealLibrary.addEventListener('dragend', handleDragEnd);
+  calendarGrid.addEventListener('dragover', handleDragOver);
+  calendarGrid.addEventListener('dragleave', handleDragLeave);
+  calendarGrid.addEventListener('drop', handleDrop);
+}
 
-  mealLibrary.addEventListener('dragend', (e) => {
-    if (e.target.classList.contains('meal-card')) {
-      draggedMealId = null;
-      e.target.classList.remove('dragging');
-    }
-  });
+async function handleLoadCsv() {
+  const urlInput = document.getElementById('csv-url-input');
+  const url = urlInput.value.trim();
+  setCsvUrl(url);
+  const meals = await fetchAndParseMeals(url);
+  setMasterMealList(meals);
+}
 
-  // Eventi Drag & Drop sul calendario
-  calendarGrid.addEventListener('dragover', (e) => {
-    if (e.target.classList.contains('calendar-slot')) {
-      e.preventDefault();
-      e.target.classList.add('drop-target');
-    }
-  });
-  
-  calendarGrid.addEventListener('dragleave', (e) => {
-    if (e.target.classList.contains('calendar-slot')) {
-      e.target.classList.remove('drop-target');
-    }
-  });
+function toggleModal() {
+  document.getElementById('info-modal').classList.toggle('modal-hidden');
+}
 
-  calendarGrid.addEventListener('drop', (e) => {
+function handleDragStart(e) {
+  if (e.target.classList.contains('meal-card')) {
+    draggedMealId = e.target.dataset.mealId;
+    e.target.classList.add('dragging');
+  }
+}
+
+function handleDragEnd(e) {
+  if (e.target.classList.contains('meal-card')) {
+    draggedMealId = null;
+    e.target.classList.remove('dragging');
+  }
+}
+
+function handleDragOver(e) {
+  const slot = e.target.closest('.calendar-slot');
+  if (slot) {
     e.preventDefault();
-    const slot = e.target.closest('.calendar-slot');
-    if (slot && draggedMealId) {
-      slot.classList.remove('drop-target');
-      const { masterMealList, weeklyPlan } = getState();
-      const mealToAdd = masterMealList.find(m => m.id === draggedMealId);
-      const day = slot.dataset.slotId.split('-')[0];
+    slot.classList.add('drop-target');
+  }
+}
 
-      if (isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList)) {
-        updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
-      } else {
-        alert('Regola violata: Non è possibile consumare due pasti con soia nello stesso giorno.');
-      }
-    }
-  });
-  
-  // Eventi Pulsanti
-  resetBtn.addEventListener('click', () => {
-    if(confirm('Sei sicuro di voler svuotare l\'intero piano settimanale?')) {
-      resetWeeklyPlan();
-    }
-  });
+function handleDragLeave(e) {
+  const slot = e.target.closest('.calendar-slot');
+  if (slot) slot.classList.remove('drop-target');
+}
 
-  printBtn.addEventListener('click', () => {
-    window.print();
-  });
+function handleDrop(e) {
+  e.preventDefault();
+  const slot = e.target.closest('.calendar-slot');
+  if (!slot || !draggedMealId) return;
+
+  slot.classList.remove('drop-target');
+  const { masterMealList, weeklyPlan } = getState();
+  const mealToAdd = masterMealList.find(m => m.id === draggedMealId);
+  const day = slot.dataset.slotId.split('-')[0];
+
+  if (isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList)) {
+    updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
+  } else {
+    alert('Regola violata: Non è possibile consumare due pasti con soia nello stesso giorno.');
+  }
 }

@@ -14,6 +14,13 @@
     <header>
         <h1>🗓️ Protocollo Dinamico</h1>
     </header>
+    
+    <section class="data-source-container">
+        <input type="url" id="csv-url-input" placeholder="Inserisci l'URL del tuo file CSV...">
+        <button id="load-csv-btn" class="btn btn-primary">Carica Pasti</button>
+        <span id="info-icon" title="Mostra formato CSV richiesto">ℹ️</span>
+    </section>
+
     <main class="main-container">
         <section id="calendar-view" class="calendar-container" aria-labelledby="calendar-title">
             <h2 id="calendar-title" class="sr-only">Piano Settimanale</h2>
@@ -23,12 +30,40 @@
         <aside class="library-container" aria-labelledby="library-title">
             <h2 id="library-title">📚 Libreria Pasti</h2>
             <div id="meal-library" class="meal-library">
-                </div>
+                <p>Inserisci un URL e clicca "Carica Pasti" per iniziare.</p>
+            </div>
         </aside>
     </main>
     <footer>
         <button id="reset-btn" class="btn btn-secondary">Reset Settimana</button>
         <button id="print-btn" class="btn btn-primary">Stampa 🖨️</button>
     </footer>
+
+    <div id="info-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+            <h3>Formato CSV Richiesto</h3>
+            <p>Per essere compatibile, il tuo file CSV deve rispettare le seguenti regole:</p>
+            <ol>
+                <li>Usare il carattere <strong>Tabulatore (`\t`)</strong> come separatore di colonna.</li>
+                <li>Avere la seguente intestazione (header) nella prima riga:
+                    <br><code>id	nomePasto	tipoPasto	ingredienti	etichette</code>
+                </li>
+            </ol>
+            <h4>Dettaglio Colonne:</h4>
+            <ul>
+                <li><strong>id:</strong> Un numero progressivo unico per ogni pasto.</li>
+                <li><strong>nomePasto:</strong> Il nome visualizzato nell'app (es. <code>Pranzo: Riso + Tonno</code>).</li>
+                <li><strong>tipoPasto:</strong> Il tipo di pasto (es. <code>Pranzo</code>, <code>Cena</code>).</li>
+                <li><strong>ingredienti:</strong> Descrizione degli ingredienti (es. <code>"Riso: 80g, Tonno: 112g"</code>).</li>
+                <li><strong>etichette:</strong> Tag separati da virgola, senza spazi (es. <code>contiene-soia,vegetale</code>).</li>
+            </ul>
+            <h4>Esempio Completo:</h4>
+            <pre><code>id	nomePasto	tipoPasto	ingredienti	etichette
+                1	Pranzo: Riso + Tonno	Pranzo	"Riso Basmati: 80g (s), Tonno: 112g (sg)"	pesce
+                2	Pranzo: Piadina + Tofu	Pranzo	"Piadina Integrale: 80g, Tofu: 125g"	contiene-soia,vegetale
+                3	Cena: Bistecca di Soia	Cena	"Soia Testurizzata: 70g (s), Pane: 40g"	contiene-soia,vegetale</code></pre>
+        </div>
+    </div>
 </body>
 </html>

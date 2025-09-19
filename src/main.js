@@ -1,42 +1,35 @@
-import { fetchAndParseMeals } from './api/mealService.js';
-import { setMasterMealList, loadStateFromLocalStorage, getState } from './core/state.js';
+import { loadStateFromLocalStorage, getState } from './core/state.js';
 import { renderCalendar } from './ui/calendar.js';
 import { renderMealLibrary } from './ui/library.js';
 import { initializeEventListeners } from './ui/interactions.js';
+import { DEFAULT_CSV_URL } from './utils/constants.js';
 
-// Elementi del DOM
 const calendarGridElement = document.getElementById('calendar-grid');
 const mealLibraryElement = document.getElementById('meal-library');
+const csvUrlInputElement = document.getElementById('csv-url-input');
 
-/**
- * Funzione principale di render, chiamata ogni volta che lo stato cambia.
- */
 function renderApp() {
   const currentState = getState();
   renderCalendar(calendarGridElement, currentState);
   renderMealLibrary(mealLibraryElement, currentState);
+  // Assicura che l'input rifletta l'URL caricato
+  if (document.activeElement !== csvUrlInputElement) {
+    csvUrlInputElement.value = currentState.csvUrl;
+  }
 }
 
-/**
- * Funzione di inizializzazione dell'applicazione.
- */
 async function init() {
-  // Aggiunge un listener per l'evento custom 'stateChange'
   document.addEventListener('stateChange', renderApp);
 
-  // Carica lo stato salvato (se presente)
   loadStateFromLocalStorage();
+  
+  // Popola l'input con l'URL salvato o quello di default
+  const initialState = getState();
+  csvUrlInputElement.value = initialState.csvUrl || DEFAULT_CSV_URL;
 
-  // Carica i pasti dal CSV e aggiorna lo stato
-  const meals = await fetchAndParseMeals();
-  setMasterMealList(meals); // Questo triggererà il primo render tramite l'evento
-
-  // Inizializza tutti gli event listener
   initializeEventListeners();
   
-  // Render iniziale (potrebbe essere ridondante se setMasterMealList è sincrono, ma sicuro)
   renderApp();
 }
 
-// Avvia l'applicazione
 document.addEventListener('DOMContentLoaded', init);

@@ -1,175 +1,521 @@
-commit_message: "docs: Create and save project documentation files"
+commit_message: "feat: Add configurable CSV URL input and info modal"
 rationale: |
-  Saving the foundational project documentation (`FUNCTIONALITY`, `ARCHITECTURE`, `STYLE_GUIDE`) to the repository. This acts as a stable, version-controlled source of truth before proceeding with implementation, safeguarding against any potential context loss or anomalies. This commit establishes the formal specification for the project.
+  As per the approved plan, this commit enhances the application's flexibility by decoupling the data source from the code.
+
+  Key changes include:
+  - A new UI section in `index.html` allows users to provide a custom CSV URL.
+  - A corresponding "Load" button now triggers the data fetching process, which is no longer automatic on startup.
+  - An informational modal has been added to `index.html` and styled in `style.css`. This modal provides clear instructions and an example of the required CSV format.
+  - JavaScript logic in `main.js`, `interactions.js`, and `mealService.js` has been updated to handle the new user-driven data loading flow and to manage the modal's visibility.
+  - The hardcoded CSV URL constant has been converted to a default value for the input field, improving user experience.
 patches:
-  - file: docs/01_FUNCTIONALITY.md
+  - file: index.html
     content: |
-      # Funzionalità: Protocollo Dinamico v1.0
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Protocollo Dinamico</title>
+          <link rel="stylesheet" href="style.css">
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <header>
+              <h1>🗓️ Protocollo Dinamico</h1>
+          </header>
+          
+          <section class="data-source-container">
+              <input type="url" id="csv-url-input" placeholder="Inserisci l'URL del tuo file CSV...">
+              <button id="load-csv-btn" class="btn btn-primary">Carica Pasti</button>
+              <span id="info-icon" title="Mostra formato CSV richiesto">ℹ️</span>
+          </section>
 
-      ## 1. Visione Generale
-      Una web app frontend-only che permette a un utente di pianificare il proprio protocollo alimentare settimanale trascinando pasti predefiniti da una libreria a un calendario, con logiche di validazione in tempo reale.
+          <main class="main-container">
+              <section id="calendar-view" class="calendar-container" aria-labelledby="calendar-title">
+                  <h2 id="calendar-title" class="sr-only">Piano Settimanale</h2>
+                  <div id="calendar-grid" class="calendar-grid">
+                      </div>
+              </section>
+              <aside class="library-container" aria-labelledby="library-title">
+                  <h2 id="library-title">📚 Libreria Pasti</h2>
+                  <div id="meal-library" class="meal-library">
+                      <p>Inserisci un URL e clicca "Carica Pasti" per iniziare.</p>
+                  </div>
+              </aside>
+          </main>
+          <footer>
+              <button id="reset-btn" class="btn btn-secondary">Reset Settimana</button>
+              <button id="print-btn" class="btn btn-primary">Stampa 🖨️</button>
+          </footer>
 
-      ## 2. User Stories (Cosa l'utente può fare)
-
-      * **US-1 (Caricamento Dati):** Come utente, al primo avvio, voglio che l'app carichi automaticamente l'elenco completo dei pasti da una fonte dati remota (CSV), in modo da avere sempre la versione più aggiornata.
-      * **US-2 (Visualizzazione):** Come utente, voglio vedere una griglia chiara del calendario settimanale (Lunedì-Domenica) e una libreria laterale con tutti i pasti disponibili, filtrabili per tipo (Pranzo, Cena).
-      * **US-3 (Pianificazione):** Come utente, voglio poter trascinare un pasto dalla libreria e rilasciarlo in uno slot specifico del calendario (es. "Pranzo" di Lunedì).
-      * **US-4 (Validazione Soia):** Come utente, quando inserisco un pasto contenente soia a pranzo, voglio che l'app mi impedisca visivamente (es. rendendolo non selezionabile) di aggiungere un altro pasto con soia a cena nello stesso giorno, per rispettare le regole del protocollo.
-      * **US-5 (Persistenza):** Come utente, voglio che il mio piano settimanale venga salvato automaticamente, in modo che ricaricando la pagina io possa ritrovare la mia pianificazione.
-      * **US-6 (Pasto Libero):** Come utente, voglio poter contrassegnare un pasto qualsiasi nel mio calendario come "Pasto Libero", per gestire le eccezioni settimanali.
-      * **US-7 (Reset):** Come utente, voglio un pulsante "Reset Settimana" per svuotare rapidamente tutto il calendario e ricominciare da capo.
-      * **US-8 (Stampa):** Come utente, voglio un pulsante "Stampa" che generi una versione pulita e stampabile del mio piano settimanale.
-
-      ## 3. Mockup ASCII dell'Interfaccia
-
-      Questo mockup definisce la struttura di base dell'interfaccia.
-
-      +----------------------------------------------------+--------------------------+
-      |  **🗓️ Protocollo Dinamico** |  **📚 Libreria Pasti** |
-      |                                                    |                          |
-      |         LUN      MAR      MER      GIO      VEN ... |  [Filtro: Pranzo/Cena ]  |
-      |                                                    |                          |
-      | **Pranzo** [slot vuoto] [slot vuoto] [slot vuoto] ... |  +--------------------+  |
-      |         +------------+                              |  | draggable-pasto-1  |  |
-      | **Cena** | Riso+Tonno | [slot vuoto] [slot vuoto] ... |  +--------------------+  |
-      |         +------------+                              |  | draggable-pasto-2  |  |
-      |                                                    |  +--------------------+  |
-      |         ...etc...                                  |  | draggable-pasto-3  |  |
-      |                                                    |  +--------------------+  |
-      |                                                    |                          |
-      +----------------------------------------------------+--------------------------+
-      | [ Reset Settimana ]                           [ Stampa 🖨️ ]                  |
-      +------------------------------------------------------------------------------+
-  - file: docs/02_ARCHITECTURE.md
+          <div id="info-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+                  <h3>Formato CSV Richiesto</h3>
+                  <p>Per essere compatibile, il tuo file CSV deve rispettare le seguenti regole:</p>
+                  <ol>
+                      <li>Usare il carattere <strong>Tabulatore (`\t`)</strong> come separatore di colonna.</li>
+                      <li>Avere la seguente intestazione (header) nella prima riga:
+                          <br><code>id	nomePasto	tipoPasto	ingredienti	etichette</code>
+                      </li>
+                  </ol>
+                  <h4>Dettaglio Colonne:</h4>
+                  <ul>
+                      <li><strong>id:</strong> Un numero progressivo unico per ogni pasto.</li>
+                      <li><strong>nomePasto:</strong> Il nome visualizzato nell'app (es. <code>Pranzo: Riso + Tonno</code>).</li>
+                      <li><strong>tipoPasto:</strong> Il tipo di pasto (es. <code>Pranzo</code>, <code>Cena</code>).</li>
+                      <li><strong>ingredienti:</strong> Descrizione degli ingredienti (es. <code>"Riso: 80g, Tonno: 112g"</code>).</li>
+                      <li><strong>etichette:</strong> Tag separati da virgola, senza spazi (es. <code>contiene-soia,vegetale</code>).</li>
+                  </ul>
+                  <h4>Esempio Completo:</h4>
+                  <pre><code>id	nomePasto	tipoPasto	ingredienti	etichette
+                      1	Pranzo: Riso + Tonno	Pranzo	"Riso Basmati: 80g (s), Tonno: 112g (sg)"	pesce
+                      2	Pranzo: Piadina + Tofu	Pranzo	"Piadina Integrale: 80g, Tofu: 125g"	contiene-soia,vegetale
+                      3	Cena: Bistecca di Soia	Cena	"Soia Testurizzata: 70g (s), Pane: 40g"	contiene-soia,vegetale</code></pre>
+              </div>
+          </div>
+      </body>
+      </html>
+  - file: style.css
     content: |
-      # Architettura: Protocollo Dinamico v1.0
+      :root {
+        /* Palette Colori */
+        --color-background: #F8F9FA;
+        --color-surface: #FFFFFF;
+        --color-border: #E9ECEF;
+        --color-text-primary: #212529;
+        --color-text-secondary: #6C757D;
+        --color-primary: #28a745;
+        --color-accent: #007BFF;
+        --color-warning: #FFC107;
+        --color-disabled: #CED4DA;
+        --color-drop-target: #E2F5E6;
+      }
 
-      ## 1. Principi Guida
-      * **Frontend-Only:** Nessun server, nessun backend. L'app vive interamente nel browser.
-      * **KISS (Keep It Simple, Stupid):** Utilizzare Vanilla JavaScript, HTML e CSS. Nessun framework.
-      * **SRP (Single Responsibility Principle):** Ogni funzione e ogni file deve avere una sola, chiara responsabilità.
+      /* Reset e Stili Globali */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-      ## 2. Diagramma di Flusso (Flowchart)
-      Questo diagramma descrive il ciclo di vita e la logica dell'applicazione.
+      body {
+        font-family: 'Roboto', sans-serif;
+        background-color: var(--color-background);
+        color: var(--color-text-primary);
+        line-height: 1.6;
+      }
 
-      ```mermaid
-      graph TD
-          A[Inizio App] --> B{Controlla localStorage};
-          B -- Svuota Calendario --> C[Mostra Calendario Vuoto];
-          B -- Trova Piano Salvato --> D[Carica Piano da localStorage];
-          D --> E{Popola Stato Applicazione};
-          C --> F[Fetch 'pasti.csv' da GitHub];
-          F -- Fallito --> G[Mostra Errore Caricamento];
-          F -- Successo --> H[Esegui Parsing CSV];
-          H --> I[Popola Lista Master dei Pasti nello Stato];
-          I --> E;
-          E --> J[Renderizza UI Completa];
-          J --> K{Attesa Interazione Utente};
+      header, footer {
+        padding: 1rem 2rem;
+        background-color: var(--color-surface);
+        border-bottom: 1px solid var(--color-border);
+        text-align: center;
+      }
 
-          K -- Drag & Drop Pasto --> L[Evento 'drop' su Slot Calendario];
-          L --> M{Pasto contiene 'contiene-soia'?};
-          M -- Sì --> N{Controlla altro pasto soia nel giorno};
-          N -- No --> O[Aggiungi Pasto allo Stato];
-          N -- Sì --> P[Annulla operazione / Mostra notifica];
-          M -- No --> O;
+      footer {
+        border-top: 1px solid var(--color-border);
+        border-bottom: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
 
-          K -- Click 'Reset' --> Q[Svuota Piano nello Stato];
-          K -- Click 'Pasto Libero' --> R[Aggiorna flag Pasto nello Stato];
+      h1, h2, h3 {
+        font-weight: 700;
+      }
 
-          O --> S[Salva Stato in localStorage];
-          Q --> S;
-          R --> S;
-          S --> J;
-      ```
+      /* Sezione Input Dati */
+      .data-source-container {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 2rem;
+        background: var(--color-surface);
+        border-bottom: 1px solid var(--color-border);
+      }
 
-      ## 3. Struttura dei File
-      La struttura dei file è progettata per la massima modularità e leggibilità.
+      #csv-url-input {
+        flex-grow: 1;
+        padding: 0.75rem;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        font-size: 1rem;
+      }
 
-      ```
-      .
-      ├── index.html              # Entry point dell'applicazione
-      ├── style.css               # Stili globali e dei componenti
-      └── src/
-          ├── main.js             # File principale, inizializza l'app
-          ├── api/
-          │   └── mealService.js  # Funzione per fetch e parsing del CSV
-          ├── core/
-          │   ├── state.js        # Gestione dello stato centrale dell'app
-          │   └── validation.js   # Logica per la regola della soia
-          ├── ui/
-          │   ├── calendar.js     # Funzioni per renderizzare e aggiornare la griglia
-          │   ├── library.js      # Funzioni per renderizzare la libreria dei pasti
-          │   └── interactions.js # Gestione degli eventi (drag & drop, clicks)
-          └── utils/
-              └── constants.js    # Costanti come l'URL del CSV e le chiavi del localStorage
-      ```
+      #info-icon {
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--color-text-secondary);
+        user-select: none;
+      }
 
-      ## 4. Gestione dello Stato
-      L'intero stato dell'applicazione sarà gestito da un singolo oggetto JavaScript in `src/core/state.js`.
+      /* Layout Principale */
+      .main-container {
+        display: grid;
+        grid-template-columns: 3fr 1fr;
+        gap: 2rem;
+        padding: 2rem;
+        min-height: 70vh;
+      }
 
-      **Struttura dello Stato Iniziale:**
-      ```javascript
-      {
-        // Lista di tutti i pasti caricati dal CSV
-        masterMealList: [],
-        // Oggetto che mappa gli slot del calendario ai pasti pianificati
-        // Esempio: { 'lunedi-pranzo': mealId_1, 'martedi-cena': mealId_2, ... }
-        weeklyPlan: {},
-        // Stato dei filtri UI
-        uiFilters: {
-          type: 'all' // 'pranzo', 'cena'
+      .library-container {
+        padding: 1rem;
+        background: var(--color-surface);
+        border-radius: 8px;
+        border: 1px solid var(--color-border);
+      }
+      
+      .meal-library {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      /* Griglia Calendario */
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: 1fr repeat(7, 2fr);
+        gap: 0.5rem;
+      }
+
+      .grid-header, .meal-type-label {
+        font-weight: 500;
+        padding: 0.5rem;
+        text-align: center;
+      }
+
+      .meal-type-label {
+        text-align: right;
+        align-self: center;
+      }
+
+      .calendar-slot {
+        min-height: 100px;
+        border: 2px dashed var(--color-border);
+        border-radius: 8px;
+        padding: 0.5rem;
+        background-color: var(--color-surface);
+        transition: background-color 0.2s ease;
+      }
+
+      .calendar-slot.drop-target {
+        background-color: var(--color-drop-target);
+        border-style: solid;
+      }
+
+      /* Card Pasto */
+      .meal-card {
+        padding: 0.75rem;
+        border: 1px solid var(--color-border);
+        background-color: var(--color-surface);
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        cursor: grab;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .meal-card:hover {
+        transform: scale(1.03);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      }
+      .meal-card.dragging { opacity: 0.5; box-shadow: none; }
+      .meal-card.disabled { background-color: var(--color-disabled); opacity: 0.6; cursor: not-allowed; }
+      .meal-card h4 { margin-bottom: 0.25rem; font-size: 0.9rem; }
+      .meal-card p { font-size: 0.8rem; color: var(--color-text-secondary); }
+
+      /* Pulsanti */
+      .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s ease, color 0.2s ease;
+      }
+      .btn-primary { background-color: var(--color-primary); color: white; }
+      .btn-primary:hover { opacity: 0.9; }
+      .btn-secondary { background-color: transparent; color: var(--color-text-secondary); border-color: var(--color-border); }
+      .btn-secondary:hover { background-color: var(--color-background); border-color: #adb5bd; }
+
+      /* Modal */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+      .modal-content {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        max-width: 600px;
+        width: 90%;
+        position: relative;
+      }
+      .modal-close-btn {
+        position: absolute;
+        top: 10px;
+        right: 15px;
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+      }
+      .modal-hidden { display: none; }
+      .modal-content pre { background: var(--color-background); padding: 1rem; border-radius: 4px; margin-top: 1rem; }
+      .modal-content code { font-family: monospace; }
+      .modal-content ul, .modal-content ol { padding-left: 20px; }
+
+      /* Utility */
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+      
+      /* Stili di Stampa */
+      @media print { /* ... (invariato) ... */ }
+  - file: src/utils/constants.js
+    content: |
+      // NOTA: Questo URL è un placeholder di default.
+      export const DEFAULT_CSV_URL = 'https://raw.githubusercontent.com/username/repo/main/pasti.csv';
+
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicProtocolUrl';
+
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = ['Pranzo', 'Cena'];
+  - file: src/api/mealService.js
+    content: |
+      /**
+       * Scarica e processa il file CSV dei pasti da un URL specifico.
+       * @param {string} url - L'URL del file CSV.
+       * @returns {Promise<Array<Object>>} Una promessa che risolve in un array di oggetti pasto.
+       */
+      export async function fetchAndParseMeals(url) {
+        if (!url) {
+          alert("Per favore, inserisci un URL valido.");
+          return [];
+        }
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Errore HTTP: ${response.status}`);
+          }
+          const csvText = await response.text();
+          const meals = parseCSV(csvText);
+          if (meals.length === 0) {
+            alert("Il file CSV è vuoto o non ha un formato valido.");
+            return [];
+          }
+          return meals;
+        } catch (error) {
+          console.error("Impossibile caricare i dati dei pasti:", error);
+          alert(`Errore nel caricamento dei pasti dall'URL fornito.\nControlla che l'URL sia corretto e che il formato del file sia valido.`);
+          return [];
         }
       }
-      ```
-      Ogni funzione che modifica lo stato (es. `addMealToPlan`, `clearPlan`) dovrà essere definita in `state.js` e dovrà essere l'unica a poter mutare questo oggetto. Dopo ogni modifica, verrà emesso un evento custom per notificare all'UI di ri-renderizzarsi.
-  - file: docs/03_STYLE_GUIDE.md
-    content: |
-      # Guida di Stile: Protocollo Dinamico v1.0
 
-      ## 1. Palette Colori
-      La palette è pensata per essere pulita, fresca e professionale, con un richiamo al mondo del cibo e della salute. Useremo variabili CSS per una facile gestione.
+      function parseCSV(text) {
+        const lines = text.trim().split('\n');
+        const headers = lines[0].split('\t').map(h => h.trim());
+        
+        // Validazione base dell'header
+        if(!['id', 'nomePasto', 'tipoPasto'].every(h => headers.includes(h))) {
+            console.error("Header del CSV non valido. Richiesti: id, nomePasto, tipoPasto, etc.");
+            return [];
+        }
 
-      ```css
-      :root {
-        /* Sfondi e Superfici */
-        --color-background: #F8F9FA; /* Grigio molto chiaro */
-        --color-surface: #FFFFFF;    /* Bianco puro per le card */
-        --color-border: #E9ECEF;    /* Bordo sottile e neutro */
-
-        /* Testo */
-        --color-text-primary: #212529;   /* Nero quasi puro */
-        --color-text-secondary: #6C757D; /* Grigio per testo secondario */
-
-        /* Colori Primari e d'Accento */
-        --color-primary: #28a745;        /* Verde successo/salute */
-        --color-accent: #007BFF;         /* Blu per interazioni e link */
-        --color-warning: #FFC107;        /* Giallo per il "Pasto Libero" */
-        --color-disabled: #CED4DA;       /* Grigio per elementi disattivati */
+        return lines.slice(1).map(line => {
+          const values = line.split('\t').map(v => v.trim());
+          const mealObject = {};
+          headers.forEach((header, index) => {
+            mealObject[header] = values[index];
+          });
+          return mealObject;
+        });
       }
-      ```
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL } from '../utils/constants.js';
 
-      ## 2. Tipografia
-      Useremo un font sans-serif pulito e leggibile, importato da Google Fonts.
+      let appState = {
+        masterMealList: [],
+        weeklyPlan: {},
+        csvUrl: '',
+      };
 
-      * **Font Family:** `Roboto`, `sans-serif`
-      * **Body Text:** `16px`, `font-weight: 400`
-      * **Titoli (H1, H2):** `font-weight: 700`
-      * **Nomi dei Pasti:** `font-weight: 500`
+      function notifyStateChange() {
+        document.dispatchEvent(new CustomEvent('stateChange'));
+      }
 
-      ## 3. Stile dei Componenti
+      export function setMasterMealList(meals) {
+        appState.masterMealList = meals;
+        notifyStateChange();
+      }
 
-      ### Card del Pasto (in Libreria e Calendario)
-      * **Stato Default:** `background-color: var(--color-surface);`, `border: 1px solid var(--color-border);`, `border-radius: 8px;`, `box-shadow: 0 2px 4px rgba(0,0,0,0.05);`, `cursor: grab;`
-      * **Stato Hover:** Leggero ingrandimento (`transform: scale(1.03);`) e ombra più marcata.
-      * **Stato Dragging:** Opacità ridotta (`opacity: 0.8;`), ombra più evidente.
-      * **Stato Disabilitato (Regola Soia):** `background-color: var(--color-disabled);`, `opacity: 0.6;`, `cursor: not-allowed;`
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) { appState.weeklyPlan[slotId] = mealId; } 
+        else { delete appState.weeklyPlan[slotId]; }
+        saveStateToLocalStorage();
+        notifyStateChange();
+      }
 
-      ### Slot del Calendario
-      * **Stato Vuoto:** Bordo tratteggiato (`border: 2px dashed var(--color-border);`).
-      * **Stato "Droppable" (quando si sta trascinando sopra):** Sfondo evidenziato (`background-color: #E2F5E6;` - un verde molto chiaro).
+      export function resetWeeklyPlan() {
+        appState.weeklyPlan = {};
+        saveStateToLocalStorage();
+        notifyStateChange();
+      }
 
-      ### Pulsanti
-      * **Pulsante Primario (Stampa):** `background-color: var(--color-primary);`, `color: white;`
-      * **Pulsante Secondario (Reset):** `background-color: transparent;`, `color: var(--color-text-secondary);`, `border: 1px solid var(--color-border);`
+      export function setCsvUrl(url) {
+        appState.csvUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+      }
+
+      export function getState() { return { ...appState }; }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(appState.weeklyPlan));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const savedPlan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const savedUrl = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        if (savedPlan) { appState.weeklyPlan = JSON.parse(savedPlan); }
+        if (savedUrl) { appState.csvUrl = savedUrl; }
+      }
+  - file: src/ui/interactions.js
+    content: |
+      import { getState, updateWeeklyPlan, resetWeeklyPlan, setMasterMealList, setCsvUrl } from '../core/state.js';
+      import { isSoyMealAllowed } from '../core/validation.js';
+      import { fetchAndParseMeals } from '../api/mealService.js';
+
+      let draggedMealId = null;
+
+      export function initializeEventListeners() {
+        // Pulsanti Principali
+        document.getElementById('reset-btn').addEventListener('click', () => {
+          if(confirm('Sei sicuro di voler svuotare l\'intero piano settimanale?')) resetWeeklyPlan();
+        });
+        document.getElementById('print-btn').addEventListener('click', () => window.print());
+        document.getElementById('load-csv-btn').addEventListener('click', handleLoadCsv);
+        
+        // Modal
+        document.getElementById('info-icon').addEventListener('click', toggleModal);
+        document.getElementById('modal-close-btn').addEventListener('click', toggleModal);
+        document.getElementById('info-modal').addEventListener('click', (e) => {
+          if (e.target.id === 'info-modal') toggleModal(); // Chiude se si clicca sull'overlay
+        });
+
+        // Drag & Drop
+        const mealLibrary = document.getElementById('meal-library');
+        const calendarGrid = document.getElementById('calendar-grid');
+
+        mealLibrary.addEventListener('dragstart', handleDragStart);
+        mealLibrary.addEventListener('dragend', handleDragEnd);
+        calendarGrid.addEventListener('dragover', handleDragOver);
+        calendarGrid.addEventListener('dragleave', handleDragLeave);
+        calendarGrid.addEventListener('drop', handleDrop);
+      }
+      
+      async function handleLoadCsv() {
+        const urlInput = document.getElementById('csv-url-input');
+        const url = urlInput.value.trim();
+        setCsvUrl(url);
+        const meals = await fetchAndParseMeals(url);
+        setMasterMealList(meals);
+      }
+
+      function toggleModal() {
+        document.getElementById('info-modal').classList.toggle('modal-hidden');
+      }
+
+      function handleDragStart(e) {
+        if (e.target.classList.contains('meal-card')) {
+          draggedMealId = e.target.dataset.mealId;
+          e.target.classList.add('dragging');
+        }
+      }
+
+      function handleDragEnd(e) {
+        if (e.target.classList.contains('meal-card')) {
+          draggedMealId = null;
+          e.target.classList.remove('dragging');
+        }
+      }
+
+      function handleDragOver(e) {
+        const slot = e.target.closest('.calendar-slot');
+        if (slot) {
+          e.preventDefault();
+          slot.classList.add('drop-target');
+        }
+      }
+
+      function handleDragLeave(e) {
+        const slot = e.target.closest('.calendar-slot');
+        if (slot) slot.classList.remove('drop-target');
+      }
+      
+      function handleDrop(e) {
+        e.preventDefault();
+        const slot = e.target.closest('.calendar-slot');
+        if (!slot || !draggedMealId) return;
+
+        slot.classList.remove('drop-target');
+        const { masterMealList, weeklyPlan } = getState();
+        const mealToAdd = masterMealList.find(m => m.id === draggedMealId);
+        const day = slot.dataset.slotId.split('-')[0];
+
+        if (isSoyMealAllowed(day, mealToAdd, weeklyPlan, masterMealList)) {
+          updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
+        } else {
+          alert('Regola violata: Non è possibile consumare due pasti con soia nello stesso giorno.');
+        }
+      }
+  - file: src/main.js
+    content: |
+      import { loadStateFromLocalStorage, getState } from './core/state.js';
+      import { renderCalendar } from './ui/calendar.js';
+      import { renderMealLibrary } from './ui/library.js';
+      import { initializeEventListeners } from './ui/interactions.js';
+      import { DEFAULT_CSV_URL } from './utils/constants.js';
+
+      const calendarGridElement = document.getElementById('calendar-grid');
+      const mealLibraryElement = document.getElementById('meal-library');
+      const csvUrlInputElement = document.getElementById('csv-url-input');
+
+      function renderApp() {
+        const currentState = getState();
+        renderCalendar(calendarGridElement, currentState);
+        renderMealLibrary(mealLibraryElement, currentState);
+        // Assicura che l'input rifletta l'URL caricato
+        if (document.activeElement !== csvUrlInputElement) {
+          csvUrlInputElement.value = currentState.csvUrl;
+        }
+      }
+
+      async function init() {
+        document.addEventListener('stateChange', renderApp);
+
+        loadStateFromLocalStorage();
+        
+        // Popola l'input con l'URL salvato o quello di default
+        const initialState = getState();
+        csvUrlInputElement.value = initialState.csvUrl || DEFAULT_CSV_URL;
+
+        initializeEventListeners();
+        
+        renderApp();
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
 commands:
-  - "echo 'Project documentation saved successfully.'"
+  - echo "Enhancement complete: CSV URL is now user-configurable with an info modal."
