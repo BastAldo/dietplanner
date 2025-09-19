@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocollo Dinamico</title>
+    <title>NutriPlan</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,10 @@
     <script src="src/main.js" type="module" defer></script>
 </head>
 <body>
-    <header><h1>🗓️ Protocollo Dinamico</h1></header>
+    <header>
+        <h1>NutriPlan</h1>
+        <p class="subtitle">Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.</p>
+    </header>
     <section class="data-source-container">
         <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
         <button id="load-config-btn" class="btn btn-primary">Carica</button>
@@ -26,25 +29,26 @@
         </section>
     </main>
     <footer>
-        <button id="reset-btn" class="btn btn-secondary">Reset</button>
-        <button id="print-btn" class="btn btn-primary">Stampa 🖨️</button>
+        <button id="reset-btn" class="btn btn-secondary">Reset Piano</button>
     </footer>
     
     <div id="info-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
             <button class="modal-close-btn" data-target="info-modal">&times;</button>
             <h3>Formato `config.json` Richiesto</h3>
+            <p>Includi `calories_min` e `calories_max` per ogni pasto.</p>
             <pre><code>{
-  "rules": [
-    {
-      "tag": "contiene-soia",
-      "type": "daily-block",
-      "limit": 1,
-      "message": "Non più di 1 pasto con soia al giorno."
-    }
-  ],
+  "rules": [],
   "meals": [
-    { "id": "1", "nomePasto": "...", "etichette": ["..."] }
+    {
+      "id": "1",
+      "nomePasto": "Pranzo: Riso+Tonno",
+      "tipoPasto": "Pranzo",
+      "ingredienti": "Riso: 80g, Tonno: 112g",
+      "etichette": ["pesce"],
+      "calories_min": 550,
+      "calories_max": 600
+    }
   ]
 }</code></pre>
         </div>

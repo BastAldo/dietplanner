@@ -2,7 +2,6 @@ import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl } fro
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openSelectionModal } from './renderer.js';
-
 async function handleLoadConfig() {
   const url = document.getElementById('config-url-input').value.trim();
   setConfigUrl(url);
@@ -14,25 +13,20 @@ async function handleLoadConfig() {
     showNotification(error.message, 'error');
   }
 }
-
 function handleCalendarClick(e) {
   const slot = e.target.closest('.calendar-slot');
   if (!slot) return;
-  
   const deleteButton = e.target.closest('.delete-meal-btn');
   if (deleteButton) {
     updateWeeklyPlan(deleteButton.dataset.slotId, null);
     return;
   }
-
   if (slot.childElementCount === 0) {
     openSelectionModal(slot.dataset.slotId);
   }
 }
-
 export function initializeEventListeners() {
   document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
-  document.getElementById('print-btn').addEventListener('click', () => window.print());
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   document.querySelectorAll('.modal-close-btn').forEach(btn => {

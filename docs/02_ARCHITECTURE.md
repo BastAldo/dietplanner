@@ -1,4 +1,4 @@
-# Architettura: Protocollo Dinamico v1.4
+# Architettura: NutriPlan v1.5
 
 ## 1. Principi Guida
 * **Minimalism:** L'interfaccia utente è ridotta all'essenziale.
@@ -6,7 +6,19 @@
 * **Frontend-Only, KISS, SRP:** L'app vive nel browser, usa Vanilla JS e ogni file ha una sola responsabilità.
 
 ## 2. Formato Dati: `planner-config.json`
-L'applicazione è guidata da un singolo file JSON con due sezioni principali: `rules` e `meals`.
+Il file JSON ora richiede campi `calories_min` e `calories_max` per ogni pasto nell'array `meals`.
+```json
+{
+  "meals": [
+    {
+      "id": "1",
+      "nomePasto": "...",
+      "calories_min": 550,
+      "calories_max": 600
+    }
+  ]
+}
+```
 
 ## 3. Struttura dei File
 ```
@@ -28,6 +40,5 @@ L'applicazione è guidata da un singolo file JSON con due sezioni principali: `r
 ## 4. Flusso di Interazione Utente
 Il flusso è unificato: l'utente clicca su uno slot vuoto e un modale si apre per la selezione del pasto.
 
-## 5. Design Responsivo
-* **Mobile (< 992px):** Il calendario è una lista di card scorrevole orizzontalmente.
-* **Desktop (>= 992px):** Il calendario è una griglia a otto colonne.
+## 5. Logica di Calcolo
+Una nuova funzione nel modulo `renderer.js` calcola la somma dei range calorici per ogni giorno. Viene eseguita ad ogni modifica del piano (`stateChange`) e aggiorna il DOM con i totali giornalieri.

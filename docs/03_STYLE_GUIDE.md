@@ -1,4 +1,4 @@
-# Guida di Stile: Protocollo Dinamico v1.4 (Dark Mode)
+# Guida di Stile: NutriPlan v1.5 (Dark Mode)
 
 ## 1. Palette Colori
 ```css
@@ -19,7 +19,9 @@
 * **Body Text:** `16px`
 
 ## 3. Stile dei Componenti
-Tutti i componenti sono stilizzati per un tema scuro, usando le variabili definite nella palette. Le card usano `--color-surface` come sfondo e i testi usano `--color-text-primary` e `--color-text-secondary`.
+* **Header:** Include ora un titolo `h1` e un sottotitolo `p`.
+* **Totalizzatore Calorie:** Un elemento testuale (`.daily-calories`) posizionato in ogni card/colonna giornaliera.
+* **Footer:** Contiene solo il pulsante "Reset".
 
 ## 4. Breakpoints e Layout Mobile
 * **Breakpoint principale:** `992px`.
