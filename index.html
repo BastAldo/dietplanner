@@ -12,40 +12,37 @@
 </head>
 <body>
     <header>
-        <h1>NutriPlan</h1>
-        <p class="subtitle">Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.</p>
+        <h1 id="main-title"></h1>
+        <p id="subtitle" class="subtitle"></p>
     </header>
     <section class="data-source-container">
         <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
-        <button id="load-config-btn" class="btn btn-primary">Carica</button>
+        <button id="load-config-btn" class="btn btn-primary"></button>
         <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
     </section>
     <main class="main-container">
         <section id="calendar-view" class="calendar-container">
-            <h2>Piano Settimanale</h2>
+            <h2 id="weekly-plan-title"></h2>
             <div id="calendar-grid" class="calendar-grid">
-                <p>Carica una configurazione per visualizzare il calendario.</p>
+                <p id="calendar-placeholder"></p>
             </div>
         </section>
     </main>
     <footer>
-        <button id="reset-btn" class="btn btn-secondary">Reset Piano</button>
+        <button id="reset-btn" class="btn btn-secondary"></button>
     </footer>
     
     <div id="info-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
             <button class="modal-close-btn" data-target="info-modal">&times;</button>
-            <h3>Formato `config.json` Richiesto</h3>
-            <p>Includi `calories_min` e `calories_max` per ogni pasto.</p>
+            <h3 id="info-modal-title"></h3>
+            <p id="info-modal-desc"></p>
             <pre><code>{
   "rules": [],
   "meals": [
     {
       "id": "1",
       "nomePasto": "Pranzo: Riso+Tonno",
-      "tipoPasto": "Pranzo",
-      "ingredienti": "Riso: 80g, Tonno: 112g",
-      "etichette": ["pesce"],
       "calories_min": 550,
       "calories_max": 600
     }
@@ -62,7 +59,7 @@
     <div id="selection-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
             <button class="modal-close-btn" data-target="selection-modal">&times;</button>
-            <h3 id="selection-modal-title">Scegli un pasto</h3>
+            <h3 id="selection-modal-title"></h3>
             <div id="selection-modal-list" class="selection-list"></div>
         </div>
     </div>

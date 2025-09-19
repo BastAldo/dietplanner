@@ -1,44 +1,23 @@
-# Architettura: NutriPlan v1.5
+# Architettura: NutriPlan v1.6
 
 ## 1. Principi Guida
-* **Minimalism:** L'interfaccia utente è ridotta all'essenziale.
-* **Data-Driven:** La logica di business (regole) è definita nel file JSON.
+* **Minimalism:** L'interfaccia è ridotta all'essenziale.
+* **Data-Driven:** La logica di business è definita nel file JSON.
+* **Maintainability:** I testi dell'interfaccia (stringhe) sono centralizzati in un file di costanti per facilitare future modifiche e traduzioni (i18n).
 * **Frontend-Only, KISS, SRP:** L'app vive nel browser, usa Vanilla JS e ogni file ha una sola responsabilità.
 
 ## 2. Formato Dati: `planner-config.json`
-Il file JSON ora richiede campi `calories_min` e `calories_max` per ogni pasto nell'array `meals`.
-```json
-{
-  "meals": [
-    {
-      "id": "1",
-      "nomePasto": "...",
-      "calories_min": 550,
-      "calories_max": 600
-    }
-  ]
-}
-```
+Il file JSON richiede campi `calories_min` e `calories_max` per ogni pasto.
 
 ## 3. Struttura dei File
-```
-.
-└── src/
-    ├── api/
-    │   └── configService.js
-    ├── core/
-    │   ├── state.js
-    │   └── validation.js
-    ├── ui/
-    │   ├── renderer.js
-    │   ├── interactions.js
-    │   └── notifications.js
-    └── utils/
-        └── constants.js
-```
+Il file `src/utils/constants.js` ora esporta anche un oggetto `UI_TEXT` contenente tutte le stringhe testuali dell'applicazione.
 
 ## 4. Flusso di Interazione Utente
 Il flusso è unificato: l'utente clicca su uno slot vuoto e un modale si apre per la selezione del pasto.
 
 ## 5. Logica di Calcolo
-Una nuova funzione nel modulo `renderer.js` calcola la somma dei range calorici per ogni giorno. Viene eseguita ad ogni modifica del piano (`stateChange`) e aggiorna il DOM con i totali giornalieri.
+Una funzione in `renderer.js` calcola la somma dei range calorici per ogni giorno.
+
+## 6. Design Responsivo
+* **Mobile (< 992px):** Il calendario è una lista scorrevole orizzontalmente.
+* **Desktop (>= 992px):** Il calendario è una griglia a otto colonne.

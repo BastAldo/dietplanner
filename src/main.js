@@ -1,5 +1,5 @@
 import { loadStateFromLocalStorage, getState, setPlannerConfig } from './core/state.js';
-import { renderApp } from './ui/renderer.js';
+import { renderApp, populateInitialText } from './ui/renderer.js';
 import { initializeEventListeners } from './ui/interactions.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { fetchAndParseConfig } from './api/configService.js';
@@ -14,6 +14,7 @@ async function loadInitialConfig(url) {
   }
 }
 function init() {
+  populateInitialText();
   document.addEventListener('stateChange', renderApp);
   loadStateFromLocalStorage();
   const initialState = getState();

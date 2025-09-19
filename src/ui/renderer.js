@@ -1,5 +1,6 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
-import { DAYS, MEAL_TYPES } from '../utils/constants.js';
+import { DAYS, MEAL_TYPES, UI_TEXT } from '../utils/constants.js';
+
 const selectionModal = document.getElementById('selection-modal');
 const selectionModalTitle = document.getElementById('selection-modal-title');
 const selectionModalList = document.getElementById('selection-modal-list');
@@ -16,7 +17,7 @@ function calculateDailyCalories(day, state) {
       }
     }
   });
-  return (min === 0 && max === 0) ? '' : `Kcal: ${min} - ${max}`;
+  return (min === 0 && max === 0) ? '' : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
 function createMealCardHTML(meal, slotId, mealType) {
@@ -71,7 +72,7 @@ function renderMobileCalendar(element, state) {
 export function openSelectionModal(slotId) {
   const state = getState();
   const [day, mealType] = slotId.split('-');
-  selectionModalTitle.textContent = `Scegli ${mealType} per ${day}`;
+  selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType} ${UI_TEXT.FOR_DAY_PREFIX} ${day}`;
   const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
   if(relevantMeals.length > 0) {
       selectionModalList.innerHTML = relevantMeals.map(meal => 
@@ -81,7 +82,7 @@ export function openSelectionModal(slotId) {
       </div>`
       ).join('');
   } else {
-      selectionModalList.innerHTML = "<p>Nessun pasto di questo tipo disponibile.</p>";
+      selectionModalList.innerHTML = `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
   }
   
   selectionModalList.onclick = (e) => {
@@ -94,11 +95,22 @@ export function openSelectionModal(slotId) {
   selectionModal.classList.remove('modal-hidden');
 }
 
+export function populateInitialText() {
+  document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+  document.getElementById('subtitle').textContent = UI_TEXT.SUBTITLE;
+  document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+  document.getElementById('weekly-plan-title').textContent = UI_TEXT.WEEKLY_PLAN_TITLE;
+  document.getElementById('calendar-placeholder').textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
+  document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+  document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+  document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+}
+
 export function renderApp() {
   const state = getState();
   const calendarGrid = document.getElementById('calendar-grid');
   if (state.masterMealList.length === 0 && Object.keys(state.weeklyPlan).length === 0) {
-      calendarGrid.innerHTML = '<p>Carica una configurazione per visualizzare il calendario.</p>'; return;
+      calendarGrid.innerHTML = `<p>${UI_TEXT.CALENDAR_PLACEHOLDER}</p>`; return;
   }
   if (window.matchMedia('(min-width: 992px)').matches) {
     renderDesktopCalendar(calendarGrid, state);
