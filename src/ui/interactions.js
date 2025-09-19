@@ -7,35 +7,67 @@ import { openSelectionModal } from './renderer.js';
 const IS_DESKTOP = window.matchMedia('(min-width: 768px)').matches;
 let draggedMealId = null;
 
+async function handleLoadConfig() {
+  const url = document.getElementById('config-url-input').value.trim();
+  setConfigUrl(url);
+  try {
+    const config = await fetchAndParseConfig(url);
+    setPlannerConfig(config);
+    showNotification('Configurazione caricata!', 'success');
+  } catch (error) {
+    showNotification(error.message, 'error');
+  }
+}
+
+function handleFilterClick(e) {
+  if (e.target.matches('.filter-btn')) {
+    setActiveFilter(e.target.dataset.filter);
+  }
+}
+
 function handleCalendarClick(e) {
   if (e.target.matches('.delete-meal-btn')) {
     updateWeeklyPlan(e.target.dataset.slotId, null);
     return;
   }
-  // Attiva il modale di selezione solo su mobile e su slot vuoti
   if (!IS_DESKTOP && e.target.matches('.calendar-slot:empty')) {
     openSelectionModal(e.target.dataset.slotId);
   }
 }
 
-function handleDrop(e) { /* ... (invariato) ... */ }
+function handleDrop(e) {
+  e.preventDefault();
+  const slot = e.target.closest('.calendar-slot');
+  if (!slot || !draggedMealId) return;
+  const state = getState();
+  const mealToAdd = state.masterMealList.find(m => m.id === draggedMealId);
+  if (!mealToAdd) return;
+  const validationResult = isPlacementValid(mealToAdd, slot.dataset.slotId, state.weeklyPlan, state.masterMealList, state.rules);
+  if (validationResult.isValid) {
+    updateWeeklyPlan(slot.dataset.slotId, draggedMealId);
+  } else {
+    showNotification(validationResult.message, 'error');
+  }
+  draggedMealId = null;
+}
 
 export function initializeEventListeners() {
   document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
   document.getElementById('print-btn').addEventListener('click', () => window.print());
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-  document.querySelectorAll('.modal-close-btn').forEach(btn => { /* ... (invariato) ... */ });
+  document.querySelectorAll('.modal-close-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => document.getElementById(e.target.dataset.target).classList.add('modal-hidden'));
+  });
   document.getElementById('filter-container').addEventListener('click', handleFilterClick);
-  document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+  const calendar = document.getElementById('calendar-grid');
+  calendar.addEventListener('click', handleCalendarClick);
 
-  // Attiva il drag & drop solo su desktop
   if (IS_DESKTOP) {
-      const calendar = document.getElementById('calendar-grid');
       const library = document.getElementById('meal-library');
-      library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) draggedMealId = e.target.dataset.mealId; });
+      library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) { draggedMealId = e.target.dataset.mealId; e.target.classList.add('dragging') }});
+      library.addEventListener('dragend', e => e.target.classList.remove('dragging'));
       calendar.addEventListener('drop', handleDrop);
       calendar.addEventListener('dragover', e => { if(e.target.closest('.calendar-slot')) e.preventDefault(); });
   }
 }
-// ... (altre funzioni di interazione come handleLoadConfig, handleFilterClick, etc. sono invariate)
