@@ -1,4 +1,4 @@
-# Guida di Stile: NutriPlan v1.6 (Dark Mode)
+# Guida di Stile: NutriPlan v1.7 (Dark Mode)
 
 ## 1. Palette Colori
 ```css
@@ -20,7 +20,7 @@
 
 ## 3. Stile dei Componenti
 * **Header:** Include titolo e sottotitolo.
-* **Totalizzatore Calorie:** Un elemento testuale (`.daily-calories`).
+* **Totalizzatore Calorie:** Mostra un range o un valore singolo.
 * **Footer:** Contiene solo il pulsante "Reset".
 
 ## 4. Breakpoints

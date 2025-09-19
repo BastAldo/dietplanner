@@ -38,17 +38,26 @@
             <h3 id="info-modal-title"></h3>
             <p id="info-modal-desc"></p>
             <pre><code>{
-  "rules": [],
+  "rules": [
+    {
+      "tag": "contiene-soia",
+      "type": "daily-block",
+      "limit": 1,
+      "message": "Non più di 1 pasto con soia al giorno."
+    }
+  ],
   "meals": [
     {
       "id": "1",
       "nomePasto": "Pasto con Range",
+      "tipoPasto": "Pranzo",
       "calories_min": 550,
       "calories_max": 600
     },
     {
       "id": "2",
       "nomePasto": "Pasto Fisso",
+      "tipoPasto": "Cena",
       "calories_min": 300
     }
   ]

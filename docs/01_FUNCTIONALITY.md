@@ -1,12 +1,13 @@
-# Funzionalità: NutriPlan v1.6
+# Funzionalità: NutriPlan v1.7
 
 ## 1. Visione Generale
-Una web app frontend-only, responsiva e con tema scuro, per creare e gestire piani alimentari flessibili con conteggio calorico giornaliero.
+Una web app frontend-only, responsiva e con tema scuro, per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
 
 ## 2. User Stories
 * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
-* **US-2 (Visualizzazione Calendario):** L'utente vede un calendario come interfaccia principale.
+* **US-2 (Visualizzazione Calendario):** L'utente vede un calendario completo con slot per colazione, spuntini, pranzo e cena.
 * **US-3 (Pianificazione via Modale):** L'utente clicca su uno slot vuoto per aprire un modale e selezionare un pasto.
+* **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
 * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
 * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista scorrevole orizzontalmente.
-* **US-16 (Conteggio Calorie Flessibile):** Come utente, voglio vedere il totale calorico (min-max) per ogni giorno, calcolato automaticamente in base ai pasti che ho inserito.
+* **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno.
