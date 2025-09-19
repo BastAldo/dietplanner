@@ -27,7 +27,7 @@ h2 { margin-bottom: 1rem; }
 .meal-card { position: relative; height: 100%; padding: 0.75rem; border: 1px solid var(--color-border); background-color: var(--color-surface); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: grab; }
 .meal-card.is-mismatched { border-color: var(--color-warning); border-width: 2px; }
 .delete-meal-btn { position: absolute; top: 2px; right: 5px; background: none; border: none; font-size: 1.5rem; color: var(--color-text-secondary); cursor: pointer; opacity: 0; transition: opacity 0.2s; }
-.calendar-slot:hover .delete-meal-btn { opacity: 1; }
+.calendar-slot .meal-card:hover .delete-meal-btn { opacity: 1; }
 .meal-card.dragging { opacity: 0.5; }
 .meal-card h4 { margin-bottom: 0.25rem; font-size: 0.9rem; }
 .meal-card p { font-size: 0.8rem; color: var(--color-text-secondary); }

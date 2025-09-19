@@ -11,13 +11,13 @@ export function initializeEventListeners() {
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   document.querySelectorAll('.modal-close-btn').forEach(btn => {
-    btn.addEventListener('click', () => document.getElementById(btn.dataset.target).classList.add('modal-hidden'));
+    btn.addEventListener('click', (e) => document.getElementById(e.target.dataset.target).classList.add('modal-hidden'));
   });
   document.getElementById('filter-container').addEventListener('click', handleFilterClick);
   const calendar = document.getElementById('calendar-grid');
   calendar.addEventListener('click', handleCalendarClick);
-  calendar.addEventListener('dragover', e => { if(e.target.closest('.calendar-slot')) e.preventDefault(); });
   calendar.addEventListener('drop', handleDrop);
+  calendar.addEventListener('dragover', e => { if(e.target.closest('.calendar-slot')) e.preventDefault(); });
   const library = document.getElementById('meal-library');
   library.addEventListener('dragstart', e => { if (e.target.classList.contains('meal-card')) draggedMealId = e.target.dataset.mealId; });
 }
@@ -28,7 +28,7 @@ async function handleLoadConfig() {
   try {
     const config = await fetchAndParseConfig(url);
     setPlannerConfig(config);
-    showNotification('Configurazione caricata con successo!', 'success');
+    showNotification('Configurazione caricata!', 'success');
   } catch (error) {
     showNotification(error.message, 'error');
   }
@@ -42,8 +42,7 @@ function handleFilterClick(e) {
 
 function handleCalendarClick(e) {
   if (e.target.matches('.delete-meal-btn')) {
-    const slotId = e.target.dataset.slotId;
-    updateWeeklyPlan(slotId, null);
+    updateWeeklyPlan(e.target.dataset.slotId, null);
   }
 }
 

@@ -6,7 +6,7 @@
 
 ## 2. Formato Dati: `planner-config.json`
 L'applicazione è guidata da un singolo file JSON con due sezioni principali:
-* **`rules`**: Un array di oggetti regola. Ogni oggetto definisce un `tag`, un `type` di regola (es. `daily-block`), un `limit` e un `message` di errore. Questo permette di definire la logica di business senza modificare il codice.
+* **`rules`**: Un array di oggetti regola. Ogni oggetto definisce un `tag`, un `type` di regola (es. `daily-block`), un `limit` e un `message` di errore.
 * **`meals`**: Un array di oggetti pasto, che costituisce la libreria a disposizione dell'utente.
 
 ## 3. Struttura dei File
@@ -14,16 +14,22 @@ L'applicazione è guidata da un singolo file JSON con due sezioni principali:
 .
 └── src/
     ├── api/
-    │   └── configService.js  # Sostituisce mealService, gestisce il JSON
+    │   └── configService.js
     ├── core/
-    │   ├── state.js        # Gestisce lo stato (inclusi filtri e regole)
-    │   └── validation.js   # Motore di validazione generico basato sulle regole
+    │   ├── state.js
+    │   └── validation.js
     ├── ui/
-    │   ├── ...
+    │   ├── renderer.js     # Modulo di rendering puro
+    │   ├── interactions.js
     │   └── notifications.js
     └── utils/
         └── constants.js
 ```
 
-## 4. Flusso di Validazione
-Quando un utente sposta un pasto, `interactions.js` chiama il motore di validazione in `validation.js`. Il motore non conosce la "soia", ma itera sull'array `rules` presente nello stato. Per ogni regola, controlla se il pasto ha il `tag` corrispondente e, in caso affermativo, applica la logica del `type` di regola (es. `daily-block`). Se una regola fallisce, il processo si interrompe e viene mostrato il `message` di errore associato.
+## 4. Gestione dello Stato e Flusso di Rendering
+Lo stato è centralizzato in `state.js`. Ogni modifica allo stato (es. `setPlannerConfig`, `updateWeeklyPlan`) non modifica direttamente il DOM, ma emette un evento globale `stateChange` chiamando la funzione `notify()`.
+
+In `main.js`, un singolo "event listener" è in ascolto di `stateChange`. Quando l'evento viene catturato, questo listener invoca la funzione principale `renderApp()` in `renderer.js`, la quale legge lo stato aggiornato tramite `getState()` e ridisegna l'intera interfaccia. Questo garantisce un flusso di dati unidirezionale e prevedibile (Stato -> Evento -> UI).
+
+## 5. Design Responsivo
+(invariato)

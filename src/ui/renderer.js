@@ -1,3 +1,4 @@
+import { getState } from '../core/state.js';
 import { DAYS, MEAL_TYPES } from '../utils/constants.js';
 
 function renderCalendar(element, state) {
@@ -27,9 +28,13 @@ function renderMealLibrary(element, state) {
   const filteredMeals = state.masterMealList.filter(meal => 
     state.activeFilter === 'all' || meal.tipoPasto === state.activeFilter
   );
-  if (filteredMeals.length === 0 && state.masterMealList.length > 0) {
+  if (state.masterMealList.length > 0 && filteredMeals.length === 0) {
      element.innerHTML = `<p>Nessun pasto per il filtro '${state.activeFilter}'.</p>`;
      return;
+  }
+  if (state.masterMealList.length === 0) {
+      element.innerHTML = '<p>Carica una configurazione per iniziare.</p>';
+      return;
   }
   element.innerHTML = filteredMeals.map(meal => `
     <div class="meal-card" draggable="true" data-meal-id="${meal.id}">
@@ -43,8 +48,11 @@ function renderFilters(element, state) {
     });
 }
 
+/**
+ * Funzione principale di rendering che ridisegna l'intera UI basandosi sullo stato corrente.
+ */
 export function renderApp() {
-  const state = window.getState(); // Assuming getState is globally available or passed
+  const state = getState();
   renderCalendar(document.getElementById('calendar-grid'), state);
   renderMealLibrary(document.getElementById('meal-library'), state);
   renderFilters(document.getElementById('filter-container'), state);

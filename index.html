@@ -45,30 +45,30 @@
             <p>Il file deve essere un JSON con due chiavi principali: <strong>rules</strong> e <strong>meals</strong>.</p>
             <h4>Esempio da copiare:</h4>
             <pre><code>{
-"rules": [
-  {
-    "tag": "contiene-soia",
-    "type": "daily-block",
-    "limit": 1,
-    "message": "Non puoi consumare più di un pasto con soia al giorno."
-  }
-],
-"meals": [
-  {
-    "id": "1",
-    "nomePasto": "Pranzo: Riso+Tonno",
-    "tipoPasto": "Pranzo",
-    "ingredienti": "Riso: 80g, Tonno: 112g",
-    "etichette": ["pesce"]
-  },
-  {
-    "id": "2",
-    "nomePasto": "Cena: B. di Soia",
-    "tipoPasto": "Cena",
-    "ingredienti": "Soia: 70g, Pane: 40g",
-    "etichette": ["contiene-soia", "vegetale"]
-  }
-]
+  "rules": [
+    {
+      "tag": "contiene-soia",
+      "type": "daily-block",
+      "limit": 1,
+      "message": "Non puoi consumare più di un pasto con soia al giorno."
+    }
+  ],
+  "meals": [
+    {
+      "id": "1",
+      "nomePasto": "Pranzo: Riso+Tonno",
+      "tipoPasto": "Pranzo",
+      "ingredienti": "Riso: 80g, Tonno: 112g",
+      "etichette": ["pesce"]
+    },
+    {
+      "id": "2",
+      "nomePasto": "Cena: B. di Soia",
+      "tipoPasto": "Cena",
+      "ingredienti": "Soia: 70g, Pane: 40g",
+      "etichette": ["contiene-soia", "vegetale"]
+    }
+  ]
 }</code></pre>
         </div>
     </div>

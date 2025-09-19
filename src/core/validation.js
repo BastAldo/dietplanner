@@ -18,7 +18,6 @@ function applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
   switch (rule.type) {
     case 'daily-block':
       return validateDailyBlock(rule, mealToAdd, slotId, weeklyPlan, masterMealList);
-    // Altri tipi di regole possono essere aggiunti qui
     default:
       return { isValid: true, message: null };
   }
