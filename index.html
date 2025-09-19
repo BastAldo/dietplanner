@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocollo Dinamico</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="src/main.js" type="module" defer></script>
+</head>
+<body>
+    <header>
+        <h1>🗓️ Protocollo Dinamico</h1>
+    </header>
+    <main class="main-container">
+        <section id="calendar-view" class="calendar-container" aria-labelledby="calendar-title">
+            <h2 id="calendar-title" class="sr-only">Piano Settimanale</h2>
+            <div id="calendar-grid" class="calendar-grid">
+                </div>
+        </section>
+        <aside class="library-container" aria-labelledby="library-title">
+            <h2 id="library-title">📚 Libreria Pasti</h2>
+            <div id="meal-library" class="meal-library">
+                </div>
+        </aside>
+    </main>
+    <footer>
+        <button id="reset-btn" class="btn btn-secondary">Reset Settimana</button>
+        <button id="print-btn" class="btn btn-primary">Stampa 🖨️</button>
+    </footer>
+</body>
+</html>
