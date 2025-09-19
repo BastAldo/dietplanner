@@ -1,22 +1,33 @@
-# Architettura: Protocollo Dinamico v1.3
+# Architettura: Protocollo Dinamico v1.4
 
 ## 1. Principi Guida
-* **Minimalism:** L'interfaccia utente è ridotta all'essenziale, focalizzandosi sul calendario ed eliminando elementi persistenti come la libreria dei pasti.
-* **Data-Driven, Frontend-Only, KISS, SRP:** (invariati)
+* **Minimalism:** L'interfaccia utente è ridotta all'essenziale.
+* **Data-Driven:** La logica di business (regole) è definita nel file JSON.
+* **Frontend-Only, KISS, SRP:** L'app vive nel browser, usa Vanilla JS e ogni file ha una sola responsabilità.
 
 ## 2. Formato Dati: `planner-config.json`
 L'applicazione è guidata da un singolo file JSON con due sezioni principali: `rules` e `meals`.
 
 ## 3. Struttura dei File
-La struttura rimane la stessa, ma il ruolo dei moduli UI cambia. `renderer.js` e `interactions.js` ora gestiscono un'unica interfaccia basata su modali, eliminando la complessità del drag & drop e della libreria.
+```
+.
+└── src/
+    ├── api/
+    │   └── configService.js
+    ├── core/
+    │   ├── state.js
+    │   └── validation.js
+    ├── ui/
+    │   ├── renderer.js
+    │   ├── interactions.js
+    │   └── notifications.js
+    └── utils/
+        └── constants.js
+```
 
 ## 4. Flusso di Interazione Utente
-Il flusso primario è stato semplificato:
-1. L'utente visualizza il calendario.
-2. Clicca su uno slot vuoto (`Pranzo` o `Cena` di un dato giorno).
-3. Si apre un modale (`#selection-modal`) contenente la lista dei pasti pertinenti (solo Pranzo o solo Cena).
-4. L'utente clicca su un pasto nel modale.
-5. Il modale si chiude e il calendario si aggiorna con il pasto selezionato.
+Il flusso è unificato: l'utente clicca su uno slot vuoto e un modale si apre per la selezione del pasto.
 
-## 5. Design Responsivo e Interazione Utente
-L'approccio è ora unificato. L'interazione "tap/click-to-select" è la stessa per mobile e desktop. Cambia solo la visualizzazione del calendario (lista vs. griglia).
+## 5. Design Responsivo
+* **Mobile (< 992px):** Il calendario è una lista di card scorrevole orizzontalmente.
+* **Desktop (>= 992px):** Il calendario è una griglia a otto colonne.

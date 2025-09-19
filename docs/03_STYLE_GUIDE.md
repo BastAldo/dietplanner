@@ -1,15 +1,15 @@
-# Guida di Stile: Protocollo Dinamico v1.3
+# Guida di Stile: Protocollo Dinamico v1.4 (Dark Mode)
 
 ## 1. Palette Colori
 ```css
 :root {
-  --color-background: #F8F9FA;
-  --color-surface: #FFFFFF;
-  --color-border: #E9ECEF;
-  --color-text-primary: #212529;
-  --color-text-secondary: #6C757D;
+  --color-background: #121212;
+  --color-surface: #1E1E1E;
+  --color-border: #2E2E2E;
+  --color-text-primary: #EAEAEA;
+  --color-text-secondary: #8E8E8E;
   --color-primary: #28a745;
-  --color-error: #dc3545;
+  --color-error: #cf6679;
   --color-warning: #ffc107;
 }
 ```
@@ -19,9 +19,8 @@
 * **Body Text:** `16px`
 
 ## 3. Stile dei Componenti
-* **Card Pasto:** Include uno stato `.is-mismatched` con bordo giallo.
-* **Pulsante Cancellazione:** Visibile al passaggio del mouse sulla card.
-* **Modali:** L'applicazione utilizza tre modali per Info, Notifiche e Selezione Pasti.
+Tutti i componenti sono stilizzati per un tema scuro, usando le variabili definite nella palette. Le card usano `--color-surface` come sfondo e i testi usano `--color-text-primary` e `--color-text-secondary`.
 
-## 4. Breakpoints
+## 4. Breakpoints e Layout Mobile
 * **Breakpoint principale:** `992px`.
+* **Mobile (< 992px):** Layout a slide orizzontale per il calendario.

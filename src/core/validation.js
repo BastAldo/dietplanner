@@ -1,5 +1,3 @@
-// Il motore di validazione è mantenuto per future regole bloccanti.
-// Attualmente non viene chiamato attivamente dall'interfaccia.
 export function isPlacementValid(mealToAdd, slotId, weeklyPlan, masterMealList, rules) {
   for (const rule of rules) {
     if (mealToAdd.etichette && mealToAdd.etichette.includes(rule.tag)) {

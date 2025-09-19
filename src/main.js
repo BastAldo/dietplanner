@@ -4,7 +4,6 @@ import { initializeEventListeners } from './ui/interactions.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { fetchAndParseConfig } from './api/configService.js';
 import { showNotification } from './ui/notifications.js';
-
 async function loadInitialConfig(url) {
   if (!url) return;
   try {
@@ -14,7 +13,6 @@ async function loadInitialConfig(url) {
     showNotification(error.message, 'error');
   }
 }
-
 function init() {
   document.addEventListener('stateChange', renderApp);
   loadStateFromLocalStorage();
