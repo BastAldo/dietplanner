@@ -1,4 +1,4 @@
-# Guida di Stile: NutriPlan v1.7 (Dark Mode)
+# Guida di Stile: NutriPlan v2.0 (Dark Mode)
 
 ## 1. Palette Colori
 ```css
@@ -19,9 +19,7 @@
 * **Body Text:** `15px`
 
 ## 3. Stile dei Componenti
-* **Header:** Include titolo e sottotitolo.
-* **Totalizzatore Calorie:** Mostra un range o un valore singolo.
-* **Footer:** Contiene solo il pulsante "Reset".
+* **Titolo Calendario:** Centrato (`text-align: center`).
 
 ## 4. Breakpoints
 * **Breakpoint principale:** `992px`.

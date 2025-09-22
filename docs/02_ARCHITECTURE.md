@@ -1,13 +1,19 @@
-# Architettura: NutriPlan v1.7
+# Architettura: NutriPlan v2.0 (PWA)
 
 ## 1. Principi Guida
+* **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
 * **Minimalism:** L'interfaccia utente è ridotta all'essenziale.
 * **Data-Driven:** La logica di business (regole) è definita nel file JSON.
-* **Maintainability:** I testi dell'interfaccia sono centralizzati (i18n).
+* **Maintainability:** I testi dell'interfaccia (stringhe) sono centralizzati (i18n).
 * **Frontend-Only, KISS, SRP:** L'app vive nel browser, usa Vanilla JS e ogni file ha una sola responsabilità.
 
-## 2. Formato Dati: `planner-config.json`
-Il file JSON è composto da due chiavi principali: `rules` e `meals`. `calories_max` è opzionale per i pasti.
+## 2. Architettura PWA
+L'applicazione ora include due componenti chiave per la funzionalità PWA:
+* **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
+* **`sw.js` (Service Worker)**: Uno script che viene eseguito in background. Alla prima visita (evento `install`), mette in cache i file statici dell'app ("app shell"). Alle visite successive (evento `fetch`), intercetta le richieste di rete e, se una risorsa è in cache, la fornisce direttamente dal dispositivo, abilitando il funzionamento offline. La registrazione avviene tramite un percorso relativo (`'sw.js'`) per garantire la compatibilità con deployment in sottocartelle.
+
+## 3. Formato Dati: `planner-config.json`
+Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è opzionale.
 ```json
 {
   "rules": [
@@ -25,9 +31,14 @@ Il file JSON è composto da due chiavi principali: `rules` e `meals`. `calories_
 }
 ```
 
-## 3. Struttura dei File
+## 4. Struttura dei File
 ```
 .
+├── index.html
+├── style.css
+├── manifest.json
+├── sw.js
+├── icon.svg
 └── src/
     ├── api/
     │   └── configService.js
@@ -41,13 +52,3 @@ Il file JSON è composto da due chiavi principali: `rules` e `meals`. `calories_
     └── utils/
         └── constants.js
 ```
-
-## 4. Flusso di Interazione Utente
-Il flusso è unificato: l'utente clicca su uno slot vuoto e un modale si apre per la selezione del pasto.
-
-## 5. Logica di Calcolo
-La funzione di calcolo delle calorie ora itera su tutti i tipi di pasto definiti in `MEAL_TYPES`.
-
-## 6. Design Responsivo
-* **Mobile (< 992px):** Il calendario è una lista scorrevole orizzontalmente.
-* **Desktop (>= 992px):** Il calendario è una griglia a otto colonne.

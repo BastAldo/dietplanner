@@ -10,6 +10,7 @@ header { text-align: center; padding: 1.5rem 1rem; background-color: var(--color
 header .subtitle { font-size: 1rem; color: var(--color-text-secondary); max-width: 40ch; margin: 0.5rem auto 0; }
 footer { padding: 1rem 1.5rem; background-color: var(--color-surface); border-top: 1px solid var(--color-border); text-align: center; }
 h1, h2, h3 { font-weight: 700; color: var(--color-text-primary); }
+.calendar-container h2 { text-align: center; }
 .data-source-container { display: flex; align-items: center; gap: 0.5rem; padding: 1rem 1.5rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
 #config-url-input { flex-grow: 1; min-width: 0; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 8px; font-size: 1rem; background-color: #333; color: var(--color-text-primary); }
 #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--color-text-secondary); flex-shrink: 0; }
