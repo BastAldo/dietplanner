@@ -11,7 +11,10 @@ const APP_SHELL_FILES = [
   'src/ui/notifications.js',
   'src/ui/renderer.js',
   'src/utils/constants.js',
-  'icon.svg'
+  'icons/icon-192x192.png',
+  'icons/icon-512x512.png',
+  'screenshots/screenshot_desktop.png',
+  'screenshots/screenshot_mobile.png'
 ];
 
 self.addEventListener('install', (event) => {
