@@ -12,6 +12,13 @@ let state = {
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
 const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
+const getWeekStartDate = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+};
+
 export const getState = () => ({ ...state });
 
 export function setPlannerConfig(config) {
@@ -50,8 +57,25 @@ export function updateWeeklyPlan(slotId, mealId) {
   notify();
 }
 
-export function resetWeeklyPlan() {
+export function resetEntirePlan() {
   state.weeklyPlan = {};
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function resetCurrentWeek() {
+  const weekStart = getWeekStartDate(state.focusedDate);
+  for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + i);
+      const isoDate = toISODateString(date);
+      MEAL_TYPES.forEach(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          if (state.weeklyPlan[slotId]) {
+              delete state.weeklyPlan[slotId];
+          }
+      });
+  }
   saveStateToLocalStorage();
   notify();
 }
@@ -71,11 +95,7 @@ export function setView(view) {
 }
 
 export function copyPreviousWeek() {
-  const d = new Date(state.focusedDate);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const currentWeekStart = new Date(d.setDate(diff));
-  
+  const currentWeekStart = getWeekStartDate(state.focusedDate);
   const prevWeekStart = new Date(currentWeekStart);
   prevWeekStart.setDate(prevWeekStart.getDate() - 7);
 

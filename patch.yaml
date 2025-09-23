@@ -1,10 +1,12 @@
-commit_message: "feat(ui): Implement global alert banner and fix editor spacing"
+0commit_message: "refactor(ui,core): Implement custom confirm modal and weekly reset"
 rationale: |
-  This commit implements a superior user experience for the application's initial empty state and simultaneously fixes a persistent UI bug in the Day Editor modal, based on direct user feedback.
+  This is a significant refactoring commit that improves the application's architecture, user safety, and UI consistency based on detailed user feedback.
 
-  1.  **Global Alert Banner**: The previous logic of hiding the entire calendar when no configuration was loaded has been replaced. A new, non-intrusive "alert banner" now appears at the top of the application, guiding the user to load a configuration. This provides a better initial experience. The implementation involved adding the component to `index.html`, styling it in `style.css` (including a new `--warning-color`), and managing its visibility in `renderer.js` and `interactions.js`.
+  1.  **Custom Confirm Modal**: A generic, reusable confirm modal has been implemented. This involves a new modal "shell" in `index.html`, styles in `style.css`, and a dynamic `showConfirmModal` function in `renderer.js`. This replaces the native browser `confirm()`, providing a consistent user experience.
 
-  2.  **Day Editor Spacing Fix**: The cramped spacing between meal slots in the Day Editor modal has been corrected by replacing the `gap` property with a more robust `margin-bottom` on each slot in `style.css`, ensuring consistent spacing on all devices.
+  2.  **Weekly Reset Functionality**: The dangerous "Reset Plan" button has been replaced with a much safer "Reset Week" button. A new `resetCurrentWeek` function was created in `state.js` to only clear data for the currently viewed week. The interaction in `interactions.js` now uses the new custom confirm modal before triggering this action.
+
+  3.  **UI Spacing Adjustment**: The vertical spacing in the Day Editor modal has been fine-tuned by adjusting the `margin-bottom` in `style.css` for a better visual balance.
 patches:
   - file: index.html
     content: |
@@ -110,15 +112,157 @@ patches:
                 <div id="day-editor-body" class="modal-body day-editor-list"></div>
             </div>
           </div>
+          
+          <div id="confirm-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="confirm-modal-title"></h3>
+                </div>
+                <div class="modal-body">
+                  <p id="confirm-modal-message"></p>
+                </div>
+                <div class="modal-footer">
+                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary">Annulla</button>
+                  <button id="confirm-modal-confirm-btn" class="btn btn-danger">Conferma</button>
+                </div>
+            </div>
+          </div>
 
       </body>
       </html>
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        configUrl: '',
+        focusedDate: new Date(),
+        currentView: 'calendar', // 'calendar' or 'log'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        if (plan) {
+          state.weeklyPlan = JSON.parse(plan);
+        }
+        if (url) {
+          state.configUrl = url;
+        }
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          state.weeklyPlan[slotId] = mealId;
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetEntirePlan() {
+        state.weeklyPlan = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (view === 'calendar' || view === 'log') {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealId = state.weeklyPlan[sourceSlotId];
+
+            if (mealId) {
+              state.weeklyPlan[destSlotId] = mealId;
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/ui/interactions.js
     content: |
-      import { resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
+      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
       import { fetchAndParseConfig } from '../api/configService.js';
       import { showNotification } from './notifications.js';
-      import { openDayEditorModal } from './renderer.js';
+      import { openDayEditorModal, showConfirmModal } from './renderer.js';
 
       async function handleLoadConfig() {
         const url = document.getElementById('config-url-input').value.trim();
@@ -140,14 +284,29 @@ patches:
       }
 
       function handleCopyWeek() {
-        if (confirm('Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?')) {
-          copyPreviousWeek();
-          showNotification('Piano settimanale copiato!', 'success');
-        }
+        showConfirmModal(
+          'Copia Settimana',
+          'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
+          () => {
+            copyPreviousWeek();
+            showNotification('Piano settimanale copiato!', 'success');
+          }
+        );
+      }
+
+      function handleResetWeek() {
+        showConfirmModal(
+          'Pulisci Settimana',
+          'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
+          () => {
+            resetCurrentWeek();
+            showNotification('Settimana pulita!', 'info');
+          }
+        );
       }
 
       export function initializeEventListeners() {
-        document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
         document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
         document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
         
@@ -174,7 +333,6 @@ patches:
         document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
         document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
 
-        // Listener for the new global alert
         document.getElementById('global-alert-close').addEventListener('click', () => {
             document.getElementById('global-alert').classList.add('hidden');
         });
@@ -198,6 +356,12 @@ patches:
       const dayEditorModal = document.getElementById('day-editor-modal');
       const dayEditorTitle = document.getElementById('day-editor-title');
       const dayEditorBody = document.getElementById('day-editor-body');
+      
+      const confirmModal = document.getElementById('confirm-modal');
+      const confirmModalTitle = document.getElementById('confirm-modal-title');
+      const confirmModalMessage = document.getElementById('confirm-modal-message');
+      const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+      const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
 
       let currentEditingDayISO = null;
 
@@ -237,10 +401,35 @@ patches:
             }
           }
         });
-
         if (min === 0 && max === 0) return '';
         if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
         return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      export function showConfirmModal(title, message, onConfirm) {
+        confirmModalTitle.textContent = title;
+        confirmModalMessage.textContent = message;
+        
+        const cancelHandler = () => {
+          confirmModal.classList.add('hidden');
+          cleanup();
+        };
+        
+        const confirmHandler = () => {
+          onConfirm();
+          confirmModal.classList.add('hidden');
+          cleanup();
+        };
+
+        const cleanup = () => {
+            confirmModalCancelBtn.removeEventListener('click', cancelHandler);
+            confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
+        };
+        
+        confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
+        
+        confirmModal.classList.remove('hidden');
       }
 
       export function openSelectionModal(slotId) {
@@ -248,22 +437,15 @@ patches:
         const mealType = slotId.substring(11);
         selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
         const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        
-        selectionModalList.innerHTML = relevantMeals.length > 0
-          ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('')
-          : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        
+        selectionModalList.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
         const closeButton = selectionModal.querySelector('.modal-close-btn');
-
         const closeAndReturn = () => {
           selectionModal.classList.add('modal-hidden');
           if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
           closeButton.removeEventListener('click', closeAndReturn);
           selectionModal.removeEventListener('click', overlayClickHandler);
         };
-
         const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
-
         selectionModalList.onclick = (e) => {
           const item = e.target.closest('.selection-item');
           if(item) {
@@ -271,7 +453,6 @@ patches:
             closeAndReturn();
           }
         };
-
         closeButton.addEventListener('click', closeAndReturn, { once: true });
         selectionModal.addEventListener('click', overlayClickHandler);
         selectionModal.classList.remove('modal-hidden');
@@ -281,28 +462,12 @@ patches:
         currentEditingDayISO = isoDate;
         const state = getState();
         dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
-
         dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
           const slotId = `${isoDate}-${mealType}`;
           const mealId = state.weeklyPlan[slotId];
           const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-          
-          return `
-            <div class="day-editor-slot">
-              <span class="meal-type-label">${mealType}</span>
-              <div class="meal-details-container">
-                ${meal 
-                  ? `<div class="meal-details">
-                       <span>${meal.nomePasto}</span>
-                       <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
-                     </div>` 
-                  : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`
-                }
-              </div>
-            </div>
-          `;
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${meal ? `<div class="meal-details"><span>${meal.nomePasto}</span><button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button></div>` : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`}</div></div>`;
         }).join('');
-
         dayEditorBody.onclick = (e) => {
           if (e.target.classList.contains('btn-add-meal')) {
             dayEditorModal.classList.add('modal-hidden');
@@ -336,10 +501,7 @@ patches:
           const dayCell = document.createElement('div');
           dayCell.className = 'day-cell';
           dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `
-            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
-            <div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>
-          `;
+          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
           calendarGrid.appendChild(dayCell);
         }
       }
@@ -350,17 +512,11 @@ patches:
           const dayDate = new Date(weekStart);
           dayDate.setDate(dayDate.getDate() + i);
           const isoDate = toISODateString(dayDate);
-          
-          const dayMeals = MEAL_TYPES
-            .map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) }))
-            .filter(item => item.meal);
-            
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) })).filter(item => item.meal);
           if (dayMeals.length > 0) {
             const dayLog = document.createElement('div');
             dayLog.className = 'log-day';
-            dayLog.innerHTML = `<h3>${formatFullDate(isoDate)}</h3>` + dayMeals.map(item =>
-              `<div class="log-item"><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>`
-            ).join('');
+            dayLog.innerHTML = `<h3>${formatFullDate(isoDate)}</h3>` + dayMeals.map(item => `<div class="log-item"><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>`).join('');
             logView.appendChild(dayLog);
           }
         }
@@ -371,19 +527,16 @@ patches:
 
       export function renderApp() {
         const state = getState();
-
         if (state.masterMealList.length === 0) {
             globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
             globalAlert.classList.remove('hidden');
         } else {
             globalAlert.classList.add('hidden');
         }
-
         const weekStart = getWeekStartDate(state.focusedDate);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
         weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-
         if (state.currentView === 'calendar') {
           calendarGrid.classList.remove('hidden');
           logView.classList.add('hidden');
@@ -397,10 +550,63 @@ patches:
           viewLogBtn.classList.add('active');
           renderLogView(state, weekStart);
         }
-        
         const urlInput = document.getElementById('config-url-input');
         if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
+  - file: src/utils/constants.js
+    content: |
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [
+        'Colazione',
+        'Spuntino Mattutino',
+        'Pranzo',
+        'Spuntino Pomeridiano',
+        'Cena'
+      ];
+
+      export const UI_TEXT = {
+        MAIN_TITLE: 'NutriPlan',
+        SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
+        LOAD_BUTTON: 'Carica',
+        WEEKLY_PLAN_TITLE: 'Piano Settimanale',
+        CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
+        RESET_BUTTON: 'Pulisci Settimana',
+        INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
+        INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
+        SELECT_MEAL_TITLE: 'Scegli',
+        FOR_DAY_PREFIX: 'per',
+        NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
+        KCAL_LABEL: 'Kcal',
+        INFO_MODAL_EXAMPLE_JSON:
+      `{
+        "rules": [
+          {
+            "tag": "contiene-soia",
+            "type": "daily-block",
+            "limit": 1,
+            "message": "Non più di 1 pasto con soia al giorno."
+          }
+        ],
+        "meals": [
+          { 
+            "id": "1", 
+            "tipoPasto": "Pranzo", 
+            "calories_min": 550, 
+            "calories_max": 600, 
+            "etichette": ["contiene-soia"] 
+          },
+          { 
+            "id": "2", 
+            "tipoPasto": "Cena", 
+            "calories_min": 300 
+          }
+        ]
+      }`
+      };
   - file: style.css
     content: |
       /* --- GLOBAL STYLES & MOBILE FIRST --- */
@@ -414,7 +620,7 @@ patches:
           --border-color: #40404a;
           --danger-color: #ef5350;
           --success-color: #66bb6a;
-          --warning-color: #fdd835; /* New Color */
+          --warning-color: #fdd835;
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { font-size: 16px; }
@@ -446,9 +652,7 @@ patches:
         cursor: pointer;
         transition: color 0.2s;
       }
-      .alert-close-btn:hover {
-        color: var(--text-color);
-      }
+      .alert-close-btn:hover { color: var(--text-color); }
 
       /* --- PERSISTENT HEADER --- */
       .app-header {
@@ -519,6 +723,7 @@ patches:
       .btn-primary:hover { opacity: 0.85; }
       .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
       .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
       .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
 
       /* --- MODAL STYLES --- */
@@ -531,6 +736,7 @@ patches:
       .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
       .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
       .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
       .notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
       .notification-box.is-success { border-left-color: var(--success-color); }
       .notification-box.is-error { border-left-color: var(--danger-color); }
@@ -547,11 +753,9 @@ patches:
         padding: 0.75rem; 
         background: var(--bg-color); 
         border-radius: 8px; 
-        margin-bottom: 1rem;
+        margin-bottom: 0.75rem;
       }
-      .day-editor-slot:last-child {
-        margin-bottom: 0;
-      }
+      .day-editor-slot:last-child { margin-bottom: 0; }
       .day-editor-slot .meal-type-label { 
         font-weight: bold; 
         color: var(--text-color-muted); 

@@ -9,7 +9,7 @@
     --border-color: #40404a;
     --danger-color: #ef5350;
     --success-color: #66bb6a;
-    --warning-color: #fdd835; /* New Color */
+    --warning-color: #fdd835;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; }
@@ -41,9 +41,7 @@ body {
   cursor: pointer;
   transition: color 0.2s;
 }
-.alert-close-btn:hover {
-  color: var(--text-color);
-}
+.alert-close-btn:hover { color: var(--text-color); }
 
 /* --- PERSISTENT HEADER --- */
 .app-header {
@@ -114,6 +112,7 @@ body {
 .btn-primary:hover { opacity: 0.85; }
 .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
 .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); }
+.btn-danger { background-color: var(--danger-color); color: var(--text-color); }
 .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
 
 /* --- MODAL STYLES --- */
@@ -126,6 +125,7 @@ body {
 .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
 .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
 .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+.modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
 .notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
 .notification-box.is-success { border-left-color: var(--success-color); }
 .notification-box.is-error { border-left-color: var(--danger-color); }
@@ -142,11 +142,9 @@ body {
   padding: 0.75rem; 
   background: var(--bg-color); 
   border-radius: 8px; 
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
-.day-editor-slot:last-child {
-  margin-bottom: 0;
-}
+.day-editor-slot:last-child { margin-bottom: 0; }
 .day-editor-slot .meal-type-label { 
   font-weight: bold; 
   color: var(--text-color-muted); 

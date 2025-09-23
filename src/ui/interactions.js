@@ -1,7 +1,7 @@
-import { resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
+import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
-import { openDayEditorModal } from './renderer.js';
+import { openDayEditorModal, showConfirmModal } from './renderer.js';
 
 async function handleLoadConfig() {
   const url = document.getElementById('config-url-input').value.trim();
@@ -23,14 +23,29 @@ function handleCalendarClick(e) {
 }
 
 function handleCopyWeek() {
-  if (confirm('Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?')) {
-    copyPreviousWeek();
-    showNotification('Piano settimanale copiato!', 'success');
-  }
+  showConfirmModal(
+    'Copia Settimana',
+    'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
+    () => {
+      copyPreviousWeek();
+      showNotification('Piano settimanale copiato!', 'success');
+    }
+  );
+}
+
+function handleResetWeek() {
+  showConfirmModal(
+    'Pulisci Settimana',
+    'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
+    () => {
+      resetCurrentWeek();
+      showNotification('Settimana pulita!', 'info');
+    }
+  );
 }
 
 export function initializeEventListeners() {
-  document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
+  document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   
@@ -57,7 +72,6 @@ export function initializeEventListeners() {
   document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
   document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
 
-  // Listener for the new global alert
   document.getElementById('global-alert-close').addEventListener('click', () => {
       document.getElementById('global-alert').classList.add('hidden');
   });

@@ -17,7 +17,7 @@ export const UI_TEXT = {
   LOAD_BUTTON: 'Carica',
   WEEKLY_PLAN_TITLE: 'Piano Settimanale',
   CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
-  RESET_BUTTON: 'Reset Piano',
+  RESET_BUTTON: 'Pulisci Settimana',
   INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
   INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
   SELECT_MEAL_TITLE: 'Scegli',
