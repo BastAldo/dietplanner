@@ -13,8 +13,8 @@ const APP_SHELL_FILES = [
   'src/utils/constants.js',
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
-  'screenshots/screenshot_desktop.png',
-  'screenshots/screenshot_mobile.png'
+  'screenshots/screen_desktop.png',
+  'screenshots/screen_mobile.png'
 ];
 
 self.addEventListener('install', (event) => {
