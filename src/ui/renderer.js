@@ -70,16 +70,35 @@ export function openSelectionModal(slotId) {
       selectionModalList.innerHTML = `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
   }
   
+  const closeButton = selectionModal.querySelector('.modal-close-btn');
+
+  const closeAndReturn = () => {
+    selectionModal.classList.add('modal-hidden');
+    if (currentEditingDayISO) {
+      openDayEditorModal(currentEditingDayISO);
+    }
+    // Clean up listeners
+    closeButton.removeEventListener('click', closeAndReturn);
+    selectionModal.removeEventListener('click', overlayClickHandler);
+  };
+
+  const overlayClickHandler = (e) => {
+    if (e.target === selectionModal) {
+      closeAndReturn();
+    }
+  };
+
   selectionModalList.onclick = (e) => {
     const item = e.target.closest('.selection-item');
     if(item) {
       updateWeeklyPlan(slotId, item.dataset.mealId);
-      selectionModal.classList.add('modal-hidden');
-      if (currentEditingDayISO) {
-        openDayEditorModal(currentEditingDayISO);
-      }
+      closeAndReturn();
     }
   };
+
+  closeButton.addEventListener('click', closeAndReturn, { once: true });
+  selectionModal.addEventListener('click', overlayClickHandler);
+
   selectionModal.classList.remove('modal-hidden');
 }
 

@@ -26,15 +26,16 @@ export function initializeEventListeners() {
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   
-  document.querySelectorAll('.modal-close-btn').forEach(btn => {
+  // General close buttons, EXCLUDING the selection modal which has special logic
+  document.querySelectorAll('.modal-close-btn:not([data-target=selection-modal])').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       document.getElementById(e.target.dataset.target).classList.add('modal-hidden');
     });
   });
 
-  // Add click-outside-to-close listener for all modals
-  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  // Click-outside-to-close, EXCLUDING the selection modal
+  document.querySelectorAll('.modal-overlay:not(#selection-modal)').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         overlay.classList.add('modal-hidden');

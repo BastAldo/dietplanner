@@ -1,264 +1,262 @@
-commit_message: "docs: Align documentation with current implementation (Full Content)"
+commit_message: "fix(ux): Ensure closing selection modal returns to editor"
 rationale: |
-  This commit provides the full and complete update to the project's documentation, correcting a previous omission. All documentation files are now fully synchronized with the current state of the application's architecture and UI.
+  This commit fixes a UI workflow bug where closing the meal selection modal would incorrectly exit the entire editing process instead of returning the user to the day editor.
 
-  - `docs/00_HEALTYPRO_SPEC.md`: The workflow for the Day Editor modal has been accurately described.
-  - `docs/02_ARCHITECTURE.md`: The critical decision regarding date-based keys for `weeklyPlan` is now formally documented.
-  - `docs/03_STYLE_GUIDE.md`: The notification component has been added to the official design system.
-  - `docs/01_FUNCTIONALITY.md`: The 'click-outside-to-close' feature is now included as an official user story.
+  The root cause was generic event handlers in `interactions.js` that lacked the context for this specific modal flow.
 
-  This ensures that the project's documentation serves as a reliable single source of truth.
+  The fix involves a refactoring of `renderer.js` and `interactions.js`:
+  1. The generic close handlers in `interactions.js` now ignore the selection modal.
+  2. The `openSelectionModal` function in `renderer.js` is now self-contained. It programmatically adds and removes its own close event listeners ('X' button and overlay click).
+  3. These specific listeners now correctly close the selection modal and immediately re-open the day editor modal, providing the expected "go back" user experience.
 patches:
-  - file: docs/00_HEALTYPRO_SPEC.md
+  - file: src/ui/interactions.js
     content: |
-      # Progetto HealtyPro: Specifiche di Integrazione e Sviluppo
+      import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek } from '../core/state.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
+      import { showNotification } from './notifications.js';
+      import { openDayEditorModal } from './renderer.js';
 
-      **Obiettivo**: Questo documento definisce la visione e il piano di sviluppo per `HealtyPro`, un'applicazione nata dalla fusione concettuale di `NutriPlan` e `Mio Trainer Personale` (MTP). Funge da unica fonte di verità per la prossima fase di sviluppo.
+      async function handleLoadConfig() {
+        const url = document.getElementById('config-url-input').value.trim();
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+          showNotification('Configurazione caricata!', 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+        }
+      }
 
-      ## 1. Analisi dell'Applicazione di Riferimento (MTP)
+      function handleCalendarClick(e) {
+        const dayCell = e.target.closest('.day-cell');
+        if (!dayCell) return;
+        openDayEditorModal(dayCell.dataset.date);
+      }
 
-      Questa sezione analizza l'applicazione MTP basandosi esclusivamente sulla sua documentazione per estrarne i concetti di design e di flusso utente (UX) che intendiamo adottare.
+      export function initializeEventListeners() {
+        document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+        
+        // General close buttons, EXCLUDING the selection modal which has special logic
+        document.querySelectorAll('.modal-close-btn:not([data-target=selection-modal])').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById(e.target.dataset.target).classList.add('modal-hidden');
+          });
+        });
 
-      ### 1.1. Funzionalità Core (Cosa Fa)
+        // Click-outside-to-close, EXCLUDING the selection modal
+        document.querySelectorAll('.modal-overlay:not(#selection-modal)').forEach(overlay => {
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.classList.add('modal-hidden');
+            }
+          });
+        });
 
-      L'applicazione MTP è una SPA (Single Page Application) progettata per gestire il ciclo di vita di un allenamento attraverso tre viste principali:
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
 
-      * **Vista Calendario**: Una dashboard principale con una griglia settimanale. Ogni cella-giorno riassume gli esercizi programmati e permette di avviare l'allenamento.
-      * **Vista Trainer Interattivo**: Un'interfaccia che guida l'utente in tempo reale attraverso l'allenamento, con timer visivi e controlli di flusso (start/pausa/termina).
-      * **Vista Debriefing**: Una schermata di riepilogo che appare alla fine dell'allenamento e mostra un report dettagliato di ciò che è stato completato, interrotto o saltato.
-      * **Sistema di Modali**: L'editing degli allenamenti avviene tramite un modale che permette di aggiungere esercizi da una libreria e di riordinare gli item della sessione con drag-and-drop.
-
-      ### 1.2. Flusso Utente e Architettura Concettuale (Come lo Fa)
-
-      Il flusso utente di MTP è **"day-centric"** (incentrato sul giorno), il che lo rende molto intuitivo:
-
-      1.  **Visione d'Insieme**: L'utente sceglie un giorno dal calendario.
-      2.  **Editing Centralizzato**: Modifica l'intero piano di quel giorno in un unico modale.
-      3.  **Esecuzione**: Avvia la sessione che viene eseguita passo dopo passo.
-      4.  **Revisione**: Analizza il riepilogo finale.
-
-      L'architettura si basa su un principio chiave per garantire la stabilità: il **Piano di Esecuzione Pre-compilato**. Prima che l'allenamento inizi, il sistema genera una semplice lista sequenziale di tutti i passaggi (esercizio, riposo, annuncio). Il modulo Trainer si limita a scorrere questa lista, eliminando la necessità di logiche complesse durante l'esecuzione.
-
-      ### 1.3. Sistema Visivo e Schermate (La Grafica)
-
-      L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **tema scuro**, minimale e funzionale.
-
-      * **Palette Colori**: I colori primari sono un viola (`--primary-color: #9575cd`) e un verde acqua (`--secondary-color: #4db6ac`) su uno sfondo scuro (`--bg-color: #1a1a1d`).
-      * **Componenti**: L'UI è basata su "card" con angoli arrotondati per tutti gli elementi interattivi (celle del calendario, item nei modali).
-      * **Schermate Principali (ASCII Mockup)**:
-
-          * **Calendario**: Una griglia responsive con navigazione settimanale.
-              ```plaintext
-              +------------------------------------------------------+
-              |  < Precedente    Settimana: 22 - 28 Luglio   Successiva >  |
-              +------------------------------------------------------+
-              | +----------+  +----------+  +----------+  +----------+ |
-              | | LUN 22   |  | MAR 23   |  | MER 24   |  | GIO 25   | |
-              | | Kcal: 2100|  | Kcal: 1850|  |          |  |          | |
-              | +----------+  +----------+  +----------+  +----------+ |
-              | +----------+  +----------+  +----------+               |
-              | | VEN 26   |  | SAB 27   |  | DOM 28   |               |
-              | |          |  | Kcal: 2200|  |          |               |
-              | +----------+  +----------+  +----------+               |
-              +------------------------------------------------------+
-              ```
-          * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti del giorno.
-              ```plaintext
-              +------------------------------------------------------+
-              |  Editor Piano Alimentare - 23 Luglio            [X]  |
-              |------------------------------------------------------|
-              |  - Colazione:   [ Aggiungi pasto ]                   |
-              |  - Spuntino M:   [ Aggiungi pasto ]                   |
-              |  - Pranzo:      Pollo e Riso       (Modifica/Rimuovi) |
-              |  - Spuntino P:   Yogurt Greco       (Modifica/Rimuovi) |
-              |  - Cena:        [ Aggiungi pasto ]                   |
-              |                                                      |
-              +------------------------------------------------------+
-              ```
-
-      ---
-
-      ## 2. Piano di Sviluppo per HealtyPro (Cosa e Come Faremo)
-
-      Questa sezione definisce come implementeremo i concetti di MTP all'interno della base di codice di `NutriPlan`.
-
-      ### 2.1. Visione del Prodotto
-
-      `HealtyPro` sarà un'unica applicazione che unisce la pianificazione alimentare di `NutriPlan` con la filosofia di interazione di MTP. L'obiettivo è un'esperienza utente coesa, semplice e moderna.
-
-      ### 2.2. Principi Guida (La Nostra Filosofia)
-
-      1.  **La Semplicità è la Chiave**: Manterremo la base di codice di `NutriPlan` (`state.js`, `renderer.js`, ecc.) come nostra architettura. È semplice, funzionale e testata. Non importeremo alcuna logica o file `.js` da MTP.
-      2.  **Ispirazione, non Copia**: Adotteremo solo i *concetti visivi e di flusso* di MTP descritti sopra, implementandoli con il nostro codice pulito.
-      3.  **Documentazione come Guida**: Questo documento sarà il nostro riferimento. Ogni fase di sviluppo dovrà essere allineata a quanto qui descritto.
-
-      ### 2.3. Action Plan Dettagliato
-
-      #### Fase 1: Rinnovamento Visivo e Strutturale (L'Aspetto)
-
-      * **Azione**: Sostituire il contenuto di `index.html` e `style.css` di `NutriPlan`.
-      * **Dettagli**:
-          * `index.html` adotta la struttura con header fisso e container principale, mantenendo tutti gli `id` esistenti richiesti dagli script.
-          * `style.css` è stato completamente riscritto usando la palette colori e gli stili dei componenti definiti nella guida di stile.
-      * **Fix Critico - Service Worker**: Il `CACHE_NAME` in `sw.js` è stato aggiornato e un evento `activate` è stato aggiunto per garantire l'aggiornamento della cache e la pulizia delle versioni vecchie.
-
-      #### Fase 2: Refactoring del Calendario (La Vista Principale)
-
-      * **Azione**: Riscrivere la logica di rendering in `src/ui/renderer.js` e aggiornare le interazioni.
-      * **Dettagli**:
-          * La funzione `renderApp` disegna una griglia di 7 "day-cell" cliccabili che mostrano nome del giorno, data e totale calorico.
-          * È stata implementata la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
-
-      #### Fase 3: Implementazione del Modale "Editor del Giorno" (L'Interazione Core)
-
-      * **Azione**: Creare la logica per un modale di editing centralizzato con auto-aggiornamento.
-      * **Dettagli**:
-          * Il click su una "day-cell" apre il modale "Editor del Giorno".
-          * Questo modale mostra tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
-          * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
-          * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
-
-      #### Fase 4 (Futura): Integrazione Funzionalità Workout
-
-      * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
-      * **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi. La vista calendario mostrerà un riepilogo sia delle calorie che degli esercizi. Questo unificherà completamente le due anime dell'applicazione.
-  - file: docs/01_FUNCTIONALITY.md
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+      }
+  - file: src/ui/renderer.js
     content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
+      import { getState, updateWeeklyPlan } from '../core/state.js';
+      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
+      const selectionModal = document.getElementById('selection-modal');
+      const selectionModalTitle = document.getElementById('selection-modal-title');
+      const selectionModalList = document.getElementById('selection-modal-list');
+      const calendarGrid = document.getElementById('calendar-grid');
+      const weekTitleEl = document.getElementById('week-title');
+      const dayEditorModal = document.getElementById('day-editor-modal');
+      const dayEditorTitle = document.getElementById('day-editor-title');
+      const dayEditorBody = document.getElementById('day-editor-body');
 
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+      let currentEditingDayISO = null;
 
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-  - file: docs/02_ARCHITECTURE.md
-    content: |
-      # Architettura: HealtyPro (ex NutriPlan)
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
 
-      ## 1. Principi Guida
-      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è stata ridisegnata per essere essenziale e intuitiva. La base di codice sottostante rimane semplice e basata su Vanilla JS.
-      * **Data-Driven:** La logica di business (regole, pasti) è definita nel file JSON di configurazione.
-      * **Maintainability (SRP):** I testi dell'interfaccia (stringhe) sono centralizzati e ogni file ha una sola responsabilità.
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
 
-      ## 2. Architettura PWA
-      L'applicazione include due componenti chiave per la funzionalità PWA:
-      * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
-      * **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline. Include una logica di pulizia per le cache obsolete.
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
 
-      ## 3. Refactoring dell'Interfaccia Utente (UI/UX)
-      L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
 
-      ## 4. Formato Dati: `planner-config.json`
-      Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è opzionale.
-      ```json
-      {
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
+      function calculateDailyCalories(isoDate, state) {
+        let min = 0;
+        let max = 0;
+        MEAL_TYPES.forEach(type => {
+          const slotId = `${isoDate}-${type}`;
+          const mealId = state.weeklyPlan[slotId];
+          if (mealId) {
+            const meal = state.masterMealList.find(m => m.id === mealId);
+            if (meal && meal.calories_min) {
+              const minCals = Number(meal.calories_min) || 0;
+              const maxCals = Number(meal.calories_max) || minCals;
+              min += minCals;
+              max += maxCals;
+            }
           }
-        ],
-        "meals": [
-          { "id": "1", "tipoPasto": "Pranzo", "calories_min": 550, "calories_max": 600, "etichette": ["contiene-soia"] },
-          { "id": "2", "tipoPasto": "Cena", "calories_min": 300 }
-        ]
+        });
+
+        if (min === 0 && max === 0) return '';
+        if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
+        return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
       }
-      ```
 
-      ## 5. Struttura Dati Chiave: `weeklyPlan`
-      Per garantire che i piani alimentari siano univoci per ogni giorno specifico e non si ripetano tra le settimane, lo stato `weeklyPlan` utilizza una chiave composita basata sulla data.
-      * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
-      * **Razionale:** Usare la data in formato ISO come prefisso garantisce che ogni voce sia legata a un giorno di calendario univoco, risolvendo il problema della persistenza dei dati durante la navigazione settimanale.
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const [day, mealType] = [slotId.substring(0, 10), slotId.substring(11)];
+        selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        if(relevantMeals.length > 0) {
+            selectionModalList.innerHTML = relevantMeals.map(meal => 
+            `<div class="selection-item" data-meal-id="${meal.id}">
+                <h4>${meal.nomePasto}</h4>
+                <p>${meal.ingredienti || ''}</p>
+            </div>`
+            ).join('');
+        } else {
+            selectionModalList.innerHTML = `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        }
+        
+        const closeButton = selectionModal.querySelector('.modal-close-btn');
 
-      ## 6. Struttura dei File (Invariata)
-      ```
-      .
-      ├── index.html
-      ├── style.css
-      ├── manifest.json
-      ├── sw.js
-      ├── icon.svg
-      └── src/
-          ├── api/
-          │   └── configService.js
-          ├── core/
-          │   ├── state.js
-          │   └── validation.js
-          ├── ui/
-          │   ├── renderer.js
-          │   ├── interactions.js
-          │   └── notifications.js
-          └── utils/
-              └── constants.js
-      ```
-  - file: docs/03_STYLE_GUIDE.md
-    content: |
-      # Guida di Stile: HealtyPro
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) {
+            openDayEditorModal(currentEditingDayISO);
+          }
+          // Clean up listeners
+          closeButton.removeEventListener('click', closeAndReturn);
+          selectionModal.removeEventListener('click', overlayClickHandler);
+        };
 
-      ## 1. Filosofia
-      L'interfaccia utilizza un **dark theme** per essere riposante per gli occhi. L'estetica è minimale e funzionale, con l'obiettivo di dare priorità alla chiarezza e alla leggibilità delle informazioni.
+        const overlayClickHandler = (e) => {
+          if (e.target === selectionModal) {
+            closeAndReturn();
+          }
+        };
 
-      ## 2. Palette Colori
-      L'intera UI si basa su un set di variabili CSS per garantire coerenza.
+        selectionModalList.onclick = (e) => {
+          const item = e.target.closest('.selection-item');
+          if(item) {
+            updateWeeklyPlan(slotId, item.dataset.mealId);
+            closeAndReturn();
+          }
+        };
 
-      ```css
-      :root {
-          --bg-color: #1a1a1d;
-          --card-color: #2c2c34;
-          --primary-color: #9575cd;      /* Viola */
-          --secondary-color: #4db6ac;    /* Teal */
-          --text-color: #f4f4f9;
-          --text-color-muted: #aaa;
-          --border-color: #40404a;
-          --danger-color: #ef5350;
-          --success-color: #66bb6a;
+        closeButton.addEventListener('click', closeAndReturn, { once: true });
+        selectionModal.addEventListener('click', overlayClickHandler);
+
+        selectionModal.classList.remove('modal-hidden');
       }
-      ```
 
-      ## 3. Tipografia
-      * **Font Family:** `system-ui`, `-apple-system`, `BlinkMacSystemFont`, `'Segoe UI'`, `Roboto`, `sans-serif`.
-      * **Body Text:** `16px` come dimensione di base.
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
 
-      ## 4. Layout e Struttura
-      * **Header Persistente (`.app-header`):** Un header fisso in cima alla pagina garantisce un branding e una navigazione costanti.
-      * **Container Principale (`#app-container`):** Tutto il contenuto è avvolto in un contenitore centrato con una larghezza massima per assicurare la leggibilità su schermi grandi.
+        dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const mealId = state.weeklyPlan[slotId];
+          const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
+          
+          return `
+            <div class="day-editor-slot">
+              <span class="meal-type-label">${mealType}</span>
+              <div class="meal-details-container">
+                ${meal 
+                  ? `<div class="meal-details">
+                       <span>${meal.nomePasto}</span>
+                       <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
+                     </div>` 
+                  : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`
+                }
+              </div>
+            </div>
+          `;
+        }).join('');
 
-      ## 5. Componenti Chiave
+        dayEditorBody.onclick = (e) => {
+          if (e.target.classList.contains('btn-add-meal')) {
+            dayEditorModal.classList.add('modal-hidden');
+            openSelectionModal(e.target.dataset.slotId);
+          } else if (e.target.classList.contains('btn-remove-meal')) {
+            updateWeeklyPlan(e.target.dataset.slotId, null);
+            openDayEditorModal(isoDate);
+          }
+        };
 
-      ### Card
-      * **Utilizzo:** Usate per le celle dei giorni del calendario (`.day-cell`) e per gli elementi nelle liste.
-      * **Stile:** Hanno un colore di sfondo di `--card-color`, bordi arrotondati (`8px`) e un bordo di `--border-color`.
-      * **Interazione:** Al passaggio del mouse, il colore del bordo cambia in `--primary-color` per fornire un feedback visivo chiaro.
+        dayEditorModal.classList.remove('modal-hidden');
+      }
 
-      ### Bottoni
-      * **Stile Base (`.btn`):** Uno stile standardizzato con angoli arrotondati, testo in grassetto e un leggero effetto di transizione al passaggio del mouse.
-      * **Varianti:** Varianti di colore (`.btn-primary`, `.btn-secondary`, `.btn-danger`) sono usate per indicare lo scopo del bottone.
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+      }
 
-      ### Modali
-      * **Overlay (`.modal-overlay`):** Un overlay nero semitrasparente copre l'intera finestra quando un modale è attivo.
-      * **Content Box (`.modal-content`):** Una card centrata contiene il contenuto del modale, con `max-height` per gestire lo scrolling interno.
-      * **Interazione:** I modali si chiudono cliccando sul pulsante 'X' o cliccando sull'overlay esterno.
+      export function renderApp() {
+        const state = getState();
+        
+        if (state.masterMealList.length === 0 && Object.keys(state.weeklyPlan).length === 0) {
+            calendarGrid.innerHTML = `<p id="calendar-placeholder">${UI_TEXT.CALENDAR_PLACEHOLDER}</p>`;
+            weekTitleEl.textContent = '';
+            return;
+        }
 
-      ### Notifiche
-      * **Utilizzo:** Usate per fornire un feedback conciso all'utente (es. "Configurazione caricata!").
-      * **Stile (`.notification-box`):** Un modale semplificato con un bordo sinistro colorato che indica lo stato del messaggio.
-      * **Colori Indicatore**:
-          * **Verde (`--success-color`)**: Per messaggi di successo.
-          * **Rosso (`--danger-color`)**: Per messaggi di errore.
-          * **Teal (`--secondary-color`)**: Per messaggi informativi.
-commands:
-  - "echo 'Documentation has been updated with full, non-truncated content.'"
+        calendarGrid.innerHTML = ''; // Clear previous render
+
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state);
+
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          dayCell.dataset.date = isoDate;
+          
+          dayCell.innerHTML = `
+            <div class="day-cell__header">
+              <span>${dayName}</span>
+              <span>${dayDate.getDate()}</span>
+            </div>
+            <div class="day-cell__body">
+              <div class="daily-calories">${dailyCalories}</div>
+            </div>
+          `;
+          calendarGrid.appendChild(dayCell);
+        }
+        
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) {
+           urlInput.value = state.configUrl;
+        }
+      }
