@@ -1,18 +1,20 @@
-# Architettura: NutriPlan v2.0 (PWA)
+# Architettura: HealtyPro (ex NutriPlan)
 
 ## 1. Principi Guida
 * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-* **Minimalism:** L'interfaccia utente è ridotta all'essenziale.
-* **Data-Driven:** La logica di business (regole) è definita nel file JSON.
-* **Maintainability:** I testi dell'interfaccia (stringhe) sono centralizzati (i18n).
-* **Frontend-Only, KISS, SRP:** L'app vive nel browser, usa Vanilla JS e ogni file ha una sola responsabilità.
+* **Minimalism & Simplicity (KISS):** L'interfaccia utente è stata ridisegnata per essere essenziale e intuitiva. La base di codice sottostante rimane semplice e basata su Vanilla JS.
+* **Data-Driven:** La logica di business (regole, pasti) è definita nel file JSON di configurazione.
+* **Maintainability (SRP):** I testi dell'interfaccia (stringhe) sono centralizzati e ogni file ha una sola responsabilità.
 
 ## 2. Architettura PWA
-L'applicazione ora include due componenti chiave per la funzionalità PWA:
+L'applicazione include due componenti chiave per la funzionalità PWA:
 * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
-* **`sw.js` (Service Worker)**: Uno script che viene eseguito in background. Alla prima visita (evento `install`), mette in cache i file statici dell'app ("app shell"). Alle visite successive (evento `fetch`), intercetta le richieste di rete e, se una risorsa è in cache, la fornisce direttamente dal dispositivo, abilitando il funzionamento offline. La registrazione avviene tramite un percorso relativo (`'sw.js'`) per garantire la compatibilità con deployment in sottocartelle.
+* **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline.
 
-## 3. Formato Dati: `planner-config.json`
+## 3. Refactoring dell'Interfaccia Utente (UI/UX)
+L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
+
+## 4. Formato Dati: `planner-config.json`
 Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è opzionale.
 ```json
 {
@@ -31,7 +33,7 @@ Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è 
 }
 ```
 
-## 4. Struttura dei File
+## 5. Struttura dei File (Invariata)
 ```
 .
 ├── index.html
