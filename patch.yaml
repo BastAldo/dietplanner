@@ -1,374 +1,302 @@
-commit_message: "fix(core, ui): Implement date-based keys and multiple UI fixes"
+commit_message: "fix(ui): Add gap to day editor slots for better spacing"
 rationale: |
-  This is a comprehensive commit that resolves several critical bugs and implements UI improvements based on user feedback.
+  Based on user feedback, this commit resolves a minor UI bug in the Day Editor modal where the meal type label and the meal name could appear too close together.
 
-  1.  **Date-Based Keys**: The core data persistence bug has been fixed. The application now uses date-specific ISO strings (e.g., '2025-09-22-Pranzo') as keys for storing meals in `weeklyPlan`. This prevents meals from incorrectly appearing across different weeks. This change impacts `renderer.js` and `validation.js`.
-
-  2.  **Modal 'X' Button Fix**: A structural HTML issue causing the close button to be misplaced has been resolved. The button has been moved inside the modal header in `index.html` for correct CSS positioning.
-
-  3.  **Calorie Color Fix**: A typo (`class.` instead of `class=`) in `renderer.js` has been corrected, restoring the proper CSS styling for the daily calorie count.
-
-  4.  **Click-Outside-to-Close**: A new feature has been added to `interactions.js`. Users can now close any open modal by clicking on the semi-transparent overlay, improving usability.
+  A `gap` property has been added to the `.day-editor-slot` flex container in `style.css`. This ensures there is always a consistent and visually appealing space between the label and the meal details, improving the overall layout and readability of the modal.
 patches:
-  - file: index.html
+  - file: style.css
     content: |
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#1a1a1d">
-          <title>NutriPlan</title>
-          <link rel="stylesheet" href="style.css">
-          <link rel="manifest" href="manifest.json">
-          <link rel="apple-touch-icon" href="icon.svg">
-          <script src="src/main.js" type="module" defer></script>
-      </head>
-      <body>
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+      }
 
-          <header class="app-header">
-              <div class="app-title">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
-                  <h1 id="main-title">NutriPlan</h1>
-              </div>
-          </header>
+      * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+      }
 
-          <div id="app-container">
-              <section class="data-source-container">
-                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
-                  <button id="load-config-btn" class="btn btn-primary"></button>
-                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
-              </section>
+      html {
+          font-size: 16px;
+      }
 
-              <main class="main-container">
-                  <section id="calendar-view" class="calendar-container">
-                      <header class="calendar-header">
-                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
-                          <h2 id="week-title"></h2>
-                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
-                      </header>
-                      <div id="calendar-grid" class="calendar-grid">
-                          <p id="calendar-placeholder"></p>
-                      </div>
-                  </section>
-              </main>
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px; /* Space for the fixed header */
+      }
 
-              <footer class="app-footer">
-                  <button id="reset-btn" class="btn btn-secondary"></button>
-              </footer>
-          </div>
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
 
-          <div id="info-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <div class="modal-header">
-                    <h3 id="info-modal-title"></h3>
-                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
-                  </div>
-                  <div class="modal-body">
-                      <p id="info-modal-desc"></p>
-                      <pre><code>{
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
+      .app-title {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+      }
+
+      .app-title h1 {
+          font-size: 1.4rem;
+          color: var(--text-color);
+      }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 1rem;
+      }
+
+      .data-source-container {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 1rem;
+          background: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+
+      #config-url-input {
+          flex-grow: 1;
+          min-width: 0;
+          padding: 0.75rem;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          font-size: 1rem;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus {
+          outline: none;
+          border-color: var(--primary-color);
+      }
+
+      #info-icon {
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: var(--text-color-muted);
+          flex-shrink: 0;
+      }
+
+      .app-footer {
+          padding-top: 1.5rem;
+          margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex;
+          justify-content: center;
+      }
+
+      /* --- CALENDAR --- */
+      .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+      }
+
+      .calendar-header h2 {
+        font-size: 1.25rem;
+        text-align: center;
+        color: var(--text-color);
+      }
+
+      .calendar-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.75rem;
+      }
+
+      .day-cell {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1rem;
+          min-height: 120px;
+          display: flex;
+          flex-direction: column;
+          cursor: pointer;
+          transition: border-color 0.2s, transform 0.2s;
+      }
+      .day-cell:hover {
+          border-color: var(--primary-color);
+          transform: translateY(-3px);
+      }
+
+      .day-cell__header {
+          display: flex;
+          justify-content: space-between;
+          font-weight: bold;
+          color: var(--text-color-muted);
+          text-transform: uppercase;
+          font-size: 0.8rem;
+          pointer-events: none;
+      }
+
+      .day-cell__body {
+          margin-top: 0.5rem;
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          align-items: flex-start;
+          pointer-events: none;
+      }
+
+      .daily-calories {
+          font-size: 1rem;
+          font-weight: bold;
+          color: var(--secondary-color);
+      }
+
+      /* --- BUTTONS --- */
+      .btn {
+          padding: 0.75rem 1.5rem;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 0.9rem;
+          text-transform: uppercase;
+      }
+      .btn-primary {
+          background-color: var(--secondary-color);
+          color: var(--bg-color);
+      }
+      .btn-primary:hover { opacity: 0.85; }
+      .btn-secondary {
+          color: var(--text-color-muted);
+          border-color: var(--border-color);
+          background-color: transparent;
+      }
+      .btn-secondary:hover {
+          background-color: var(--card-color);
+          color: var(--text-color);
+          border-color: var(--text-color-muted);
+      }
+      .calendar-header .btn-secondary {
+        padding: 0.5rem 1rem;
+      }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background-color: rgba(0, 0, 0, 0.7);
+          display: flex; justify-content: center; align-items: center;
+          z-index: 1001;
+          opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+      }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) {
+          display: flex;
+          opacity: 1;
+          pointer-events: all;
+      }
+
+      .modal-content {
+          background-color: var(--card-color);
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
+          width: 90%;
+          max-width: 600px;
+          display: flex;
+          flex-direction: column;
+          max-height: 90vh;
+      }
+
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); position: relative; }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          right: 1rem;
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: var(--text-color-muted);
+          padding: 0;
+          line-height: 1;
+          width: 2.25rem;
+          height: 2.25rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: background-color 0.2s, color 0.2s;
+      }
+      .modal-close-btn:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+          color: var(--text-color);
+      }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-content pre { background: var(--bg-color); padding: 1rem; border-radius: 4px; margin-top: 1rem; overflow-x: auto; }
+
+      .notification-box { max-width: 400px; border-left: 5px solid var(--secondary-color); }
+      .notification-box.is-success { border-left-color: var(--success-color); }
+      .notification-box.is-error { border-left-color: var(--danger-color); }
+
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      
+      /* --- DAY EDITOR MODAL --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .day-editor-slot { 
+        display: flex; 
+        align-items: center; 
+        gap: 1rem;
+        padding: 0.75rem; 
+        background: var(--bg-color); 
+        border-radius: 8px; 
+      }
+      .day-editor-slot .meal-type-label { 
+        font-weight: bold; 
+        color: var(--text-color-muted); 
+        flex-shrink: 0; /* Prevents the label from shrinking */
+        width: 150px; /* Explicit width for alignment */
+      }
+      .meal-details-container { flex-grow: 1; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
+
+      /* --- DESKTOP OVERRIDES --- */
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid {
+              grid-template-columns: repeat(7, 1fr);
+              gap: 1rem;
           }
-        ],
-        "meals": [
-          { "id": "1", "tipoPasto": "Pranzo", "calories_min": 550, "calories_max": 600, "etichette": ["contiene-soia"] },
-          { "id": "2", "tipoPasto": "Cena", "calories_min": 300 }
-        ]
-      }</code></pre>
-                  </div>
-              </div>
-          </div>
-
-          <div id="notification-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content notification-box">
-                  <p id="notification-message"></p>
-                  <button class="modal-close-btn" data-target="notification-modal">&times;</button>
-              </div>
-          </div>
-
-          <div id="selection-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <div class="modal-header">
-                    <h3 id="selection-modal-title"></h3>
-                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
-                  </div>
-                  <div id="selection-modal-list" class="modal-body selection-list"></div>
-              </div>
-          </div>
-
-          <div id="day-editor-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="day-editor-title"></h3>
-                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
-                </div>
-                <div id="day-editor-body" class="modal-body day-editor-list"></div>
-            </div>
-          </div>
-
-      </body>
-      </html>
-  - file: src/core/validation.js
-    content: |
-      export function isPlacementValid(mealToAdd, slotId, weeklyPlan, masterMealList, rules) {
-        for (const rule of rules) {
-          if (mealToAdd.etichette && mealToAdd.etichette.includes(rule.tag)) {
-            const result = applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList);
-            if (!result.isValid) return result;
-          }
-        }
-        return { isValid: true, message: null };
-      }
-
-      function applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
-        if (rule.type === 'daily-block') {
-          const dayISO = slotId.substring(0, 10); // Extracts "YYYY-MM-DD" from "YYYY-MM-DD-MealType"
-          let count = 0;
-          for (const key in weeklyPlan) {
-            if (key.startsWith(dayISO) && key !== slotId) {
-              const meal = masterMealList.find(m => m.id === weeklyPlan[key]);
-              if (meal && meal.etichette && meal.etichette.includes(rule.tag)) count++;
-            }
-          }
-          if (count >= rule.limit) return { isValid: false, message: rule.message };
-        }
-        return { isValid: true, message: null };
-      }
-  - file: src/ui/interactions.js
-    content: |
-      import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek } from '../core/state.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal } from './renderer.js';
-
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification('Configurazione caricata!', 'success');
-        } catch (error) {
-          showNotification(error.message, 'error');
-        }
-      }
-
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (!dayCell) return;
-        openDayEditorModal(dayCell.dataset.date);
-      }
-
-      export function initializeEventListeners() {
-        document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.getElementById(e.target.dataset.target).classList.add('modal-hidden');
-          });
-        });
-
-        // Add click-outside-to-close listener for all modals
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-              overlay.classList.add('modal-hidden');
-            }
-          });
-        });
-
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState, updateWeeklyPlan } from '../core/state.js';
-      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-
-      const selectionModal = document.getElementById('selection-modal');
-      const selectionModalTitle = document.getElementById('selection-modal-title');
-      const selectionModalList = document.getElementById('selection-modal-list');
-      const calendarGrid = document.getElementById('calendar-grid');
-      const weekTitleEl = document.getElementById('week-title');
-      const dayEditorModal = document.getElementById('day-editor-modal');
-      const dayEditorTitle = document.getElementById('day-editor-title');
-      const dayEditorBody = document.getElementById('day-editor-body');
-
-      let currentEditingDayISO = null;
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function calculateDailyCalories(isoDate, state) {
-        let min = 0;
-        let max = 0;
-        MEAL_TYPES.forEach(type => {
-          const slotId = `${isoDate}-${type}`;
-          const mealId = state.weeklyPlan[slotId];
-          if (mealId) {
-            const meal = state.masterMealList.find(m => m.id === mealId);
-            if (meal && meal.calories_min) {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              min += minCals;
-              max += maxCals;
-            }
-          }
-        });
-
-        if (min === 0 && max === 0) return '';
-        if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
-        return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      export function openSelectionModal(slotId) {
-        const state = getState();
-        const [day, mealType] = [slotId.substring(0, 10), slotId.substring(11)];
-        selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        if(relevantMeals.length > 0) {
-            selectionModalList.innerHTML = relevantMeals.map(meal => 
-            `<div class="selection-item" data-meal-id="${meal.id}">
-                <h4>${meal.nomePasto}</h4>
-                <p>${meal.ingredienti || ''}</p>
-            </div>`
-            ).join('');
-        } else {
-            selectionModalList.innerHTML = `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        }
-        
-        selectionModalList.onclick = (e) => {
-          const item = e.target.closest('.selection-item');
-          if(item) {
-            updateWeeklyPlan(slotId, item.dataset.mealId);
-            selectionModal.classList.add('modal-hidden');
-            if (currentEditingDayISO) {
-              openDayEditorModal(currentEditingDayISO);
-            }
-          }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openDayEditorModal(isoDate) {
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
-
-        dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const mealId = state.weeklyPlan[slotId];
-          const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-          
-          return `
-            <div class="day-editor-slot">
-              <span class="meal-type-label">${mealType}</span>
-              <div class="meal-details-container">
-                ${meal 
-                  ? `<div class="meal-details">
-                       <span>${meal.nomePasto}</span>
-                       <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
-                     </div>` 
-                  : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`
-                }
-              </div>
-            </div>
-          `;
-        }).join('');
-
-        dayEditorBody.onclick = (e) => {
-          if (e.target.classList.contains('btn-add-meal')) {
-            dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(e.target.dataset.slotId);
-          } else if (e.target.classList.contains('btn-remove-meal')) {
-            updateWeeklyPlan(e.target.dataset.slotId, null);
-            openDayEditorModal(isoDate);
-          }
-        };
-
-        dayEditorModal.classList.remove('modal-hidden');
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-      }
-
-      export function renderApp() {
-        const state = getState();
-        
-        if (state.masterMealList.length === 0 && Object.keys(state.weeklyPlan).length === 0) {
-            calendarGrid.innerHTML = `<p id="calendar-placeholder">${UI_TEXT.CALENDAR_PLACEHOLDER}</p>`;
-            weekTitleEl.textContent = '';
-            return;
-        }
-
-        calendarGrid.innerHTML = ''; // Clear previous render
-
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state);
-
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          dayCell.dataset.date = isoDate;
-          
-          dayCell.innerHTML = `
-            <div class="day-cell__header">
-              <span>${dayName}</span>
-              <span>${dayDate.getDate()}</span>
-            </div>
-            <div class="day-cell__body">
-              <div class="daily-calories">${dailyCalories}</div>
-            </div>
-          `;
-          calendarGrid.appendChild(dayCell);
-        }
-        
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) {
-           urlInput.value = state.configUrl;
-        }
       }
 commands:
-  - "echo 'Comprehensive bug fixes applied. Please test week navigation, calorie colors, and modal interactions.'"
+  - "echo 'Spacing fix applied to Day Editor modal.'"

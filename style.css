@@ -262,8 +262,20 @@ body {
 
 /* --- DAY EDITOR MODAL --- */
 .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
-.day-editor-slot { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
-.day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-basis: 150px; }
+.day-editor-slot { 
+  display: flex; 
+  align-items: center; 
+  gap: 1rem;
+  padding: 0.75rem; 
+  background: var(--bg-color); 
+  border-radius: 8px; 
+}
+.day-editor-slot .meal-type-label { 
+  font-weight: bold; 
+  color: var(--text-color-muted); 
+  flex-shrink: 0; /* Prevents the label from shrinking */
+  width: 150px; /* Explicit width for alignment */
+}
 .meal-details-container { flex-grow: 1; }
 .meal-details { display: flex; justify-content: space-between; align-items: center; }
 .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
