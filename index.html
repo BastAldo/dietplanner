@@ -11,6 +11,7 @@
     <script src="src/main.js" type="module" defer></script>
 </head>
 <body>
+    <div id="toast-container" class="toast-container"></div>
 
     <header class="app-header">
         <div class="app-title">
@@ -72,15 +73,6 @@
         </div>
     </div>
 
-    <div id="notification-modal" class="modal-overlay modal-hidden">
-      <div class="modal-content notification-box">
-        <div class="modal-body">
-          <p id="notification-message"></p>
-        </div>
-        <button class="modal-close-btn" data-target="notification-modal">&times;</button>
-      </div>
-    </div>
-
     <div id="selection-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -111,7 +103,7 @@
           </div>
           <div class="modal-footer">
             <button id="confirm-modal-cancel-btn" class="btn btn-secondary">Annulla</button>
-            <button id="confirm-modal-confirm-btn" class="btn btn-danger">Conferma</button>
+            <button id="confirm-modal-confirm-btn" class="btn">Conferma</button>
           </div>
       </div>
     </div>

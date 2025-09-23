@@ -65,28 +65,25 @@ function calculateDailyCalories(isoDate, state) {
   return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
-export function showConfirmModal(title, message, onConfirm) {
+export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
   confirmModalTitle.textContent = title;
   confirmModalMessage.textContent = message;
-  
-  const cancelHandler = () => {
-    confirmModal.classList.add('hidden');
-    cleanup();
-  };
-  
-  const confirmHandler = () => {
-    onConfirm();
-    confirmModal.classList.add('hidden');
-    cleanup();
-  };
+  confirmModalConfirmBtn.className = `btn btn-${type}`;
 
   const cleanup = () => {
-      confirmModalCancelBtn.removeEventListener('click', cancelHandler);
-      confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
+    confirmModal.classList.add('hidden');
+    confirmModalCancelBtn.removeEventListener('click', cancelHandler);
+    confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
+  };
+
+  const cancelHandler = () => cleanup();
+  const confirmHandler = () => {
+    onConfirm();
+    cleanup();
   };
   
-  confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
-  confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
+  confirmModalCancelBtn.addEventListener('click', cancelHandler);
+  confirmModalConfirmBtn.addEventListener('click', confirmHandler);
   
   confirmModal.classList.remove('hidden');
 }
@@ -114,7 +111,7 @@ export function openSelectionModal(slotId) {
   };
   closeButton.addEventListener('click', closeAndReturn, { once: true });
   selectionModal.addEventListener('click', overlayClickHandler);
-  selectionModal.classList.remove('modal-hidden');
+  selectionModal.classList.remove('hidden');
 }
 
 export function openDayEditorModal(isoDate) {

@@ -1,12 +1,12 @@
-0commit_message: "refactor(ui,core): Implement custom confirm modal and weekly reset"
+commit_message: "refactor(core): Implement toast notifications and fix confirm modals"
 rationale: |
-  This is a significant refactoring commit that improves the application's architecture, user safety, and UI consistency based on detailed user feedback.
+  This is a major architectural refactoring of the user feedback system, implementing a modern toast notification service and fixing critical bugs in the confirmation modal flow.
 
-  1.  **Custom Confirm Modal**: A generic, reusable confirm modal has been implemented. This involves a new modal "shell" in `index.html`, styles in `style.css`, and a dynamic `showConfirmModal` function in `renderer.js`. This replaces the native browser `confirm()`, providing a consistent user experience.
+  1.  **Toast Notification Service**: The old, blocking notification modal has been entirely replaced by a non-blocking toast system. A new container is added to `index.html`, `notifications.js` is rewritten to dynamically create and manage self-dismissing toast messages (except for errors), and `style.css` contains the new styles. This provides a much cleaner user experience.
 
-  2.  **Weekly Reset Functionality**: The dangerous "Reset Plan" button has been replaced with a much safer "Reset Week" button. A new `resetCurrentWeek` function was created in `state.js` to only clear data for the currently viewed week. The interaction in `interactions.js` now uses the new custom confirm modal before triggering this action.
+  2.  **Confirm Modal Fix**: The bug preventing the confirm button callback from firing has been resolved in `renderer.js` by refactoring the event listener logic to be more robust.
 
-  3.  **UI Spacing Adjustment**: The vertical spacing in the Day Editor modal has been fine-tuned by adjusting the `margin-bottom` in `style.css` for a better visual balance.
+  3.  **Confirm Modal Color Coding**: The `showConfirmModal` function now accepts a `type` parameter, allowing the confirmation button to be styled contextually (e.g., as `.btn-danger` for destructive actions), improving user safety and clarity. The calls in `interactions.js` have been updated to use this new feature.
 patches:
   - file: index.html
     content: |
@@ -23,6 +23,7 @@ patches:
           <script src="src/main.js" type="module" defer></script>
       </head>
       <body>
+          <div id="toast-container" class="toast-container"></div>
 
           <header class="app-header">
               <div class="app-title">
@@ -84,15 +85,6 @@ patches:
               </div>
           </div>
 
-          <div id="notification-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content notification-box">
-              <div class="modal-body">
-                <p id="notification-message"></p>
-              </div>
-              <button class="modal-close-btn" data-target="notification-modal">&times;</button>
-            </div>
-          </div>
-
           <div id="selection-modal" class="modal-overlay modal-hidden">
               <div class="modal-content">
                   <div class="modal-header">
@@ -123,140 +115,13 @@ patches:
                 </div>
                 <div class="modal-footer">
                   <button id="confirm-modal-cancel-btn" class="btn btn-secondary">Annulla</button>
-                  <button id="confirm-modal-confirm-btn" class="btn btn-danger">Conferma</button>
+                  <button id="confirm-modal-confirm-btn" class="btn">Conferma</button>
                 </div>
             </div>
           </div>
 
       </body>
       </html>
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        weeklyPlan: {},
-        configUrl: '',
-        focusedDate: new Date(),
-        currentView: 'calendar', // 'calendar' or 'log'
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-
-      export function setPlannerConfig(config) {
-        state.rules = config.rules || [];
-        state.masterMealList = config.meals || [];
-        notify();
-      }
-
-      export function setConfigUrl(url) {
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-      }
-
-      export function saveStateToLocalStorage() {
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-      }
-
-      export function loadStateFromLocalStorage() {
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        if (plan) {
-          state.weeklyPlan = JSON.parse(plan);
-        }
-        if (url) {
-          state.configUrl = url;
-        }
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        if (mealId) {
-          state.weeklyPlan[slotId] = mealId;
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function resetEntirePlan() {
-        state.weeklyPlan = {};
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function resetCurrentWeek() {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        if (view === 'calendar' || view === 'log') {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function copyPreviousWeek() {
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealId = state.weeklyPlan[sourceSlotId];
-
-            if (mealId) {
-              state.weeklyPlan[destSlotId] = mealId;
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
   - file: src/ui/interactions.js
     content: |
       import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
@@ -290,7 +155,8 @@ patches:
           () => {
             copyPreviousWeek();
             showNotification('Piano settimanale copiato!', 'success');
-          }
+          },
+          'primary'
         );
       }
 
@@ -301,7 +167,8 @@ patches:
           () => {
             resetCurrentWeek();
             showNotification('Settimana pulita!', 'info');
-          }
+          },
+          'danger'
         );
       }
 
@@ -335,6 +202,45 @@ patches:
 
         document.getElementById('global-alert-close').addEventListener('click', () => {
             document.getElementById('global-alert').classList.add('hidden');
+        });
+      }
+  - file: src/ui/notifications.js
+    content: |
+      const toastContainer = document.getElementById('toast-container');
+
+      export function showNotification(message, type = 'info', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `toast is-${type}`;
+        toast.textContent = message;
+
+        toastContainer.appendChild(toast);
+
+        // Animate in
+        setTimeout(() => {
+          toast.classList.add('show');
+        }, 100);
+
+        // If it's not an error, set a timeout to remove it
+        if (type !== 'error') {
+          setTimeout(() => {
+            toast.classList.remove('show');
+            // Remove the element from the DOM after the transition ends
+            toast.addEventListener('transitionend', () => {
+              if (toast.parentElement) {
+                toastContainer.removeChild(toast);
+              }
+            });
+          }, duration);
+        }
+
+        // Allow manual closing for all types
+        toast.addEventListener('click', () => {
+          toast.classList.remove('show');
+          toast.addEventListener('transitionend', () => {
+            if (toast.parentElement) {
+              toastContainer.removeChild(toast);
+            }
+          });
         });
       }
   - file: src/ui/renderer.js
@@ -406,28 +312,25 @@ patches:
         return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
       }
 
-      export function showConfirmModal(title, message, onConfirm) {
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
         confirmModalTitle.textContent = title;
         confirmModalMessage.textContent = message;
-        
-        const cancelHandler = () => {
-          confirmModal.classList.add('hidden');
-          cleanup();
-        };
-        
-        const confirmHandler = () => {
-          onConfirm();
-          confirmModal.classList.add('hidden');
-          cleanup();
-        };
+        confirmModalConfirmBtn.className = `btn btn-${type}`;
 
         const cleanup = () => {
-            confirmModalCancelBtn.removeEventListener('click', cancelHandler);
-            confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
+          confirmModal.classList.add('hidden');
+          confirmModalCancelBtn.removeEventListener('click', cancelHandler);
+          confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
+        };
+
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => {
+          onConfirm();
+          cleanup();
         };
         
-        confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
-        confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModalCancelBtn.addEventListener('click', cancelHandler);
+        confirmModalConfirmBtn.addEventListener('click', confirmHandler);
         
         confirmModal.classList.remove('hidden');
       }
@@ -455,7 +358,7 @@ patches:
         };
         closeButton.addEventListener('click', closeAndReturn, { once: true });
         selectionModal.addEventListener('click', overlayClickHandler);
-        selectionModal.classList.remove('modal-hidden');
+        selectionModal.classList.remove('hidden');
       }
 
       export function openDayEditorModal(isoDate) {
@@ -553,60 +456,6 @@ patches:
         const urlInput = document.getElementById('config-url-input');
         if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [
-        'Colazione',
-        'Spuntino Mattutino',
-        'Pranzo',
-        'Spuntino Pomeridiano',
-        'Cena'
-      ];
-
-      export const UI_TEXT = {
-        MAIN_TITLE: 'NutriPlan',
-        SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
-        LOAD_BUTTON: 'Carica',
-        WEEKLY_PLAN_TITLE: 'Piano Settimanale',
-        CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
-        RESET_BUTTON: 'Pulisci Settimana',
-        INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
-        INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
-        SELECT_MEAL_TITLE: 'Scegli',
-        FOR_DAY_PREFIX: 'per',
-        NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
-        KCAL_LABEL: 'Kcal',
-        INFO_MODAL_EXAMPLE_JSON:
-      `{
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
-          }
-        ],
-        "meals": [
-          { 
-            "id": "1", 
-            "tipoPasto": "Pranzo", 
-            "calories_min": 550, 
-            "calories_max": 600, 
-            "etichette": ["contiene-soia"] 
-          },
-          { 
-            "id": "2", 
-            "tipoPasto": "Cena", 
-            "calories_min": 300 
-          }
-        ]
-      }`
-      };
   - file: style.css
     content: |
       /* --- GLOBAL STYLES & MOBILE FIRST --- */
@@ -621,6 +470,7 @@ patches:
           --danger-color: #ef5350;
           --success-color: #66bb6a;
           --warning-color: #fdd835;
+          --info-color: var(--primary-color);
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { font-size: 16px; }
@@ -632,26 +482,44 @@ patches:
       }
       .hidden { display: none !important; }
 
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 1rem;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.4s ease;
+        cursor: pointer;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
+
       /* --- GLOBAL ALERT BANNER --- */
       .global-alert {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem;
-        background-color: var(--card-color);
-        border-left: 5px solid var(--warning-color);
-        border-radius: 8px;
-        margin-bottom: 1.5rem;
-        color: var(--text-color);
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
       }
-      .alert-close-btn {
-        background: none;
-        border: none;
-        color: var(--text-color-muted);
-        font-size: 1.5rem;
-        cursor: pointer;
-        transition: color 0.2s;
-      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
       .alert-close-btn:hover { color: var(--text-color); }
 
       /* --- PERSISTENT HEADER --- */
@@ -697,7 +565,6 @@ patches:
       .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
       .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
       .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-
       .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
       .day-cell {
           background-color: var(--card-color); border: 1px solid var(--border-color);
@@ -708,7 +575,6 @@ patches:
       .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
       .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
       .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-
       .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
       .log-day { margin-bottom: 1.5rem; }
       .log-day:last-child { margin-bottom: 0; }
@@ -719,11 +585,11 @@ patches:
 
       /* --- BUTTONS --- */
       .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
-      .btn-primary { background-color: var(--secondary-color); color: var(--bg-color); }
-      .btn-primary:hover { opacity: 0.85; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
       .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); }
       .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
       .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
 
       /* --- MODAL STYLES --- */
@@ -737,31 +603,18 @@ patches:
       .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
       .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
       .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-      .notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
-      .notification-box.is-success { border-left-color: var(--success-color); }
-      .notification-box.is-error { border-left-color: var(--danger-color); }
-      .notification-box .modal-body { padding: 0; }
       .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
       .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
       .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
       
       .day-editor-list { display: flex; flex-direction: column; }
       .day-editor-slot { 
-        display: flex; 
-        align-items: center; 
-        gap: 1rem;
-        padding: 0.75rem; 
-        background: var(--bg-color); 
-        border-radius: 8px; 
-        margin-bottom: 0.75rem;
+        display: flex; align-items: center; gap: 1rem;
+        padding: 0.75rem; background: var(--bg-color); 
+        border-radius: 8px; margin-bottom: 0.75rem;
       }
       .day-editor-slot:last-child { margin-bottom: 0; }
-      .day-editor-slot .meal-type-label { 
-        font-weight: bold; 
-        color: var(--text-color-muted); 
-        flex-shrink: 0;
-        width: 150px;
-      }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
       .meal-details-container { flex-grow: 1; }
       .meal-details { display: flex; justify-content: space-between; align-items: center; }
       .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }

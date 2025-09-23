@@ -10,6 +10,7 @@
     --danger-color: #ef5350;
     --success-color: #66bb6a;
     --warning-color: #fdd835;
+    --info-color: var(--primary-color);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; }
@@ -21,26 +22,44 @@ body {
 }
 .hidden { display: none !important; }
 
+/* --- TOAST NOTIFICATIONS --- */
+.toast-container {
+  position: fixed;
+  top: 80px;
+  right: 1rem;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.toast {
+  background-color: var(--card-color);
+  color: var(--text-color);
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 5px solid var(--info-color);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.4s ease;
+  cursor: pointer;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+.toast.is-success { border-left-color: var(--success-color); }
+.toast.is-error { border-left-color: var(--danger-color); }
+.toast.is-info { border-left-color: var(--secondary-color); }
+
 /* --- GLOBAL ALERT BANNER --- */
 .global-alert {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background-color: var(--card-color);
-  border-left: 5px solid var(--warning-color);
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-  color: var(--text-color);
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 1rem; background-color: var(--card-color);
+  border-left: 5px solid var(--warning-color); border-radius: 8px;
+  margin-bottom: 1.5rem; color: var(--text-color);
 }
-.alert-close-btn {
-  background: none;
-  border: none;
-  color: var(--text-color-muted);
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition: color 0.2s;
-}
+.alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
 .alert-close-btn:hover { color: var(--text-color); }
 
 /* --- PERSISTENT HEADER --- */
@@ -86,7 +105,6 @@ body {
 .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
 .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
 .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-
 .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
 .day-cell {
     background-color: var(--card-color); border: 1px solid var(--border-color);
@@ -97,7 +115,6 @@ body {
 .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
 .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
 .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-
 .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
 .log-day { margin-bottom: 1.5rem; }
 .log-day:last-child { margin-bottom: 0; }
@@ -108,11 +125,11 @@ body {
 
 /* --- BUTTONS --- */
 .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
-.btn-primary { background-color: var(--secondary-color); color: var(--bg-color); }
-.btn-primary:hover { opacity: 0.85; }
+.btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
 .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-.btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); }
 .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+.btn:hover { opacity: 0.85; }
+.btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
 .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
 
 /* --- MODAL STYLES --- */
@@ -126,31 +143,18 @@ body {
 .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
 .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
 .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-.notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
-.notification-box.is-success { border-left-color: var(--success-color); }
-.notification-box.is-error { border-left-color: var(--danger-color); }
-.notification-box .modal-body { padding: 0; }
 .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
 .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
 
 .day-editor-list { display: flex; flex-direction: column; }
 .day-editor-slot { 
-  display: flex; 
-  align-items: center; 
-  gap: 1rem;
-  padding: 0.75rem; 
-  background: var(--bg-color); 
-  border-radius: 8px; 
-  margin-bottom: 0.75rem;
+  display: flex; align-items: center; gap: 1rem;
+  padding: 0.75rem; background: var(--bg-color); 
+  border-radius: 8px; margin-bottom: 0.75rem;
 }
 .day-editor-slot:last-child { margin-bottom: 0; }
-.day-editor-slot .meal-type-label { 
-  font-weight: bold; 
-  color: var(--text-color-muted); 
-  flex-shrink: 0;
-  width: 150px;
-}
+.day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
 .meal-details-container { flex-grow: 1; }
 .meal-details { display: flex; justify-content: space-between; align-items: center; }
 .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }

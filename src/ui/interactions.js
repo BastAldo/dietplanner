@@ -29,7 +29,8 @@ function handleCopyWeek() {
     () => {
       copyPreviousWeek();
       showNotification('Piano settimanale copiato!', 'success');
-    }
+    },
+    'primary'
   );
 }
 
@@ -40,7 +41,8 @@ function handleResetWeek() {
     () => {
       resetCurrentWeek();
       showNotification('Settimana pulita!', 'info');
-    }
+    },
+    'danger'
   );
 }
 
