@@ -27,6 +27,20 @@ self.addEventListener('install', (event) => {
   );
 });
 
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.filter((cacheName) => {
+          // Return true if you want to remove this cache,
+          // and false otherwise.
+          return cacheName !== CACHE_NAME;
+        }).map(cacheName => caches.delete(cacheName))
+      );
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   // Only apply cache-first strategy to same-origin requests.
   // This prevents errors with cross-origin requests like Google Fonts or remote JSON files.
