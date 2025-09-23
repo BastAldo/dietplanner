@@ -9,7 +9,7 @@
 ## 2. Architettura PWA
 L'applicazione include due componenti chiave per la funzionalità PWA:
 * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
-* **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline.
+* **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline. Include una logica di pulizia per le cache obsolete.
 
 ## 3. Refactoring dell'Interfaccia Utente (UI/UX)
 L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
@@ -33,7 +33,12 @@ Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è 
 }
 ```
 
-## 5. Struttura dei File (Invariata)
+## 5. Struttura Dati Chiave: `weeklyPlan`
+Per garantire che i piani alimentari siano univoci per ogni giorno specifico e non si ripetano tra le settimane, lo stato `weeklyPlan` utilizza una chiave composita basata sulla data.
+* **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
+* **Razionale:** Usare la data in formato ISO come prefisso garantisce che ogni voce sia legata a un giorno di calendario univoco, risolvendo il problema della persistenza dei dati durante la navigazione settimanale.
+
+## 6. Struttura dei File (Invariata)
 ```
 .
 ├── index.html

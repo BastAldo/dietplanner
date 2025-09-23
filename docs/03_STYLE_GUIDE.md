@@ -42,3 +42,12 @@ L'intera UI si basa su un set di variabili CSS per garantire coerenza.
 ### Modali
 * **Overlay (`.modal-overlay`):** Un overlay nero semitrasparente copre l'intera finestra quando un modale è attivo.
 * **Content Box (`.modal-content`):** Una card centrata contiene il contenuto del modale, con `max-height` per gestire lo scrolling interno.
+* **Interazione:** I modali si chiudono cliccando sul pulsante 'X' o cliccando sull'overlay esterno.
+
+### Notifiche
+* **Utilizzo:** Usate per fornire un feedback conciso all'utente (es. "Configurazione caricata!").
+* **Stile (`.notification-box`):** Un modale semplificato con un bordo sinistro colorato che indica lo stato del messaggio.
+* **Colori Indicatore**:
+    * **Verde (`--success-color`)**: Per messaggi di successo.
+    * **Rosso (`--danger-color`)**: Per messaggi di errore.
+    * **Teal (`--secondary-color`)**: Per messaggi informativi.

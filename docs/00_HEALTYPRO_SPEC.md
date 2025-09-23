@@ -85,25 +85,25 @@ Questa sezione definisce come implementeremo i concetti di MTP all'interno della
 
 * **Azione**: Sostituire il contenuto di `index.html` e `style.css` di `NutriPlan`.
 * **Dettagli**:
-    * `index.html` adotterà la struttura con header fisso e container principale di MTP, mantenendo però tutti gli `id` esistenti richiesti dagli script di `NutriPlan` (`calendar-grid`, `config-url-input`, etc.).
-    * `style.css` sarà completamente riscritto usando la palette colori e gli stili dei componenti (card, bottoni, modali) definiti nella guida di stile di MTP.
-* **Fix Critico - Service Worker**: Per garantire che le modifiche siano visibili, modificheremo `sw.js` cambiando il `CACHE_NAME` (es. in `healtypro-v1`). Questo forzerà l'aggiornamento della cache e il caricamento dei nuovi file.
+    * `index.html` adotta la struttura con header fisso e container principale, mantenendo tutti gli `id` esistenti richiesti dagli script.
+    * `style.css` è stato completamente riscritto usando la palette colori e gli stili dei componenti definiti nella guida di stile.
+* **Fix Critico - Service Worker**: Il `CACHE_NAME` in `sw.js` è stato aggiornato e un evento `activate` è stato aggiunto per garantire l'aggiornamento della cache e la pulizia delle versioni vecchie.
 
 #### Fase 2: Refactoring del Calendario (La Vista Principale)
 
 * **Azione**: Riscrivere la logica di rendering in `src/ui/renderer.js` e aggiornare le interazioni.
 * **Dettagli**:
-    * La funzione `renderApp` verrà modificata per disegnare una griglia di 7 "day-cell" cliccabili, invece della griglia complessa attuale.
-    * Ogni "day-cell" mostrerà il nome del giorno, la data e il totale calorico.
-    * Implementeremo la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
+    * La funzione `renderApp` disegna una griglia di 7 "day-cell" cliccabili che mostrano nome del giorno, data e totale calorico.
+    * È stata implementata la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
 
 #### Fase 3: Implementazione del Modale "Editor del Giorno" (L'Interazione Core)
 
-* **Azione**: Creare la logica per un nuovo modale di editing centralizzato.
+* **Azione**: Creare la logica per un modale di editing centralizzato con auto-aggiornamento.
 * **Dettagli**:
-    * Il click su una "day-cell" aprirà un nuovo modale: "Editor del Giorno".
-    * Questo modale mostrerà tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
-    * L'utente potrà cliccare su uno slot vuoto all'interno del modale per aprire la lista di selezione dei cibi (riutilizzando la logica di `openSelectionModal`). I pasti aggiunti appariranno nello slot corrispondente.
+    * Il click su una "day-cell" apre il modale "Editor del Giorno".
+    * Questo modale mostra tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
+    * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
+    * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
 
 #### Fase 4 (Futura): Integrazione Funzionalità Workout
 
