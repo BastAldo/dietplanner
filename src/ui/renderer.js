@@ -66,12 +66,13 @@ function calculateDailyCalories(isoDate, state) {
 }
 
 export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+  console.log('Apertura modale di conferma:', { title, message, type });
   confirmModalTitle.textContent = title;
   confirmModalMessage.textContent = message;
   confirmModalConfirmBtn.className = `btn btn-${type}`;
 
   const cleanup = () => {
-    confirmModal.classList.add('hidden');
+    confirmModal.classList.add('modal-hidden');
     confirmModalCancelBtn.removeEventListener('click', cancelHandler);
     confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
   };
@@ -85,10 +86,11 @@ export function showConfirmModal(title, message, onConfirm, type = 'secondary') 
   confirmModalCancelBtn.addEventListener('click', cancelHandler);
   confirmModalConfirmBtn.addEventListener('click', confirmHandler);
   
-  confirmModal.classList.remove('hidden');
+  confirmModal.classList.remove('modal-hidden');
 }
 
 export function openSelectionModal(slotId) {
+  console.log('Apertura modale di selezione per lo slot:', slotId);
   const state = getState();
   const mealType = slotId.substring(11);
   selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
@@ -111,7 +113,7 @@ export function openSelectionModal(slotId) {
   };
   closeButton.addEventListener('click', closeAndReturn, { once: true });
   selectionModal.addEventListener('click', overlayClickHandler);
-  selectionModal.classList.remove('hidden');
+  selectionModal.classList.remove('modal-hidden');
 }
 
 export function openDayEditorModal(isoDate) {
@@ -209,3 +211,4 @@ export function renderApp() {
   const urlInput = document.getElementById('config-url-input');
   if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }
+console.log("modifica00")
