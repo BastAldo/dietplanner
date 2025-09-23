@@ -1,9 +1,27 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
-import { DAYS, MEAL_TYPES, UI_TEXT } from '../utils/constants.js';
+import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 
 const selectionModal = document.getElementById('selection-modal');
 const selectionModalTitle = document.getElementById('selection-modal-title');
 const selectionModalList = document.getElementById('selection-modal-list');
+const calendarGrid = document.getElementById('calendar-grid');
+const weekTitleEl = document.getElementById('week-title'); // Hook for week title
+
+// Utility to format a date as YYYY-MM-DD
+function toISODateString(date) {
+  return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+}
+
+function getWeekStartDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+  return new Date(d.setDate(diff));
+}
+
+function formatShortDate(date) {
+  return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+}
 
 function calculateDailyCalories(day, state) {
   let min = 0;
@@ -24,55 +42,6 @@ function calculateDailyCalories(day, state) {
   if (min === 0 && max === 0) return '';
   if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
   return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-}
-
-function createMealCardHTML(meal, slotId, mealType) {
-    const isMismatched = meal.tipoPasto !== mealType ? 'is-mismatched' : '';
-    return `<div class="meal-card ${isMismatched}">
-        <button class="delete-meal-btn" data-slot-id="${slotId}">&times;</button>
-        <h4>${meal.nomePasto}</h4>
-        <p>${meal.ingredienti || ''}</p>
-      </div>`;
-}
-
-function renderDesktopCalendar(element, state) {
-  element.innerHTML = '';
-  const dayHeaders = DAYS.map(day => `<div class="grid-header"><span>${day}</span><div class="daily-calories">${calculateDailyCalories(day, state)}</div></div>`).join('');
-  element.insertAdjacentHTML('beforeend', '<div class="meal-type-label"></div>' + dayHeaders);
-  MEAL_TYPES.forEach(mealType => {
-    element.insertAdjacentHTML('beforeend', `<div class="meal-type-label">${mealType}</div>`);
-    DAYS.forEach(day => {
-      const slotId = `${day}-${mealType}`;
-      const mealId = state.weeklyPlan[slotId];
-      const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-      const mealCardHTML = meal ? createMealCardHTML(meal, slotId, mealType) : '';
-      element.insertAdjacentHTML('beforeend', `<div class="calendar-slot" data-slot-id="${slotId}">${mealCardHTML}</div>`);
-    });
-  });
-}
-
-function renderMobileCalendar(element, state) {
-  element.innerHTML = '';
-  DAYS.forEach(day => {
-    const dayCard = document.createElement('div');
-    dayCard.className = 'day-card';
-    dayCard.innerHTML = `
-      <div class="day-header">${day}</div>
-      <div class="daily-calories">${calculateDailyCalories(day, state)}</div>
-      <div class="day-slots"></div>`;
-    const slotsContainer = dayCard.querySelector('.day-slots');
-    MEAL_TYPES.forEach(mealType => {
-      const slotId = `${day}-${mealType}`;
-      const mealId = state.weeklyPlan[slotId];
-      const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-      const mealCardHTML = meal ? createMealCardHTML(meal, slotId, mealType) : '';
-      slotsContainer.innerHTML += `
-        <div class="meal-type-label-mobile">${mealType}</div>
-        <div class="calendar-slot" data-slot-id="${slotId}">${mealCardHTML}</div>
-      `;
-    });
-    element.appendChild(dayCard);
-  });
 }
 
 export function openSelectionModal(slotId) {
@@ -104,10 +73,7 @@ export function openSelectionModal(slotId) {
 export function populateInitialText() {
   document.title = UI_TEXT.MAIN_TITLE;
   document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-  document.getElementById('subtitle').textContent = UI_TEXT.SUBTITLE;
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-  document.getElementById('weekly-plan-title').textContent = UI_TEXT.WEEKLY_PLAN_TITLE;
-  document.getElementById('calendar-placeholder').textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
   document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
   document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
@@ -115,15 +81,46 @@ export function populateInitialText() {
 
 export function renderApp() {
   const state = getState();
-  const calendarGrid = document.getElementById('calendar-grid');
+  
   if (state.masterMealList.length === 0 && Object.keys(state.weeklyPlan).length === 0) {
-      calendarGrid.innerHTML = `<p>${UI_TEXT.CALENDAR_PLACEHOLDER}</p>`; return;
+      calendarGrid.innerHTML = `<p id="calendar-placeholder">${UI_TEXT.CALENDAR_PLACEHOLDER}</p>`;
+      weekTitleEl.textContent = '';
+      return;
   }
-  if (window.matchMedia('(min-width: 992px)').matches) {
-    renderDesktopCalendar(calendarGrid, state);
-  } else {
-    renderMobileCalendar(calendarGrid, state);
+
+  calendarGrid.innerHTML = ''; // Clear previous render
+
+  const weekStart = getWeekStartDate(state.focusedDate);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+
+  for (let i = 0; i < 7; i++) {
+    const dayDate = new Date(weekStart);
+    dayDate.setDate(dayDate.getDate() + i);
+    
+    const dayName = DAYS[i];
+    const isoDate = toISODateString(dayDate);
+    const dailyCalories = calculateDailyCalories(dayName, state);
+
+    const dayCell = document.createElement('div');
+    dayCell.className = 'day-cell';
+    dayCell.dataset.date = isoDate;
+    
+    dayCell.innerHTML = `
+      <div class="day-cell__header">
+        <span>${dayName}</span>
+        <span>${dayDate.getDate()}</span>
+      </div>
+      <div class="day-cell__body">
+        <div class="daily-calories">${dailyCalories}</div>
+      </div>
+    `;
+    calendarGrid.appendChild(dayCell);
   }
+  
   const urlInput = document.getElementById('config-url-input');
-  if (document.activeElement !== urlInput) { urlInput.value = state.configUrl; }
+  if (document.activeElement !== urlInput) {
+     urlInput.value = state.configUrl;
+  }
 }
