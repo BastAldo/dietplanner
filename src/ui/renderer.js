@@ -10,6 +10,8 @@ const dayEditorModal = document.getElementById('day-editor-modal');
 const dayEditorTitle = document.getElementById('day-editor-title');
 const dayEditorBody = document.getElementById('day-editor-body');
 
+let currentEditingDayISO = null; // Track the currently open day
+
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 }
@@ -72,12 +74,16 @@ export function openSelectionModal(slotId) {
     if(item) {
       updateWeeklyPlan(slotId, item.dataset.mealId);
       selectionModal.classList.add('modal-hidden');
+      if (currentEditingDayISO) {
+        openDayEditorModal(currentEditingDayISO); // Re-open editor to show changes
+      }
     }
   };
   selectionModal.classList.remove('modal-hidden');
 }
 
 export function openDayEditorModal(isoDate) {
+  currentEditingDayISO = isoDate; // Keep track of the open day
   const state = getState();
   const dayName = DAYS[new Date(isoDate).getDay() === 0 ? 6 : new Date(isoDate).getDay() - 1];
   dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
@@ -109,6 +115,7 @@ export function openDayEditorModal(isoDate) {
       openSelectionModal(e.target.dataset.slotId);
     } else if (e.target.classList.contains('btn-remove-meal')) {
       updateWeeklyPlan(e.target.dataset.slotId, null);
+      openDayEditorModal(isoDate); // Re-render the modal with fresh data
     }
   };
 
@@ -158,7 +165,7 @@ export function renderApp() {
         <span>${dayDate.getDate()}</span>
       </div>
       <div class="day-cell__body">
-        <div class="daily-calories">${dailyCalories}</div>
+        <div class.daily-calories">${dailyCalories}</div>
       </div>
     `;
     calendarGrid.appendChild(dayCell);

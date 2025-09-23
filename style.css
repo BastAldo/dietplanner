@@ -229,14 +229,19 @@ body {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    right: 1.5rem;
+    right: 1rem;
     background: none;
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
     color: var(--text-color-muted);
-    padding: 0.25rem;
+    padding: 0;
     line-height: 1;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 50%;
     transition: background-color 0.2s, color 0.2s;
 }

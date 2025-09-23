@@ -1,10 +1,10 @@
-commit_message: "fix(ui): Correct modal layering and improve close button UI"
+commit_message: "fix(ui): Refresh day editor on change and fix close button CSS"
 rationale: |
-  This commit addresses two immediate UI issues based on user feedback, improving the overall user experience.
+  This commit resolves two outstanding issues with the Day Editor modal to improve data consistency and UI correctness.
 
-  1.  A bug that caused the meal selection modal to open underneath the day editor modal has been fixed. The logic in `renderer.js` now correctly hides the day editor before opening the selection modal, ensuring the correct stacking order and unblocking the user flow.
+  1.  A bug causing the modal's content to become stale after removing a meal has been fixed. The logic in `renderer.js` has been refactored to automatically refresh the modal's view after any state change (add or remove meal), ensuring the user always sees the most current data.
 
-  2.  The usability of the modal close button ('X') has been enhanced. The CSS in `style.css` was updated to better position the button and add a hover effect, making it more visible and easier to interact with, as per the approved UI improvement plan.
+  2.  The CSS for the modal close button ('X') has been corrected. The previous implementation caused positioning errors. The new, simplified rules correctly and reliably place the button inside the top-right corner of the modal header, fixing the visual glitch.
 patches:
   - file: src/ui/renderer.js
     content: |
@@ -19,6 +19,8 @@ patches:
       const dayEditorModal = document.getElementById('day-editor-modal');
       const dayEditorTitle = document.getElementById('day-editor-title');
       const dayEditorBody = document.getElementById('day-editor-body');
+
+      let currentEditingDayISO = null; // Track the currently open day
 
       function toISODateString(date) {
         return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -82,12 +84,16 @@ patches:
           if(item) {
             updateWeeklyPlan(slotId, item.dataset.mealId);
             selectionModal.classList.add('modal-hidden');
+            if (currentEditingDayISO) {
+              openDayEditorModal(currentEditingDayISO); // Re-open editor to show changes
+            }
           }
         };
         selectionModal.classList.remove('modal-hidden');
       }
 
       export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate; // Keep track of the open day
         const state = getState();
         const dayName = DAYS[new Date(isoDate).getDay() === 0 ? 6 : new Date(isoDate).getDay() - 1];
         dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
@@ -119,6 +125,7 @@ patches:
             openSelectionModal(e.target.dataset.slotId);
           } else if (e.target.classList.contains('btn-remove-meal')) {
             updateWeeklyPlan(e.target.dataset.slotId, null);
+            openDayEditorModal(isoDate); // Re-render the modal with fresh data
           }
         };
 
@@ -168,7 +175,7 @@ patches:
               <span>${dayDate.getDate()}</span>
             </div>
             <div class="day-cell__body">
-              <div class="daily-calories">${dailyCalories}</div>
+              <div class.daily-calories">${dailyCalories}</div>
             </div>
           `;
           calendarGrid.appendChild(dayCell);
@@ -412,14 +419,19 @@ patches:
           position: absolute;
           top: 50%;
           transform: translateY(-50%);
-          right: 1.5rem;
+          right: 1rem;
           background: none;
           border: none;
           font-size: 1.5rem;
           cursor: pointer;
           color: var(--text-color-muted);
-          padding: 0.25rem;
+          padding: 0;
           line-height: 1;
+          width: 2.25rem;
+          height: 2.25rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           border-radius: 50%;
           transition: background-color 0.2s, color 0.2s;
       }
@@ -457,4 +469,4 @@ patches:
           }
       }
 commands:
-  - "echo 'UI bug fixes applied. The modal layering issue is resolved and the close button is now more visible.'"
+  - "echo 'Day editor modal logic and styles have been fixed. Please test the add/remove meal workflow.'"
