@@ -1,10 +1,10 @@
-commit_message: "refactor(ui): Centralize info modal content in constants"
+commit_message: "feat(ui): Implement global alert banner and fix editor spacing"
 rationale: |
-  Based on user feedback, this commit resolves an omission in the info modal's example code and improves the application's architecture.
+  This commit implements a superior user experience for the application's initial empty state and simultaneously fixes a persistent UI bug in the Day Editor modal, based on direct user feedback.
 
-  The static JSON example, previously hardcoded and truncated in `index.html`, has been moved into a dedicated constant in `src/utils/constants.js`. The `populateInitialText` function in `renderer.js` now dynamically injects this content into the DOM at startup.
+  1.  **Global Alert Banner**: The previous logic of hiding the entire calendar when no configuration was loaded has been replaced. A new, non-intrusive "alert banner" now appears at the top of the application, guiding the user to load a configuration. This provides a better initial experience. The implementation involved adding the component to `index.html`, styling it in `style.css` (including a new `--warning-color`), and managing its visibility in `renderer.js` and `interactions.js`.
 
-  This change adheres to the Single Responsibility Principle, making the HTML purely structural and centralizing UI text content for easier maintenance and to prevent future errors of omission.
+  2.  **Day Editor Spacing Fix**: The cramped spacing between meal slots in the Day Editor modal has been corrected by replacing the `gap` property with a more robust `margin-bottom` on each slot in `style.css`, ensuring consistent spacing on all devices.
 patches:
   - file: index.html
     content: |
@@ -30,6 +30,11 @@ patches:
           </header>
 
           <div id="app-container">
+              <div id="global-alert" class="global-alert hidden">
+                  <p id="global-alert-message"></p>
+                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
+              </div>
+
               <section class="data-source-container">
                   <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
                   <button id="load-config-btn" class="btn btn-primary"></button>
@@ -108,6 +113,72 @@ patches:
 
       </body>
       </html>
+  - file: src/ui/interactions.js
+    content: |
+      import { resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
+      import { showNotification } from './notifications.js';
+      import { openDayEditorModal } from './renderer.js';
+
+      async function handleLoadConfig() {
+        const url = document.getElementById('config-url-input').value.trim();
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+          showNotification('Configurazione caricata!', 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+        }
+      }
+
+      function handleCalendarClick(e) {
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+            openDayEditorModal(dayCell.dataset.date);
+        }
+      }
+
+      function handleCopyWeek() {
+        if (confirm('Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?')) {
+          copyPreviousWeek();
+          showNotification('Piano settimanale copiato!', 'success');
+        }
+      }
+
+      export function initializeEventListeners() {
+        document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+        
+        document.querySelectorAll('.modal-close-btn:not([data-target=selection-modal])').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById(e.target.dataset.target).classList.add('modal-hidden');
+          });
+        });
+
+        document.querySelectorAll('.modal-overlay:not(#selection-modal)').forEach(overlay => {
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.classList.add('modal-hidden');
+            }
+          });
+        });
+
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+
+        // Listener for the new global alert
+        document.getElementById('global-alert-close').addEventListener('click', () => {
+            document.getElementById('global-alert').classList.add('hidden');
+        });
+      }
   - file: src/ui/renderer.js
     content: |
       import { getState, updateWeeklyPlan } from '../core/state.js';
@@ -118,6 +189,8 @@ patches:
       const weekTitleEl = document.getElementById('week-title');
       const viewCalendarBtn = document.getElementById('view-calendar-btn');
       const viewLogBtn = document.getElementById('view-log-btn');
+      const globalAlert = document.getElementById('global-alert');
+      const globalAlertMessage = document.getElementById('global-alert-message');
 
       const selectionModal = document.getElementById('selection-modal');
       const selectionModalTitle = document.getElementById('selection-modal-title');
@@ -298,6 +371,14 @@ patches:
 
       export function renderApp() {
         const state = getState();
+
+        if (state.masterMealList.length === 0) {
+            globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
+            globalAlert.classList.remove('hidden');
+        } else {
+            globalAlert.classList.add('hidden');
+        }
+
         const weekStart = getWeekStartDate(state.focusedDate);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
@@ -320,57 +401,170 @@ patches:
         const urlInput = document.getElementById('config-url-input');
         if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
-  - file: src/utils/constants.js
+  - file: style.css
     content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [
-        'Colazione',
-        'Spuntino Mattutino',
-        'Pranzo',
-        'Spuntino Pomeridiano',
-        'Cena'
-      ];
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835; /* New Color */
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
 
-      export const UI_TEXT = {
-        MAIN_TITLE: 'NutriPlan',
-        SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
-        LOAD_BUTTON: 'Carica',
-        WEEKLY_PLAN_TITLE: 'Piano Settimanale',
-        CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
-        RESET_BUTTON: 'Reset Piano',
-        INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
-        INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
-        SELECT_MEAL_TITLE: 'Scegli',
-        FOR_DAY_PREFIX: 'per',
-        NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
-        KCAL_LABEL: 'Kcal',
-        INFO_MODAL_EXAMPLE_JSON:
-      `{
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
-          }
-        ],
-        "meals": [
-          { 
-            "id": "1", 
-            "tipoPasto": "Pranzo", 
-            "calories_min": 550, 
-            "calories_max": 600, 
-            "etichette": ["contiene-soia"] 
-          },
-          { 
-            "id": "2", 
-            "tipoPasto": "Cena", 
-            "calories_min": 300 
-          }
-        ]
-      }`
-      };
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color);
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        color: var(--text-color);
+      }
+      .alert-close-btn {
+        background: none;
+        border: none;
+        color: var(--text-color-muted);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: color 0.2s;
+      }
+      .alert-close-btn:hover {
+        color: var(--text-color);
+      }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      .app-footer {
+          padding-top: 1.5rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+      }
+
+      /* --- CALENDAR & LOG VIEW --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+      }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 1.5rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; font-size: 1.1rem; }
+      .log-item { display: flex; gap: 1rem; padding: 0.5rem 0; font-size: 0.95rem; }
+      .log-item strong { color: var(--text-color-muted); flex-basis: 150px; flex-shrink: 0; text-align: right; }
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+
+      /* --- BUTTONS --- */
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--secondary-color); color: var(--bg-color); }
+      .btn-primary:hover { opacity: 0.85; }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); }
+      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
+      .notification-box.is-success { border-left-color: var(--success-color); }
+      .notification-box.is-error { border-left-color: var(--danger-color); }
+      .notification-box .modal-body { padding: 0; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { 
+        display: flex; 
+        align-items: center; 
+        gap: 1rem;
+        padding: 0.75rem; 
+        background: var(--bg-color); 
+        border-radius: 8px; 
+        margin-bottom: 1rem;
+      }
+      .day-editor-slot:last-child {
+        margin-bottom: 0;
+      }
+      .day-editor-slot .meal-type-label { 
+        font-weight: bold; 
+        color: var(--text-color-muted); 
+        flex-shrink: 0;
+        width: 150px;
+      }
+      .meal-details-container { flex-grow: 1; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
+      
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }

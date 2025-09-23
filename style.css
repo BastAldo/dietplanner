@@ -9,6 +9,7 @@
     --border-color: #40404a;
     --danger-color: #ef5350;
     --success-color: #66bb6a;
+    --warning-color: #fdd835; /* New Color */
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; }
@@ -19,6 +20,30 @@ body {
     padding-top: 60px;
 }
 .hidden { display: none !important; }
+
+/* --- GLOBAL ALERT BANNER --- */
+.global-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: var(--card-color);
+  border-left: 5px solid var(--warning-color);
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  color: var(--text-color);
+}
+.alert-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-color-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.alert-close-btn:hover {
+  color: var(--text-color);
+}
 
 /* --- PERSISTENT HEADER --- */
 .app-header {
@@ -108,8 +133,26 @@ body {
 .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
 .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-.day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
-.day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+
+.day-editor-list { display: flex; flex-direction: column; }
+.day-editor-slot { 
+  display: flex; 
+  align-items: center; 
+  gap: 1rem;
+  padding: 0.75rem; 
+  background: var(--bg-color); 
+  border-radius: 8px; 
+  margin-bottom: 1rem;
+}
+.day-editor-slot:last-child {
+  margin-bottom: 0;
+}
+.day-editor-slot .meal-type-label { 
+  font-weight: bold; 
+  color: var(--text-color-muted); 
+  flex-shrink: 0;
+  width: 150px;
+}
 .meal-details-container { flex-grow: 1; }
 .meal-details { display: flex; justify-content: space-between; align-items: center; }
 .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }

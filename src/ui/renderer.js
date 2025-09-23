@@ -6,6 +6,8 @@ const logView = document.getElementById('log-view');
 const weekTitleEl = document.getElementById('week-title');
 const viewCalendarBtn = document.getElementById('view-calendar-btn');
 const viewLogBtn = document.getElementById('view-log-btn');
+const globalAlert = document.getElementById('global-alert');
+const globalAlertMessage = document.getElementById('global-alert-message');
 
 const selectionModal = document.getElementById('selection-modal');
 const selectionModalTitle = document.getElementById('selection-modal-title');
@@ -186,6 +188,14 @@ function renderLogView(state, weekStart) {
 
 export function renderApp() {
   const state = getState();
+
+  if (state.masterMealList.length === 0) {
+      globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
+      globalAlert.classList.remove('hidden');
+  } else {
+      globalAlert.classList.add('hidden');
+  }
+
   const weekStart = getWeekStartDate(state.focusedDate);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);

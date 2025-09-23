@@ -56,4 +56,9 @@ export function initializeEventListeners() {
   document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
   document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
   document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+
+  // Listener for the new global alert
+  document.getElementById('global-alert-close').addEventListener('click', () => {
+      document.getElementById('global-alert').classList.add('hidden');
+  });
 }

@@ -20,6 +20,11 @@
     </header>
 
     <div id="app-container">
+        <div id="global-alert" class="global-alert hidden">
+            <p id="global-alert-message"></p>
+            <button id="global-alert-close" class="alert-close-btn">&times;</button>
+        </div>
+
         <section class="data-source-container">
             <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
             <button id="load-config-btn" class="btn btn-primary"></button>
