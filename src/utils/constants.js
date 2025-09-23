@@ -1,4 +1,4 @@
-export const DEFAULT_CONFIG_URL = '';
+export const DEFAULT_CONFIG_URL = 'https://raw.githubusercontent.com/BastAldo/bio/refs/heads/main/pasti.json';
 export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
 export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
 export const WEEK_STARTS_ON_MONDAY = 1;
