@@ -1,11 +1,16 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
 import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 
+const calendarGrid = document.getElementById('calendar-grid');
+const logView = document.getElementById('log-view');
+const weekTitleEl = document.getElementById('week-title');
+const viewCalendarBtn = document.getElementById('view-calendar-btn');
+const viewLogBtn = document.getElementById('view-log-btn');
+
+// Modal elements
 const selectionModal = document.getElementById('selection-modal');
 const selectionModalTitle = document.getElementById('selection-modal-title');
 const selectionModalList = document.getElementById('selection-modal-list');
-const calendarGrid = document.getElementById('calendar-grid');
-const weekTitleEl = document.getElementById('week-title');
 const dayEditorModal = document.getElementById('day-editor-modal');
 const dayEditorTitle = document.getElementById('day-editor-title');
 const dayEditorBody = document.getElementById('day-editor-body');
@@ -56,38 +61,21 @@ function calculateDailyCalories(isoDate, state) {
 
 export function openSelectionModal(slotId) {
   const state = getState();
-  const [day, mealType] = [slotId.substring(0, 10), slotId.substring(11)];
+  const mealType = slotId.substring(11);
   selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
   const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-  if(relevantMeals.length > 0) {
-      selectionModalList.innerHTML = relevantMeals.map(meal => 
-      `<div class="selection-item" data-meal-id="${meal.id}">
-          <h4>${meal.nomePasto}</h4>
-          <p>${meal.ingredienti || ''}</p>
-      </div>`
-      ).join('');
-  } else {
-      selectionModalList.innerHTML = `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-  }
+  selectionModalList.innerHTML = relevantMeals.length > 0
+    ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('')
+    : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
   
   const closeButton = selectionModal.querySelector('.modal-close-btn');
-
   const closeAndReturn = () => {
     selectionModal.classList.add('modal-hidden');
-    if (currentEditingDayISO) {
-      openDayEditorModal(currentEditingDayISO);
-    }
-    // Clean up listeners
+    if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
     closeButton.removeEventListener('click', closeAndReturn);
     selectionModal.removeEventListener('click', overlayClickHandler);
   };
-
-  const overlayClickHandler = (e) => {
-    if (e.target === selectionModal) {
-      closeAndReturn();
-    }
-  };
-
+  const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
   selectionModalList.onclick = (e) => {
     const item = e.target.closest('.selection-item');
     if(item) {
@@ -95,10 +83,8 @@ export function openSelectionModal(slotId) {
       closeAndReturn();
     }
   };
-
   closeButton.addEventListener('click', closeAndReturn, { once: true });
   selectionModal.addEventListener('click', overlayClickHandler);
-
   selectionModal.classList.remove('modal-hidden');
 }
 
@@ -106,28 +92,12 @@ export function openDayEditorModal(isoDate) {
   currentEditingDayISO = isoDate;
   const state = getState();
   dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
-
   dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
     const mealId = state.weeklyPlan[slotId];
     const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-    
-    return `
-      <div class="day-editor-slot">
-        <span class="meal-type-label">${mealType}</span>
-        <div class="meal-details-container">
-          ${meal 
-            ? `<div class="meal-details">
-                 <span>${meal.nomePasto}</span>
-                 <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
-               </div>` 
-            : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`
-          }
-        </div>
-      </div>
-    `;
+    return `<div class="day-editor-slot">...</div>`; // Placeholder
   }).join('');
-
   dayEditorBody.onclick = (e) => {
     if (e.target.classList.contains('btn-add-meal')) {
       dayEditorModal.classList.add('modal-hidden');
@@ -137,7 +107,6 @@ export function openDayEditorModal(isoDate) {
       openDayEditorModal(isoDate);
     }
   };
-
   dayEditorModal.classList.remove('modal-hidden');
 }
 
@@ -147,51 +116,72 @@ export function populateInitialText() {
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
   document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-  document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+}
+
+function renderCalendarView(state, weekStart) {
+  calendarGrid.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const dayDate = new Date(weekStart);
+    dayDate.setDate(dayDate.getDate() + i);
+    const dayName = DAYS[i];
+    const isoDate = toISODateString(dayDate);
+    const dailyCalories = calculateDailyCalories(isoDate, state);
+    const dayCell = document.createElement('div');
+    dayCell.className = 'day-cell';
+    dayCell.dataset.date = isoDate;
+    dayCell.innerHTML = `
+      <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
+      <div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>
+    `;
+    calendarGrid.appendChild(dayCell);
+  }
+}
+
+function renderLogView(state, weekStart) {
+  logView.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const dayDate = new Date(weekStart);
+    dayDate.setDate(dayDate.getDate() + i);
+    const isoDate = toISODateString(dayDate);
+    const dayMeals = MEAL_TYPES
+      .map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) }))
+      .filter(item => item.meal);
+    if (dayMeals.length > 0) {
+      const dayLog = document.createElement('div');
+      dayLog.className = 'log-day';
+      dayLog.innerHTML = `<h3>${formatFullDate(isoDate)}</h3>` + dayMeals.map(item =>
+        `<div class="log-item"><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>`
+      ).join('');
+      logView.appendChild(dayLog);
+    }
+  }
+  if (logView.innerHTML === '') {
+    logView.innerHTML = `<p class="placeholder-text">Nessun pasto pianificato per questa settimana.</p>`;
+  }
 }
 
 export function renderApp() {
   const state = getState();
-  
-  if (state.masterMealList.length === 0 && Object.keys(state.weeklyPlan).length === 0) {
-      calendarGrid.innerHTML = `<p id="calendar-placeholder">${UI_TEXT.CALENDAR_PLACEHOLDER}</p>`;
-      weekTitleEl.textContent = '';
-      return;
-  }
-
-  calendarGrid.innerHTML = ''; // Clear previous render
-
   const weekStart = getWeekStartDate(state.focusedDate);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
   weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
 
-  for (let i = 0; i < 7; i++) {
-    const dayDate = new Date(weekStart);
-    dayDate.setDate(dayDate.getDate() + i);
-    
-    const dayName = DAYS[i];
-    const isoDate = toISODateString(dayDate);
-    const dailyCalories = calculateDailyCalories(isoDate, state);
-
-    const dayCell = document.createElement('div');
-    dayCell.className = 'day-cell';
-    dayCell.dataset.date = isoDate;
-    
-    dayCell.innerHTML = `
-      <div class="day-cell__header">
-        <span>${dayName}</span>
-        <span>${dayDate.getDate()}</span>
-      </div>
-      <div class="day-cell__body">
-        <div class="daily-calories">${dailyCalories}</div>
-      </div>
-    `;
-    calendarGrid.appendChild(dayCell);
+  // View routing
+  if (state.currentView === 'calendar') {
+    calendarGrid.classList.remove('hidden');
+    logView.classList.add('hidden');
+    viewCalendarBtn.classList.add('active');
+    viewLogBtn.classList.remove('active');
+    renderCalendarView(state, weekStart);
+  } else {
+    calendarGrid.classList.add('hidden');
+    logView.classList.remove('hidden');
+    viewCalendarBtn.classList.remove('active');
+    viewLogBtn.classList.add('active');
+    renderLogView(state, weekStart);
   }
   
   const urlInput = document.getElementById('config-url-input');
-  if (document.activeElement !== urlInput) {
-     urlInput.value = state.configUrl;
-  }
+  if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }

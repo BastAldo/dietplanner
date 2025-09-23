@@ -5,10 +5,12 @@ let state = {
   masterMealList: [],
   weeklyPlan: {},
   configUrl: '',
-  focusedDate: new Date(), // New state property to track the currently viewed week
+  focusedDate: new Date(),
+  currentView: 'calendar', // 'calendar' or 'log'
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
 export const getState = () => ({ ...state });
 
@@ -54,10 +56,49 @@ export function resetWeeklyPlan() {
   notify();
 }
 
-// New actions for week navigation
 export function navigateWeek(direction) {
   const newDate = new Date(state.focusedDate);
   newDate.setDate(newDate.getDate() + (direction * 7));
   state.focusedDate = newDate;
+  notify();
+}
+
+export function setView(view) {
+  if (view === 'calendar' || view === 'log') {
+    state.currentView = view;
+    notify();
+  }
+}
+
+export function copyPreviousWeek() {
+  const currentWeekStart = new Date(state.focusedDate);
+  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1); // Monday of current week
+  
+  const prevWeekStart = new Date(currentWeekStart);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7); // Monday of previous week
+
+  for (let i = 0; i < 7; i++) {
+    const sourceDate = new Date(prevWeekStart);
+    sourceDate.setDate(sourceDate.getDate() + i);
+    const sourceISO = toISODateString(sourceDate);
+
+    const destDate = new Date(currentWeekStart);
+    destDate.setDate(destDate.getDate() + i);
+    const destISO = toISODateString(destDate);
+
+    // Copy each meal type
+    state.masterMealList.map(m => m.tipoPasto).forEach(mealType => {
+      const sourceSlotId = `${sourceISO}-${mealType}`;
+      const destSlotId = `${destISO}-${mealType}`;
+      const mealId = state.weeklyPlan[sourceSlotId];
+
+      if (mealId) {
+        state.weeklyPlan[destSlotId] = mealId;
+      } else {
+        delete state.weeklyPlan[destSlotId]; // Ensure empty slots are also copied
+      }
+    });
+  }
+  saveStateToLocalStorage();
   notify();
 }

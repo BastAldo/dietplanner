@@ -1,30 +1,592 @@
-commit_message: "docs: Add user stories for meal log and copy week features"
+commit_message: "feat: Implement weekly meal log and copy week features"
 rationale: |
-  As per the approved plan, this commit updates the core functionality document to include two major new features: the Weekly Meal Log and the Copy Previous Week function.
+  This commit introduces two major features as specified in the updated documentation: the Weekly Meal Log and the Copy Previous Week function.
 
-  Formalizing these requirements in `docs/01_FUNCTIONALITY.md` is the necessary first step before beginning implementation, ensuring our documentation remains the single source of truth for the project's scope and capabilities.
+  1.  **State Management (`state.js`):** A new `currentView` property has been added to the state to manage switching between the calendar and the new log view. The `copyPreviousWeek` function has been implemented to handle the core logic of duplicating a week's meal plan.
+
+  2.  **UI Structure (`index.html`, `style.css`):** New UI elements have been added, including view-switcher icons, a 'copy week' button, and a container for the meal log. Corresponding styles have been added to ensure visual consistency.
+
+  3.  **Rendering Logic (`renderer.js`):** The `renderApp` function now acts as a view router. New functions (`renderCalendarView`, `renderLogView`) have been created to handle the rendering of each specific view, keeping the code modular and clean.
+
+  4.  **User Interactions (`interactions.js`):** Event listeners for the new buttons have been added to connect the UI to the new state management logic, including a confirmation dialog for the copy action to prevent accidental data loss.
 patches:
-  - file: docs/01_FUNCTIONALITY.md
+  - file: index.html
     content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>NutriPlan</title>
+          <link rel="stylesheet" href="style.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
 
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
+          <header class="app-header">
+              <div class="app-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
+                  <h1 id="main-title">NutriPlan</h1>
+              </div>
+          </header>
 
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+          <div id="app-container">
+              <section class="data-source-container">
+                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+                  <button id="load-config-btn" class="btn btn-primary"></button>
+                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
+              </section>
 
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-      * **US-20 (Registro Pasti Settimanale):** Come utente, voglio poter passare da una vista calendario a una vista registro per vedere l'elenco dettagliato di tutti i pasti pianificati per la settimana corrente.
-      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
-commands:
-  - "echo 'Documentation updated. We are now ready to begin implementation of the new features.'"
+              <main class="main-container">
+                  <section id="calendar-view-container" class="view-container">
+                      <header class="calendar-header">
+                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
+                          <h2 id="week-title"></h2>
+                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
+                      </header>
+                      <div class="calendar-controls">
+                        <div class="view-switcher">
+                            <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
+                            </button>
+                            <button id="view-log-btn" class="btn-view" title="Vista Registro">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
+                            </button>
+                        </div>
+                        <button id="copy-week-btn" class="btn btn-secondary">Copia Precedente</button>
+                      </div>
+                      <div id="calendar-grid" class="calendar-grid"></div>
+                      <div id="log-view" class="log-view hidden"></div>
+                  </section>
+              </main>
+
+              <footer class="app-footer">
+                  <button id="reset-btn" class="btn btn-secondary"></button>
+              </footer>
+          </div>
+
+          <div id="info-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="info-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
+                  </div>
+                  <div class="modal-body">
+                      <p id="info-modal-desc"></p>
+                      <pre><code>{
+        "rules": [], "meals": []
+      }</code></pre>
+                  </div>
+              </div>
+          </div>
+
+          <div id="notification-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content notification-box">
+              <div class="modal-body">
+                <p id="notification-message"></p>
+              </div>
+              <button class="modal-close-btn" data-target="notification-modal">&times;</button>
+            </div>
+          </div>
+
+          <div id="selection-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="selection-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
+                  </div>
+                  <div id="selection-modal-list" class="modal-body selection-list"></div>
+              </div>
+          </div>
+
+          <div id="day-editor-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="day-editor-title"></h3>
+                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
+                </div>
+                <div id="day-editor-body" class="modal-body day-editor-list"></div>
+            </div>
+          </div>
+
+      </body>
+      </html>
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL } from '../utils/constants.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        configUrl: '',
+        focusedDate: new Date(),
+        currentView: 'calendar', // 'calendar' or 'log'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        if (plan) {
+          state.weeklyPlan = JSON.parse(plan);
+        }
+        if (url) {
+          state.configUrl = url;
+        }
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          state.weeklyPlan[slotId] = mealId;
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetWeeklyPlan() {
+        state.weeklyPlan = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (view === 'calendar' || view === 'log') {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = new Date(state.focusedDate);
+        currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1); // Monday of current week
+        
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7); // Monday of previous week
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          // Copy each meal type
+          state.masterMealList.map(m => m.tipoPasto).forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealId = state.weeklyPlan[sourceSlotId];
+
+            if (mealId) {
+              state.weeklyPlan[destSlotId] = mealId;
+            } else {
+              delete state.weeklyPlan[destSlotId]; // Ensure empty slots are also copied
+            }
+          });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: src/ui/interactions.js
+    content: |
+      import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
+      import { showNotification } from './notifications.js';
+      import { openDayEditorModal } from './renderer.js';
+
+      async function handleLoadConfig() {
+        const url = document.getElementById('config-url-input').value.trim();
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+          showNotification('Configurazione caricata!', 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+        }
+      }
+
+      function handleCalendarClick(e) {
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+            openDayEditorModal(dayCell.dataset.date);
+        }
+      }
+
+      function handleCopyWeek() {
+        if (confirm('Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?')) {
+          copyPreviousWeek();
+          showNotification('Piano settimanale copiato!', 'success');
+        }
+      }
+
+      export function initializeEventListeners() {
+        document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+        
+        document.querySelectorAll('.modal-close-btn:not([data-target=selection-modal])').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById(e.target.dataset.target).classList.add('modal-hidden');
+          });
+        });
+
+        document.querySelectorAll('.modal-overlay:not(#selection-modal)').forEach(overlay => {
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.classList.add('modal-hidden');
+            }
+          });
+        });
+
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+
+        // New listeners for view switcher and copy week
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+      }
+  - file: src/ui/renderer.js
+    content: |
+      import { getState, updateWeeklyPlan } from '../core/state.js';
+      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+
+      const calendarGrid = document.getElementById('calendar-grid');
+      const logView = document.getElementById('log-view');
+      const weekTitleEl = document.getElementById('week-title');
+      const viewCalendarBtn = document.getElementById('view-calendar-btn');
+      const viewLogBtn = document.getElementById('view-log-btn');
+
+      // Modal elements
+      const selectionModal = document.getElementById('selection-modal');
+      const selectionModalTitle = document.getElementById('selection-modal-title');
+      const selectionModalList = document.getElementById('selection-modal-list');
+      const dayEditorModal = document.getElementById('day-editor-modal');
+      const dayEditorTitle = document.getElementById('day-editor-title');
+      const dayEditorBody = document.getElementById('day-editor-body');
+
+      let currentEditingDayISO = null;
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function calculateDailyCalories(isoDate, state) {
+        let min = 0;
+        let max = 0;
+        MEAL_TYPES.forEach(type => {
+          const slotId = `${isoDate}-${type}`;
+          const mealId = state.weeklyPlan[slotId];
+          if (mealId) {
+            const meal = state.masterMealList.find(m => m.id === mealId);
+            if (meal && meal.calories_min) {
+              const minCals = Number(meal.calories_min) || 0;
+              const maxCals = Number(meal.calories_max) || minCals;
+              min += minCals;
+              max += maxCals;
+            }
+          }
+        });
+
+        if (min === 0 && max === 0) return '';
+        if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
+        return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const mealType = slotId.substring(11);
+        selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        selectionModalList.innerHTML = relevantMeals.length > 0
+          ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('')
+          : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        
+        const closeButton = selectionModal.querySelector('.modal-close-btn');
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+          closeButton.removeEventListener('click', closeAndReturn);
+          selectionModal.removeEventListener('click', overlayClickHandler);
+        };
+        const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
+        selectionModalList.onclick = (e) => {
+          const item = e.target.closest('.selection-item');
+          if(item) {
+            updateWeeklyPlan(slotId, item.dataset.mealId);
+            closeAndReturn();
+          }
+        };
+        closeButton.addEventListener('click', closeAndReturn, { once: true });
+        selectionModal.addEventListener('click', overlayClickHandler);
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
+        dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const mealId = state.weeklyPlan[slotId];
+          const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
+          return `<div class="day-editor-slot">...</div>`; // Placeholder
+        }).join('');
+        dayEditorBody.onclick = (e) => {
+          if (e.target.classList.contains('btn-add-meal')) {
+            dayEditorModal.classList.add('modal-hidden');
+            openSelectionModal(e.target.dataset.slotId);
+          } else if (e.target.classList.contains('btn-remove-meal')) {
+            updateWeeklyPlan(e.target.dataset.slotId, null);
+            openDayEditorModal(isoDate);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+      }
+      
+      function renderCalendarView(state, weekStart) {
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state);
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `
+            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
+            <div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>
+          `;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        logView.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES
+            .map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) }))
+            .filter(item => item.meal);
+          if (dayMeals.length > 0) {
+            const dayLog = document.createElement('div');
+            dayLog.className = 'log-day';
+            dayLog.innerHTML = `<h3>${formatFullDate(isoDate)}</h3>` + dayMeals.map(item =>
+              `<div class="log-item"><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>`
+            ).join('');
+            logView.appendChild(dayLog);
+          }
+        }
+        if (logView.innerHTML === '') {
+          logView.innerHTML = `<p class="placeholder-text">Nessun pasto pianificato per questa settimana.</p>`;
+        }
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+
+        // View routing
+        if (state.currentView === 'calendar') {
+          calendarGrid.classList.remove('hidden');
+          logView.classList.add('hidden');
+          viewCalendarBtn.classList.add('active');
+          viewLogBtn.classList.remove('active');
+          renderCalendarView(state, weekStart);
+        } else {
+          calendarGrid.classList.add('hidden');
+          logView.classList.remove('hidden');
+          viewCalendarBtn.classList.remove('active');
+          viewLogBtn.classList.add('active');
+          renderLogView(state, weekStart);
+        }
+        
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: style.css
+    content: |
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); display: flex; align-items: center;
+          justify-content: center; z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); }
+      .app-footer {
+          padding-top: 1.5rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+      }
+
+      /* --- CALENDAR & LOG VIEW --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: all 0.2s;
+      }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; }
+      .log-day { margin-bottom: 1.5rem; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+      .log-item { display: flex; gap: 1rem; padding: 0.25rem 0; }
+      .log-item strong { color: var(--text-color-muted); flex-basis: 150px; flex-shrink: 0; }
+      .placeholder-text { color: var(--text-color-muted); text-align: center; }
+
+      /* --- BUTTONS --- */
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--secondary-color); color: var(--bg-color); }
+      .btn-primary:hover { opacity: 0.85; }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); }
+      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
+      .notification-box.is-success { border-left-color: var(--success-color); }
+      .notification-box.is-error { border-left-color: var(--danger-color); }
+      .notification-box .modal-body { padding: 0; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
+      
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }

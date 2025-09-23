@@ -27,15 +27,25 @@
         </section>
 
         <main class="main-container">
-            <section id="calendar-view" class="calendar-container">
+            <section id="calendar-view-container" class="view-container">
                 <header class="calendar-header">
                     <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
                     <h2 id="week-title"></h2>
                     <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
                 </header>
-                <div id="calendar-grid" class="calendar-grid">
-                    <p id="calendar-placeholder"></p>
+                <div class="calendar-controls">
+                  <div class="view-switcher">
+                      <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
+                      </button>
+                      <button id="view-log-btn" class="btn-view" title="Vista Registro">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
+                      </button>
+                  </div>
+                  <button id="copy-week-btn" class="btn btn-secondary">Copia Precedente</button>
                 </div>
+                <div id="calendar-grid" class="calendar-grid"></div>
+                <div id="log-view" class="log-view hidden"></div>
             </section>
         </main>
 
@@ -53,18 +63,7 @@
             <div class="modal-body">
                 <p id="info-modal-desc"></p>
                 <pre><code>{
-  "rules": [
-    {
-      "tag": "contiene-soia",
-      "type": "daily-block",
-      "limit": 1,
-      "message": "Non più di 1 pasto con soia al giorno."
-    }
-  ],
-  "meals": [
-    { "id": "1", "tipoPasto": "Pranzo", "calories_min": 550, "calories_max": 600, "etichette": ["contiene-soia"] },
-    { "id": "2", "tipoPasto": "Cena", "calories_min": 300 }
-  ]
+  "rules": [], "meals": []
 }</code></pre>
             </div>
         </div>

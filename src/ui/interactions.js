@@ -1,4 +1,4 @@
-import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek } from '../core/state.js';
+import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal } from './renderer.js';
@@ -17,8 +17,16 @@ async function handleLoadConfig() {
 
 function handleCalendarClick(e) {
   const dayCell = e.target.closest('.day-cell');
-  if (!dayCell) return;
-  openDayEditorModal(dayCell.dataset.date);
+  if (dayCell) {
+      openDayEditorModal(dayCell.dataset.date);
+  }
+}
+
+function handleCopyWeek() {
+  if (confirm('Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?')) {
+    copyPreviousWeek();
+    showNotification('Piano settimanale copiato!', 'success');
+  }
 }
 
 export function initializeEventListeners() {
@@ -26,7 +34,6 @@ export function initializeEventListeners() {
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   
-  // General close buttons, EXCLUDING the selection modal which has special logic
   document.querySelectorAll('.modal-close-btn:not([data-target=selection-modal])').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -34,7 +41,6 @@ export function initializeEventListeners() {
     });
   });
 
-  // Click-outside-to-close, EXCLUDING the selection modal
   document.querySelectorAll('.modal-overlay:not(#selection-modal)').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
@@ -44,7 +50,11 @@ export function initializeEventListeners() {
   });
 
   document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-
   document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
   document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+
+  // New listeners for view switcher and copy week
+  document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
+  document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+  document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
 }
