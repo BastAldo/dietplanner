@@ -1,7 +1,7 @@
 import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
-import { openSelectionModal, openDayEditorModal } from './renderer.js';
+import { openDayEditorModal } from './renderer.js';
 
 async function handleLoadConfig() {
   const url = document.getElementById('config-url-input').value.trim();
@@ -27,7 +27,19 @@ export function initializeEventListeners() {
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   
   document.querySelectorAll('.modal-close-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => document.getElementById(e.target.dataset.target).classList.add('modal-hidden'));
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById(e.target.dataset.target).classList.add('modal-hidden');
+    });
+  });
+
+  // Add click-outside-to-close listener for all modals
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        overlay.classList.add('modal-hidden');
+      }
+    });
   });
 
   document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);

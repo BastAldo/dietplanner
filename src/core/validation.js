@@ -7,12 +7,13 @@ export function isPlacementValid(mealToAdd, slotId, weeklyPlan, masterMealList, 
   }
   return { isValid: true, message: null };
 }
+
 function applyRule(rule, mealToAdd, slotId, weeklyPlan, masterMealList) {
   if (rule.type === 'daily-block') {
-    const day = slotId.split('-')[0];
+    const dayISO = slotId.substring(0, 10); // Extracts "YYYY-MM-DD" from "YYYY-MM-DD-MealType"
     let count = 0;
     for (const key in weeklyPlan) {
-      if (key.startsWith(day) && key !== slotId) {
+      if (key.startsWith(dayISO) && key !== slotId) {
         const meal = masterMealList.find(m => m.id === weeklyPlan[key]);
         if (meal && meal.etichette && meal.etichette.includes(rule.tag)) count++;
       }

@@ -10,7 +10,7 @@ const dayEditorModal = document.getElementById('day-editor-modal');
 const dayEditorTitle = document.getElementById('day-editor-title');
 const dayEditorBody = document.getElementById('day-editor-body');
 
-let currentEditingDayISO = null; // Track the currently open day
+let currentEditingDayISO = null;
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -32,11 +32,12 @@ function formatFullDate(isoDate) {
   return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-function calculateDailyCalories(dayName, state) {
+function calculateDailyCalories(isoDate, state) {
   let min = 0;
   let max = 0;
   MEAL_TYPES.forEach(type => {
-    const mealId = state.weeklyPlan[`${dayName}-${type}`];
+    const slotId = `${isoDate}-${type}`;
+    const mealId = state.weeklyPlan[slotId];
     if (mealId) {
       const meal = state.masterMealList.find(m => m.id === mealId);
       if (meal && meal.calories_min) {
@@ -55,8 +56,8 @@ function calculateDailyCalories(dayName, state) {
 
 export function openSelectionModal(slotId) {
   const state = getState();
-  const [day, mealType] = slotId.split('-');
-  selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType} ${UI_TEXT.FOR_DAY_PREFIX} ${day}`;
+  const [day, mealType] = [slotId.substring(0, 10), slotId.substring(11)];
+  selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
   const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
   if(relevantMeals.length > 0) {
       selectionModalList.innerHTML = relevantMeals.map(meal => 
@@ -75,7 +76,7 @@ export function openSelectionModal(slotId) {
       updateWeeklyPlan(slotId, item.dataset.mealId);
       selectionModal.classList.add('modal-hidden');
       if (currentEditingDayISO) {
-        openDayEditorModal(currentEditingDayISO); // Re-open editor to show changes
+        openDayEditorModal(currentEditingDayISO);
       }
     }
   };
@@ -83,13 +84,12 @@ export function openSelectionModal(slotId) {
 }
 
 export function openDayEditorModal(isoDate) {
-  currentEditingDayISO = isoDate; // Keep track of the open day
+  currentEditingDayISO = isoDate;
   const state = getState();
-  const dayName = DAYS[new Date(isoDate).getDay() === 0 ? 6 : new Date(isoDate).getDay() - 1];
   dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
 
   dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
-    const slotId = `${dayName}-${mealType}`;
+    const slotId = `${isoDate}-${mealType}`;
     const mealId = state.weeklyPlan[slotId];
     const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
     
@@ -115,7 +115,7 @@ export function openDayEditorModal(isoDate) {
       openSelectionModal(e.target.dataset.slotId);
     } else if (e.target.classList.contains('btn-remove-meal')) {
       updateWeeklyPlan(e.target.dataset.slotId, null);
-      openDayEditorModal(isoDate); // Re-render the modal with fresh data
+      openDayEditorModal(isoDate);
     }
   };
 
@@ -153,7 +153,7 @@ export function renderApp() {
     
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
-    const dailyCalories = calculateDailyCalories(dayName, state);
+    const dailyCalories = calculateDailyCalories(isoDate, state);
 
     const dayCell = document.createElement('div');
     dayCell.className = 'day-cell';
@@ -165,7 +165,7 @@ export function renderApp() {
         <span>${dayDate.getDate()}</span>
       </div>
       <div class="day-cell__body">
-        <div class.daily-calories">${dailyCalories}</div>
+        <div class="daily-calories">${dailyCalories}</div>
       </div>
     `;
     calendarGrid.appendChild(dayCell);

@@ -46,8 +46,10 @@
 
     <div id="info-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
-            <button class="modal-close-btn" data-target="info-modal">&times;</button>
-            <div class="modal-header"><h3 id="info-modal-title"></h3></div>
+            <div class="modal-header">
+              <h3 id="info-modal-title"></h3>
+              <button class="modal-close-btn" data-target="info-modal">&times;</button>
+            </div>
             <div class="modal-body">
                 <p id="info-modal-desc"></p>
                 <pre><code>{
@@ -70,23 +72,27 @@
 
     <div id="notification-modal" class="modal-overlay modal-hidden">
         <div class="modal-content notification-box">
-            <button class="modal-close-btn" data-target="notification-modal">&times;</button>
             <p id="notification-message"></p>
+            <button class="modal-close-btn" data-target="notification-modal">&times;</button>
         </div>
     </div>
 
     <div id="selection-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
-            <button class="modal-close-btn" data-target="selection-modal">&times;</button>
-            <div class="modal-header"><h3 id="selection-modal-title"></h3></div>
+            <div class="modal-header">
+              <h3 id="selection-modal-title"></h3>
+              <button class="modal-close-btn" data-target="selection-modal">&times;</button>
+            </div>
             <div id="selection-modal-list" class="modal-body selection-list"></div>
         </div>
     </div>
 
     <div id="day-editor-modal" class="modal-overlay modal-hidden">
       <div class="modal-content">
-          <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
-          <div class="modal-header"><h3 id="day-editor-title"></h3></div>
+          <div class="modal-header">
+            <h3 id="day-editor-title"></h3>
+            <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
+          </div>
           <div id="day-editor-body" class="modal-body day-editor-list"></div>
       </div>
     </div>
