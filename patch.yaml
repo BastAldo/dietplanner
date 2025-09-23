@@ -1,151 +1,11 @@
-commit_message: "feat(ui): Implement Day Editor modal interaction"
+commit_message: "fix(ui): Correct modal layering and improve close button UI"
 rationale: |
-  This commit delivers Phase 3 of the HealtyPro specification, introducing the core 'Day Editor' modal functionality.
+  This commit addresses two immediate UI issues based on user feedback, improving the overall user experience.
 
-  1.  **`index.html`**: The basic HTML structure for the new `day-editor-modal` has been added, ensuring consistency with the existing modal components.
-  
-  2.  **`src/ui/renderer.js`**: A new `openDayEditorModal` function has been created. This function is responsible for dynamically rendering the content of the modal based on the selected date. It displays all meal slots for the day, showing either the planned meal with a 'remove' button or an 'add' button for empty slots. It cleverly reuses the existing `openSelectionModal` for adding meals, demonstrating code modularity.
+  1.  A bug that caused the meal selection modal to open underneath the day editor modal has been fixed. The logic in `renderer.js` now correctly hides the day editor before opening the selection modal, ensuring the correct stacking order and unblocking the user flow.
 
-  3.  **`src/ui/interactions.js`**: The `handleCalendarClick` function has been updated to call the new `openDayEditorModal`, effectively connecting the main calendar view to the new editing workflow.
-
-  This change completes the primary user interaction loop for daily meal planning as envisioned in the project's documentation.
+  2.  The usability of the modal close button ('X') has been enhanced. The CSS in `style.css` was updated to better position the button and add a hover effect, making it more visible and easier to interact with, as per the approved UI improvement plan.
 patches:
-  - file: index.html
-    content: |
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#1a1a1d">
-          <title>NutriPlan</title>
-          <link rel="stylesheet" href="style.css">
-          <link rel="manifest" href="manifest.json">
-          <link rel="apple-touch-icon" href="icon.svg">
-          <script src="src/main.js" type="module" defer></script>
-      </head>
-      <body>
-
-          <header class="app-header">
-              <div class="app-title">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
-                  <h1 id="main-title">NutriPlan</h1>
-              </div>
-          </header>
-
-          <div id="app-container">
-              <section class="data-source-container">
-                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
-                  <button id="load-config-btn" class="btn btn-primary"></button>
-                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
-              </section>
-
-              <main class="main-container">
-                  <section id="calendar-view" class="calendar-container">
-                      <header class="calendar-header">
-                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
-                          <h2 id="week-title"></h2>
-                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
-                      </header>
-                      <div id="calendar-grid" class="calendar-grid">
-                          <p id="calendar-placeholder"></p>
-                      </div>
-                  </section>
-              </main>
-
-              <footer class="app-footer">
-                  <button id="reset-btn" class="btn btn-secondary"></button>
-              </footer>
-          </div>
-
-          <div id="info-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <button class="modal-close-btn" data-target="info-modal">&times;</button>
-                  <div class="modal-header"><h3 id="info-modal-title"></h3></div>
-                  <div class="modal-body">
-                      <p id="info-modal-desc"></p>
-                      <pre><code>{
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
-          }
-        ],
-        "meals": [
-          { "id": "1", "tipoPasto": "Pranzo", "calories_min": 550, "calories_max": 600, "etichette": ["contiene-soia"] },
-          { "id": "2", "tipoPasto": "Cena", "calories_min": 300 }
-        ]
-      }</code></pre>
-                  </div>
-              </div>
-          </div>
-
-          <div id="notification-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content notification-box">
-                  <button class="modal-close-btn" data-target="notification-modal">&times;</button>
-                  <p id="notification-message"></p>
-              </div>
-          </div>
-
-          <div id="selection-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <button class="modal-close-btn" data-target="selection-modal">&times;</button>
-                  <div class="modal-header"><h3 id="selection-modal-title"></h3></div>
-                  <div id="selection-modal-list" class="modal-body selection-list"></div>
-              </div>
-          </div>
-
-          <div id="day-editor-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
-                <div class="modal-header"><h3 id="day-editor-title"></h3></div>
-                <div id="day-editor-body" class="modal-body day-editor-list"></div>
-            </div>
-          </div>
-
-      </body>
-      </html>
-  - file: src/ui/interactions.js
-    content: |
-      import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek } from '../core/state.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openSelectionModal, openDayEditorModal } from './renderer.js';
-
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification('Configurazione caricata!', 'success');
-        } catch (error) {
-          showNotification(error.message, 'error');
-        }
-      }
-
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (!dayCell) return;
-        openDayEditorModal(dayCell.dataset.date);
-      }
-
-      export function initializeEventListeners() {
-        document.getElementById('reset-btn').addEventListener('click', () => { if(confirm('Sei sicuro?')) resetWeeklyPlan(); });
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => document.getElementById(e.target.dataset.target).classList.add('modal-hidden'));
-        });
-
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-      }
   - file: src/ui/renderer.js
     content: |
       import { getState, updateWeeklyPlan } from '../core/state.js';
@@ -222,7 +82,6 @@ patches:
           if(item) {
             updateWeeklyPlan(slotId, item.dataset.mealId);
             selectionModal.classList.add('modal-hidden');
-            dayEditorModal.classList.add('modal-hidden'); // Close day editor as well
           }
         };
         selectionModal.classList.remove('modal-hidden');
@@ -256,10 +115,10 @@ patches:
 
         dayEditorBody.onclick = (e) => {
           if (e.target.classList.contains('btn-add-meal')) {
+            dayEditorModal.classList.add('modal-hidden');
             openSelectionModal(e.target.dataset.slotId);
           } else if (e.target.classList.contains('btn-remove-meal')) {
             updateWeeklyPlan(e.target.dataset.slotId, null);
-            dayEditorModal.classList.add('modal-hidden'); // Re-open to refresh content is handled by stateChange
           }
         };
 
@@ -549,7 +408,25 @@ patches:
 
       .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); position: relative; }
       .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); }
+      .modal-close-btn {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          right: 1.5rem;
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: var(--text-color-muted);
+          padding: 0.25rem;
+          line-height: 1;
+          border-radius: 50%;
+          transition: background-color 0.2s, color 0.2s;
+      }
+      .modal-close-btn:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+          color: var(--text-color);
+      }
       .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
       .modal-content pre { background: var(--bg-color); padding: 1rem; border-radius: 4px; margin-top: 1rem; overflow-x: auto; }
 
@@ -580,4 +457,4 @@ patches:
           }
       }
 commands:
-  - "echo 'Day Editor modal implemented. Click on a day in the calendar to test the new functionality.'"
+  - "echo 'UI bug fixes applied. The modal layering issue is resolved and the close button is now more visible.'"
