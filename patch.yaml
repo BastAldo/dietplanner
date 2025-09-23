@@ -1,26 +1,56 @@
-commit_message: "fix(pwa): Correct syntax error in manifest.json"
+commit_message: "fix(sw): Correct fetch handler for cross-origin requests"
 rationale: |
-  This commit fixes a critical syntax error in `manifest.json` that was preventing the PWA from being installable. The file content has been regenerated and validated to be 100% correct JSON.
+  This commit fixes a critical issue in the Service Worker (`sw.js`) that was causing network errors for all cross-origin requests (e.g., Google Fonts, remote JSON configuration).
 
-  This is a targeted patch that only modifies the single problematic file, as per the new directive. The successful registration of the service worker indicates that this was the final blocker for PWA functionality.
+  The previous implementation intercepted all `fetch` events with a "cache-first" strategy, which is not suitable for third-party resources and resulted in CORS-related failures.
+
+  The updated `fetch` event listener now correctly differentiates between same-origin and cross-origin requests. It applies the cache-first strategy only to local application assets (same-origin), ensuring offline capability as per `docs/02_ARCHITECTURE.md`, while allowing all other requests to be handled directly by the network. This resolves the `TypeError: Failed to fetch` and `net::ERR_FAILED` errors observed in the console, stabilizing the PWA's network functionality.
 patches:
-  - file: manifest.json
+  - file: sw.js
     content: |
-      {
-        "name": "NutriPlan",
-        "short_name": "NutriPlan",
-        "start_url": ".",
-        "display": "standalone",
-        "background_color": "#121212",
-        "theme_color": "#1E1E1E",
-        "description": "Un assistente per creare e gestire piani alimentari flessibili.",
-        "icons": [
-          {
-            "src": "icon.svg",
-            "sizes": "any",
-            "type": "image/svg+xml"
-          }
-        ]
-      }
+      const CACHE_NAME = 'nutriplan-v1';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'style.css',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/validation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screenshot_desktop.png',
+        'screenshots/screenshot_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        // Only apply cache-first strategy to same-origin requests.
+        // This prevents errors with cross-origin requests like Google Fonts or remote JSON files.
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          // For all other requests, go to the network directly.
+          event.respondWith(fetch(event.request));
+        }
+      });
 commands:
-  - "echo 'Manifest file corrected. Please clear the browser cache and data for the site one last time and re-test.'"
+  - "echo 'Service Worker logic has been corrected. Please clear browser cache and re-test PWA functionality.'"

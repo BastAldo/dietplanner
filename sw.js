@@ -28,10 +28,17 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        return response || fetch(event.request);
-      })
-  );
+  // Only apply cache-first strategy to same-origin requests.
+  // This prevents errors with cross-origin requests like Google Fonts or remote JSON files.
+  if (event.request.url.startsWith(self.location.origin)) {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => {
+          return response || fetch(event.request);
+        })
+    );
+  } else {
+    // For all other requests, go to the network directly.
+    event.respondWith(fetch(event.request));
+  }
 });
