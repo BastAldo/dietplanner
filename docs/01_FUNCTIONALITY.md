@@ -16,3 +16,5 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
 * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
 * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+* **US-20 (Registro Pasti Settimanale):** Come utente, voglio poter passare da una vista calendario a una vista registro per vedere l'elenco dettagliato di tutti i pasti pianificati per la settimana corrente.
+* **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
