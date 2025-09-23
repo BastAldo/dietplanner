@@ -7,7 +7,6 @@ const weekTitleEl = document.getElementById('week-title');
 const viewCalendarBtn = document.getElementById('view-calendar-btn');
 const viewLogBtn = document.getElementById('view-log-btn');
 
-// Modal elements
 const selectionModal = document.getElementById('selection-modal');
 const selectionModalTitle = document.getElementById('selection-modal-title');
 const selectionModalList = document.getElementById('selection-modal-list');
@@ -64,18 +63,22 @@ export function openSelectionModal(slotId) {
   const mealType = slotId.substring(11);
   selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
   const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+  
   selectionModalList.innerHTML = relevantMeals.length > 0
     ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('')
     : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
   
   const closeButton = selectionModal.querySelector('.modal-close-btn');
+
   const closeAndReturn = () => {
     selectionModal.classList.add('modal-hidden');
     if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
     closeButton.removeEventListener('click', closeAndReturn);
     selectionModal.removeEventListener('click', overlayClickHandler);
   };
+
   const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
+
   selectionModalList.onclick = (e) => {
     const item = e.target.closest('.selection-item');
     if(item) {
@@ -83,6 +86,7 @@ export function openSelectionModal(slotId) {
       closeAndReturn();
     }
   };
+
   closeButton.addEventListener('click', closeAndReturn, { once: true });
   selectionModal.addEventListener('click', overlayClickHandler);
   selectionModal.classList.remove('modal-hidden');
@@ -92,12 +96,28 @@ export function openDayEditorModal(isoDate) {
   currentEditingDayISO = isoDate;
   const state = getState();
   dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
+
   dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
     const mealId = state.weeklyPlan[slotId];
     const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-    return `<div class="day-editor-slot">...</div>`; // Placeholder
+    
+    return `
+      <div class="day-editor-slot">
+        <span class="meal-type-label">${mealType}</span>
+        <div class="meal-details-container">
+          ${meal 
+            ? `<div class="meal-details">
+                 <span>${meal.nomePasto}</span>
+                 <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
+               </div>` 
+            : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`
+          }
+        </div>
+      </div>
+    `;
   }).join('');
+
   dayEditorBody.onclick = (e) => {
     if (e.target.classList.contains('btn-add-meal')) {
       dayEditorModal.classList.add('modal-hidden');
@@ -143,9 +163,11 @@ function renderLogView(state, weekStart) {
     const dayDate = new Date(weekStart);
     dayDate.setDate(dayDate.getDate() + i);
     const isoDate = toISODateString(dayDate);
+    
     const dayMeals = MEAL_TYPES
       .map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) }))
       .filter(item => item.meal);
+      
     if (dayMeals.length > 0) {
       const dayLog = document.createElement('div');
       dayLog.className = 'log-day';
@@ -167,7 +189,6 @@ export function renderApp() {
   weekEnd.setDate(weekEnd.getDate() + 6);
   weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
 
-  // View routing
   if (state.currentView === 'calendar') {
     calendarGrid.classList.remove('hidden');
     logView.classList.add('hidden');

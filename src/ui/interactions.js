@@ -1,4 +1,4 @@
-import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
+import { resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal } from './renderer.js';
@@ -53,7 +53,6 @@ export function initializeEventListeners() {
   document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
   document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
 
-  // New listeners for view switcher and copy week
   document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
   document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
   document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);

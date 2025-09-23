@@ -1,14 +1,14 @@
-commit_message: "feat: Implement weekly meal log and copy week features"
+commit_message: "feat: Implement weekly meal log and copy week features (Full)"
 rationale: |
-  This commit introduces two major features as specified in the updated documentation: the Weekly Meal Log and the Copy Previous Week function.
+  This commit introduces two major features as specified in the updated documentation: the Weekly Meal Log and the Copy Previous Week function. This patch provides the full and complete implementation, correcting a previous version that included unacceptable placeholders.
 
-  1.  **State Management (`state.js`):** A new `currentView` property has been added to the state to manage switching between the calendar and the new log view. The `copyPreviousWeek` function has been implemented to handle the core logic of duplicating a week's meal plan.
+  1.  **State Management (`state.js`):** A new `currentView` property manages switching between the calendar and log views. The `copyPreviousWeek` function handles the logic for duplicating a week's plan.
 
-  2.  **UI Structure (`index.html`, `style.css`):** New UI elements have been added, including view-switcher icons, a 'copy week' button, and a container for the meal log. Corresponding styles have been added to ensure visual consistency.
+  2.  **UI Structure (`index.html`, `style.css`):** New UI elements for view-switching and copying have been added, along with a container for the meal log and all necessary styles for a consistent look and feel.
 
-  3.  **Rendering Logic (`renderer.js`):** The `renderApp` function now acts as a view router. New functions (`renderCalendarView`, `renderLogView`) have been created to handle the rendering of each specific view, keeping the code modular and clean.
+  3.  **Rendering Logic (`renderer.js`):** The `renderApp` function now acts as a view router. `renderCalendarView` and `renderLogView` handle the rendering of each view. The `openDayEditorModal` function is now fully implemented without any placeholders.
 
-  4.  **User Interactions (`interactions.js`):** Event listeners for the new buttons have been added to connect the UI to the new state management logic, including a confirmation dialog for the copy action to prevent accidental data loss.
+  4.  **User Interactions (`interactions.js`):** Event listeners for the new buttons connect the UI to the state logic, including a confirmation dialog for the copy action.
 patches:
   - file: index.html
     content: |
@@ -41,7 +41,7 @@ patches:
               </section>
 
               <main class="main-container">
-                  <section id="calendar-view-container" class="view-container">
+                  <section class="view-container">
                       <header class="calendar-header">
                           <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
                           <h2 id="week-title"></h2>
@@ -116,7 +116,7 @@ patches:
       </html>
   - file: src/core/state.js
     content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL } from '../utils/constants.js';
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
 
       let state = {
         rules: [],
@@ -189,11 +189,13 @@ patches:
       }
 
       export function copyPreviousWeek() {
-        const currentWeekStart = new Date(state.focusedDate);
-        currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1); // Monday of current week
+        const d = new Date(state.focusedDate);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const currentWeekStart = new Date(d.setDate(diff));
         
         const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7); // Monday of previous week
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
 
         for (let i = 0; i < 7; i++) {
           const sourceDate = new Date(prevWeekStart);
@@ -204,8 +206,7 @@ patches:
           destDate.setDate(destDate.getDate() + i);
           const destISO = toISODateString(destDate);
 
-          // Copy each meal type
-          state.masterMealList.map(m => m.tipoPasto).forEach(mealType => {
+          MEAL_TYPES.forEach(mealType => {
             const sourceSlotId = `${sourceISO}-${mealType}`;
             const destSlotId = `${destISO}-${mealType}`;
             const mealId = state.weeklyPlan[sourceSlotId];
@@ -213,7 +214,7 @@ patches:
             if (mealId) {
               state.weeklyPlan[destSlotId] = mealId;
             } else {
-              delete state.weeklyPlan[destSlotId]; // Ensure empty slots are also copied
+              delete state.weeklyPlan[destSlotId];
             }
           });
         }
@@ -222,7 +223,7 @@ patches:
       }
   - file: src/ui/interactions.js
     content: |
-      import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
+      import { resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek } from '../core/state.js';
       import { fetchAndParseConfig } from '../api/configService.js';
       import { showNotification } from './notifications.js';
       import { openDayEditorModal } from './renderer.js';
@@ -277,7 +278,6 @@ patches:
         document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
         document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
 
-        // New listeners for view switcher and copy week
         document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
         document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
         document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
@@ -293,7 +293,6 @@ patches:
       const viewCalendarBtn = document.getElementById('view-calendar-btn');
       const viewLogBtn = document.getElementById('view-log-btn');
 
-      // Modal elements
       const selectionModal = document.getElementById('selection-modal');
       const selectionModalTitle = document.getElementById('selection-modal-title');
       const selectionModalList = document.getElementById('selection-modal-list');
@@ -350,18 +349,22 @@ patches:
         const mealType = slotId.substring(11);
         selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
         const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        
         selectionModalList.innerHTML = relevantMeals.length > 0
           ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('')
           : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
         
         const closeButton = selectionModal.querySelector('.modal-close-btn');
+
         const closeAndReturn = () => {
           selectionModal.classList.add('modal-hidden');
           if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
           closeButton.removeEventListener('click', closeAndReturn);
           selectionModal.removeEventListener('click', overlayClickHandler);
         };
+
         const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
+
         selectionModalList.onclick = (e) => {
           const item = e.target.closest('.selection-item');
           if(item) {
@@ -369,6 +372,7 @@ patches:
             closeAndReturn();
           }
         };
+
         closeButton.addEventListener('click', closeAndReturn, { once: true });
         selectionModal.addEventListener('click', overlayClickHandler);
         selectionModal.classList.remove('modal-hidden');
@@ -378,12 +382,28 @@ patches:
         currentEditingDayISO = isoDate;
         const state = getState();
         dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
+
         dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
           const slotId = `${isoDate}-${mealType}`;
           const mealId = state.weeklyPlan[slotId];
           const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-          return `<div class="day-editor-slot">...</div>`; // Placeholder
+          
+          return `
+            <div class="day-editor-slot">
+              <span class="meal-type-label">${mealType}</span>
+              <div class="meal-details-container">
+                ${meal 
+                  ? `<div class="meal-details">
+                       <span>${meal.nomePasto}</span>
+                       <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
+                     </div>` 
+                  : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`
+                }
+              </div>
+            </div>
+          `;
         }).join('');
+
         dayEditorBody.onclick = (e) => {
           if (e.target.classList.contains('btn-add-meal')) {
             dayEditorModal.classList.add('modal-hidden');
@@ -429,9 +449,11 @@ patches:
           const dayDate = new Date(weekStart);
           dayDate.setDate(dayDate.getDate() + i);
           const isoDate = toISODateString(dayDate);
+          
           const dayMeals = MEAL_TYPES
             .map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) }))
             .filter(item => item.meal);
+            
           if (dayMeals.length > 0) {
             const dayLog = document.createElement('div');
             dayLog.className = 'log-day';
@@ -453,7 +475,6 @@ patches:
         weekEnd.setDate(weekEnd.getDate() + 6);
         weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
 
-        // View routing
         if (state.currentView === 'calendar') {
           calendarGrid.classList.remove('hidden');
           logView.classList.add('hidden');
@@ -488,7 +509,7 @@ patches:
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html { font-size: 16px; }
       body {
-          font-family: system-ui, -apple-system, sans-serif;
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           background-color: var(--bg-color);
           color: var(--text-color);
           padding-top: 60px;
@@ -499,8 +520,9 @@ patches:
       .app-header {
           position: fixed; top: 0; left: 0; width: 100%; height: 60px;
           background-color: rgba(44, 44, 52, 0.85);
-          backdrop-filter: blur(10px); display: flex; align-items: center;
-          justify-content: center; z-index: 1000;
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
           border-bottom: 1px solid var(--border-color);
       }
@@ -522,7 +544,7 @@ patches:
           color: var(--text-color);
       }
       #config-url-input:focus { outline: none; border-color: var(--primary-color); }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
       .app-footer {
           padding-top: 1.5rem; margin-top: 1.5rem;
           border-top: 1px solid var(--border-color);
@@ -532,9 +554,9 @@ patches:
       /* --- CALENDAR & LOG VIEW --- */
       .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
       .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
       .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
       .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
       .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
 
@@ -542,26 +564,27 @@ patches:
       .day-cell {
           background-color: var(--card-color); border: 1px solid var(--border-color);
           border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-          flex-direction: column; cursor: pointer; transition: all 0.2s;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
       }
       .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
       .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
       .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
       .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
 
-      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; }
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
       .log-day { margin-bottom: 1.5rem; }
-      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; }
-      .log-item { display: flex; gap: 1rem; padding: 0.25rem 0; }
-      .log-item strong { color: var(--text-color-muted); flex-basis: 150px; flex-shrink: 0; }
-      .placeholder-text { color: var(--text-color-muted); text-align: center; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; font-size: 1.1rem; }
+      .log-item { display: flex; gap: 1rem; padding: 0.5rem 0; font-size: 0.95rem; }
+      .log-item strong { color: var(--text-color-muted); flex-basis: 150px; flex-shrink: 0; text-align: right; }
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
 
       /* --- BUTTONS --- */
       .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
       .btn-primary { background-color: var(--secondary-color); color: var(--bg-color); }
       .btn-primary:hover { opacity: 0.85; }
       .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); }
       .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
 
       /* --- MODAL STYLES --- */
@@ -571,7 +594,7 @@ patches:
       .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
       .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
       .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.2s; z-index: 10; }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
       .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
       .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
       .notification-box { padding: 1.5rem; padding-left: 2rem; border-left: 5px solid var(--secondary-color); display: flex; align-items: center; }
@@ -579,11 +602,14 @@ patches:
       .notification-box.is-error { border-left-color: var(--danger-color); }
       .notification-box .modal-body { padding: 0; }
       .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
       .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
       .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
       .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
       .meal-details-container { flex-grow: 1; }
       .meal-details { display: flex; justify-content: space-between; align-items: center; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
       .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
       
       @media (min-width: 768px) {

@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
 
 let state = {
   rules: [],
@@ -71,11 +71,13 @@ export function setView(view) {
 }
 
 export function copyPreviousWeek() {
-  const currentWeekStart = new Date(state.focusedDate);
-  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay() + 1); // Monday of current week
+  const d = new Date(state.focusedDate);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const currentWeekStart = new Date(d.setDate(diff));
   
   const prevWeekStart = new Date(currentWeekStart);
-  prevWeekStart.setDate(prevWeekStart.getDate() - 7); // Monday of previous week
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
 
   for (let i = 0; i < 7; i++) {
     const sourceDate = new Date(prevWeekStart);
@@ -86,8 +88,7 @@ export function copyPreviousWeek() {
     destDate.setDate(destDate.getDate() + i);
     const destISO = toISODateString(destDate);
 
-    // Copy each meal type
-    state.masterMealList.map(m => m.tipoPasto).forEach(mealType => {
+    MEAL_TYPES.forEach(mealType => {
       const sourceSlotId = `${sourceISO}-${mealType}`;
       const destSlotId = `${destISO}-${mealType}`;
       const mealId = state.weeklyPlan[sourceSlotId];
@@ -95,7 +96,7 @@ export function copyPreviousWeek() {
       if (mealId) {
         state.weeklyPlan[destSlotId] = mealId;
       } else {
-        delete state.weeklyPlan[destSlotId]; // Ensure empty slots are also copied
+        delete state.weeklyPlan[destSlotId];
       }
     });
   }
