@@ -1,7 +1,7 @@
 import { updateWeeklyPlan, resetWeeklyPlan, setPlannerConfig, setConfigUrl, navigateWeek } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
-import { openSelectionModal } from './renderer.js';
+import { openSelectionModal, openDayEditorModal } from './renderer.js';
 
 async function handleLoadConfig() {
   const url = document.getElementById('config-url-input').value.trim();
@@ -18,10 +18,7 @@ async function handleLoadConfig() {
 function handleCalendarClick(e) {
   const dayCell = e.target.closest('.day-cell');
   if (!dayCell) return;
-
-  // In the next step, this will open the "Day Editor" modal.
-  // For now, it does nothing to avoid errors.
-  console.log(`Day cell clicked: ${dayCell.dataset.date}`);
+  openDayEditorModal(dayCell.dataset.date);
 }
 
 export function initializeEventListeners() {
@@ -35,7 +32,6 @@ export function initializeEventListeners() {
 
   document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
 
-  // Event listeners for the new navigation buttons
   document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
   document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
 }
