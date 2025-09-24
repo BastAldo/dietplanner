@@ -170,9 +170,17 @@ body {
 .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
 .meal-details-container { flex-grow: 1; }
 .meal-details { display: flex; justify-content: space-between; align-items: center; }
+.meal-actions { display: flex; align-items: center; gap: 0.5rem; }
 .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
 .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-.btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
+.btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+.btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+.btn-view-recipe:hover { color: var(--text-color); }
+
+.recipe-body { line-height: 1.6; }
+.recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+.recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+.recipe-body li { margin-bottom: 0.5rem; }
 
 @media (min-width: 768px) {
     #app-container { padding: 2rem; }

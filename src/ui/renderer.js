@@ -1,5 +1,6 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
 import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+import { showNotification } from './notifications.js';
 
 const calendarGrid = document.getElementById('calendar-grid');
 const logView = document.getElementById('log-view');
@@ -21,6 +22,10 @@ const confirmModalTitle = document.getElementById('confirm-modal-title');
 const confirmModalMessage = document.getElementById('confirm-modal-message');
 const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
 const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
+
+const recipeModal = document.getElementById('recipe-modal');
+const recipeModalTitle = document.getElementById('recipe-modal-title');
+const recipeModalBody = document.getElementById('recipe-modal-body');
 
 let currentEditingDayISO = null;
 
@@ -73,6 +78,40 @@ function calculateDailyCalories(isoDate, state) {
   if (min === 0 && max === 0) return '';
   if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
   return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+}
+
+function parseMarkdownToHTML(markdown) {
+  let html = markdown
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+    .replace(/\*(.*)\*/gim, '<em>$1</em>')
+    .replace(/^\s*[-*] (.*$)/gim, '<li>$1</li>');
+
+  html = html.replace(/<li>(.*?)<\/li>\s*(?=<li)/g, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+  html = html.replace(/<\/ul>\s*<ul>/g, '');
+
+  return html.replace(/\n/g, '<br>');
+}
+
+async function showRecipeModal(meal) {
+  const state = getState();
+  const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+  recipeModalTitle.textContent = meal.nomePasto;
+  recipeModalBody.innerHTML = '<p>Caricamento ricetta...</p>';
+  recipeModal.classList.remove('modal-hidden');
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+    const markdown = await response.text();
+    recipeModalBody.innerHTML = parseMarkdownToHTML(markdown);
+  } catch (error) {
+    recipeModalBody.innerHTML = `<p>Impossibile caricare la ricetta. Controlla l'URL e la connessione.</p>`;
+    showNotification('Caricamento ricetta fallito', 'error');
+  }
 }
 
 export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
@@ -134,15 +173,42 @@ export function openDayEditorModal(isoDate) {
     const slotId = `${isoDate}-${mealType}`;
     const mealId = state.weeklyPlan[slotId];
     const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-    return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${meal ? `<div class="meal-details"><span>${meal.nomePasto}</span><button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button></div>` : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`}</div></div>`;
+    
+    let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`;
+    if (meal) {
+      const recipeButtonHTML = state.recipeBaseUrl && meal.recipeId 
+        ? `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="Mostra ricetta">
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+           </button>`
+        : '';
+
+      mealDetailsHTML = `
+        <div class="meal-details">
+          <span>${meal.nomePasto}</span>
+          <div class="meal-actions">
+            ${recipeButtonHTML}
+            <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
+          </div>
+        </div>`;
+    }
+
+    return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
   }).join('');
+
   dayEditorBody.onclick = (e) => {
-    if (e.target.classList.contains('btn-add-meal')) {
+    const btnAdd = e.target.closest('.btn-add-meal');
+    const btnRemove = e.target.closest('.btn-remove-meal');
+    const btnRecipe = e.target.closest('.btn-view-recipe');
+
+    if (btnAdd) {
       dayEditorModal.classList.add('modal-hidden');
-      openSelectionModal(e.target.dataset.slotId);
-    } else if (e.target.classList.contains('btn-remove-meal')) {
-      updateWeeklyPlan(e.target.dataset.slotId, null);
+      openSelectionModal(btnAdd.dataset.slotId);
+    } else if (btnRemove) {
+      updateWeeklyPlan(btnRemove.dataset.slotId, null);
       openDayEditorModal(isoDate);
+    } else if (btnRecipe) {
+      const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+      if (meal) showRecipeModal(meal);
     }
   };
   dayEditorModal.classList.remove('modal-hidden');

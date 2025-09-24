@@ -5,6 +5,7 @@ let state = {
   masterMealList: [],
   weeklyPlan: {},
   configUrl: '',
+  recipeBaseUrl: '',
   focusedDate: new Date(),
   currentView: 'calendar', // 'calendar' or 'log'
 };
@@ -24,6 +25,7 @@ export const getState = () => ({ ...state });
 export function setPlannerConfig(config) {
   state.rules = config.rules || [];
   state.masterMealList = config.meals || [];
+  state.recipeBaseUrl = config.recipeBaseUrl || '';
   notify();
 }
 

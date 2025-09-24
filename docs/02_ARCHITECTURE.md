@@ -15,9 +15,10 @@ L'applicazione include due componenti chiave per la funzionalità PWA:
 L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
 
 ## 4. Formato Dati: `planner-config.json`
-Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è opzionale.
+Il file JSON può contenere una chiave opzionale `recipeBaseUrl` al livello principale per specificare la directory base delle ricette. Ogni pasto può avere un `recipeId` per collegare una ricetta Markdown. L'URL finale sarà costruito come `recipeBaseUrl + recipeId + '.md'`.
 ```json
 {
+  "recipeBaseUrl": "[https://raw.githubusercontent.com/user/repo/main/recipes/](https://raw.githubusercontent.com/user/repo/main/recipes/)",
   "rules": [
     {
       "tag": "contiene-soia",
@@ -27,8 +28,8 @@ Il file JSON richiede `calories_min` per ogni pasto. Il campo `calories_max` è 
     }
   ],
   "meals": [
-    { "id": "1", "tipoPasto": "Pranzo", "calories_min": 550, "calories_max": 600, "etichette": ["contiene-soia"] },
-    { "id": "2", "tipoPasto": "Cena", "calories_min": 300 }
+    { "id": "1", "nomePasto": "Tofu Scrambled", "tipoPasto": "Pranzo", "calories_min": 550, "recipeId": "00001", "etichette": ["contiene-soia"] },
+    { "id": "2", "nomePasto": "Insalata Greca", "tipoPasto": "Cena", "calories_min": 300, "recipeId": "00002" }
   ]
 }
 ```

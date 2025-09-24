@@ -1,17 +1,361 @@
-commit_message: "feat(ui): Add calorie display to Log View"
+commit_message: "feat(feature): Implement recipe viewing from Markdown files"
 rationale: |
-  In accordo con la richiesta, questa patch migliora la "Vista Registro" per includere informazioni caloriche dettagliate, rendendola più informativa.
+  This commit introduces a major new feature allowing users to link recipes from external Markdown files to meals within the planner, based on the approved "Diet-as-Code" strategy.
 
-  1.  **Dettaglio Calorie per Pasto**: Ogni elemento nella lista del registro (`.log-item`) ora mostra il range calorico specifico per quel pasto (es. "550 - 600 kcal"), posizionato sulla destra per una facile lettura.
+  1.  **Updated Documentation**: The official documentation (`01_FUNCTIONALITY.md` and `02_ARCHITECTURE.md`) has been updated to reflect the new system. This includes defining the new `recipeBaseUrl` and `recipeId` properties in the `config.json` structure and adding User Story US-22.
 
-  2.  **Totale Calorie Giornaliero**: L'intestazione di ogni giorno nella vista registro ora include il totale calorico giornaliero, riutilizzando la stessa logica di calcolo della vista calendario per garantire coerenza.
+  2.  **State Management**: The core state (`src/core/state.js`) now extracts and stores the `recipeBaseUrl` from the configuration file, making it globally available to the rendering engine.
 
-  3.  **Aggiornamento Stili**: Sono state aggiunte nuove regole CSS in `style.css` per formattare e allineare correttamente le nuove informazioni caloriche, mantenendo l'estetica pulita e funzionale dell'applicazione.
+  3.  **New Recipe Modal**: A new modal has been added to `index.html` and styled in `style.css` to display the recipe content. The styling ensures good readability of the fetched Markdown content.
+
+  4.  **Rendering Logic**: The renderer (`src/ui/renderer.js`) has been significantly enhanced. It now checks if a meal has an associated `recipeId` and if a global `recipeBaseUrl` is set. If both are present, it displays a "view recipe" button. Clicking this button fetches the corresponding `.md` file, parses it into basic HTML (supporting headers, lists, and bold text), and displays it in the new modal.
 patches:
+  - file: docs/01_FUNCTIONALITY.md
+    content: |
+      # Funzionalità: HealtyPro (ex NutriPlan)
+
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
+
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale):** Come utente, voglio poter passare da una vista calendario a una vista registro per vedere l'elenco dettagliato di tutti i pasti pianificati per la settimana corrente.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona nell'editor del giorno, per capire come prepararlo.
+  - file: docs/02_ARCHITECTURE.md
+    content: |
+      # Architettura: HealtyPro (ex NutriPlan)
+
+      ## 1. Principi Guida
+      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
+      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è stata ridisegnata per essere essenziale e intuitiva. La base di codice sottostante rimane semplice e basata su Vanilla JS.
+      * **Data-Driven:** La logica di business (regole, pasti) è definita nel file JSON di configurazione.
+      * **Maintainability (SRP):** I testi dell'interfaccia (stringhe) sono centralizzati e ogni file ha una sola responsabilità.
+
+      ## 2. Architettura PWA
+      L'applicazione include due componenti chiave per la funzionalità PWA:
+      * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
+      * **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline. Include una logica di pulizia per le cache obsolete.
+
+      ## 3. Refactoring dell'Interfaccia Utente (UI/UX)
+      L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
+
+      ## 4. Formato Dati: `planner-config.json`
+      Il file JSON può contenere una chiave opzionale `recipeBaseUrl` al livello principale per specificare la directory base delle ricette. Ogni pasto può avere un `recipeId` per collegare una ricetta Markdown. L'URL finale sarà costruito come `recipeBaseUrl + recipeId + '.md'`.
+      ```json
+      {
+        "recipeBaseUrl": "[https://raw.githubusercontent.com/user/repo/main/recipes/](https://raw.githubusercontent.com/user/repo/main/recipes/)",
+        "rules": [
+          {
+            "tag": "contiene-soia",
+            "type": "daily-block",
+            "limit": 1,
+            "message": "Non più di 1 pasto con soia al giorno."
+          }
+        ],
+        "meals": [
+          { "id": "1", "nomePasto": "Tofu Scrambled", "tipoPasto": "Pranzo", "calories_min": 550, "recipeId": "00001", "etichette": ["contiene-soia"] },
+          { "id": "2", "nomePasto": "Insalata Greca", "tipoPasto": "Cena", "calories_min": 300, "recipeId": "00002" }
+        ]
+      }
+      ```
+
+      ## 5. Struttura Dati Chiave: `weeklyPlan`
+      Per garantire che i piani alimentari siano univoci per ogni giorno specifico e non si ripetano tra le settimane, lo stato `weeklyPlan` utilizza una chiave composita basata sulla data.
+      * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
+      * **Razionale:** Usare la data in formato ISO come prefisso garantisce che ogni voce sia legata a un giorno di calendario univoco, risolvendo il problema della persistenza dei dati durante la navigazione settimanale.
+
+      ## 6. Struttura dei File (Invariata)
+      ```
+      .
+      ├── index.html
+      ├── style.css
+      ├── manifest.json
+      ├── sw.js
+      ├── icon.svg
+      └── src/
+          ├── api/
+          │   └── configService.js
+          ├── core/
+          │   ├── state.js
+          │   └── validation.js
+          ├── ui/
+          │   ├── renderer.js
+          │   ├── interactions.js
+          │   └── notifications.js
+          └── utils/
+              └── constants.js
+      ```
+  - file: index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>NutriPlan</title>
+          <link rel="stylesheet" href="style.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="app-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
+                  <h1 id="main-title">NutriPlan</h1>
+              </div>
+          </header>
+
+          <div id="app-container">
+              <div id="global-alert" class="global-alert hidden">
+                  <p id="global-alert-message"></p>
+                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
+              </div>
+
+              <section class="data-source-container">
+                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+                  <button id="load-config-btn" class="btn btn-primary"></button>
+                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
+              </section>
+
+              <main class="main-container">
+                  <section class="view-container">
+                      <header class="calendar-header">
+                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
+                          <h2 id="week-title"></h2>
+                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
+                      </header>
+                      <div class="calendar-controls">
+                        <div class="view-switcher">
+                            <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
+                            </button>
+                            <button id="view-log-btn" class="btn-view" title="Vista Registro">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
+                            </button>
+                        </div>
+                        <button id="copy-week-btn" class="btn btn-secondary">Copia Precedente</button>
+                      </div>
+                      <div id="calendar-grid" class="calendar-grid"></div>
+                      <div id="log-view" class="log-view hidden"></div>
+                  </section>
+              </main>
+
+              <footer class="app-footer">
+                  <button id="reset-btn" class="btn btn-secondary"></button>
+              </footer>
+          </div>
+
+          <div id="info-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="info-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
+                  </div>
+                  <div class="modal-body">
+                      <p id="info-modal-desc"></p>
+                      <pre><code id="info-modal-json-example"></code></pre>
+                  </div>
+              </div>
+          </div>
+
+          <div id="selection-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="selection-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
+                  </div>
+                  <div id="selection-modal-list" class="modal-body selection-list"></div>
+              </div>
+          </div>
+
+          <div id="day-editor-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="day-editor-title"></h3>
+                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
+                </div>
+                <div id="day-editor-body" class="modal-body day-editor-list"></div>
+            </div>
+          </div>
+          
+          <div id="confirm-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="confirm-modal-title"></h3>
+                </div>
+                <div class="modal-body">
+                  <p id="confirm-modal-message"></p>
+                </div>
+                <div class="modal-footer">
+                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary">Annulla</button>
+                  <button id="confirm-modal-confirm-btn" class="btn">Conferma</button>
+                </div>
+            </div>
+          </div>
+
+          <div id="recipe-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="recipe-modal-title"></h3>
+                  <button class="modal-close-btn" data-target="recipe-modal">&times;</button>
+                </div>
+                <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+            </div>
+          </div>
+
+      </body>
+      </html>
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'calendar', // 'calendar' or 'log'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        state.recipeBaseUrl = config.recipeBaseUrl || '';
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        if (plan) {
+          state.weeklyPlan = JSON.parse(plan);
+        }
+        if (url) {
+          state.configUrl = url;
+        }
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          state.weeklyPlan[slotId] = mealId;
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetEntirePlan() {
+        state.weeklyPlan = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (view === 'calendar' || view === 'log') {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealId = state.weeklyPlan[sourceSlotId];
+
+            if (mealId) {
+              state.weeklyPlan[destSlotId] = mealId;
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/ui/renderer.js
     content: |
       import { getState, updateWeeklyPlan } from '../core/state.js';
       import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+      import { showNotification } from './notifications.js';
 
       const calendarGrid = document.getElementById('calendar-grid');
       const logView = document.getElementById('log-view');
@@ -33,6 +377,10 @@ patches:
       const confirmModalMessage = document.getElementById('confirm-modal-message');
       const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
       const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
+
+      const recipeModal = document.getElementById('recipe-modal');
+      const recipeModalTitle = document.getElementById('recipe-modal-title');
+      const recipeModalBody = document.getElementById('recipe-modal-body');
 
       let currentEditingDayISO = null;
 
@@ -85,6 +433,40 @@ patches:
         if (min === 0 && max === 0) return '';
         if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
         return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function parseMarkdownToHTML(markdown) {
+        let html = markdown
+          .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+          .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+          .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+          .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+          .replace(/\*(.*)\*/gim, '<em>$1</em>')
+          .replace(/^\s*[-*] (.*$)/gim, '<li>$1</li>');
+      
+        html = html.replace(/<li>(.*?)<\/li>\s*(?=<li)/g, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+        html = html.replace(/<\/ul>\s*<ul>/g, '');
+      
+        return html.replace(/\n/g, '<br>');
+      }
+
+      async function showRecipeModal(meal) {
+        const state = getState();
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModalTitle.textContent = meal.nomePasto;
+        recipeModalBody.innerHTML = '<p>Caricamento ricetta...</p>';
+        recipeModal.classList.remove('modal-hidden');
+      
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          const markdown = await response.text();
+          recipeModalBody.innerHTML = parseMarkdownToHTML(markdown);
+        } catch (error) {
+          recipeModalBody.innerHTML = `<p>Impossibile caricare la ricetta. Controlla l'URL e la connessione.</p>`;
+          showNotification('Caricamento ricetta fallito', 'error');
+        }
       }
 
       export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
@@ -146,15 +528,42 @@ patches:
           const slotId = `${isoDate}-${mealType}`;
           const mealId = state.weeklyPlan[slotId];
           const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${meal ? `<div class="meal-details"><span>${meal.nomePasto}</span><button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button></div>` : `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`}</div></div>`;
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`;
+          if (meal) {
+            const recipeButtonHTML = state.recipeBaseUrl && meal.recipeId 
+              ? `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="Mostra ricetta">
+                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+                 </button>`
+              : '';
+
+            mealDetailsHTML = `
+              <div class="meal-details">
+                <span>${meal.nomePasto}</span>
+                <div class="meal-actions">
+                  ${recipeButtonHTML}
+                  <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
+                </div>
+              </div>`;
+          }
+
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
         }).join('');
+
         dayEditorBody.onclick = (e) => {
-          if (e.target.classList.contains('btn-add-meal')) {
+          const btnAdd = e.target.closest('.btn-add-meal');
+          const btnRemove = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+
+          if (btnAdd) {
             dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(e.target.dataset.slotId);
-          } else if (e.target.classList.contains('btn-remove-meal')) {
-            updateWeeklyPlan(e.target.dataset.slotId, null);
+            openSelectionModal(btnAdd.dataset.slotId);
+          } else if (btnRemove) {
+            updateWeeklyPlan(btnRemove.dataset.slotId, null);
             openDayEditorModal(isoDate);
+          } else if (btnRecipe) {
+            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
           }
         };
         dayEditorModal.classList.remove('modal-hidden');
@@ -414,13 +823,21 @@ patches:
       .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
       .meal-details-container { flex-grow: 1; }
       .meal-details { display: flex; justify-content: space-between; align-items: center; }
+      .meal-actions { display: flex; align-items: center; gap: 0.5rem; }
       .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
       .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
-      
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+      .btn-view-recipe:hover { color: var(--text-color); }
+
+      .recipe-body { line-height: 1.6; }
+      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+      .recipe-body li { margin-bottom: 0.5rem; }
+
       @media (min-width: 768px) {
           #app-container { padding: 2rem; }
           .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
 commands:
-  - "echo 'Patch applied. The Log View now displays daily and per-meal calorie information.'"
+  - "echo 'Feature implemented. The app now supports viewing recipes from Markdown files.'"
