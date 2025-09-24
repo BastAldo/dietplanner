@@ -11,6 +11,7 @@ patches:
   - file: style.css
     content: |
       /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
       :root {
           --bg-color: #1a1a1d;
           --card-color: #2c2c34;
