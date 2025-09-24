@@ -1,209 +1,15 @@
-commit_message: "refactor(ui): Replace manual MD parser with Marked.js and DOMPurify"
+commit_message: "fix(ui): Prevent layout shift in day editor for long meal names"
 rationale: |
-  This refactoring addresses the issue where complex Markdown, such as tables, was not rendering correctly in the recipe modal. The previous manual parser was too basic for this task.
+  This commit fixes a CSS layout issue in the Day Editor modal where long meal names would cause the action icons (view recipe, remove) to misalign or wrap incorrectly.
 
-  1.  **Dependency Addition**: The `index.html` file has been updated to include `Marked.js` and `DOMPurify` from a reliable CDN. Marked.js is a robust, full-featured Markdown parser, while DOMPurify is a critical security addition to sanitize the resulting HTML and prevent XSS vulnerabilities.
+  1.  **Flexbox Sizing**: The core of the fix is in `style.css`. I have applied specific Flexbox properties to the container of the meal name and the container of the action icons.
 
-  2.  **Logic Replacement**: The naive, manually-written `parseMarkdownToHTML` function in `src/ui/renderer.js` has been completely removed. It has been replaced by a call to `DOMPurify.sanitize(marked.parse(markdown))`. This new implementation correctly handles all standard Markdown syntax, including tables, lists, and headers, and ensures the output is safe before injection into the DOM.
+  2.  **Meal Name Truncation**: The `<span>` containing the meal name (`.meal-details__name`) is now configured to grow and shrink flexibly (`flex-grow: 1`, `min-width: 0`). To prevent wrapping and maintain a clean, single-line layout, the text will now truncate with an ellipsis (`text-overflow: ellipsis`) if it's too long to fit.
 
-  3.  **Documentation Update**: The `docs/02_ARCHITECTURE.md` file has been updated to officially document the inclusion of Marked.js and DOMPurify as third-party dependencies, maintaining the project's source of truth.
+  3.  **Icon Container Stability**: The `div` containing the action icons (`.meal-actions`) has been set to never shrink (`flex-shrink: 0`), ensuring that the icons always have their required space and remain perfectly aligned to the right, regardless of the meal name's length.
+
+  4.  **HTML Structure**: A new class, `meal-details__name`, has been added in `src/ui/renderer.js` to the `<span>` wrapping the meal name. This provides a specific, robust selector for the new CSS rules, adhering to good practices.
 patches:
-  - file: docs/02_ARCHITECTURE.md
-    content: |
-      # Architettura: HealtyPro (ex NutriPlan)
-
-      ## 1. Principi Guida
-      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è stata ridisegnata per essere essenziale e intuitiva. La base di codice sottostante rimane semplice e basata su Vanilla JS.
-      * **Data-Driven:** La logica di business (regole, pasti) è definita nel file JSON di configurazione.
-      * **Maintainability (SRP):** I testi dell'interfaccia (stringhe) sono centralizzati e ogni file ha una sola responsabilità.
-
-      ## 2. Architettura PWA
-      L'applicazione include due componenti chiave per la funzionalità PWA:
-      * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
-      * **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline. Include una logica di pulizia per le cache obsolete.
-
-      ## 3. Refactoring dell'Interfaccia Utente (UI/UX)
-      L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
-
-      ## 4. Formato Dati: `planner-config.json`
-      Il file JSON può contenere una chiave opzionale `recipeBaseUrl` al livello principale per specificare la directory base delle ricette. Ogni pasto può avere un `recipeId` per collegare una ricetta Markdown. L'URL finale sarà costruito come `recipeBaseUrl + recipeId + '.md'`.
-      ```json
-      {
-        "recipeBaseUrl": "[https://raw.githubusercontent.com/user/repo/main/recipes/](https://raw.githubusercontent.com/user/repo/main/recipes/)",
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
-          }
-        ],
-        "meals": [
-          { "id": "1", "nomePasto": "Tofu Scrambled", "tipoPasto": "Pranzo", "calories_min": 550, "recipeId": "00001", "etichette": ["contiene-soia"] },
-          { "id": "2", "nomePasto": "Insalata Greca", "tipoPasto": "Cena", "calories_min": 300, "recipeId": "00002" }
-        ]
-      }
-      ```
-
-      ## 5. Struttura Dati Chiave: `weeklyPlan`
-      Per garantire che i piani alimentari siano univoci per ogni giorno specifico e non si ripetano tra le settimane, lo stato `weeklyPlan` utilizza una chiave composita basata sulla data.
-      * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
-      * **Razionale:** Usare la data in formato ISO come prefisso garantisce che ogni voce sia legata a un giorno di calendario univoco, risolvendo il problema della persistenza dei dati durante la navigazione settimanale.
-
-      ## 6. Dipendenze di Terze Parti
-      Per il rendering delle ricette da file Markdown, l'applicazione si affida a due librerie esterne caricate via CDN:
-      * **Marked.js**: Una libreria veloce e completa per il parsing di Markdown in HTML.
-      * **DOMPurify**: Una libreria essenziale per la sicurezza, utilizzata per sanificare l'output HTML generato da Marked.js prima di inserirlo nel DOM, prevenendo attacchi XSS.
-
-      ## 7. Struttura dei File (Invariata)
-      ```
-      .
-      ├── index.html
-      ├── style.css
-      ├── manifest.json
-      ├── sw.js
-      ├── icon.svg
-      └── src/
-          ├── api/
-          │   └── configService.js
-          ├── core/
-          │   ├── state.js
-          │   └── validation.js
-          ├── ui/
-          │   ├── renderer.js
-          │   ├── interactions.js
-          │   └── notifications.js
-          └── utils/
-              └── constants.js
-      ```
-  - file: index.html
-    content: |
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#1a1a1d">
-          <title>NutriPlan</title>
-          <link rel="stylesheet" href="style.css">
-          <link rel="manifest" href="manifest.json">
-          <link rel="icon" href="favicon.ico" type="image/x-icon">
-          <link rel="apple-touch-icon" href="icon.svg">
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
-          <script src="src/main.js" type="module" defer></script>
-      </head>
-      <body>
-          <div id="toast-container" class="toast-container"></div>
-
-          <header class="app-header">
-              <div class="app-title">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
-                  <h1 id="main-title">NutriPlan</h1>
-              </div>
-          </header>
-
-          <div id="app-container">
-              <div id="global-alert" class="global-alert hidden">
-                  <p id="global-alert-message"></p>
-                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
-              </div>
-
-              <section class="data-source-container">
-                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
-                  <button id="load-config-btn" class="btn btn-primary"></button>
-                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
-              </section>
-
-              <main class="main-container">
-                  <section class="view-container">
-                      <header class="calendar-header">
-                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
-                          <h2 id="week-title"></h2>
-                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
-                      </header>
-                      <div class="calendar-controls">
-                        <div class="view-switcher">
-                            <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
-                            </button>
-                            <button id="view-log-btn" class="btn-view" title="Vista Registro">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
-                            </button>
-                        </div>
-                        <button id="copy-week-btn" class="btn btn-secondary">Copia Precedente</button>
-                      </div>
-                      <div id="calendar-grid" class="calendar-grid"></div>
-                      <div id="log-view" class="log-view hidden"></div>
-                  </section>
-              </main>
-
-              <footer class="app-footer">
-                  <button id="reset-btn" class="btn btn-secondary"></button>
-              </footer>
-          </div>
-
-          <div id="info-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <div class="modal-header">
-                    <h3 id="info-modal-title"></h3>
-                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
-                  </div>
-                  <div class="modal-body">
-                      <p id="info-modal-desc"></p>
-                      <pre><code id="info-modal-json-example"></code></pre>
-                  </div>
-              </div>
-          </div>
-
-          <div id="selection-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <div class="modal-header">
-                    <h3 id="selection-modal-title"></h3>
-                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
-                  </div>
-                  <div id="selection-modal-list" class="modal-body selection-list"></div>
-              </div>
-          </div>
-
-          <div id="day-editor-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="day-editor-title"></h3>
-                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
-                </div>
-                <div id="day-editor-body" class="modal-body day-editor-list"></div>
-            </div>
-          </div>
-          
-          <div id="confirm-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="confirm-modal-title"></h3>
-                </div>
-                <div class="modal-body">
-                  <p id="confirm-modal-message"></p>
-                </div>
-                <div class="modal-footer">
-                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary">Annulla</button>
-                  <button id="confirm-modal-confirm-btn" class="btn">Conferma</button>
-                </div>
-            </div>
-          </div>
-
-          <div id="recipe-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="recipe-modal-title"></h3>
-                  <button class="modal-close-btn" data-target="recipe-modal">&times;</button>
-                </div>
-                <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-            </div>
-          </div>
-
-      </body>
-      </html>
   - file: src/ui/renderer.js
     content: |
       import { getState, updateWeeklyPlan } from '../core/state.js';
@@ -377,7 +183,7 @@ patches:
 
             mealDetailsHTML = `
               <div class="meal-details">
-                <span>${meal.nomePasto}</span>
+                <span class="meal-details__name">${meal.nomePasto}</span>
                 <div class="meal-actions">
                   ${recipeButtonHTML}
                   <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
@@ -487,5 +293,205 @@ patches:
         const urlInput = document.getElementById('config-url-input');
         if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
+  - file: style.css
+    content: |
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
+
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 1rem;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.4s ease;
+        cursor: pointer;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
+
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
+      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+      .alert-close-btn:hover { color: var(--text-color); }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      .app-footer {
+          padding-top: 1.5rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+      }
+
+      /* --- CALENDAR & LOG VIEW --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+      }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { 
+        color: var(--primary-color); border-bottom: 1px solid var(--border-color); 
+        padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; 
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { 
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item strong { color: var(--text-color-muted); margin-right: 0.5rem; }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+      
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+
+      /* --- BUTTONS --- */
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { 
+        display: flex; align-items: center; gap: 1rem;
+        padding: 0.75rem; background: var(--bg-color); 
+        border-radius: 8px; margin-bottom: 0.75rem;
+      }
+      .day-editor-slot:last-child { margin-bottom: 0; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+      .meal-details__name {
+        flex-grow: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+      .btn-view-recipe:hover { color: var(--text-color); }
+
+      .recipe-body { line-height: 1.6; }
+      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+      .recipe-body li { margin-bottom: 0.5rem; }
+      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
+      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
+      .recipe-body th { background-color: var(--bg-color); }
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }
 commands:
-  - "echo 'Patch applied. Markdown rendering is now handled by Marked.js and sanitized by DOMPurify.'"
+  - "echo 'Patch applied. The layout issue in the day editor is now fixed with CSS Flexbox and text truncation.'"

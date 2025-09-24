@@ -169,7 +169,7 @@ export function openDayEditorModal(isoDate) {
 
       mealDetailsHTML = `
         <div class="meal-details">
-          <span>${meal.nomePasto}</span>
+          <span class="meal-details__name">${meal.nomePasto}</span>
           <div class="meal-actions">
             ${recipeButtonHTML}
             <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>

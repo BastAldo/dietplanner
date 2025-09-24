@@ -168,9 +168,16 @@ body {
 }
 .day-editor-slot:last-child { margin-bottom: 0; }
 .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-.meal-details-container { flex-grow: 1; }
-.meal-details { display: flex; justify-content: space-between; align-items: center; }
-.meal-actions { display: flex; align-items: center; gap: 0.5rem; }
+.meal-details-container { flex-grow: 1; min-width: 0; }
+.meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.meal-details__name {
+  flex-grow: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
 .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
@@ -181,6 +188,9 @@ body {
 .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
 .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
 .recipe-body li { margin-bottom: 0.5rem; }
+.recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
+.recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
+.recipe-body th { background-color: var(--bg-color); }
 
 @media (min-width: 768px) {
     #app-container { padding: 2rem; }
