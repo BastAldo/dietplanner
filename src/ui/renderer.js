@@ -44,6 +44,16 @@ function formatFullDate(isoDate) {
   return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+function formatMealCalories(meal) {
+  if (!meal || !meal.calories_min) return '';
+  const minCals = Number(meal.calories_min) || 0;
+  const maxCals = Number(meal.calories_max) || minCals;
+  if (minCals === 0) return '';
+  const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+  if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+  return `${minCals} - ${maxCals} ${kcalLabel}`;
+}
+
 function calculateDailyCalories(isoDate, state) {
   let min = 0;
   let max = 0;
@@ -172,9 +182,16 @@ function renderLogView(state, weekStart) {
     const isoDate = toISODateString(dayDate);
     const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) })).filter(item => item.meal);
     if (dayMeals.length > 0) {
+      const dailyCalories = calculateDailyCalories(isoDate, state);
       const dayLog = document.createElement('div');
       dayLog.className = 'log-day';
-      dayLog.innerHTML = `<h3>${formatFullDate(isoDate)}</h3>` + dayMeals.map(item => `<div class="log-item"><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>`).join('');
+      dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
+        + dayMeals.map(item => `
+          <div class="log-item">
+            <div><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>
+            <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
+          </div>
+        `).join('');
       logView.appendChild(dayLog);
     }
   }
@@ -211,4 +228,3 @@ export function renderApp() {
   const urlInput = document.getElementById('config-url-input');
   if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }
-console.log("modifica00")

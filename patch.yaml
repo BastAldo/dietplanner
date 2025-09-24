@@ -1,10 +1,12 @@
-commit_message: "fix(ui): Correzione della classe CSS per la visibilità dei modali e aggiunta di logging"
+commit_message: "feat(ui): Add calorie display to Log View"
 rationale: |
-  Questo commit risolve un bug critico che impediva la visualizzazione dei modali di conferma e di selezione dei pasti.
+  In accordo con la richiesta, questa patch migliora la "Vista Registro" per includere informazioni caloriche dettagliate, rendendola più informativa.
 
-  1.  **Correzione Bug Visibilità**: Il file `src/ui/renderer.js` utilizzava la classe CSS `.hidden` per mostrare e nascondere i modali. Tuttavia, i file `index.html` e `style.css` definiscono `.modal-hidden` come la classe corretta per questa funzionalità. Ho sostituito tutte le occorrenze di `.hidden` con `.modal-hidden` nelle funzioni `showConfirmModal` e `openSelectionModal` per ripristinare il comportamento corretto.
+  1.  **Dettaglio Calorie per Pasto**: Ogni elemento nella lista del registro (`.log-item`) ora mostra il range calorico specifico per quel pasto (es. "550 - 600 kcal"), posizionato sulla destra per una facile lettura.
 
-  2.  **Aggiunta di Debugging**: Come richiesto, ho inserito delle chiamate a `console.log()` all'inizio delle funzioni `showConfirmModal` e `openSelectionModal`. Questo permetterà di verificare facilmente nella console del browser che le funzioni vengano eseguite correttamente al click dei pulsanti corrispondenti.
+  2.  **Totale Calorie Giornaliero**: L'intestazione di ogni giorno nella vista registro ora include il totale calorico giornaliero, riutilizzando la stessa logica di calcolo della vista calendario per garantire coerenza.
+
+  3.  **Aggiornamento Stili**: Sono state aggiunte nuove regole CSS in `style.css` per formattare e allineare correttamente le nuove informazioni caloriche, mantenendo l'estetica pulita e funzionale dell'applicazione.
 patches:
   - file: src/ui/renderer.js
     content: |
@@ -52,6 +54,16 @@ patches:
       function formatFullDate(isoDate) {
         const date = new Date(isoDate);
         return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+      
+      function formatMealCalories(meal) {
+        if (!meal || !meal.calories_min) return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
       }
 
       function calculateDailyCalories(isoDate, state) {
@@ -182,9 +194,16 @@ patches:
           const isoDate = toISODateString(dayDate);
           const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) })).filter(item => item.meal);
           if (dayMeals.length > 0) {
+            const dailyCalories = calculateDailyCalories(isoDate, state);
             const dayLog = document.createElement('div');
             dayLog.className = 'log-day';
-            dayLog.innerHTML = `<h3>${formatFullDate(isoDate)}</h3>` + dayMeals.map(item => `<div class="log-item"><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>`).join('');
+            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
+              + dayMeals.map(item => `
+                <div class="log-item">
+                  <div><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>
+                  <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
+                </div>
+              `).join('');
             logView.appendChild(dayLog);
           }
         }
@@ -221,6 +240,187 @@ patches:
         const urlInput = document.getElementById('config-url-input');
         if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
-      console.log("modifica00")
+  - file: style.css
+    content: |
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
+
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 1rem;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.4s ease;
+        cursor: pointer;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
+
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
+      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+      .alert-close-btn:hover { color: var(--text-color); }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      .app-footer {
+          padding-top: 1.5rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+      }
+
+      /* --- CALENDAR & LOG VIEW --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+      }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { 
+        color: var(--primary-color); border-bottom: 1px solid var(--border-color); 
+        padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; 
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { 
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item strong { color: var(--text-color-muted); margin-right: 0.5rem; }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+      
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+
+      /* --- BUTTONS --- */
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { 
+        display: flex; align-items: center; gap: 1rem;
+        padding: 0.75rem; background: var(--bg-color); 
+        border-radius: 8px; margin-bottom: 0.75rem;
+      }
+      .day-editor-slot:last-child { margin-bottom: 0; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; }
+      
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }
 commands:
-  - "echo 'Patch applicata. I modali ora dovrebbero funzionare correttamente. Controlla la console del browser per i log di debug.'"
+  - "echo 'Patch applied. The Log View now displays daily and per-meal calorie information.'"
