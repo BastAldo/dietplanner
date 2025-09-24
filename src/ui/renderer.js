@@ -80,22 +80,6 @@ function calculateDailyCalories(isoDate, state) {
   return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
-function parseMarkdownToHTML(markdown) {
-  let html = markdown
-    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-    .replace(/\*(.*)\*/gim, '<em>$1</em>')
-    .replace(/^\s*[-*] (.*$)/gim, '<li>$1</li>');
-
-  html = html.replace(/<li>(.*?)<\/li>\s*(?=<li)/g, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
-  html = html.replace(/<\/ul>\s*<ul>/g, '');
-
-  return html.replace(/\n/g, '<br>');
-}
-
 async function showRecipeModal(meal) {
   const state = getState();
   const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
@@ -107,7 +91,8 @@ async function showRecipeModal(meal) {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
     const markdown = await response.text();
-    recipeModalBody.innerHTML = parseMarkdownToHTML(markdown);
+    // Use Marked to parse and DOMPurify to sanitize
+    recipeModalBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
   } catch (error) {
     recipeModalBody.innerHTML = `<p>Impossibile caricare la ricetta. Controlla l'URL e la connessione.</p>`;
     showNotification('Caricamento ricetta fallito', 'error');

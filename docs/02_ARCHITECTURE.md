@@ -39,7 +39,12 @@ Per garantire che i piani alimentari siano univoci per ogni giorno specifico e n
 * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
 * **Razionale:** Usare la data in formato ISO come prefisso garantisce che ogni voce sia legata a un giorno di calendario univoco, risolvendo il problema della persistenza dei dati durante la navigazione settimanale.
 
-## 6. Struttura dei File (Invariata)
+## 6. Dipendenze di Terze Parti
+Per il rendering delle ricette da file Markdown, l'applicazione si affida a due librerie esterne caricate via CDN:
+* **Marked.js**: Una libreria veloce e completa per il parsing di Markdown in HTML.
+* **DOMPurify**: Una libreria essenziale per la sicurezza, utilizzata per sanificare l'output HTML generato da Marked.js prima di inserirlo nel DOM, prevenendo attacchi XSS.
+
+## 7. Struttura dei File (Invariata)
 ```
 .
 ├── index.html
