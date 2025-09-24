@@ -5,9 +5,9 @@ export const WEEK_STARTS_ON_MONDAY = 1;
 export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 export const MEAL_TYPES = [
   'Colazione',
-  'Spuntino AM',
+  'Spuntino Mattutino',
   'Pranzo',
-  'Spuntino PM',
+  'Spuntino Pomeridiano',
   'Cena'
 ];
 
