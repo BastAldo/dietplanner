@@ -1,15 +1,24 @@
-const CACHE_NAME = 'healtypro-v3';
+const CACHE_NAME = 'healtypro-v4';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
-  'style.css',
+  'styles/base.css',
+  'styles/planner.css',
+  'styles/progress.css',
+  'styles/modals.css',
+  'templates/planner.html',
+  'templates/progress.html',
+  'templates/profile.html',
+  'templates/modals.html',
   'src/main.js',
   'src/api/configService.js',
   'src/core/state.js',
+  'src/core/calculations.js',
   'src/core/validation.js',
   'src/ui/interactions.js',
   'src/ui/notifications.js',
   'src/ui/renderer.js',
+  'src/ui/viewLoader.js',
   'src/utils/constants.js',
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
@@ -32,8 +41,6 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.filter((cacheName) => {
-          // Return true if you want to remove this cache,
-          // and false otherwise.
           return cacheName !== CACHE_NAME;
         }).map(cacheName => caches.delete(cacheName))
       );
@@ -42,8 +49,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only apply cache-first strategy to same-origin requests.
-  // This prevents errors with cross-origin requests like Google Fonts or remote JSON files.
   if (event.request.url.startsWith(self.location.origin)) {
     event.respondWith(
       caches.match(event.request)
@@ -52,7 +57,6 @@ self.addEventListener('fetch', (event) => {
         })
     );
   } else {
-    // For all other requests, go to the network directly.
     event.respondWith(fetch(event.request));
   }
 });

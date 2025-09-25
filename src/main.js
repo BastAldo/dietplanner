@@ -1,6 +1,7 @@
 import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
 import { renderApp, populateInitialText, showConfirmModal } from './ui/renderer.js';
 import { initializeEventListeners } from './ui/interactions.js';
+import { loadViews } from './ui/viewLoader.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { fetchAndParseConfig } from './api/configService.js';
 import { showNotification } from './ui/notifications.js';
@@ -32,6 +33,7 @@ function registerServiceWorker() {
 }
 
 async function init() {
+  await loadViews();
   document.addEventListener('stateChange', renderApp);
   
   loadStateFromLocalStorage();
@@ -69,4 +71,3 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-//console.log("TEST")

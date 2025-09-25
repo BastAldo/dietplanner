@@ -3,34 +3,6 @@ import { calculateBMR } from '../core/calculations.js';
 import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../utils/constants.js';
 import { showNotification } from './notifications.js';
 
-// Page containers
-const plannerPage = document.getElementById('planner-page');
-const progressPage = document.getElementById('progress-page');
-const profilePage = document.getElementById('profile-page');
-
-// Planner elements
-const calendarGrid = document.getElementById('calendar-grid');
-const logView = document.getElementById('log-view');
-const weekTitleEl = document.getElementById('week-title');
-const viewCalendarBtn = document.getElementById('view-calendar-btn');
-const viewLogBtn = document.getElementById('view-log-btn');
-
-// Biometrics elements
-const biometricsView = document.getElementById('biometrics-view');
-
-// Global elements
-const globalAlert = document.getElementById('global-alert');
-const globalAlertMessage = document.getElementById('global-alert-message');
-const navPlannerBtn = document.getElementById('nav-planner');
-const navProgressBtn = document.getElementById('nav-progress');
-const navProfileBtn = document.getElementById('nav-profile');
-
-// Modals
-const selectionModal = document.getElementById('selection-modal');
-const dayEditorModal = document.getElementById('day-editor-modal');
-const confirmModal = document.getElementById('confirm-modal');
-const recipeModal = document.getElementById('recipe-modal');
-
 let currentEditingDayISO = null;
 
 function toISODateString(date) {
@@ -90,6 +62,7 @@ function getRecipeButtonHTML(meal, state) {
 export async function showRecipeModal(meal) {
   if (!meal) return;
   const state = getState();
+  const recipeModal = document.getElementById('recipe-modal');
   const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
   recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
   const body = recipeModal.querySelector('#recipe-modal-body');
@@ -106,6 +79,7 @@ export async function showRecipeModal(meal) {
 }
 
 export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+  const confirmModal = document.getElementById('confirm-modal');
   confirmModal.querySelector('#confirm-modal-title').textContent = title;
   confirmModal.querySelector('#confirm-modal-message').textContent = message;
   const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
@@ -128,6 +102,7 @@ export function showConfirmModal(title, message, onConfirm, type = 'secondary') 
 export function openSelectionModal(slotId) {
   const state = getState();
   const mealType = slotId.substring(11);
+  const selectionModal = document.getElementById('selection-modal');
   selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
   const list = selectionModal.querySelector('#selection-modal-list');
   const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
@@ -146,6 +121,7 @@ export function openSelectionModal(slotId) {
 export function openDayEditorModal(isoDate) {
   currentEditingDayISO = isoDate;
   const state = getState();
+  const dayEditorModal = document.getElementById('day-editor-modal');
   dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
   const body = dayEditorModal.querySelector('#day-editor-body');
   body.innerHTML = MEAL_TYPES.map(mealType => {
@@ -194,12 +170,13 @@ function renderPlannerPage(state) {
   const weekStart = getWeekStartDate(state.focusedDate);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
-  weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+  document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
   renderCalendarView(state, weekStart);
   renderLogView(state, weekStart);
 }
 
 function renderCalendarView(state, weekStart) {
+  const calendarGrid = document.getElementById('calendar-grid');
   calendarGrid.innerHTML = '';
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
@@ -216,6 +193,7 @@ function renderCalendarView(state, weekStart) {
 }
 
 function renderLogView(state, weekStart) {
+  const logView = document.getElementById('log-view');
   logView.innerHTML = '';
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
@@ -260,6 +238,13 @@ function renderProfilePage(state) {
 
 export function renderApp() {
   const state = getState();
+  const plannerPage = document.getElementById('planner-page');
+  const progressPage = document.getElementById('progress-page');
+  const profilePage = document.getElementById('profile-page');
+  const navPlannerBtn = document.getElementById('nav-planner');
+  const navProgressBtn = document.getElementById('nav-progress');
+  const navProfileBtn = document.getElementById('nav-profile');
+
   [plannerPage, progressPage, profilePage].forEach(p => p.classList.add('hidden'));
   [navPlannerBtn, navProgressBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
 
