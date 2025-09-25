@@ -1,4 +1,4 @@
-import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState } from '../core/state.js';
+import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
@@ -64,12 +64,48 @@ function handleSaveBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'nutriplan_backup.json';
+  a.download = 'healtypro_backup.json';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+}
+
+function handleRestoreBackup() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json,application/json';
+    fileInput.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = readerEvent => {
+            try {
+                const content = readerEvent.target.result;
+                const backupData = JSON.parse(content);
+
+                if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                    showConfirmModal(
+                        UI_TEXT.RESTORE_CONFIRM_TITLE,
+                        UI_TEXT.RESTORE_CONFIRM_MSG,
+                        () => {
+                            setAppState(backupData);
+                            showNotification(UI_TEXT.RESTORE_SUCCESS, 'success');
+                        },
+                        'danger'
+                    );
+                } else {
+                    throw new Error('Invalid structure');
+                }
+            } catch (err) {
+                showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+    fileInput.click();
 }
 
 function handleCopyWeek() {
@@ -99,6 +135,7 @@ function handleResetWeek() {
 export function initializeEventListeners() {
   document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
   document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+  document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   

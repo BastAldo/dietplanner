@@ -1,18 +1,12 @@
-commit_message: "feat(feature): Implement local file backup functionality"
+commit_message: "feat: Implementa ripristino backup, allinea branding e rimuovi codice morto"
 rationale: |
-  This commit introduces a secure, client-side backup feature, allowing users to save their entire application state to a local JSON file. This aligns with the project's privacy-first principles by ensuring user data never leaves their machine.
+  In linea con il piano d'azione approvato, questa patch introduce tre cambiamenti strategici per migliorare la robustezza e la manutenibilità dell'applicazione.
 
-  1.  **Documentation Update**: A new User Story (US-24) has been added to `docs/01_FUNCTIONALITY.md` to formally describe the new backup capability.
+  1.  **Implementazione del Ripristino Backup (US-25)**: È stata aggiunta la funzionalità critica di ripristino da un file di backup locale. Questo completa il ciclo di backup/restore, permettendo agli utenti di ricaricare i propri dati in modo sicuro. La logica è stata implementata in `src/ui/interactions.js` con un flusso di conferma per l'utente, e i relativi elementi UI sono stati aggiunti a `index.html` e `src/utils/constants.js`.
 
-  2.  **UI Addition**: A "Salva Backup" button has been added to the application footer in `index.html`, providing a clear and persistent entry point for this function. New text for this button has also been centralized in `src/utils/constants.js`.
+  2.  **Allineamento Branding a "HealtyPro"**: In conformità con la documentazione (`00_HEALTYPRO_SPEC.md`), il branding dell'applicazione è stato aggiornato da "NutriPlan" a "HealtyPro" in tutti i file rilevanti, inclusi `manifest.json`, `sw.js` e le costanti UI. Come richiesto, i testi principali sono stati centralizzati nel file `constants.js` per garantire coerenza.
 
-  3.  **Backup Logic**: A new `handleSaveBackup` function has been implemented in `src/ui/interactions.js`. This function:
-      -   Retrieves the current `configUrl` and the self-contained `weeklyPlan` from the application's state.
-      -   Bundles them into a single JSON object.
-      -   Creates a Blob from this JSON data.
-      -   Uses a dynamically created anchor (`<a>`) element to trigger a browser download of the data as a `nutriplan_backup.json` file.
-
-  4.  **Event Handling**: An event listener for the new backup button has been added to the `initializeEventListeners` function, connecting the UI to the new logic.
+  3.  **Rimozione Codice Morto**: Sono stati eliminati i file JavaScript obsoleti (`mealService.js`, `calendar.js`, `library.js`) che erano residui della precedente architettura. Questa pulizia riduce la complessità della codebase e la allinea all'architettura documentata, migliorando la leggibilità e la manutenibilità futura.
 patches:
   - file: docs/01_FUNCTIONALITY.md
     content: |
@@ -39,6 +33,7 @@ patches:
       * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
       * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
       * **US-24 (Backup Dati Locale):** Come utente, voglio poter scaricare un singolo file JSON contenente tutti i miei dati (`configUrl` e `weeklyPlan`) per conservarne una copia di backup sicura sul mio computer.
+      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
   - file: index.html
     content: |
       <!DOCTYPE html>
@@ -47,7 +42,7 @@ patches:
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <meta name="theme-color" content="#1a1a1d">
-          <title>NutriPlan</title>
+          <title>HealtyPro</title>
           <link rel="stylesheet" href="style.css">
           <link rel="manifest" href="manifest.json">
           <link rel="icon" href="favicon.ico" type="image/x-icon">
@@ -62,7 +57,7 @@ patches:
           <header class="app-header">
               <div class="app-title">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
-                  <h1 id="main-title">NutriPlan</h1>
+                  <h1 id="main-title"></h1>
               </div>
           </header>
 
@@ -105,6 +100,7 @@ patches:
               </main>
 
               <footer class="app-footer">
+                  <button id="restore-btn" class="btn btn-secondary"></button>
                   <button id="backup-btn" class="btn btn-secondary"></button>
                   <button id="reset-btn" class="btn btn-secondary"></button>
               </footer>
@@ -170,9 +166,256 @@ patches:
 
       </body>
       </html>
+  - file: manifest.json
+    content: |
+      {
+        "name": "HealtyPro",
+        "short_name": "HealtyPro",
+        "start_url": "/dietplanner/",
+        "display": "standalone",
+        "background_color": "#121212",
+        "theme_color": "#1E1E1E",
+        "description": "Un assistente per creare e gestire piani alimentari flessibili.",
+        "icons": [
+          {
+            "src": "icons/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+          },
+          {
+            "src": "icons/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+          }
+        ],
+        "screenshots": [
+          {
+            "src": "screenshots/screen_mobile.png",
+            "sizes": "540x720",
+            "type": "image/png",
+            "form_factor": "narrow"
+          },
+          {
+            "src": "screenshots/screen_desktop.png",
+            "sizes": "1280x720",
+            "type": "image/png",
+            "form_factor": "wide"
+          }
+        ]
+      }
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v3';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'style.css',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/validation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                // Return true if you want to remove this cache,
+                // and false otherwise.
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        // Only apply cache-first strategy to same-origin requests.
+        // This prevents errors with cross-origin requests like Google Fonts or remote JSON files.
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          // For all other requests, go to the network directly.
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'calendar', // 'calendar' or 'log'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        state.recipeBaseUrl = config.recipeBaseUrl || '';
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        if (plan) {
+          try {
+            state.weeklyPlan = JSON.parse(plan);
+          } catch (e) {
+            console.error("Error parsing weeklyPlan from localStorage", e);
+            state.weeklyPlan = {};
+          }
+        }
+        if (url) {
+          state.configUrl = url;
+        }
+      }
+
+      export function setAppState(backupData) {
+        if (backupData.weeklyPlan) {
+          state.weeklyPlan = backupData.weeklyPlan;
+        }
+        if (backupData.configUrl) {
+          state.configUrl = backupData.configUrl;
+        }
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal }; // Store a full copy of the meal object
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetEntirePlan() {
+        state.weeklyPlan = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (view === 'calendar' || view === 'log') {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject }; // Store a copy
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/ui/interactions.js
     content: |
-      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState } from '../core/state.js';
+      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState } from '../core/state.js';
       import { fetchAndParseConfig } from '../api/configService.js';
       import { showNotification } from './notifications.js';
       import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
@@ -238,12 +481,48 @@ patches:
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'nutriplan_backup.json';
+        a.download = 'healtypro_backup.json';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      function handleRestoreBackup() {
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,application/json';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => {
+                                  setAppState(backupData);
+                                  showNotification(UI_TEXT.RESTORE_SUCCESS, 'success');
+                              },
+                              'danger'
+                          );
+                      } else {
+                          throw new Error('Invalid structure');
+                      }
+                  } catch (err) {
+                      showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error');
+                  }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
       }
 
       function handleCopyWeek() {
@@ -273,6 +552,7 @@ patches:
       export function initializeEventListeners() {
         document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
         document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
         document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
         document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
         
@@ -328,7 +608,7 @@ patches:
       const dayEditorModal = document.getElementById('day-editor-modal');
       const dayEditorTitle = document.getElementById('day-editor-title');
       const dayEditorBody = document.getElementById('day-editor-body');
-      
+
       const confirmModal = document.getElementById('confirm-modal');
       const confirmModalTitle = document.getElementById('confirm-modal-title');
       const confirmModalMessage = document.getElementById('confirm-modal-message');
@@ -360,7 +640,7 @@ patches:
         const date = new Date(isoDate);
         return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
       }
-      
+
       function formatMealCalories(meal) {
         if (!meal || !meal.calories_min) return '';
         const minCals = Number(meal.calories_min) || 0;
@@ -405,7 +685,7 @@ patches:
         recipeModalTitle.textContent = meal.nomePasto;
         recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
         recipeModal.classList.remove('modal-hidden');
-      
+
         try {
           const response = await fetch(url);
           if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
@@ -519,11 +799,12 @@ patches:
         document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
         document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
         document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
         document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
         document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
         document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
       }
-      
+
       function renderCalendarView(state, weekStart) {
         calendarGrid.innerHTML = '';
         for (let i = 0; i < 7; i++) {
@@ -621,12 +902,13 @@ patches:
       ];
 
       export const UI_TEXT = {
-        MAIN_TITLE: 'NutriPlan',
+        MAIN_TITLE: 'HealtyPro',
         SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
         LOAD_BUTTON: 'Carica',
         COPY_WEEK_BTN: 'Copia Precedente',
         SHARE_CONFIG_BTN: 'Condividi Config',
         BACKUP_BTN: 'Salva Backup',
+        RESTORE_BTN: 'Ripristina Backup',
         WEEKLY_PLAN_TITLE: 'Piano Settimanale',
         CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
         RESET_BUTTON: 'Pulisci Settimana',
@@ -647,6 +929,10 @@ patches:
         SHARE_SUCCESS: 'Link di condivisione copiato!',
         SHARE_ERROR: 'Impossibile copiare il link.',
         BACKUP_SUCCESS: 'Backup scaricato con successo!',
+        RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
+        RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
+        RESTORE_SUCCESS: 'Backup ripristinato con successo!',
+        RESTORE_INVALID_FILE: 'File di backup non valido o corrotto.',
         EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
         ADD_MEAL_BTN: 'Aggiungi',
         RECIPE_BUTTON_TITLE: 'Mostra ricetta',
@@ -684,3 +970,11 @@ patches:
         ]
       }`
       };
+  - file: src/api/mealService.js
+    content: ''
+  - file: src/ui/calendar.js
+    content: ''
+  - file: src/ui/library.js
+    content: ''
+commands:
+  - "echo 'Funzionalità di ripristino implementata, codice allineato e pulito.'"

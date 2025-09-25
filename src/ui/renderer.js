@@ -207,6 +207,7 @@ export function populateInitialText() {
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
   document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
   document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+  document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
   document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
   document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
   document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;

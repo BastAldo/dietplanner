@@ -55,6 +55,18 @@ export function loadStateFromLocalStorage() {
   }
 }
 
+export function setAppState(backupData) {
+  if (backupData.weeklyPlan) {
+    state.weeklyPlan = backupData.weeklyPlan;
+  }
+  if (backupData.configUrl) {
+    state.configUrl = backupData.configUrl;
+  }
+  saveStateToLocalStorage();
+  localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+  notify();
+}
+
 export function updateWeeklyPlan(slotId, mealId) {
   if (mealId) {
     const meal = state.masterMealList.find(m => m.id === mealId);

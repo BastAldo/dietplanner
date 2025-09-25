@@ -1,6 +1,6 @@
 {
-  "name": "NutriPlan",
-  "short_name": "NutriPlan",
+  "name": "HealtyPro",
+  "short_name": "HealtyPro",
   "start_url": "/dietplanner/",
   "display": "standalone",
   "background_color": "#121212",

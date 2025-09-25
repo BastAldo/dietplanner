@@ -12,12 +12,13 @@ export const MEAL_TYPES = [
 ];
 
 export const UI_TEXT = {
-  MAIN_TITLE: 'NutriPlan',
+  MAIN_TITLE: 'HealtyPro',
   SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
   LOAD_BUTTON: 'Carica',
   COPY_WEEK_BTN: 'Copia Precedente',
   SHARE_CONFIG_BTN: 'Condividi Config',
   BACKUP_BTN: 'Salva Backup',
+  RESTORE_BTN: 'Ripristina Backup',
   WEEKLY_PLAN_TITLE: 'Piano Settimanale',
   CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
   RESET_BUTTON: 'Pulisci Settimana',
@@ -38,6 +39,10 @@ export const UI_TEXT = {
   SHARE_SUCCESS: 'Link di condivisione copiato!',
   SHARE_ERROR: 'Impossibile copiare il link.',
   BACKUP_SUCCESS: 'Backup scaricato con successo!',
+  RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
+  RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
+  RESTORE_SUCCESS: 'Backup ripristinato con successo!',
+  RESTORE_INVALID_FILE: 'File di backup non valido o corrotto.',
   EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
   ADD_MEAL_BTN: 'Aggiungi',
   RECIPE_BUTTON_TITLE: 'Mostra ricetta',
