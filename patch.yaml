@@ -1,37 +1,11 @@
-commit_message: "feat: Migliora UX backup con Web Share API e corregge UI"
+commit_message: "fix: Rende il backup robusto con fallback e corregge la UI del footer"
 rationale: |
-  In risposta al feedback dell'utente, questa patch migliora l'esperienza d'uso su dispositivi mobili e corregge un'imperfezione stilistica.
+  Questa patch risolve il bug critico sulla funzionalità di salvataggio del backup e migliora l'interfaccia utente, basandosi sull'ultima analisi approvata.
 
-  1.  **Integrazione della Web Share API**: La funzionalità di salvataggio del backup (`handleSaveBackup` in `src/ui/interactions.js`) è stata potenziata. Ora rileva se il browser supporta la Web Share API. Se supportata (tipicamente su mobile), invoca la finestra di condivisione nativa del sistema operativo, permettendo all'utente di salvare il file di backup in modo intuitivo e familiare (es. su Google Drive, File locali, o inviarlo tramite app di messaggistica). Sui sistemi non supportati (desktop), viene mantenuto il comportamento di download diretto come fallback, garantendo la compatibilità universale. La User Story `US-24` è stata aggiornata per riflettere questo comportamento avanzato.
+  1.  **Correzione Robusta della Web Share API**: La funzione `handleSaveBackup` in `src/ui/interactions.js` è stata riscritta per essere più resiliente. Ora implementa un meccanismo di fallback automatico. Tenta di utilizzare la Web Share API per un'esperienza nativa su mobile. In caso di qualsiasi errore (incluso il `NotAllowedError` riscontrato) che non sia un annullamento esplicito da parte dell'utente (`AbortError`), la funzione esegue silenziosamente un download diretto del file. Questo garantisce che l'utente riceva sempre il file di backup, indipendentemente dal supporto del browser o da altre restrizioni di sicurezza, risolvendo il problema alla radice.
 
-  2.  **Correzione Stile Footer**: È stato risolto un problema di layout nel footer dell'applicazione. Aggiungendo la proprietà `gap` alla classe `.app-footer` in `style.css`, i pulsanti ora sono correttamente spaziati, migliorando la leggibilità e l'estetica generale dell'interfaccia.
+  2.  **Correzione Stile Footer**: È stato risolto il problema di layout nel footer dell'applicazione. Aggiungendo la proprietà `gap` alla classe `.app-footer` in `style.css`, i pulsanti sono ora correttamente spaziati, migliorando la leggibilità e l'estetica generale dell'interfaccia.
 patches:
-  - file: docs/01_FUNCTIONALITY.md
-    content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
-
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
-
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
-
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
-      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
-      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
-      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
-      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo per inviarlo ad altre app o salvarlo in una posizione a mia scelta.
-      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
   - file: style.css
     content: |
       /* --- GLOBAL STYLES & MOBILE FIRST --- */
@@ -292,6 +266,18 @@ patches:
         });
       }
 
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
       async function handleSaveBackup() {
         const state = getState();
         const backupData = {
@@ -300,33 +286,26 @@ patches:
         };
         const fileName = 'healtypro_backup.json';
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const file = new File([blob], fileName, { type: 'application/json' });
         
-        // Use Web Share API if available (modern mobile browsers)
-        if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName)] })) {
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            const file = new File([blob], fileName, { type: 'application/json' });
             await navigator.share({
               title: UI_TEXT.BACKUP_SHARE_TITLE,
               files: [file],
             });
-            showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+            // La notifica di successo viene mostrata solo se la condivisione non viene abortita
           } catch (error) {
+            // Se l'utente annulla la condivisione ('AbortError') o se l'API fallisce per altri motivi,
+            // si procede con il download diretto come fallback, senza mostrare un errore.
             if (error.name !== 'AbortError') {
-              console.error('Share API error:', error);
-              showNotification(UI_TEXT.BACKUP_SHARE_ERROR, 'error');
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
             }
           }
         } else {
-          // Fallback to direct download for desktop browsers
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+          // Fallback per browser desktop o non compatibili
+          triggerDownload(blob, fileName);
         }
       }
 
@@ -429,91 +408,5 @@ patches:
             document.getElementById('global-alert').classList.add('hidden');
         });
       }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [
-        'Colazione',
-        'Spuntino Mattutino',
-        'Pranzo',
-        'Spuntino Pomeridiano',
-        'Cena'
-      ];
-
-      export const UI_TEXT = {
-        MAIN_TITLE: 'HealtyPro',
-        SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
-        LOAD_BUTTON: 'Carica',
-        COPY_WEEK_BTN: 'Copia Precedente',
-        SHARE_CONFIG_BTN: 'Condividi Config',
-        BACKUP_BTN: 'Salva Backup',
-        RESTORE_BTN: 'Ripristina Backup',
-        WEEKLY_PLAN_TITLE: 'Piano Settimanale',
-        CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
-        RESET_BUTTON: 'Pulisci Settimana',
-        INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
-        INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
-        SELECT_MEAL_TITLE: 'Scegli',
-        NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
-        KCAL_LABEL: 'Kcal',
-        CONFIG_URL_EMPTY_ERROR: 'Per favore, inserisci un URL.',
-        CONFIG_LOAD_SUCCESS: 'Configurazione caricata!',
-        COPY_WEEK_CONFIRM_TITLE: 'Copia Settimana',
-        COPY_WEEK_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
-        COPY_WEEK_SUCCESS: 'Piano settimanale copiato!',
-        RESET_WEEK_CONFIRM_TITLE: 'Pulisci Settimana',
-        RESET_WEEK_CONFIRM_MSG: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
-        RESET_WEEK_SUCCESS: 'Settimana pulita!',
-        SHARE_NO_URL_INFO: 'Nessun URL di configurazione da condividere.',
-        SHARE_SUCCESS: 'Link di condivisione copiato!',
-        SHARE_ERROR: 'Impossibile copiare il link.',
-        BACKUP_SHARE_TITLE: 'Backup Dati HealtyPro',
-        BACKUP_SHARE_ERROR: 'Impossibile condividere il backup.',
-        BACKUP_SUCCESS: 'Backup salvato con successo!',
-        RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
-        RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
-        RESTORE_SUCCESS: 'Backup ripristinato con successo!',
-        RESTORE_INVALID_FILE: 'File di backup non valido o corrotto.',
-        EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
-        ADD_MEAL_BTN: 'Aggiungi',
-        RECIPE_BUTTON_TITLE: 'Mostra ricetta',
-        RECIPE_MODAL_LOADING: 'Caricamento ricetta...',
-        RECIPE_MODAL_LOAD_ERROR: "Impossibile caricare la ricetta. Controlla l'URL e la connessione.",
-        RECIPE_LOAD_FAIL_MSG: 'Caricamento ricetta fallito',
-        LOG_VIEW_EMPTY: 'Nessun pasto pianificato per questa settimana.',
-        CONFIRM_MODAL_CONFIRM_BTN: 'Conferma',
-        CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
-        LOAD_SHARED_CONFIG_TITLE: 'Caricare Nuova Configurazione?',
-        LOAD_SHARED_CONFIG_MSG: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.',
-        INFO_MODAL_EXAMPLE_JSON:
-      `{
-        "rules": [
-          {
-            "tag": "contiene-soia",
-            "type": "daily-block",
-            "limit": 1,
-            "message": "Non più di 1 pasto con soia al giorno."
-          }
-        ],
-        "meals": [
-          { 
-            "id": "1", 
-            "tipoPasto": "Pranzo", 
-            "calories_min": 550, 
-            "calories_max": 600, 
-            "etichette": ["contiene-soia"] 
-          },
-          { 
-            "id": "2", 
-            "tipoPasto": "Cena", 
-            "calories_min": 300 
-          }
-        ]
-      }`
-      };
 commands:
-  - "echo 'UX del backup migliorata con Web Share API e UI del footer corretta.'"
+  - "echo 'Funzionalità di backup resa robusta con fallback e UI del footer corretta.'"

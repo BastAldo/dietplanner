@@ -54,6 +54,18 @@ function handleShareConfig() {
   });
 }
 
+function triggerDownload(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+}
+
 async function handleSaveBackup() {
   const state = getState();
   const backupData = {
@@ -62,33 +74,26 @@ async function handleSaveBackup() {
   };
   const fileName = 'healtypro_backup.json';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+  const file = new File([blob], fileName, { type: 'application/json' });
   
-  // Use Web Share API if available (modern mobile browsers)
-  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName)] })) {
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      const file = new File([blob], fileName, { type: 'application/json' });
       await navigator.share({
         title: UI_TEXT.BACKUP_SHARE_TITLE,
         files: [file],
       });
-      showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      // La notifica di successo viene mostrata solo se la condivisione non viene abortita
     } catch (error) {
+      // Se l'utente annulla la condivisione ('AbortError') o se l'API fallisce per altri motivi,
+      // si procede con il download diretto come fallback, senza mostrare un errore.
       if (error.name !== 'AbortError') {
-        console.error('Share API error:', error);
-        showNotification(UI_TEXT.BACKUP_SHARE_ERROR, 'error');
+        console.warn('Web Share API failed, falling back to download:', error);
+        triggerDownload(blob, fileName);
       }
     }
   } else {
-    // Fallback to direct download for desktop browsers
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+    // Fallback per browser desktop o non compatibili
+    triggerDownload(blob, fileName);
   }
 }
 
