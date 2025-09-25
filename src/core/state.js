@@ -32,6 +32,7 @@ export function setPlannerConfig(config) {
 export function setConfigUrl(url) {
   state.configUrl = url;
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+  notify();
 }
 
 export function saveStateToLocalStorage() {
@@ -42,7 +43,12 @@ export function loadStateFromLocalStorage() {
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   if (plan) {
-    state.weeklyPlan = JSON.parse(plan);
+    try {
+      state.weeklyPlan = JSON.parse(plan);
+    } catch (e) {
+      console.error("Error parsing weeklyPlan from localStorage", e);
+      state.weeklyPlan = {};
+    }
   }
   if (url) {
     state.configUrl = url;
@@ -51,7 +57,10 @@ export function loadStateFromLocalStorage() {
 
 export function updateWeeklyPlan(slotId, mealId) {
   if (mealId) {
-    state.weeklyPlan[slotId] = mealId;
+    const meal = state.masterMealList.find(m => m.id === mealId);
+    if (meal) {
+      state.weeklyPlan[slotId] = { ...meal }; // Store a full copy of the meal object
+    }
   } else {
     delete state.weeklyPlan[slotId];
   }
@@ -113,10 +122,10 @@ export function copyPreviousWeek() {
     MEAL_TYPES.forEach(mealType => {
       const sourceSlotId = `${sourceISO}-${mealType}`;
       const destSlotId = `${destISO}-${mealType}`;
-      const mealId = state.weeklyPlan[sourceSlotId];
+      const mealObject = state.weeklyPlan[sourceSlotId];
 
-      if (mealId) {
-        state.weeklyPlan[destSlotId] = mealId;
+      if (mealObject) {
+        state.weeklyPlan[destSlotId] = { ...mealObject }; // Store a copy
       } else {
         delete state.weeklyPlan[destSlotId];
       }

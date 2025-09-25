@@ -6,31 +6,18 @@ import { fetchAndParseConfig } from './api/configService.js';
 import { showNotification } from './ui/notifications.js';
 import { UI_TEXT } from './utils/constants.js';
 
-async function loadConfig(url, isFromUrl) {
-  if (!url) return;
-  const state = getState();
-  if (isFromUrl && url === state.configUrl) return;
-
-  const performLoad = async () => {
-    try {
-      const config = await fetchAndParseConfig(url);
-      setConfigUrl(url);
-      setPlannerConfig(config);
-      document.getElementById('config-url-input').value = url;
-      showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-    } catch (error) {
-      showNotification(error.message, 'error');
-    }
+async function loadConfig(url) {
+  if (!url) {
+    setPlannerConfig({}); // Clear master list if no URL
+    return;
   };
-
-  if (isFromUrl) {
-    showConfirmModal(
-      UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
-      UI_TEXT.LOAD_SHARED_CONFIG_MSG,
-      performLoad
-    );
-  } else {
-    await performLoad();
+  try {
+    const config = await fetchAndParseConfig(url);
+    setPlannerConfig(config);
+    showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+  } catch (error) {
+    showNotification(error.message, 'error');
+    setPlannerConfig({}); // Clear master list on error
   }
 }
 
@@ -44,27 +31,40 @@ function registerServiceWorker() {
   }
 }
 
-function init() {
+async function init() {
   document.addEventListener('stateChange', renderApp);
   
   loadStateFromLocalStorage();
-  const initialState = getState();
+  let initialState = getState();
   document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
 
   populateInitialText();
   initializeEventListeners();
+  renderApp(); // Initial render with local data
 
   const urlParams = new URLSearchParams(window.location.search);
   const configUrlFromParam = urlParams.get('configUrl');
 
   if (configUrlFromParam) {
     const decodedUrl = decodeURIComponent(configUrlFromParam);
-    loadConfig(decodedUrl, true);
+    initialState = getState(); // Get fresh state
+    if (decodedUrl !== initialState.configUrl) {
+      showConfirmModal(
+        UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+        UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+        () => {
+          setConfigUrl(decodedUrl);
+          loadConfig(decodedUrl);
+        },
+        'primary'
+      );
+    } else {
+      await loadConfig(initialState.configUrl);
+    }
   } else {
-    loadConfig(initialState.configUrl, false);
+    await loadConfig(initialState.configUrl);
   }
-
-  renderApp();
+  
   registerServiceWorker();
 }
 

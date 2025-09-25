@@ -59,20 +59,17 @@ function formatMealCalories(meal) {
   return `${minCals} - ${maxCals} ${kcalLabel}`;
 }
 
-function calculateDailyCalories(isoDate, state) {
+function calculateDailyCalories(isoDate, weeklyPlan) {
   let min = 0;
   let max = 0;
   MEAL_TYPES.forEach(type => {
     const slotId = `${isoDate}-${type}`;
-    const mealId = state.weeklyPlan[slotId];
-    if (mealId) {
-      const meal = state.masterMealList.find(m => m.id === mealId);
-      if (meal && meal.calories_min) {
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        min += minCals;
-        max += maxCals;
-      }
+    const meal = weeklyPlan[slotId]; // Meal is now the full object
+    if (meal && meal.calories_min) {
+      const minCals = Number(meal.calories_min) || 0;
+      const maxCals = Number(meal.calories_max) || minCals;
+      min += minCals;
+      max += maxCals;
     }
   });
   if (min === 0 && max === 0) return '';
@@ -81,7 +78,7 @@ function calculateDailyCalories(isoDate, state) {
 }
 
 function getRecipeButtonHTML(meal, state) {
-  if (state.recipeBaseUrl && meal.recipeId) {
+  if (state.recipeBaseUrl && meal && meal.recipeId) {
     return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
             </button>`;
@@ -91,6 +88,7 @@ function getRecipeButtonHTML(meal, state) {
 
 export async function showRecipeModal(meal) {
   const state = getState();
+  if (!meal) return;
   const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
   recipeModalTitle.textContent = meal.nomePasto;
   recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
@@ -164,8 +162,7 @@ export function openDayEditorModal(isoDate) {
   dayEditorTitle.textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
   dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
-    const mealId = state.weeklyPlan[slotId];
-    const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
+    const meal = state.weeklyPlan[slotId]; // Get the full meal object directly
     
     let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
     if (meal) {
@@ -195,7 +192,8 @@ export function openDayEditorModal(isoDate) {
       updateWeeklyPlan(btnRemove.dataset.slotId, null);
       openDayEditorModal(isoDate);
     } else if (btnRecipe) {
-      const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+      const mealId = btnRecipe.dataset.mealId;
+      const meal = Object.values(state.weeklyPlan).find(m => m && m.id === mealId) || state.masterMealList.find(m => m.id === mealId);
       if (meal) showRecipeModal(meal);
     }
   };
@@ -208,7 +206,7 @@ export function populateInitialText() {
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
   document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-  document.getElementById('share-config-btn').textContent = UI_TEXT.SHARE_CONFIG_BTN;
+  // The share button is now an icon, no text needed
   document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
   document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
   document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
@@ -221,7 +219,7 @@ function renderCalendarView(state, weekStart) {
     dayDate.setDate(dayDate.getDate() + i);
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
-    const dailyCalories = calculateDailyCalories(isoDate, state);
+    const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
     const dayCell = document.createElement('div');
     dayCell.className = 'day-cell';
     dayCell.dataset.date = isoDate;
@@ -236,9 +234,13 @@ function renderLogView(state, weekStart) {
     const dayDate = new Date(weekStart);
     dayDate.setDate(dayDate.getDate() + i);
     const isoDate = toISODateString(dayDate);
-    const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) })).filter(item => item.meal);
+    const dayMeals = MEAL_TYPES.map(type => {
+      const slotId = `${isoDate}-${type}`;
+      return { type, meal: state.weeklyPlan[slotId] };
+    }).filter(item => item.meal);
+    
     if (dayMeals.length > 0) {
-      const dailyCalories = calculateDailyCalories(isoDate, state);
+      const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
       const dayLog = document.createElement('div');
       dayLog.className = 'log-day';
       dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
@@ -265,7 +267,7 @@ function renderLogView(state, weekStart) {
 
 export function renderApp() {
   const state = getState();
-  if (state.masterMealList.length === 0) {
+  if (Object.keys(state.weeklyPlan).length === 0 && state.masterMealList.length === 0) {
       globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
       globalAlert.classList.remove('hidden');
   } else {

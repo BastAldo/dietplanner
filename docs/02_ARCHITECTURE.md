@@ -35,9 +35,10 @@ Il file JSON può contenere una chiave opzionale `recipeBaseUrl` al livello prin
 ```
 
 ## 5. Struttura Dati Chiave: `weeklyPlan`
-Per garantire che i piani alimentari siano univoci per ogni giorno specifico e non si ripetano tra le settimane, lo stato `weeklyPlan` utilizza una chiave composita basata sulla data.
+Il `weeklyPlan`, salvato nel `localStorage`, è la struttura dati che contiene i pasti pianificati dall'utente. Per garantire la massima resilienza dei dati, **non vengono salvati solo gli ID dei pasti, ma una copia completa dell'intero oggetto del pasto** al momento della pianificazione.
 * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
-* **Razionale:** Usare la data in formato ISO come prefisso garantisce che ogni voce sia legata a un giorno di calendario univoco, risolvendo il problema della persistenza dei dati durante la navigazione settimanale.
+* **Formato Valore:** `{ "id": "1", "nomePasto": "...", ... }` (Oggetto completo del pasto)
+* **Razionale:** Questo approccio di "denormalizzazione" rende il piano settimanale dell'utente auto-consistente e indipendente dal file `config.json` originale. Anche se la configurazione remota dovesse cambiare o diventare irraggiungibile, i pasti già pianificati rimarranno visibili e integri, prevenendo la perdita di dati.
 
 ## 6. Dipendenze di Terze Parti
 Per il rendering delle ricette da file Markdown, l'applicazione si affida a due librerie esterne caricate via CDN:
