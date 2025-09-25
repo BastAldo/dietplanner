@@ -17,8 +17,8 @@ L'applicazione include due componenti chiave per la funzionalità PWA:
 * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
 * **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline.
 
-## 4. Formato Dati: `planner-config.json`
-Il file JSON di configurazione dei pasti rimane invariato.
+## 4. Logica di Business (`src/core/calculations.js`)
+Le logiche di calcolo complesse, come il calcolo dell'età e del Metabolismo Basale (BMR) tramite la formula Mifflin-St Jeor, sono isolate in un modulo dedicato per mantenere il codice pulito e testabile.
 
 ## 5. Strutture Dati Chiave
 L'applicazione si basa su tre strutture dati principali salvate nel `localStorage`.
@@ -30,8 +30,7 @@ Un oggetto che contiene i dati anagrafici dell'utente.
   {
     "firstName": "Mario",
     "lastName": "Rossi",
-    "nickname": "SuperMario",
-    "age": 35,
+    "dateOfBirth": "1988-05-20",
     "height": 180,
     "gender": "male"
   }

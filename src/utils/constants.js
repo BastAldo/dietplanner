@@ -11,20 +11,20 @@ export const PROFILE_FIELDS = [
   { id: 'firstName', label: 'Nome', type: 'text' },
   { id: 'lastName', label: 'Cognome', type: 'text' },
   { id: 'nickname', label: 'Nickname', type: 'text' },
-  { id: 'age', label: 'Età', type: 'number', props: 'min="1"' },
+  { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
   { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-  { id: 'gender', label: 'Sesso', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
+  { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
 ];
 
 export const BIOMETRIC_FIELDS = [
   { id: 'date', label: 'Data', type: 'date', props: 'required' },
-  { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1"' },
+  { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
   { id: 'muscleMass', label: 'Massa Muscolare (kg)', type: 'number', props: 'step="0.1"' },
   { id: 'fatMass', label: 'Massa Grassa (kg)', type: 'number', props: 'step="0.1"' },
   { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
   { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
   { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
-  { id: 'basalMetabolism', label: 'Metabolismo Basale (kcal)', type: 'number', props: 'step="1"' },
+  { id: 'basalMetabolism', label: 'Metabolismo Basale (kcal)', type: 'number', props: 'step="1" readonly' },
   { id: 'notes', label: 'Note', type: 'textarea' }
 ];
 
@@ -69,6 +69,7 @@ export const UI_TEXT = {
   BIOMETRICS_DELETE_CONFIRM_TITLE: 'Elimina Misurazione',
   BIOMETRICS_DELETE_CONFIRM_MSG: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.',
   BIOMETRICS_DELETE_SUCCESS: 'Misurazione eliminata.',
+  BIOMETRICS_BMR_PLACEHOLDER: 'Completa il profilo per il calcolo',
   PROFILE_FORM_TITLE: 'Profilo Utente',
   PROFILE_SAVE_BTN: 'Salva Profilo',
   PROFILE_SAVE_SUCCESS: 'Profilo salvato con successo!',
