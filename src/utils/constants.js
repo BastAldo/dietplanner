@@ -2,15 +2,20 @@ export const DEFAULT_CONFIG_URL = '';
 export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
 export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
 export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
 export const WEEK_STARTS_ON_MONDAY = 1;
 export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-export const MEAL_TYPES = [
-  'Colazione',
-  'Spuntino Mattutino',
-  'Pranzo',
-  'Spuntino Pomeridiano',
-  'Cena'
+export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+
+export const PROFILE_FIELDS = [
+  { id: 'firstName', label: 'Nome', type: 'text' },
+  { id: 'lastName', label: 'Cognome', type: 'text' },
+  { id: 'nickname', label: 'Nickname', type: 'text' },
+  { id: 'age', label: 'Età', type: 'number', props: 'min="1"' },
+  { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
+  { id: 'gender', label: 'Sesso', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
 ];
+
 export const BIOMETRIC_FIELDS = [
   { id: 'date', label: 'Data', type: 'date', props: 'required' },
   { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1"' },
@@ -25,20 +30,15 @@ export const BIOMETRIC_FIELDS = [
 
 export const UI_TEXT = {
   MAIN_TITLE: 'HealtyPro',
-  SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
+  NAV_PLANNER: 'Planner',
+  NAV_PROGRESS: 'Progressi',
+  NAV_PROFILE: 'Profilo',
   LOAD_BUTTON: 'Carica',
-  COPY_WEEK_BTN: 'Copia Precedente',
-  SHARE_CONFIG_BTN: 'Condividi Config',
+  COPY_WEEK_BTN: 'Copia Settimana',
+  RESET_BUTTON: 'Pulisci Settimana',
   BACKUP_BTN: 'Salva Backup',
   RESTORE_BTN: 'Ripristina Backup',
-  WEEKLY_PLAN_TITLE: 'Piano Settimanale',
   CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
-  RESET_BUTTON: 'Pulisci Settimana',
-  INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
-  INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
-  SELECT_MEAL_TITLE: 'Scegli',
-  NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
-  KCAL_LABEL: 'Kcal',
   CONFIG_URL_EMPTY_ERROR: 'Per favore, inserisci un URL.',
   CONFIG_LOAD_SUCCESS: 'Configurazione caricata!',
   COPY_WEEK_CONFIRM_TITLE: 'Copia Settimana',
@@ -56,12 +56,6 @@ export const UI_TEXT = {
   RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
   RESTORE_SUCCESS: 'Backup ripristinato con successo!',
   RESTORE_INVALID_FILE: 'File di backup non valido o corrotto.',
-  EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
-  ADD_MEAL_BTN: 'Aggiungi',
-  RECIPE_BUTTON_TITLE: 'Mostra ricetta',
-  RECIPE_MODAL_LOADING: 'Caricamento ricetta...',
-  RECIPE_MODAL_LOAD_ERROR: "Impossibile caricare la ricetta. Controlla l'URL e la connessione.",
-  RECIPE_LOAD_FAIL_MSG: 'Caricamento ricetta fallito',
   LOG_VIEW_EMPTY: 'Nessun pasto pianificato per questa settimana.',
   CONFIRM_MODAL_CONFIRM_BTN: 'Conferma',
   CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
@@ -75,29 +69,19 @@ export const UI_TEXT = {
   BIOMETRICS_DELETE_CONFIRM_TITLE: 'Elimina Misurazione',
   BIOMETRICS_DELETE_CONFIRM_MSG: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.',
   BIOMETRICS_DELETE_SUCCESS: 'Misurazione eliminata.',
-  INFO_MODAL_EXAMPLE_JSON:
-`{
-  "rules": [
-    {
-      "tag": "contiene-soia",
-      "type": "daily-block",
-      "limit": 1,
-      "message": "Non più di 1 pasto con soia al giorno."
-    }
-  ],
-  "meals": [
-    { 
-      "id": "1", 
-      "tipoPasto": "Pranzo", 
-      "calories_min": 550, 
-      "calories_max": 600, 
-      "etichette": ["contiene-soia"] 
-    },
-    { 
-      "id": "2", 
-      "tipoPasto": "Cena", 
-      "calories_min": 300 
-    }
-  ]
-}`
+  PROFILE_FORM_TITLE: 'Profilo Utente',
+  PROFILE_SAVE_BTN: 'Salva Profilo',
+  PROFILE_SAVE_SUCCESS: 'Profilo salvato con successo!',
+  INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
+  INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
+  SELECT_MEAL_TITLE: 'Scegli',
+  NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
+  KCAL_LABEL: 'Kcal',
+  EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
+  ADD_MEAL_BTN: 'Aggiungi',
+  RECIPE_BUTTON_TITLE: 'Mostra ricetta',
+  RECIPE_MODAL_LOADING: 'Caricamento ricetta...',
+  RECIPE_MODAL_LOAD_ERROR: "Impossibile caricare la ricetta. Controlla l'URL e la connessione.",
+  RECIPE_LOAD_FAIL_MSG: 'Caricamento ricetta fallito',
+  INFO_MODAL_EXAMPLE_JSON: `{\n  "rules": [],\n  "meals": []\n}`
 };

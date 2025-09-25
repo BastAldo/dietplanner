@@ -24,3 +24,5 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
 * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
 * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare una tabella con lo storico di tutte le misurazioni biometriche che ho inserito, ordinate per data.
+* **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, cognome, età, altezza, sesso) in una pagina dedicata.
+* **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.

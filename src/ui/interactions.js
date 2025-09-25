@@ -1,4 +1,8 @@
-import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry, deleteBiometricEntry } from '../core/state.js';
+import {
+  resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+  copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
+  deleteBiometricEntry, saveUserProfile
+} from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
@@ -71,7 +75,8 @@ async function handleSaveBackup() {
   const backupData = {
     configUrl: state.configUrl,
     weeklyPlan: state.weeklyPlan,
-    biometricData: state.biometricData
+    biometricData: state.biometricData,
+    userProfile: state.userProfile
   };
   const fileName = 'healtypro_backup.txt';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
@@ -83,7 +88,6 @@ async function handleSaveBackup() {
         title: UI_TEXT.BACKUP_SHARE_TITLE,
         files: [file],
       });
-      // La notifica di successo viene mostrata solo se la condivisione non viene abortita
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.warn('Web Share API failed, falling back to download:', error);
@@ -91,7 +95,6 @@ async function handleSaveBackup() {
       }
     }
   } else {
-    // Fallback per browser desktop o non compatibili
     triggerDownload(blob, fileName);
   }
 }
@@ -103,13 +106,11 @@ function handleRestoreBackup() {
     fileInput.onchange = e => {
         const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = readerEvent => {
             try {
                 const content = readerEvent.target.result;
                 const backupData = JSON.parse(content);
-
                 if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
                     showConfirmModal(
                         UI_TEXT.RESTORE_CONFIRM_TITLE,
@@ -120,12 +121,8 @@ function handleRestoreBackup() {
                         },
                         'danger'
                     );
-                } else {
-                    throw new Error('Invalid structure');
-                }
-            } catch (err) {
-                showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error');
-            }
+                } else { throw new Error('Invalid structure'); }
+            } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
         };
         reader.readAsText(file);
     };
@@ -136,10 +133,7 @@ function handleCopyWeek() {
   showConfirmModal(
     UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
     UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-    () => {
-      copyPreviousWeek();
-      showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success');
-    },
+    () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); },
     'primary'
   );
 }
@@ -148,10 +142,7 @@ function handleResetWeek() {
   showConfirmModal(
     UI_TEXT.RESET_WEEK_CONFIRM_TITLE,
     UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-    () => {
-      resetCurrentWeek();
-      showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info');
-    },
+    () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); },
     'danger'
   );
 }
@@ -160,9 +151,7 @@ function handleBiometricsForm(e) {
   e.preventDefault();
   const formData = new FormData(e.target);
   const entry = {};
-  for (let [key, value] of formData.entries()) {
-    entry[key] = value;
-  }
+  for (let [key, value] of formData.entries()) { entry[key] = value; }
   addOrUpdateBiometricEntry(entry);
   showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
 }
@@ -173,14 +162,11 @@ function handleBiometricsTableClick(e) {
 
   if (btnEdit) {
       const date = btnEdit.dataset.date;
-      const state = getState();
-      const entry = state.biometricData.find(e => e.date === date);
+      const entry = getState().biometricData.find(e => e.date === date);
       if (entry) {
           const form = document.getElementById('biometrics-form');
           for (const key in entry) {
-              if (form.elements[key]) {
-                  form.elements[key].value = entry[key];
-              }
+              if (form.elements[key]) { form.elements[key].value = entry[key]; }
           }
           form.scrollIntoView({ behavior: 'smooth' });
       }
@@ -189,53 +175,64 @@ function handleBiometricsTableClick(e) {
       showConfirmModal(
           UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE,
           UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-          () => {
-              deleteBiometricEntry(date);
-              showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info');
-          },
+          () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); },
           'danger'
       );
   }
 }
 
+function handleProfileForm(e) {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const profile = {};
+  for (let [key, value] of formData.entries()) { profile[key] = value; }
+  saveUserProfile(profile);
+  showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
+}
+
 export function initializeEventListeners() {
-  document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+  // Global
   document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
   document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-  document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   
-  document.querySelectorAll('.modal-close-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const modalId = e.target.dataset.target;
-      if (modalId) {
-        document.getElementById(modalId).classList.add('modal-hidden');
-      }
-    });
-  });
+  // Navigation
+  document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+  document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+  document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
 
-  document.querySelectorAll('.modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        overlay.classList.add('modal-hidden');
-      }
-    });
-  });
-
+  // Planner Page
+  document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+  document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
   document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
   document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-  document.getElementById('biometrics-view').addEventListener('submit', handleBiometricsForm);
-  document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
   document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
   document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-
-  document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
-  document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-  document.getElementById('view-biometrics-btn').addEventListener('click', () => setView('biometrics'));
+  document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner')); // Sub-view
+  document.getElementById('view-log-btn').addEventListener('click', () => setView('log')); // Sub-view
   document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-  document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+  document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
 
+  // Progress Page
+  document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
+  document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
+
+  // Profile Page
+  document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
+
+  // Modals & Alerts
+  document.querySelectorAll('.modal-close-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const modalId = e.target.dataset.target;
+      if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+    });
+  });
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) { overlay.classList.add('modal-hidden'); }
+    });
+  });
   document.getElementById('global-alert-close').addEventListener('click', () => {
       document.getElementById('global-alert').classList.add('hidden');
   });

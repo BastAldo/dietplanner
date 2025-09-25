@@ -1,14 +1,15 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE } from '../utils/constants.js';
 
 let state = {
   rules: [],
   masterMealList: [],
   weeklyPlan: {},
   biometricData: [],
+  userProfile: {},
   configUrl: '',
   recipeBaseUrl: '',
   focusedDate: new Date(),
-  currentView: 'calendar', // 'calendar', 'log', or 'biometrics'
+  currentView: 'planner', // 'planner', 'progress', or 'profile'
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
@@ -39,40 +40,34 @@ export function setConfigUrl(url) {
 export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+  localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
 }
 
 export function loadStateFromLocalStorage() {
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+  const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
 
-  if (plan) {
-    try {
-      state.weeklyPlan = JSON.parse(plan);
-    } catch (e) {
-      console.error("Error parsing weeklyPlan from localStorage", e);
-      state.weeklyPlan = {};
-    }
-  }
-  if (url) {
-    state.configUrl = url;
-  }
-  if (biometrics) {
-    try {
-      state.biometricData = JSON.parse(biometrics);
-    } catch (e) {
-      console.error("Error parsing biometricData from localStorage", e);
-      state.biometricData = [];
-    }
-  }
+  if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+  if (url) { state.configUrl = url; }
+  if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+  if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
 }
 
 export function setAppState(backupData) {
   state.weeklyPlan = backupData.weeklyPlan || {};
   state.configUrl = backupData.configUrl || '';
   state.biometricData = backupData.biometricData || [];
+  state.userProfile = backupData.userProfile || {};
   saveStateToLocalStorage();
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+  notify();
+}
+
+export function saveUserProfile(profile) {
+  state.userProfile = profile;
+  saveStateToLocalStorage();
   notify();
 }
 
@@ -98,17 +93,11 @@ export function updateWeeklyPlan(slotId, mealId) {
   if (mealId) {
     const meal = state.masterMealList.find(m => m.id === mealId);
     if (meal) {
-      state.weeklyPlan[slotId] = { ...meal }; // Store a full copy of the meal object
+      state.weeklyPlan[slotId] = { ...meal };
     }
   } else {
     delete state.weeklyPlan[slotId];
   }
-  saveStateToLocalStorage();
-  notify();
-}
-
-export function resetEntirePlan() {
-  state.weeklyPlan = {};
   saveStateToLocalStorage();
   notify();
 }
@@ -138,7 +127,7 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
-  if (['calendar', 'log', 'biometrics'].includes(view)) {
+  if (['planner', 'progress', 'profile'].includes(view)) {
     state.currentView = view;
     notify();
   }
@@ -164,7 +153,7 @@ export function copyPreviousWeek() {
       const mealObject = state.weeklyPlan[sourceSlotId];
 
       if (mealObject) {
-        state.weeklyPlan[destSlotId] = { ...mealObject }; // Store a copy
+        state.weeklyPlan[destSlotId] = { ...mealObject };
       } else {
         delete state.weeklyPlan[destSlotId];
       }
