@@ -1,17 +1,36 @@
 import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
-import { renderApp, populateInitialText } from './ui/renderer.js';
+import { renderApp, populateInitialText, showConfirmModal } from './ui/renderer.js';
 import { initializeEventListeners } from './ui/interactions.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { fetchAndParseConfig } from './api/configService.js';
 import { showNotification } from './ui/notifications.js';
+import { UI_TEXT } from './utils/constants.js';
 
-async function loadInitialConfig(url) {
+async function loadConfig(url, isFromUrl) {
   if (!url) return;
-  try {
-    const config = await fetchAndParseConfig(url);
-    setPlannerConfig(config);
-  } catch (error) {
-    showNotification(error.message, 'error');
+  const state = getState();
+  if (isFromUrl && url === state.configUrl) return;
+
+  const performLoad = async () => {
+    try {
+      const config = await fetchAndParseConfig(url);
+      setConfigUrl(url);
+      setPlannerConfig(config);
+      document.getElementById('config-url-input').value = url;
+      showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+    } catch (error) {
+      showNotification(error.message, 'error');
+    }
+  };
+
+  if (isFromUrl) {
+    showConfirmModal(
+      UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+      UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+      performLoad
+    );
+  } else {
+    await performLoad();
   }
 }
 
@@ -26,26 +45,25 @@ function registerServiceWorker() {
 }
 
 function init() {
-  populateInitialText();
   document.addEventListener('stateChange', renderApp);
+  
+  loadStateFromLocalStorage();
+  const initialState = getState();
+  document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+
+  populateInitialText();
+  initializeEventListeners();
 
   const urlParams = new URLSearchParams(window.location.search);
   const configUrlFromParam = urlParams.get('configUrl');
 
   if (configUrlFromParam) {
     const decodedUrl = decodeURIComponent(configUrlFromParam);
-    setConfigUrl(decodedUrl);
-    loadInitialConfig(decodedUrl);
+    loadConfig(decodedUrl, true);
   } else {
-    loadStateFromLocalStorage();
-    const initialState = getState();
-    loadInitialConfig(initialState.configUrl || DEFAULT_CONFIG_URL);
+    loadConfig(initialState.configUrl, false);
   }
-  
-  const initialState = getState();
-  document.getElementById('config-url-input').value = initialState.configUrl;
 
-  initializeEventListeners();
   renderApp();
   registerServiceWorker();
 }

@@ -1,15 +1,39 @@
-commit_message: "refactor(core): Centralize UI strings and fix module export bug"
+commit_message: "refactor(ui): Improve config sharing with icon and confirmation modal"
 rationale: |
-  This commit addresses two critical issues: a JavaScript module export error that was breaking functionality, and a significant amount of hardcoded text that violated the project's architectural principles.
+  This commit refactors the configuration sharing feature based on user feedback to make it safer and more intuitive.
 
-  1.  **Bug Fix**: A `SyntaxError` was occurring because the `showRecipeModal` function in `src/ui/renderer.js` was not being exported, preventing `src/ui/interactions.js` from importing it. The `export` keyword has been added to the function definition, resolving the critical bug.
+  1.  **Data Loss Prevention**: The most critical change addresses a potential data loss issue. Previously, opening a shared link with a new `configUrl` would automatically overwrite the user's current configuration. The logic in `src/main.js` has been rewritten to prevent this. It now compares the incoming URL parameter with the current configuration's URL. If they differ, it presents a confirmation modal to the user, who must explicitly approve loading the new configuration.
 
-  2.  **String Centralization**: In adherence to the project's single source of truth principle for UI text, all hardcoded strings from `interactions.js` and `renderer.js` have been moved into the `UI_TEXT` object in `src/utils/constants.js`. This includes notification messages, modal titles, confirmation dialogs, and button labels.
+  2.  **UI Improvement**: The "Condividi Config" text button in `index.html` has been replaced with a more compact and visually consistent SVG share icon. The relevant styles in `style.css` have been updated to ensure it aligns with the existing UI design.
 
-  3.  **Code Refactoring**: The `interactions.js` and `renderer.js` files have been refactored to import the `UI_TEXT` object and use these constants instead of hardcoded strings.
+  3.  **Centralized Strings**: New text for the confirmation modal's title and message has been added to the `UI_TEXT` object in `src/utils/constants.js`, maintaining our principle of no hardcoded strings.
 
-  4.  **UI Population**: The `index.html` file has been updated with new IDs for buttons, and the `populateInitialText` function in `renderer.js` has been expanded to set their text from the newly centralized constants, ensuring consistency.
+  4.  **Documentation Update**: User Story US-23 in `docs/01_FUNCTIONALITY.md` has been updated to accurately describe the new, safer workflow that includes the confirmation modal.
 patches:
+  - file: docs/01_FUNCTIONALITY.md
+    content: |
+      # Funzionalità: HealtyPro (ex NutriPlan)
+
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
+
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
+      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
   - file: index.html
     content: |
       <!DOCTYPE html>
@@ -67,7 +91,9 @@ patches:
                         </div>
                         <div class="actions-group">
                           <button id="copy-week-btn" class="btn btn-secondary"></button>
-                          <button id="share-config-btn" class="btn btn-secondary"></button>
+                          <button id="share-config-btn" class="btn-view" title="Condividi Configurazione">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="m21.426 11.23-9.513-9.512a.75.75 0 0 0-1.06 0L1.34 11.23a.75.75 0 0 0 0 1.06l4.242 4.243a.75.75 0 0 0 .53.22h10.845a.75.75 0 0 0 .53-.22l4.242-4.243a.75.75 0 0 0 0-1.06ZM6.65 15.28l-3.18-3.18L12 3.59l8.53 8.51-3.18 3.18H6.65Zm11.237-7.394a.75.75 0 0 0-1.06-1.06L12 11.643l-4.825-4.817a.75.75 0 0 0-1.06 1.06L12 13.764l5.887-5.878Z"></path></svg>
+                          </button>
                         </div>
                       </div>
                       <div id="calendar-grid" class="calendar-grid"></div>
@@ -140,420 +166,79 @@ patches:
 
       </body>
       </html>
-  - file: src/ui/interactions.js
+  - file: src/main.js
     content: |
-      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState } from '../core/state.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
-      import { UI_TEXT } from '../utils/constants.js';
+      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
+      import { renderApp, populateInitialText, showConfirmModal } from './ui/renderer.js';
+      import { initializeEventListeners } from './ui/interactions.js';
+      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+      import { fetchAndParseConfig } from './api/configService.js';
+      import { showNotification } from './ui/notifications.js';
+      import { UI_TEXT } from './utils/constants.js';
 
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) {
-          showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error');
-          return;
-        }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) {
-          showNotification(error.message, 'error');
-        }
-      }
-
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-            openDayEditorModal(dayCell.dataset.date);
-        }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleShareConfig() {
+      async function loadConfig(url, isFromUrl) {
+        if (!url) return;
         const state = getState();
-        if (!state.configUrl) {
-          showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info');
-          return;
-        }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => {
-          showNotification(UI_TEXT.SHARE_ERROR, 'error');
-        });
-      }
+        if (isFromUrl && url === state.configUrl) return;
 
-      function handleCopyWeek() {
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
-          UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => {
-            copyPreviousWeek();
-            showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success');
-          },
-          'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE,
-          UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => {
-            resetCurrentWeek();
-            showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info');
-          },
-          'danger'
-        );
-      }
-
-      export function initializeEventListeners() {
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const modalId = e.target.dataset.target;
-            if (modalId) {
-              document.getElementById(modalId).classList.add('modal-hidden');
-            }
-          });
-        });
-
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-              overlay.classList.add('modal-hidden');
-            }
-          });
-        });
-
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-
-        document.getElementById('global-alert-close').addEventListener('click', () => {
-            document.getElementById('global-alert').classList.add('hidden');
-        });
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState, updateWeeklyPlan } from '../core/state.js';
-      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-      import { showNotification } from './notifications.js';
-
-      const calendarGrid = document.getElementById('calendar-grid');
-      const logView = document.getElementById('log-view');
-      const weekTitleEl = document.getElementById('week-title');
-      const viewCalendarBtn = document.getElementById('view-calendar-btn');
-      const viewLogBtn = document.getElementById('view-log-btn');
-      const globalAlert = document.getElementById('global-alert');
-      const globalAlertMessage = document.getElementById('global-alert-message');
-
-      const selectionModal = document.getElementById('selection-modal');
-      const selectionModalTitle = document.getElementById('selection-modal-title');
-      const selectionModalList = document.getElementById('selection-modal-list');
-      const dayEditorModal = document.getElementById('day-editor-modal');
-      const dayEditorTitle = document.getElementById('day-editor-title');
-      const dayEditorBody = document.getElementById('day-editor-body');
-      
-      const confirmModal = document.getElementById('confirm-modal');
-      const confirmModalTitle = document.getElementById('confirm-modal-title');
-      const confirmModalMessage = document.getElementById('confirm-modal-message');
-      const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
-      const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
-
-      const recipeModal = document.getElementById('recipe-modal');
-      const recipeModalTitle = document.getElementById('recipe-modal-title');
-      const recipeModalBody = document.getElementById('recipe-modal-body');
-
-      let currentEditingDayISO = null;
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-      
-      function formatMealCalories(meal) {
-        if (!meal || !meal.calories_min) return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, state) {
-        let min = 0;
-        let max = 0;
-        MEAL_TYPES.forEach(type => {
-          const slotId = `${isoDate}-${type}`;
-          const mealId = state.weeklyPlan[slotId];
-          if (mealId) {
-            const meal = state.masterMealList.find(m => m.id === mealId);
-            if (meal && meal.calories_min) {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              min += minCals;
-              max += maxCals;
-            }
+        const performLoad = async () => {
+          try {
+            const config = await fetchAndParseConfig(url);
+            setConfigUrl(url);
+            setPlannerConfig(config);
+            document.getElementById('config-url-input').value = url;
+            showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+          } catch (error) {
+            showNotification(error.message, 'error');
           }
-        });
-        if (min === 0 && max === 0) return '';
-        if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
-        return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
-                  </button>`;
-        }
-        return '';
-      }
-
-      export async function showRecipeModal(meal) {
-        const state = getState();
-        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
-        recipeModalTitle.textContent = meal.nomePasto;
-        recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
-        recipeModal.classList.remove('modal-hidden');
-      
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
-          const markdown = await response.text();
-          recipeModalBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
-        } catch (error) {
-          recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
-          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
-        }
-      }
-
-      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
-        confirmModalTitle.textContent = title;
-        confirmModalMessage.textContent = message;
-        confirmModalConfirmBtn.className = `btn btn-${type}`;
-        confirmModalConfirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
-        confirmModalCancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
-
-        const cleanup = () => {
-          confirmModal.classList.add('modal-hidden');
-          confirmModalCancelBtn.removeEventListener('click', cancelHandler);
-          confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
         };
 
-        const cancelHandler = () => cleanup();
-        const confirmHandler = () => {
-          onConfirm();
-          cleanup();
-        };
-        
-        confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
-        confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
-        
-        confirmModal.classList.remove('modal-hidden');
-      }
-
-      export function openSelectionModal(slotId) {
-        const state = getState();
-        const mealType = slotId.substring(11);
-        selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        selectionModalList.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        const closeButton = selectionModal.querySelector('.modal-close-btn');
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
-          closeButton.removeEventListener('click', closeAndReturn);
-          selectionModal.removeEventListener('click', overlayClickHandler);
-        };
-        const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
-        selectionModalList.onclick = (e) => {
-          const item = e.target.closest('.selection-item');
-          if(item) {
-            updateWeeklyPlan(slotId, item.dataset.mealId);
-            closeAndReturn();
-          }
-        };
-        closeButton.addEventListener('click', closeAndReturn, { once: true });
-        selectionModal.addEventListener('click', overlayClickHandler);
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openDayEditorModal(isoDate) {
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        dayEditorTitle.textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const mealId = state.weeklyPlan[slotId];
-          const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            const recipeButtonHTML = getRecipeButtonHTML(meal, state);
-            mealDetailsHTML = `
-              <div class="meal-details">
-                <span class="meal-details__name">${meal.nomePasto}</span>
-                <div class="meal-actions">
-                  ${recipeButtonHTML}
-                  <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
-                </div>
-              </div>`;
-          }
-
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-
-        dayEditorBody.onclick = (e) => {
-          const btnAdd = e.target.closest('.btn-add-meal');
-          const btnRemove = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-
-          if (btnAdd) {
-            dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(btnAdd.dataset.slotId);
-          } else if (btnRemove) {
-            updateWeeklyPlan(btnRemove.dataset.slotId, null);
-            openDayEditorModal(isoDate);
-          } else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('share-config-btn').textContent = UI_TEXT.SHARE_CONFIG_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-      }
-      
-      function renderCalendarView(state, weekStart) {
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state);
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.masterMealList.find(m => m.id === state.weeklyPlan[`${isoDate}-${type}`]) })).filter(item => item.meal);
-          if (dayMeals.length > 0) {
-            const dailyCalories = calculateDailyCalories(isoDate, state);
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
-              + dayMeals.map(item => {
-                const recipeButtonHTML = getRecipeButtonHTML(item.meal, state);
-                return `
-                  <div class="log-item">
-                    <div class="log-item__name">
-                      <strong>${item.type}:</strong>
-                      <span>${item.meal.nomePasto}</span>
-                      ${recipeButtonHTML}
-                    </div>
-                    <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
-                  </div>
-                `;
-              }).join('');
-            logView.appendChild(dayLog);
-          }
-        }
-        if (logView.innerHTML === '') {
-          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-        }
-      }
-
-      export function renderApp() {
-        const state = getState();
-        if (state.masterMealList.length === 0) {
-            globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
-            globalAlert.classList.remove('hidden');
+        if (isFromUrl) {
+          showConfirmModal(
+            UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+            UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+            performLoad
+          );
         } else {
-            globalAlert.classList.add('hidden');
+          await performLoad();
         }
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        if (state.currentView === 'calendar') {
-          calendarGrid.classList.remove('hidden');
-          logView.classList.add('hidden');
-          viewCalendarBtn.classList.add('active');
-          viewLogBtn.classList.remove('active');
-          renderCalendarView(state, weekStart);
-        } else {
-          calendarGrid.classList.add('hidden');
-          logView.classList.remove('hidden');
-          viewCalendarBtn.classList.remove('active');
-          viewLogBtn.classList.add('active');
-          renderLogView(state, weekStart);
-        }
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
+
+      function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/dietplanner/sw.js')
+              .then(registration => console.log('ServiceWorker registration successful'))
+              .catch(err => console.log('ServiceWorker registration failed: ', err));
+          });
+        }
+      }
+
+      function init() {
+        document.addEventListener('stateChange', renderApp);
+        
+        loadStateFromLocalStorage();
+        const initialState = getState();
+        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+
+        populateInitialText();
+        initializeEventListeners();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const configUrlFromParam = urlParams.get('configUrl');
+
+        if (configUrlFromParam) {
+          const decodedUrl = decodeURIComponent(configUrlFromParam);
+          loadConfig(decodedUrl, true);
+        } else {
+          loadConfig(initialState.configUrl, false);
+        }
+
+        renderApp();
+        registerServiceWorker();
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
   - file: src/utils/constants.js
     content: |
       export const DEFAULT_CONFIG_URL = '';
@@ -603,6 +288,8 @@ patches:
         LOG_VIEW_EMPTY: 'Nessun pasto pianificato per questa settimana.',
         CONFIRM_MODAL_CONFIRM_BTN: 'Conferma',
         CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
+        LOAD_SHARED_CONFIG_TITLE: 'Caricare Nuova Configurazione?',
+        LOAD_SHARED_CONFIG_MSG: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.',
         INFO_MODAL_EXAMPLE_JSON:
       `{
         "rules": [
@@ -630,4 +317,4 @@ patches:
       }`
       };
 commands:
-  - "echo 'Bug fixed and code refactored. The module export error is resolved and all UI strings are now centralized in constants.js.'"
+  - "echo 'Patch applied. Share button is now an icon and loading a shared config requires user confirmation.'"

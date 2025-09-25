@@ -19,4 +19,4 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
 * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
 * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
-* **US-23 (Condivisione Configurazione):** Come utente, voglio poter generare un link univoco che contenga l'URL della mia configurazione `config.json` per condividerla facilmente con altri.
+* **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.

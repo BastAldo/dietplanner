@@ -45,6 +45,8 @@ export const UI_TEXT = {
   LOG_VIEW_EMPTY: 'Nessun pasto pianificato per questa settimana.',
   CONFIRM_MODAL_CONFIRM_BTN: 'Conferma',
   CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
+  LOAD_SHARED_CONFIG_TITLE: 'Caricare Nuova Configurazione?',
+  LOAD_SHARED_CONFIG_MSG: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.',
   INFO_MODAL_EXAMPLE_JSON:
 `{
   "rules": [
