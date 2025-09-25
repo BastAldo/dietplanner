@@ -69,4 +69,4 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-console.log("aldo aldo")
+//console.log("TEST")
