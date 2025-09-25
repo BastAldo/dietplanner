@@ -54,6 +54,24 @@ function handleShareConfig() {
   });
 }
 
+function handleSaveBackup() {
+  const state = getState();
+  const backupData = {
+    configUrl: state.configUrl,
+    weeklyPlan: state.weeklyPlan
+  };
+  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'nutriplan_backup.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+}
+
 function handleCopyWeek() {
   showConfirmModal(
     UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
@@ -80,6 +98,7 @@ function handleResetWeek() {
 
 export function initializeEventListeners() {
   document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+  document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   
