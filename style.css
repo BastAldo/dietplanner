@@ -99,7 +99,10 @@ body {
 /* --- PLANNER PAGE --- */
 .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-.calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+.planner-controls-wrapper {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+}
 .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
 .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
 .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
@@ -141,6 +144,7 @@ body {
     color: var(--text-color);
 }
 .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
+.form-group input[readonly] { background-color: #222; color: var(--text-color-muted); }
 .form-group textarea { min-height: 80px; resize: vertical; }
 .form-group fieldset { border: 1px solid var(--border-color); padding: 0.75rem; }
 .form-group fieldset legend { padding: 0 0.5rem; color: var(--text-color-muted); font-size: 0.9rem; }
@@ -148,7 +152,7 @@ body {
 .form-group fieldset input { margin-right: 0.5rem; }
 .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
 .table-container { overflow-x: auto; }
-#biometrics-table { width: 100%; border-collapse: collapse; margin-top: 1rem; background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
+#biometrics-table { width: 100%; border-collapse: collapse; margin-top: 2rem; background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
 #biometrics-table th, #biometrics-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
 #biometrics-table thead th { background-color: var(--bg-color); font-size: 0.85rem; text-transform: uppercase; color: var(--text-color-muted); }
 #biometrics-table tbody tr:last-child td { border-bottom: none; }

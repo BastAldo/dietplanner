@@ -1,4 +1,5 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
+import { calculateBMR } from '../core/calculations.js';
 import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../utils/constants.js';
 import { showNotification } from './notifications.js';
 
@@ -239,6 +240,17 @@ function renderBiometricsPage(state) {
   form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
   tableHead.innerHTML = `<tr>${BIOMETRIC_FIELDS.map(f => `<th>${f.label}</th>`).join('')}<th>Azioni</th></tr>`;
   tableBody.innerHTML = state.biometricData.map(entry => `<tr data-date="${entry.date}">${BIOMETRIC_FIELDS.map(field => `<td>${entry[field.id] || ''}</td>`).join('')}<td class="biometrics-actions"><button class="btn-edit-biometrics" data-date="${entry.date}" title="Modifica">✏️</button><button class="btn-delete-biometrics" data-date="${entry.date}" title="Elimina">🗑️</button></td></tr>`).join('');
+  
+  const weightInput = form.elements.weight;
+  const bmrInput = form.elements.basalMetabolism;
+  const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+  
+  const bmr = calculateBMR(state.userProfile, weightForCalc);
+  if (bmr !== null) {
+    bmrInput.value = bmr;
+  } else {
+    bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+  }
 }
 
 function renderProfilePage(state) {

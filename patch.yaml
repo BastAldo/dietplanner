@@ -1,437 +1,653 @@
-commit_message: "feat: Implementa calcolo automatico BMR e Data di Nascita (Fase 2)"
+commit_message: "fix: Corregge calcolo BMR al caricamento e layout del planner"
 rationale: |
-  In linea con il piano approvato, questa patch completa la Fase 2, introducendo il calcolo automatico del metabolismo basale (BMR) e migliorando la robustezza del profilo utente.
+  In risposta al preciso feedback dell'utente, questa patch corregge due importanti dettagli nell'implementazione precedente, migliorando sia la robustezza logica che l'usabilità dell'interfaccia.
 
-  1.  **Profilo Utente Migliorato**: Il campo "Età" è stato sostituito con "Data di Nascita". Questo garantisce che l'età dell'utente sia sempre calcolata in modo accurato e non richieda aggiornamenti manuali. La modifica è stata applicata alla documentazione, alle costanti UI e alla logica di rendering.
+  1.  **Calcolo BMR Robusto**: La logica di calcolo del Metabolismo Basale è stata resa più robusta. In `src/ui/renderer.js`, la funzione `renderBiometricsPage` ora calcola e visualizza il BMR non solo in risposta all'input manuale, ma anche al momento del caricamento della pagina. Questo assicura che il valore sia sempre presente e aggiornato se i dati del profilo e almeno una misurazione del peso esistono, risolvendo l'inconsistenza logica segnalata.
 
-  2.  **Logica di Calcolo Centralizzata**: È stato creato un nuovo modulo `src/core/calculations.js` per ospitare la logica di business. Questo file contiene le funzioni pure per calcolare l'età dalla data di nascita e per calcolare il BMR utilizzando la formula Mifflin-St Jeor, mantenendo il codice pulito e testabile come da principi architetturali.
-
-  3.  **Calcolo BMR Automatico e Reattivo**: La funzionalità è stata integrata direttamente nell'interfaccia utente della pagina "Progressi".
-      - Il campo del metabolismo basale nel form biometrico è ora in sola lettura (`readonly`).
-      - Un nuovo event listener in `src/ui/interactions.js` monitora il campo del peso in tempo reale. Ad ogni modifica, il BMR viene ricalcolato istantaneamente utilizzando i dati del profilo e il peso corrente, fornendo un feedback immediato all'utente.
-      - L'interfaccia gestisce elegantemente i casi in cui i dati del profilo sono incompleti, mostrando un messaggio indicativo nel campo BMR.
-
-  4.  **Aggiornamento Documentazione**: La documentazione è stata allineata con una nuova User Story (US-31) per il calcolo automatico del BMR e con l'aggiornamento della struttura dati del profilo.
+  2.  **Riorganizzazione UI del Planner**: Il layout della pagina "Planner" è stato rifinito per una migliore usabilità. Come richiesto, lo switcher per la vista "Calendario/Registro" è stato spostato dalla barra dei controlli generica e riposizionato direttamente sopra la griglia del calendario in `index.html`. Questa modifica, supportata da aggiustamenti in `style.css`, colloca il controllo in una posizione più contestuale e intuitiva per l'utente.
 patches:
-  - file: docs/01_FUNCTIONALITY.md
+  - file: index.html
     content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="style.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
 
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav"></button>
+                      <button id="nav-progress" class="btn-nav"></button>
+                      <button id="nav-profile" class="btn-nav"></button>
+                  </nav>
+              </div>
+          </header>
 
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+          <main id="app-container">
+              <div id="global-alert" class="global-alert hidden">
+                  <p id="global-alert-message"></p>
+                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
+              </div>
 
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
-      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
-      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
-      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
-      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
-      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
-      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
-      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare una tabella con lo storico di tutte le misurazioni biometriche che ho inserito, ordinate per data.
-      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
-      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
-      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
-  - file: docs/02_ARCHITECTURE.md
+              <div id="planner-page" class="page-view">
+                  <section class="data-source-container">
+                      <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+                      <button id="load-config-btn" class="btn btn-primary"></button>
+                      <button id="share-config-btn" class="btn-view" title="Condividi Configurazione">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"></path></svg>
+                      </button>
+                      <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
+                  </section>
+                  <section class="view-container">
+                      <header class="calendar-header">
+                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
+                          <h2 id="week-title"></h2>
+                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
+                      </header>
+                       <div class="planner-controls-wrapper">
+                          <div class="view-switcher">
+                              <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario"></button>
+                              <button id="view-log-btn" class="btn-view" title="Vista Registro"></button>
+                          </div>
+                          <div class="planner-actions">
+                            <button id="copy-week-btn" class="btn btn-secondary"></button>
+                            <button id="reset-btn" class="btn btn-secondary"></button>
+                          </div>
+                      </div>
+                      <div id="calendar-grid" class="calendar-grid"></div>
+                      <div id="log-view" class="log-view hidden"></div>
+                  </section>
+              </div>
+
+              <div id="progress-page" class="page-view hidden">
+                  <div id="biometrics-view" class="biometrics-view">
+                      <h3 id="biometrics-title"></h3>
+                      <form id="biometrics-form" class="biometrics-form"></form>
+                      <h3 id="biometrics-history-title"></h3>
+                      <div class="table-container">
+                          <table id="biometrics-table">
+                              <thead></thead>
+                              <tbody></tbody>
+                          </table>
+                      </div>
+                  </div>
+              </div>
+
+              <div id="profile-page" class="page-view hidden">
+                  <h3 id="profile-title"></h3>
+                  <form id="profile-form" class="profile-form"></form>
+              </div>
+          </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="info-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="info-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
+                  </div>
+                  <div class="modal-body">
+                      <p id="info-modal-desc"></p>
+                      <pre><code id="info-modal-json-example"></code></pre>
+                  </div>
+              </div>
+          </div>
+          <div id="selection-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="selection-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
+                  </div>
+                  <div id="selection-modal-list" class="modal-body selection-list"></div>
+              </div>
+          </div>
+          <div id="day-editor-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="day-editor-title"></h3>
+                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
+                </div>
+                <div id="day-editor-body" class="modal-body day-editor-list"></div>
+            </div>
+          </div>
+          <div id="confirm-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="confirm-modal-title"></h3>
+                </div>
+                <div class="modal-body">
+                  <p id="confirm-modal-message"></p>
+                </div>
+                <div class="modal-footer">
+                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+                  <button id="confirm-modal-confirm-btn" class="btn"></button>
+                </div>
+            </div>
+          </div>
+          <div id="recipe-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="recipe-modal-title"></h3>
+                  <button class="modal-close-btn" data-target="recipe-modal">&times;</button>
+                </div>
+                <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+            </div>
+          </div>
+      </body>
+      </html>
+  - file: src/ui/renderer.js
     content: |
-      # Architettura: HealtyPro (ex NutriPlan)
-
-      ## 1. Principi Guida
-      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è stata ridisegnata per essere essenziale e intuitiva. La base di codice sottostante rimane semplice e basata su Vanilla JS.
-      * **Data-Driven:** La logica di business (regole, pasti) è definita nel file JSON di configurazione.
-      * **Maintainability (SRP):** I testi dell'interfaccia (stringhe) sono centralizzati e ogni file ha una sola responsabilità.
-
-      ## 2. Architettura SPA Multi-Vista
-      L'applicazione è una **Single Page Application (SPA)** strutturata in viste che emulano pagine separate per una migliore organizzazione. Un singolo file `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce la visualizzazione della vista attiva in base allo stato `currentView`. Le viste principali sono:
-      * **Planner**: Contiene la gestione della configurazione, il calendario e il registro dei pasti.
-      * **Progressi**: Dedicata all'inserimento e alla visualizzazione dei dati biometrici.
-      * **Profilo**: Permette all'utente di inserire i propri dati anagrafici.
-
-      ## 3. Architettura PWA
-      L'applicazione include due componenti chiave per la funzionalità PWA:
-      * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
-      * **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline.
-
-      ## 4. Logica di Business (`src/core/calculations.js`)
-      Le logiche di calcolo complesse, come il calcolo dell'età e del Metabolismo Basale (BMR) tramite la formula Mifflin-St Jeor, sono isolate in un modulo dedicato per mantenere il codice pulito e testabile.
-
-      ## 5. Strutture Dati Chiave
-      L'applicazione si basa su tre strutture dati principali salvate nel `localStorage`.
-
-      ### 5.1. `userProfile`
-      Un oggetto che contiene i dati anagrafici dell'utente.
-      * **Esempio Oggetto:**
-        ```json
-        {
-          "firstName": "Mario",
-          "lastName": "Rossi",
-          "dateOfBirth": "1988-05-20",
-          "height": 180,
-          "gender": "male"
-        }
-        ```
-
-      ### 5.2. `weeklyPlan`
-      Questa struttura contiene i pasti pianificati dall'utente. Viene salvata una copia completa dell'oggetto pasto per garantire la resilienza dei dati.
-
-      ### 5.3. `biometricData`
-      Un array che contiene lo storico delle misurazioni biometriche dell'utente.
-
-      ## 6. Dipendenze di Terze Parti
-      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette da Markdown.
-  - file: src/core/calculations.js
-    content: |
-      export function calculateAge(dateString) {
-        if (!dateString) return null;
-        const birthDate = new Date(dateString);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        return age;
-      }
-
-      export function calculateBMR(userProfile, weight) {
-        if (!userProfile || !weight || !userProfile.dateOfBirth || !userProfile.height || !userProfile.gender) {
-          return null;
-        }
-
-        const age = calculateAge(userProfile.dateOfBirth);
-        const height = parseFloat(userProfile.height);
-        const weightFloat = parseFloat(weight);
-
-        if (isNaN(age) || isNaN(height) || isNaN(weightFloat)) return null;
-
-        let bmr;
-        // Formula Mifflin-St Jeor: P = 10m + 6.25h - 5a + s
-        // m = peso in kg, h = altezza in cm, a = età in anni, s è +5 per uomini e -161 per donne.
-        if (userProfile.gender === 'male') {
-          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) + 5;
-        } else if (userProfile.gender === 'female') {
-          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) - 161;
-        } else {
-          return null; // Gender not specified or invalid
-        }
-
-        return Math.round(bmr);
-      }
-  - file: src/ui/interactions.js
-    content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
-        deleteBiometricEntry, saveUserProfile
-      } from '../core/state.js';
+      import { getState, updateWeeklyPlan } from '../core/state.js';
       import { calculateBMR } from '../core/calculations.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
+      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../utils/constants.js';
       import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
-      import { UI_TEXT } from '../utils/constants.js';
 
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
-      }
+      // Page containers
+      const plannerPage = document.getElementById('planner-page');
+      const progressPage = document.getElementById('progress-page');
+      const profilePage = document.getElementById('profile-page');
 
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) { showRecipeModal(meal); }
-        }
-      }
-
-      function handleShareConfig() {
-        const state = getState();
-        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
-      }
-
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
-      }
-
-      async function handleSaveBackup() {
-        const state = getState();
-        const backupData = {
-          configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile
-        };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
-            }
-          }
-        } else { triggerDownload(blob, fileName); }
-      }
-
-      function handleRestoreBackup() {
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                          showConfirmModal(
-                              UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              UI_TEXT.RESTORE_CONFIRM_MSG,
-                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              'danger'
-                          );
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
-      }
-
-      function handleCopyWeek() {
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
+      // Planner elements
+      const calendarGrid = document.getElementById('calendar-grid');
+      const logView = document.getElementById('log-view');
+      const weekTitleEl = document.getElementById('week-title');
+      const viewCalendarBtn = document.getElementById('view-calendar-btn');
+      const viewLogBtn = document.getElementById('view-log-btn');
       
-      function handleBiometricsForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const entry = {};
-        for (let [key, value] of formData.entries()) { entry[key] = value; }
-        addOrUpdateBiometricEntry(entry);
-        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+      // Biometrics elements
+      const biometricsView = document.getElementById('biometrics-view');
+
+      // Global elements
+      const globalAlert = document.getElementById('global-alert');
+      const globalAlertMessage = document.getElementById('global-alert-message');
+      const navPlannerBtn = document.getElementById('nav-planner');
+      const navProgressBtn = document.getElementById('nav-progress');
+      const navProfileBtn = document.getElementById('nav-profile');
+
+      // Modals
+      const selectionModal = document.getElementById('selection-modal');
+      const dayEditorModal = document.getElementById('day-editor-modal');
+      const confirmModal = document.getElementById('confirm-modal');
+      const recipeModal = document.getElementById('recipe-modal');
+      
+      let currentEditingDayISO = null;
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
       }
 
-      function handleBiometricsTableClick(e) {
-        const btnEdit = e.target.closest('.btn-edit-biometrics');
-        const btnDelete = e.target.closest('.btn-delete-biometrics');
-        if (btnEdit) {
-            const date = btnEdit.dataset.date;
-            const entry = getState().biometricData.find(e => e.date === date);
-            if (entry) {
-                const form = document.getElementById('biometrics-form');
-                for (const key in entry) {
-                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
-                }
-                form.scrollIntoView({ behavior: 'smooth' });
-            }
-        } else if (btnDelete) {
-            const date = btnDelete.dataset.date;
-            showConfirmModal(
-                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-            );
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || !meal.calories_min) return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0, max = 0;
+        MEAL_TYPES.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
+          if (meal && meal.calories_min) {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+                  </button>`;
+        }
+        return '';
+      }
+
+      export async function showRecipeModal(meal) {
+        if (!meal) return;
+        const state = getState();
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
+        const body = recipeModal.querySelector('#recipe-modal-body');
+        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
+        } catch (error) {
+          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
         }
       }
 
-      function handleProfileForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const profile = {};
-        for (let [key, value] of formData.entries()) { profile[key] = value; }
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
+        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
+        confirmBtn.className = `btn btn-${type}`;
+        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          cancelBtn.removeEventListener('click', cancelHandler);
+          confirmBtn.removeEventListener('click', confirmHandler);
+        };
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        cancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModal.classList.remove('modal-hidden');
       }
 
-      function handleWeightInputChange(e) {
-        const weight = e.target.value;
-        const { userProfile } = getState();
-        const bmrField = document.getElementById('bio-basalMetabolism');
-        const bmr = calculateBMR(userProfile, weight);
-        if (bmr !== null) {
-          bmrField.value = bmr;
-        } else {
-          bmrField.value = '';
-          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const mealType = slotId.substring(11);
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+        };
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
+        };
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
+        body.innerHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const meal = state.weeklyPlan[slotId];
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button></div></div>`;
+          }
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+        body.onclick = e => {
+          const btnAdd = e.target.closest('.btn-add-meal');
+          const btnRemove = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
+          else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = Object.values(state.weeklyPlan).find(m => m && m.id === btnRecipe.dataset.mealId) || state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.getElementById('nav-planner').textContent = UI_TEXT.NAV_PLANNER;
+        document.getElementById('nav-progress').textContent = UI_TEXT.NAV_PROGRESS;
+        document.getElementById('nav-profile').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+      }
+
+      function renderPlannerPage(state) {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+        renderCalendarView(state, weekStart);
+        renderLogView(state, weekStart);
+      }
+
+      function renderCalendarView(state, weekStart) {
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
+          calendarGrid.appendChild(dayCell);
         }
       }
 
-      export function initializeEventListeners() {
-        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
-        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
-        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
-        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-        document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
-        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
+      function renderLogView(state, weekStart) {
+        logView.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+          if (dayMeals.length > 0) {
+            const dayLog = document.createElement('div');
+            dayLog.className = 'log-day';
+            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
+              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+            logView.appendChild(dayLog);
+          }
+        }
+        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+      }
+
+      function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const tableBody = document.querySelector('#biometrics-table tbody');
+        const tableHead = document.querySelector('#biometrics-table thead');
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+        tableHead.innerHTML = `<tr>${BIOMETRIC_FIELDS.map(f => `<th>${f.label}</th>`).join('')}<th>Azioni</th></tr>`;
+        tableBody.innerHTML = state.biometricData.map(entry => `<tr data-date="${entry.date}">${BIOMETRIC_FIELDS.map(field => `<td>${entry[field.id] || ''}</td>`).join('')}<td class="biometrics-actions"><button class="btn-edit-biometrics" data-date="${entry.date}" title="Modifica">✏️</button><button class="btn-delete-biometrics" data-date="${entry.date}" title="Elimina">🗑️</button></td></tr>`).join('');
         
-        // Listener per il calcolo BMR in tempo reale
-        document.getElementById('progress-page').addEventListener('input', e => {
-          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
-        });
-
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const modalId = e.target.dataset.target;
-            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
-          });
-        });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
-        });
-        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+        
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
       }
-  - file: src/utils/constants.js
+
+      function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderApp() {
+        const state = getState();
+        [plannerPage, progressPage, profilePage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: style.css
     content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
-      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
 
-      export const PROFILE_FIELDS = [
-        { id: 'firstName', label: 'Nome', type: 'text' },
-        { id: 'lastName', label: 'Cognome', type: 'text' },
-        { id: 'nickname', label: 'Nickname', type: 'text' },
-        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
-        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
-      ];
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed; top: 80px; right: 1rem; z-index: 2000;
+        display: flex; flex-direction: column; gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
+        border-radius: 8px; border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
+        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
+      }
+      .toast.show { opacity: 1; transform: translateX(0); }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
 
-      export const BIOMETRIC_FIELDS = [
-        { id: 'date', label: 'Data', type: 'date', props: 'required' },
-        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
-        { id: 'muscleMass', label: 'Massa Muscolare (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatMass', label: 'Massa Grassa (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
-        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
-        { id: 'basalMetabolism', label: 'Metabolismo Basale (kcal)', type: 'number', props: 'step="1" readonly' },
-        { id: 'notes', label: 'Note', type: 'textarea' }
-      ];
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
+      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+      .alert-close-btn:hover { color: var(--text-color); }
 
-      export const UI_TEXT = {
-        MAIN_TITLE: 'HealtyPro',
-        NAV_PLANNER: 'Planner',
-        NAV_PROGRESS: 'Progressi',
-        NAV_PROFILE: 'Profilo',
-        LOAD_BUTTON: 'Carica',
-        COPY_WEEK_BTN: 'Copia Settimana',
-        RESET_BUTTON: 'Pulisci Settimana',
-        BACKUP_BTN: 'Salva Backup',
-        RESTORE_BTN: 'Ripristina Backup',
-        CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
-        CONFIG_URL_EMPTY_ERROR: 'Per favore, inserisci un URL.',
-        CONFIG_LOAD_SUCCESS: 'Configurazione caricata!',
-        COPY_WEEK_CONFIRM_TITLE: 'Copia Settimana',
-        COPY_WEEK_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
-        COPY_WEEK_SUCCESS: 'Piano settimanale copiato!',
-        RESET_WEEK_CONFIRM_TITLE: 'Pulisci Settimana',
-        RESET_WEEK_CONFIRM_MSG: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
-        RESET_WEEK_SUCCESS: 'Settimana pulita!',
-        SHARE_NO_URL_INFO: 'Nessun URL di configurazione da condividere.',
-        SHARE_SUCCESS: 'Link di condivisione copiato!',
-        SHARE_ERROR: 'Impossibile copiare il link.',
-        BACKUP_SHARE_TITLE: 'Backup Dati HealtyPro',
-        BACKUP_SUCCESS: 'Backup salvato con successo!',
-        RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
-        RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
-        RESTORE_SUCCESS: 'Backup ripristinato con successo!',
-        RESTORE_INVALID_FILE: 'File di backup non valido o corrotto.',
-        LOG_VIEW_EMPTY: 'Nessun pasto pianificato per questa settimana.',
-        CONFIRM_MODAL_CONFIRM_BTN: 'Conferma',
-        CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
-        LOAD_SHARED_CONFIG_TITLE: 'Caricare Nuova Configurazione?',
-        LOAD_SHARED_CONFIG_MSG: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.',
-        BIOMETRICS_FORM_TITLE: 'Inserisci Misurazione',
-        BIOMETRICS_HISTORY_TITLE: 'Storico Misurazioni',
-        BIOMETRICS_SAVE_BTN: 'Salva Dati',
-        BIOMETRICS_CLEAR_BTN: 'Annulla',
-        BIOMETRICS_SAVE_SUCCESS: 'Dati biometrici salvati!',
-        BIOMETRICS_DELETE_CONFIRM_TITLE: 'Elimina Misurazione',
-        BIOMETRICS_DELETE_CONFIRM_MSG: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.',
-        BIOMETRICS_DELETE_SUCCESS: 'Misurazione eliminata.',
-        BIOMETRICS_BMR_PLACEHOLDER: 'Completa il profilo per il calcolo',
-        PROFILE_FORM_TITLE: 'Profilo Utente',
-        PROFILE_SAVE_BTN: 'Salva Profilo',
-        PROFILE_SAVE_SUCCESS: 'Profilo salvato con successo!',
-        INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
-        INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
-        SELECT_MEAL_TITLE: 'Scegli',
-        NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
-        KCAL_LABEL: 'Kcal',
-        EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
-        ADD_MEAL_BTN: 'Aggiungi',
-        RECIPE_BUTTON_TITLE: 'Mostra ricetta',
-        RECIPE_MODAL_LOADING: 'Caricamento ricetta...',
-        RECIPE_MODAL_LOAD_ERROR: "Impossibile caricare la ricetta. Controlla l'URL e la connessione.",
-        RECIPE_LOAD_FAIL_MSG: 'Caricamento ricetta fallito',
-        INFO_MODAL_EXAMPLE_JSON: `{\n  "rules": [],\n  "meals": []\n}`
-      };
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
+      }
+      .header-content {
+        width: 100%; max-width: 1200px; display: flex;
+        justify-content: space-between; align-items: center;
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+      .main-nav { display: flex; gap: 0.5rem; }
+      .btn-nav {
+        background: transparent; border: none; color: var(--text-color-muted);
+        padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: bold;
+        transition: all 0.2s;
+      }
+      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
+      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .page-view { width: 100%; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      .app-footer {
+          padding: 1.5rem 1rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+          gap: 0.75rem;
+      }
+
+      /* --- PLANNER PAGE --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .planner-controls-wrapper {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+      }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .planner-actions { display: flex; gap: 0.75rem; }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+      }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+
+      /* --- PROGRESS & PROFILE PAGES --- */
+      .biometrics-view h3, .profile-page h3 { color: var(--primary-color); margin-bottom: 1.5rem; }
+      .biometrics-form, .profile-form {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 1.5rem; padding: 1.5rem; background: var(--card-color);
+          border-radius: 8px; border: 1px solid var(--border-color);
+      }
+      .form-group { display: flex; flex-direction: column; }
+      .form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      .form-group input, .form-group textarea, .form-group fieldset {
+          padding: 0.75rem; border: 1px solid var(--border-color);
+          border-radius: 8px; font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
+      .form-group input[readonly] { background-color: #222; color: var(--text-color-muted); }
+      .form-group textarea { min-height: 80px; resize: vertical; }
+      .form-group fieldset { border: 1px solid var(--border-color); padding: 0.75rem; }
+      .form-group fieldset legend { padding: 0 0.5rem; color: var(--text-color-muted); font-size: 0.9rem; }
+      .form-group fieldset label { display: inline-flex; align-items: center; margin-right: 1.5rem; }
+      .form-group fieldset input { margin-right: 0.5rem; }
+      .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
+      .table-container { overflow-x: auto; }
+      #biometrics-table { width: 100%; border-collapse: collapse; margin-top: 2rem; background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
+      #biometrics-table th, #biometrics-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+      #biometrics-table thead th { background-color: var(--bg-color); font-size: 0.85rem; text-transform: uppercase; color: var(--text-color-muted); }
+      #biometrics-table tbody tr:last-child td { border-bottom: none; }
+      #biometrics-table tbody tr:hover { background-color: var(--bg-color); }
+      .biometrics-actions button { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 0.25rem; }
+
+      /* --- GENERAL COMPONENTS --- */
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+      
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.75rem; }
+      .day-editor-slot:last-child { margin-bottom: 0; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+      .btn-view-recipe:hover { color: var(--text-color); }
+      .recipe-body { line-height: 1.6; }
+      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+      .recipe-body li { margin-bottom: 0.5rem; }
+      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
+      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
+      .recipe-body th { background-color: var(--bg-color); }
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }
