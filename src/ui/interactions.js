@@ -2,18 +2,19 @@ import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
+import { UI_TEXT } from '../utils/constants.js';
 
 async function handleLoadConfig() {
   const url = document.getElementById('config-url-input').value.trim();
   if (!url) {
-    showNotification('Per favore, inserisci un URL.', 'error');
+    showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error');
     return;
   }
   setConfigUrl(url);
   try {
     const config = await fetchAndParseConfig(url);
     setPlannerConfig(config);
-    showNotification('Configurazione caricata!', 'success');
+    showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
   } catch (error) {
     showNotification(error.message, 'error');
   }
@@ -40,26 +41,26 @@ function handleLogViewClick(e) {
 function handleShareConfig() {
   const state = getState();
   if (!state.configUrl) {
-    showNotification('Nessun URL di configurazione da condividere.', 'info');
+    showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info');
     return;
   }
   const baseUrl = window.location.origin + window.location.pathname;
   const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
   
   navigator.clipboard.writeText(shareUrl).then(() => {
-    showNotification('Link di condivisione copiato!', 'success');
+    showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
   }).catch(() => {
-    showNotification('Impossibile copiare il link.', 'error');
+    showNotification(UI_TEXT.SHARE_ERROR, 'error');
   });
 }
 
 function handleCopyWeek() {
   showConfirmModal(
-    'Copia Settimana',
-    'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
+    UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
+    UI_TEXT.COPY_WEEK_CONFIRM_MSG,
     () => {
       copyPreviousWeek();
-      showNotification('Piano settimanale copiato!', 'success');
+      showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success');
     },
     'primary'
   );
@@ -67,11 +68,11 @@ function handleCopyWeek() {
 
 function handleResetWeek() {
   showConfirmModal(
-    'Pulisci Settimana',
-    'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
+    UI_TEXT.RESET_WEEK_CONFIRM_TITLE,
+    UI_TEXT.RESET_WEEK_CONFIRM_MSG,
     () => {
       resetCurrentWeek();
-      showNotification('Settimana pulita!', 'info');
+      showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info');
     },
     'danger'
   );

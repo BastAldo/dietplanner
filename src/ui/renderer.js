@@ -80,30 +80,39 @@ function calculateDailyCalories(isoDate, state) {
   return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
-async function showRecipeModal(meal) {
+function getRecipeButtonHTML(meal, state) {
+  if (state.recipeBaseUrl && meal.recipeId) {
+    return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+            </button>`;
+  }
+  return '';
+}
+
+export async function showRecipeModal(meal) {
   const state = getState();
   const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
   recipeModalTitle.textContent = meal.nomePasto;
-  recipeModalBody.innerHTML = '<p>Caricamento ricetta...</p>';
+  recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
   recipeModal.classList.remove('modal-hidden');
 
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
     const markdown = await response.text();
-    // Use Marked to parse and DOMPurify to sanitize
     recipeModalBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
   } catch (error) {
-    recipeModalBody.innerHTML = `<p>Impossibile caricare la ricetta. Controlla l'URL e la connessione.</p>`;
-    showNotification('Caricamento ricetta fallito', 'error');
+    recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+    showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
   }
 }
 
 export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
-  console.log('Apertura modale di conferma:', { title, message, type });
   confirmModalTitle.textContent = title;
   confirmModalMessage.textContent = message;
   confirmModalConfirmBtn.className = `btn btn-${type}`;
+  confirmModalConfirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+  confirmModalCancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
 
   const cleanup = () => {
     confirmModal.classList.add('modal-hidden');
@@ -117,14 +126,13 @@ export function showConfirmModal(title, message, onConfirm, type = 'secondary') 
     cleanup();
   };
   
-  confirmModalCancelBtn.addEventListener('click', cancelHandler);
-  confirmModalConfirmBtn.addEventListener('click', confirmHandler);
+  confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
+  confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
   
   confirmModal.classList.remove('modal-hidden');
 }
 
 export function openSelectionModal(slotId) {
-  console.log('Apertura modale di selezione per lo slot:', slotId);
   const state = getState();
   const mealType = slotId.substring(11);
   selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
@@ -153,20 +161,15 @@ export function openSelectionModal(slotId) {
 export function openDayEditorModal(isoDate) {
   currentEditingDayISO = isoDate;
   const state = getState();
-  dayEditorTitle.textContent = `Editor: ${formatFullDate(isoDate)}`;
+  dayEditorTitle.textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
   dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
     const mealId = state.weeklyPlan[slotId];
     const meal = mealId ? state.masterMealList.find(m => m.id === mealId) : null;
     
-    let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">Aggiungi</button>`;
+    let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
     if (meal) {
-      const recipeButtonHTML = state.recipeBaseUrl && meal.recipeId 
-        ? `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="Mostra ricetta">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
-           </button>`
-        : '';
-
+      const recipeButtonHTML = getRecipeButtonHTML(meal, state);
       mealDetailsHTML = `
         <div class="meal-details">
           <span class="meal-details__name">${meal.nomePasto}</span>
@@ -204,6 +207,8 @@ export function populateInitialText() {
   document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+  document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+  document.getElementById('share-config-btn').textContent = UI_TEXT.SHARE_CONFIG_BTN;
   document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
   document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
   document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
@@ -237,17 +242,24 @@ function renderLogView(state, weekStart) {
       const dayLog = document.createElement('div');
       dayLog.className = 'log-day';
       dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
-        + dayMeals.map(item => `
-          <div class="log-item">
-            <div><strong>${item.type}:</strong> ${item.meal.nomePasto}</div>
-            <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
-          </div>
-        `).join('');
+        + dayMeals.map(item => {
+          const recipeButtonHTML = getRecipeButtonHTML(item.meal, state);
+          return `
+            <div class="log-item">
+              <div class="log-item__name">
+                <strong>${item.type}:</strong>
+                <span>${item.meal.nomePasto}</span>
+                ${recipeButtonHTML}
+              </div>
+              <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
+            </div>
+          `;
+        }).join('');
       logView.appendChild(dayLog);
     }
   }
   if (logView.innerHTML === '') {
-    logView.innerHTML = `<p class="placeholder-text">Nessun pasto pianificato per questa settimana.</p>`;
+    logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
   }
 }
 
