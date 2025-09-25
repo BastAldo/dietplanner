@@ -1,5 +1,4 @@
 /* --- GLOBAL STYLES & MOBILE FIRST --- */
-/* --- GLOBAL STYLES & MOBILE FIRST --- */
 :root {
     --bg-color: #1a1a1d;
     --card-color: #2c2c34;
@@ -103,6 +102,7 @@ body {
 .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
 .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
 .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+.actions-group { display: flex; gap: 1rem; }
 .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
 .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
 .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
@@ -132,7 +132,8 @@ body {
   border-bottom: 1px solid var(--border-color);
 }
 .log-day .log-item:last-child { border-bottom: none; }
-.log-item strong { color: var(--text-color-muted); margin-right: 0.5rem; }
+.log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+.log-item strong { color: var(--text-color-muted); }
 .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
 
 .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }

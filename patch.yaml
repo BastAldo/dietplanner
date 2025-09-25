@@ -1,16 +1,344 @@
-commit_message: "fix(ui): Implement 2-line clamp for long meal names in editor"
+commit_message: "feat(core): Implement config sharing via URL parameter"
 rationale: |
-  This commit updates the styling of the Day Editor modal to better handle long meal names, as per the user's request for a more informative display.
+  This commit introduces the ability for users to share their meal planner configuration by generating a link that contains the URL to their `config.json` file. This enhances collaboration and simplifies setup for new users.
 
-  1.  **Previous Behavior**: Long meal names were truncated to a single line with an ellipsis (`...`).
+  1.  **Documentation Update**: A new User Story, US-23, has been added to `docs/01_FUNCTIONALITY.md` to formally document this new feature.
 
-  2.  **New Behavior**: The CSS for the `.meal-details__name` selector in `style.css` has been modified to implement a 2-line clamp. The text will now wrap onto a second line if necessary. Only if the name is long enough to exceed two lines will it be truncated with an ellipsis.
+  2.  **UI Addition**: A "Condividi Config" button has been added to `index.html` within the calendar controls, providing a clear entry point for the user to access this functionality.
 
-  3.  **Technical Implementation**: This was achieved by removing the `white-space: nowrap` property and replacing the single-line overflow logic with the `-webkit-line-clamp` technique, which is the modern standard for multi-line text truncation. This provides the best balance between displaying more text and maintaining a clean, predictable layout.
+  3.  **Share Logic**: The `src/ui/interactions.js` file now includes a `handleShareConfig` function. This function reads the current `configUrl` from the state, constructs a shareable link with this URL as a query parameter, copies it to the user's clipboard using the `navigator.clipboard` API, and provides feedback with a success notification.
+
+  4.  **Loading Logic**: The application's entry point, `src/main.js`, has been updated. The `init` function now prioritizes the `configUrl` from the URL's query parameters over any locally stored URL. This ensures that visiting a shared link correctly loads the intended configuration.
 patches:
+  - file: docs/01_FUNCTIONALITY.md
+    content: |
+      # Funzionalità: HealtyPro (ex NutriPlan)
+
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
+
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
+      * **US-23 (Condivisione Configurazione):** Come utente, voglio poter generare un link univoco che contenga l'URL della mia configurazione `config.json` per condividerla facilmente con altri.
+  - file: index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>NutriPlan</title>
+          <link rel="stylesheet" href="style.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="app-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
+                  <h1 id="main-title">NutriPlan</h1>
+              </div>
+          </header>
+
+          <div id="app-container">
+              <div id="global-alert" class="global-alert hidden">
+                  <p id="global-alert-message"></p>
+                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
+              </div>
+
+              <section class="data-source-container">
+                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+                  <button id="load-config-btn" class="btn btn-primary"></button>
+                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
+              </section>
+
+              <main class="main-container">
+                  <section class="view-container">
+                      <header class="calendar-header">
+                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
+                          <h2 id="week-title"></h2>
+                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
+                      </header>
+                      <div class="calendar-controls">
+                        <div class="view-switcher">
+                            <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
+                            </button>
+                            <button id="view-log-btn" class="btn-view" title="Vista Registro">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
+                            </button>
+                        </div>
+                        <div class="actions-group">
+                          <button id="copy-week-btn" class="btn btn-secondary">Copia Precedente</button>
+                          <button id="share-config-btn" class="btn btn-secondary">Condividi Config</button>
+                        </div>
+                      </div>
+                      <div id="calendar-grid" class="calendar-grid"></div>
+                      <div id="log-view" class="log-view hidden"></div>
+                  </section>
+              </main>
+
+              <footer class="app-footer">
+                  <button id="reset-btn" class="btn btn-secondary"></button>
+              </footer>
+          </div>
+
+          <div id="info-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="info-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
+                  </div>
+                  <div class="modal-body">
+                      <p id="info-modal-desc"></p>
+                      <pre><code id="info-modal-json-example"></code></pre>
+                  </div>
+              </div>
+          </div>
+
+          <div id="selection-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="selection-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
+                  </div>
+                  <div id="selection-modal-list" class="modal-body selection-list"></div>
+              </div>
+          </div>
+
+          <div id="day-editor-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="day-editor-title"></h3>
+                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
+                </div>
+                <div id="day-editor-body" class="modal-body day-editor-list"></div>
+            </div>
+          </div>
+          
+          <div id="confirm-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="confirm-modal-title"></h3>
+                </div>
+                <div class="modal-body">
+                  <p id="confirm-modal-message"></p>
+                </div>
+                <div class="modal-footer">
+                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary">Annulla</button>
+                  <button id="confirm-modal-confirm-btn" class="btn">Conferma</button>
+                </div>
+            </div>
+          </div>
+
+          <div id="recipe-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="recipe-modal-title"></h3>
+                  <button class="modal-close-btn" data-target="recipe-modal">&times;</button>
+                </div>
+                <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+            </div>
+          </div>
+
+      </body>
+      </html>
+  - file: src/main.js
+    content: |
+      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
+      import { renderApp, populateInitialText } from './ui/renderer.js';
+      import { initializeEventListeners } from './ui/interactions.js';
+      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+      import { fetchAndParseConfig } from './api/configService.js';
+      import { showNotification } from './ui/notifications.js';
+
+      async function loadInitialConfig(url) {
+        if (!url) return;
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+        } catch (error) {
+          showNotification(error.message, 'error');
+        }
+      }
+
+      function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/dietplanner/sw.js')
+              .then(registration => console.log('ServiceWorker registration successful'))
+              .catch(err => console.log('ServiceWorker registration failed: ', err));
+          });
+        }
+      }
+
+      function init() {
+        populateInitialText();
+        document.addEventListener('stateChange', renderApp);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const configUrlFromParam = urlParams.get('configUrl');
+
+        if (configUrlFromParam) {
+          const decodedUrl = decodeURIComponent(configUrlFromParam);
+          setConfigUrl(decodedUrl);
+          loadInitialConfig(decodedUrl);
+        } else {
+          loadStateFromLocalStorage();
+          const initialState = getState();
+          loadInitialConfig(initialState.configUrl || DEFAULT_CONFIG_URL);
+        }
+        
+        const initialState = getState();
+        document.getElementById('config-url-input').value = initialState.configUrl;
+
+        initializeEventListeners();
+        renderApp();
+        registerServiceWorker();
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+  - file: src/ui/interactions.js
+    content: |
+      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState } from '../core/state.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
+      import { showNotification } from './notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
+
+      async function handleLoadConfig() {
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) {
+          showNotification('Per favore, inserisci un URL.', 'error');
+          return;
+        }
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+          showNotification('Configurazione caricata!', 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+        }
+      }
+
+      function handleCalendarClick(e) {
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+            openDayEditorModal(dayCell.dataset.date);
+        }
+      }
+
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleShareConfig() {
+        const state = getState();
+        if (!state.configUrl) {
+          showNotification('Nessun URL di configurazione da condividere.', 'info');
+          return;
+        }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification('Link di condivisione copiato!', 'success');
+        }).catch(() => {
+          showNotification('Impossibile copiare il link.', 'error');
+        });
+      }
+
+      function handleCopyWeek() {
+        showConfirmModal(
+          'Copia Settimana',
+          'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
+          () => {
+            copyPreviousWeek();
+            showNotification('Piano settimanale copiato!', 'success');
+          },
+          'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        showConfirmModal(
+          'Pulisci Settimana',
+          'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
+          () => {
+            resetCurrentWeek();
+            showNotification('Settimana pulita!', 'info');
+          },
+          'danger'
+        );
+      }
+
+      export function initializeEventListeners() {
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+        
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const modalId = e.target.dataset.target;
+            if (modalId) {
+              document.getElementById(modalId).classList.add('modal-hidden');
+            }
+          });
+        });
+
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.classList.add('modal-hidden');
+            }
+          });
+        });
+
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+
+        document.getElementById('global-alert-close').addEventListener('click', () => {
+            document.getElementById('global-alert').classList.add('hidden');
+        });
+      }
   - file: style.css
     content: |
-      /* --- GLOBAL STYLES & MOBILE FIRST --- */
       /* --- GLOBAL STYLES & MOBILE FIRST --- */
       :root {
           --bg-color: #1a1a1d;
@@ -115,6 +443,7 @@ patches:
       .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
       .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
       .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .actions-group { display: flex; gap: 1rem; }
       .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
       .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
       .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
@@ -144,7 +473,8 @@ patches:
         border-bottom: 1px solid var(--border-color);
       }
       .log-day .log-item:last-child { border-bottom: none; }
-      .log-item strong { color: var(--text-color-muted); margin-right: 0.5rem; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
       .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
       
       .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
@@ -210,4 +540,4 @@ patches:
           .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
 commands:
-  - "echo 'Patch applied. Long meal names in the day editor will now wrap to a second line before being truncated.'"
+  - "echo 'Feature implemented. A share button is now available to copy the configuration URL.'"
