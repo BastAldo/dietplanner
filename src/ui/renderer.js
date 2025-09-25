@@ -171,12 +171,31 @@ function renderPlannerPage(state) {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
   document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+  
+  const calendarGrid = document.getElementById('calendar-grid');
+  const logView = document.getElementById('log-view');
+  const viewCalendarBtn = document.getElementById('view-calendar-btn');
+  const viewLogBtn = document.getElementById('view-log-btn');
+
+  if (state.currentView === 'planner') {
+      calendarGrid.classList.remove('hidden');
+      logView.classList.add('hidden');
+      viewCalendarBtn.classList.add('active');
+      viewLogBtn.classList.remove('active');
+  } else if (state.currentView === 'log') {
+      calendarGrid.classList.add('hidden');
+      logView.classList.remove('hidden');
+      viewCalendarBtn.classList.remove('active');
+      viewLogBtn.classList.add('active');
+  }
+
   renderCalendarView(state, weekStart);
   renderLogView(state, weekStart);
 }
 
 function renderCalendarView(state, weekStart) {
   const calendarGrid = document.getElementById('calendar-grid');
+  const todayISO = toISODateString(new Date());
   calendarGrid.innerHTML = '';
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
@@ -186,6 +205,9 @@ function renderCalendarView(state, weekStart) {
     const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
     const dayCell = document.createElement('div');
     dayCell.className = 'day-cell';
+    if (isoDate === todayISO) {
+      dayCell.classList.add('is-today');
+    }
     dayCell.dataset.date = isoDate;
     dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
     calendarGrid.appendChild(dayCell);
@@ -194,6 +216,7 @@ function renderCalendarView(state, weekStart) {
 
 function renderLogView(state, weekStart) {
   const logView = document.getElementById('log-view');
+  const todayISO = toISODateString(new Date());
   logView.innerHTML = '';
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
@@ -203,6 +226,9 @@ function renderLogView(state, weekStart) {
     if (dayMeals.length > 0) {
       const dayLog = document.createElement('div');
       dayLog.className = 'log-day';
+       if (isoDate === todayISO) {
+        dayLog.classList.add('is-today');
+      }
       dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
         + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
       logView.appendChild(dayLog);
@@ -265,4 +291,3 @@ export function renderApp() {
   const urlInput = document.getElementById('config-url-input');
   if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }
-console.log("refactoring 1")
