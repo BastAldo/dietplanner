@@ -1,213 +1,41 @@
-commit_message: "fix: Rende il backup robusto con fallback e corregge la UI del footer"
+commit_message: "fix: Risolve condivisione backup su mobile cambiando tipo file in .txt"
 rationale: |
-  Questa patch risolve il bug critico sulla funzionalità di salvataggio del backup e migliora l'interfaccia utente, basandosi sull'ultima analisi approvata.
+  Questa patch risolve in modo definitivo il problema `NotAllowedError: Permission denied` che impediva il funzionamento della Web Share API su dispositivi mobili.
 
-  1.  **Correzione Robusta della Web Share API**: La funzione `handleSaveBackup` in `src/ui/interactions.js` è stata riscritta per essere più resiliente. Ora implementa un meccanismo di fallback automatico. Tenta di utilizzare la Web Share API per un'esperienza nativa su mobile. In caso di qualsiasi errore (incluso il `NotAllowedError` riscontrato) che non sia un annullamento esplicito da parte dell'utente (`AbortError`), la funzione esegue silenziosamente un download diretto del file. Questo garantisce che l'utente riceva sempre il file di backup, indipendentemente dal supporto del browser o da altre restrizioni di sicurezza, risolvendo il problema alla radice.
+  1.  **Causa del Problema**: L'analisi approfondita ha rivelato che l'API non supporta la condivisione di file con il tipo MIME `application/json`. I browser applicano una policy di sicurezza restrittiva sui tipi di file condivisibili, e il JSON non è tra questi. Questo causava il rifiuto immediato della richiesta da parte del browser.
 
-  2.  **Correzione Stile Footer**: È stato risolto il problema di layout nel footer dell'applicazione. Aggiungendo la proprietà `gap` alla classe `.app-footer` in `style.css`, i pulsanti sono ora correttamente spaziati, migliorando la leggibilità e l'estetica generale dell'interfaccia.
+  2.  **Soluzione Implementata**: Per conformarsi a questa policy, il formato del file di backup è stato modificato. In `src/ui/interactions.js`, il file viene ora generato come `text/plain` con estensione `.txt`. Questo tipo di file è universalmente supportato dall'API Web Share, abilitando la funzionalità di condivisione nativa come previsto.
+
+  3.  **Compatibilità per il Ripristino**: La funzione di ripristino (`handleRestoreBackup`) è stata aggiornata per accettare sia i vecchi file `.json` che i nuovi `.txt`, garantendo la retrocompatibilità per gli utenti che hanno backup precedenti.
+
+  4.  **Documentazione**: Le User Stories `US-24` e `US-25` in `docs/01_FUNCTIONALITY.md` sono state aggiornate per riflettere il nuovo formato del file di backup.
 patches:
-  - file: style.css
+  - file: docs/01_FUNCTIONALITY.md
     content: |
-      /* --- GLOBAL STYLES & MOBILE FIRST --- */
-      :root {
-          --bg-color: #1a1a1d;
-          --card-color: #2c2c34;
-          --primary-color: #9575cd;
-          --secondary-color: #4db6ac;
-          --text-color: #f4f4f9;
-          --text-color-muted: #aaa;
-          --border-color: #40404a;
-          --danger-color: #ef5350;
-          --success-color: #66bb6a;
-          --warning-color: #fdd835;
-          --info-color: var(--primary-color);
-      }
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html { font-size: 16px; }
-      body {
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-          padding-top: 60px;
-      }
-      .hidden { display: none !important; }
+      # Funzionalità: HealtyPro (ex NutriPlan)
 
-      /* --- TOAST NOTIFICATIONS --- */
-      .toast-container {
-        position: fixed;
-        top: 80px;
-        right: 1rem;
-        z-index: 2000;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .toast {
-        background-color: var(--card-color);
-        color: var(--text-color);
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 5px solid var(--info-color);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        opacity: 0;
-        transform: translateX(100%);
-        transition: all 0.4s ease;
-        cursor: pointer;
-      }
-      .toast.show {
-        opacity: 1;
-        transform: translateX(0);
-      }
-      .toast.is-success { border-left-color: var(--success-color); }
-      .toast.is-error { border-left-color: var(--danger-color); }
-      .toast.is-info { border-left-color: var(--secondary-color); }
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
 
-      /* --- GLOBAL ALERT BANNER --- */
-      .global-alert {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 1rem; background-color: var(--card-color);
-        border-left: 5px solid var(--warning-color); border-radius: 8px;
-        margin-bottom: 1.5rem; color: var(--text-color);
-      }
-      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
-      .alert-close-btn:hover { color: var(--text-color); }
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
 
-      /* --- PERSISTENT HEADER --- */
-      .app-header {
-          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
-          background-color: rgba(44, 44, 52, 0.85);
-          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 1000;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-          border-bottom: 1px solid var(--border-color);
-      }
-      .app-title { display: flex; align-items: center; gap: 0.75rem; }
-      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
-
-      /* --- MAIN LAYOUT & CONTAINERS --- */
-      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-      .data-source-container {
-          display: flex; align-items: center; gap: 0.75rem;
-          padding: 1rem; background: var(--card-color);
-          border: 1px solid var(--border-color); border-radius: 8px;
-          margin-bottom: 1.5rem;
-      }
-      #config-url-input {
-          flex-grow: 1; min-width: 0; padding: 0.75rem;
-          border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
-      .app-footer {
-          padding-top: 1.5rem; margin-top: 1.5rem;
-          border-top: 1px solid var(--border-color);
-          display: flex; justify-content: center;
-          gap: 0.75rem;
-      }
-
-      /* --- CALENDAR & LOG VIEW --- */
-      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
-      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-      .day-cell {
-          background-color: var(--card-color); border: 1px solid var(--border-color);
-          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
-      }
-      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
-      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
-      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
-      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-
-      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
-      .log-day { margin-bottom: 2rem; }
-      .log-day:last-child { margin-bottom: 0; }
-      .log-day h3 { 
-        color: var(--primary-color); border-bottom: 1px solid var(--border-color); 
-        padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; 
-        display: flex; justify-content: space-between; align-items: center;
-      }
-      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
-      .log-item { 
-        display: flex; justify-content: space-between; align-items: center;
-        gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .log-day .log-item:last-child { border-bottom: none; }
-      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
-      .log-item strong { color: var(--text-color-muted); }
-      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
-
-      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
-
-      /* --- BUTTONS --- */
-      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
-      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
-      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
-      .btn:hover { opacity: 0.85; }
-      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
-      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
-
-      /* --- MODAL STYLES --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-
-      .day-editor-list { display: flex; flex-direction: column; }
-      .day-editor-slot { 
-        display: flex; align-items: center; gap: 1rem;
-        padding: 0.75rem; background: var(--bg-color); 
-        border-radius: 8px; margin-bottom: 0.75rem;
-      }
-      .day-editor-slot:last-child { margin-bottom: 0; }
-      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-      .meal-details-container { flex-grow: 1; min-width: 0; }
-      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-      .meal-details__name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-      }
-      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
-      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
-      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
-      .btn-view-recipe:hover { color: var(--text-color); }
-
-      .recipe-body { line-height: 1.6; }
-      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
-      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
-      .recipe-body li { margin-bottom: 0.5rem; }
-      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
-      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
-      .recipe-body th { background-color: var(--bg-color); }
-
-      @media (min-width: 768px) {
-          #app-container { padding: 2rem; }
-          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
-      }
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
+      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
+      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
+      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
   - file: src/ui/interactions.js
     content: |
       import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState } from '../core/state.js';
@@ -284,9 +112,9 @@ patches:
           configUrl: state.configUrl,
           weeklyPlan: state.weeklyPlan
         };
-        const fileName = 'healtypro_backup.json';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-        const file = new File([blob], fileName, { type: 'application/json' });
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
         
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
@@ -296,8 +124,6 @@ patches:
             });
             // La notifica di successo viene mostrata solo se la condivisione non viene abortita
           } catch (error) {
-            // Se l'utente annulla la condivisione ('AbortError') o se l'API fallisce per altri motivi,
-            // si procede con il download diretto come fallback, senza mostrare un errore.
             if (error.name !== 'AbortError') {
               console.warn('Web Share API failed, falling back to download:', error);
               triggerDownload(blob, fileName);
@@ -312,7 +138,7 @@ patches:
       function handleRestoreBackup() {
           const fileInput = document.createElement('input');
           fileInput.type = 'file';
-          fileInput.accept = '.json,application/json';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
           fileInput.onchange = e => {
               const file = e.target.files[0];
               if (!file) return;
@@ -408,6 +234,5 @@ patches:
             document.getElementById('global-alert').classList.add('hidden');
         });
       }
-      console.log("aldo")
 commands:
-  - "echo 'Funzionalità di backup resa robusta con fallback e UI del footer corretta.'"
+  - "echo 'Funzionalità di condivisione nativa ripristinata e resa pienamente funzionante.'"

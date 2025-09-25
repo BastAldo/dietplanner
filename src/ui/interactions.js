@@ -72,9 +72,9 @@ async function handleSaveBackup() {
     configUrl: state.configUrl,
     weeklyPlan: state.weeklyPlan
   };
-  const fileName = 'healtypro_backup.json';
-  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-  const file = new File([blob], fileName, { type: 'application/json' });
+  const fileName = 'healtypro_backup.txt';
+  const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+  const file = new File([blob], fileName, { type: 'text/plain' });
   
   if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
@@ -84,8 +84,6 @@ async function handleSaveBackup() {
       });
       // La notifica di successo viene mostrata solo se la condivisione non viene abortita
     } catch (error) {
-      // Se l'utente annulla la condivisione ('AbortError') o se l'API fallisce per altri motivi,
-      // si procede con il download diretto come fallback, senza mostrare un errore.
       if (error.name !== 'AbortError') {
         console.warn('Web Share API failed, falling back to download:', error);
         triggerDownload(blob, fileName);
@@ -100,7 +98,7 @@ async function handleSaveBackup() {
 function handleRestoreBackup() {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.json,application/json';
+    fileInput.accept = '.json,.txt,application/json,text/plain';
     fileInput.onchange = e => {
         const file = e.target.files[0];
         if (!file) return;
@@ -196,4 +194,3 @@ export function initializeEventListeners() {
       document.getElementById('global-alert').classList.add('hidden');
   });
 }
-console.log("aldo")
