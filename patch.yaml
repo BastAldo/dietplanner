@@ -829,5 +829,6 @@ patches:
         const urlInput = document.getElementById('config-url-input');
         if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
+      console.log("refactoring 1")
 commands:
   - "echo 'Refactoring completato. L''applicazione ora utilizza CSS e template modulari.'"

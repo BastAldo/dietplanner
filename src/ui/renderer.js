@@ -265,3 +265,4 @@ export function renderApp() {
   const urlInput = document.getElementById('config-url-input');
   if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }
+console.log("refactoring 1")
