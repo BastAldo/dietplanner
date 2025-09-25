@@ -1,6 +1,7 @@
 export const DEFAULT_CONFIG_URL = '';
 export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
 export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
 export const WEEK_STARTS_ON_MONDAY = 1;
 export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 export const MEAL_TYPES = [
@@ -9,6 +10,17 @@ export const MEAL_TYPES = [
   'Pranzo',
   'Spuntino Pomeridiano',
   'Cena'
+];
+export const BIOMETRIC_FIELDS = [
+  { id: 'date', label: 'Data', type: 'date', props: 'required' },
+  { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1"' },
+  { id: 'muscleMass', label: 'Massa Muscolare (kg)', type: 'number', props: 'step="0.1"' },
+  { id: 'fatMass', label: 'Massa Grassa (kg)', type: 'number', props: 'step="0.1"' },
+  { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+  { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+  { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+  { id: 'basalMetabolism', label: 'Metabolismo Basale (kcal)', type: 'number', props: 'step="1"' },
+  { id: 'notes', label: 'Note', type: 'textarea' }
 ];
 
 export const UI_TEXT = {
@@ -39,7 +51,6 @@ export const UI_TEXT = {
   SHARE_SUCCESS: 'Link di condivisione copiato!',
   SHARE_ERROR: 'Impossibile copiare il link.',
   BACKUP_SHARE_TITLE: 'Backup Dati HealtyPro',
-  BACKUP_SHARE_ERROR: 'Impossibile condividere il backup.',
   BACKUP_SUCCESS: 'Backup salvato con successo!',
   RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
   RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
@@ -56,6 +67,14 @@ export const UI_TEXT = {
   CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
   LOAD_SHARED_CONFIG_TITLE: 'Caricare Nuova Configurazione?',
   LOAD_SHARED_CONFIG_MSG: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.',
+  BIOMETRICS_FORM_TITLE: 'Inserisci Misurazione',
+  BIOMETRICS_HISTORY_TITLE: 'Storico Misurazioni',
+  BIOMETRICS_SAVE_BTN: 'Salva Dati',
+  BIOMETRICS_CLEAR_BTN: 'Annulla',
+  BIOMETRICS_SAVE_SUCCESS: 'Dati biometrici salvati!',
+  BIOMETRICS_DELETE_CONFIRM_TITLE: 'Elimina Misurazione',
+  BIOMETRICS_DELETE_CONFIRM_MSG: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.',
+  BIOMETRICS_DELETE_SUCCESS: 'Misurazione eliminata.',
   INFO_MODAL_EXAMPLE_JSON:
 `{
   "rules": [

@@ -1,13 +1,14 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS } from '../utils/constants.js';
 
 let state = {
   rules: [],
   masterMealList: [],
   weeklyPlan: {},
+  biometricData: [],
   configUrl: '',
   recipeBaseUrl: '',
   focusedDate: new Date(),
-  currentView: 'calendar', // 'calendar' or 'log'
+  currentView: 'calendar', // 'calendar', 'log', or 'biometrics'
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
@@ -37,11 +38,14 @@ export function setConfigUrl(url) {
 
 export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+  localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
 }
 
 export function loadStateFromLocalStorage() {
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+  const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+
   if (plan) {
     try {
       state.weeklyPlan = JSON.parse(plan);
@@ -53,17 +57,40 @@ export function loadStateFromLocalStorage() {
   if (url) {
     state.configUrl = url;
   }
+  if (biometrics) {
+    try {
+      state.biometricData = JSON.parse(biometrics);
+    } catch (e) {
+      console.error("Error parsing biometricData from localStorage", e);
+      state.biometricData = [];
+    }
+  }
 }
 
 export function setAppState(backupData) {
-  if (backupData.weeklyPlan) {
-    state.weeklyPlan = backupData.weeklyPlan;
-  }
-  if (backupData.configUrl) {
-    state.configUrl = backupData.configUrl;
-  }
+  state.weeklyPlan = backupData.weeklyPlan || {};
+  state.configUrl = backupData.configUrl || '';
+  state.biometricData = backupData.biometricData || [];
   saveStateToLocalStorage();
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+  notify();
+}
+
+export function addOrUpdateBiometricEntry(entry) {
+  const index = state.biometricData.findIndex(e => e.date === entry.date);
+  if (index > -1) {
+    state.biometricData[index] = entry;
+  } else {
+    state.biometricData.push(entry);
+  }
+  state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function deleteBiometricEntry(date) {
+  state.biometricData = state.biometricData.filter(e => e.date !== date);
+  saveStateToLocalStorage();
   notify();
 }
 
@@ -111,7 +138,7 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
-  if (view === 'calendar' || view === 'log') {
+  if (['calendar', 'log', 'biometrics'].includes(view)) {
     state.currentView = view;
     notify();
   }

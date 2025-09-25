@@ -53,11 +53,26 @@
                       <button id="view-log-btn" class="btn-view" title="Vista Registro">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
                       </button>
+                      <button id="view-biometrics-btn" class="btn-view" title="Vista Progressi">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M13 7h-2v6h2V7zm-2 8h2v2h-2v-2z"></path></svg>
+                      </button>
                   </div>
                   <button id="copy-week-btn" class="btn btn-secondary"></button>
                 </div>
                 <div id="calendar-grid" class="calendar-grid"></div>
                 <div id="log-view" class="log-view hidden"></div>
+                <div id="biometrics-view" class="biometrics-view hidden">
+                    <h3 id="biometrics-title"></h3>
+                    <form id="biometrics-form" class="biometrics-form">
+                        </form>
+                    <h3 id="biometrics-history-title"></h3>
+                    <div class="table-container">
+                        <table id="biometrics-table">
+                            <thead></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
         </main>
 

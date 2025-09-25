@@ -1,4 +1,4 @@
-import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState } from '../core/state.js';
+import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry, deleteBiometricEntry } from '../core/state.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
@@ -70,7 +70,8 @@ async function handleSaveBackup() {
   const state = getState();
   const backupData = {
     configUrl: state.configUrl,
-    weeklyPlan: state.weeklyPlan
+    weeklyPlan: state.weeklyPlan,
+    biometricData: state.biometricData
   };
   const fileName = 'healtypro_backup.txt';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
@@ -155,6 +156,48 @@ function handleResetWeek() {
   );
 }
 
+function handleBiometricsForm(e) {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  const entry = {};
+  for (let [key, value] of formData.entries()) {
+    entry[key] = value;
+  }
+  addOrUpdateBiometricEntry(entry);
+  showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+}
+
+function handleBiometricsTableClick(e) {
+  const btnEdit = e.target.closest('.btn-edit-biometrics');
+  const btnDelete = e.target.closest('.btn-delete-biometrics');
+
+  if (btnEdit) {
+      const date = btnEdit.dataset.date;
+      const state = getState();
+      const entry = state.biometricData.find(e => e.date === date);
+      if (entry) {
+          const form = document.getElementById('biometrics-form');
+          for (const key in entry) {
+              if (form.elements[key]) {
+                  form.elements[key].value = entry[key];
+              }
+          }
+          form.scrollIntoView({ behavior: 'smooth' });
+      }
+  } else if (btnDelete) {
+      const date = btnDelete.dataset.date;
+      showConfirmModal(
+          UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE,
+          UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+          () => {
+              deleteBiometricEntry(date);
+              showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info');
+          },
+          'danger'
+      );
+  }
+}
+
 export function initializeEventListeners() {
   document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
   document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
@@ -182,11 +225,14 @@ export function initializeEventListeners() {
 
   document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
   document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+  document.getElementById('biometrics-view').addEventListener('submit', handleBiometricsForm);
+  document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
   document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
   document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
 
   document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
   document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+  document.getElementById('view-biometrics-btn').addEventListener('click', () => setView('biometrics'));
   document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
   document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
 

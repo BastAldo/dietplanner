@@ -1,12 +1,14 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
-import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
 import { showNotification } from './notifications.js';
 
 const calendarGrid = document.getElementById('calendar-grid');
 const logView = document.getElementById('log-view');
+const biometricsView = document.getElementById('biometrics-view');
 const weekTitleEl = document.getElementById('week-title');
 const viewCalendarBtn = document.getElementById('view-calendar-btn');
 const viewLogBtn = document.getElementById('view-log-btn');
+const viewBiometricsBtn = document.getElementById('view-biometrics-btn');
 const globalAlert = document.getElementById('global-alert');
 const globalAlertMessage = document.getElementById('global-alert-message');
 
@@ -211,6 +213,8 @@ export function populateInitialText() {
   document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
   document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
   document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+  document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+  document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
 }
 
 function renderCalendarView(state, weekStart) {
@@ -266,9 +270,45 @@ function renderLogView(state, weekStart) {
   }
 }
 
+function renderBiometricsView(state) {
+  const form = document.getElementById('biometrics-form');
+  const tableBody = document.querySelector('#biometrics-table tbody');
+  const tableHead = document.querySelector('#biometrics-table thead');
+
+  const today = toISODateString(new Date());
+
+  form.innerHTML = `
+      ${BIOMETRIC_FIELDS.map(field => `
+          <div class="form-group">
+              <label for="bio-${field.id}">${field.label}</label>
+              ${field.type === 'textarea' ?
+                  `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` :
+                  `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${today}"` : ''}>`
+              }
+          </div>
+      `).join('')}
+      <div class="form-actions">
+          <button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button>
+          <button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button>
+      </div>
+  `;
+
+  tableHead.innerHTML = `<tr>${BIOMETRIC_FIELDS.map(f => `<th>${f.label}</th>`).join('')}<th>Azioni</th></tr>`;
+
+  tableBody.innerHTML = state.biometricData.map(entry => `
+      <tr data-date="${entry.date}">
+          ${BIOMETRIC_FIELDS.map(field => `<td>${entry[field.id] || ''}</td>`).join('')}
+          <td class="biometrics-actions">
+              <button class="btn-edit-biometrics" data-date="${entry.date}" title="Modifica">✏️</button>
+              <button class="btn-delete-biometrics" data-date="${entry.date}" title="Elimina">🗑️</button>
+          </td>
+      </tr>
+  `).join('');
+}
+
 export function renderApp() {
   const state = getState();
-  if (Object.keys(state.weeklyPlan).length === 0 && state.masterMealList.length === 0) {
+  if (Object.keys(state.weeklyPlan).length === 0 && state.masterMealList.length === 0 && state.currentView !== 'biometrics') {
       globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
       globalAlert.classList.remove('hidden');
   } else {
@@ -278,19 +318,30 @@ export function renderApp() {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
   weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+
+  const planningViews = [calendarGrid, logView];
+  const allViews = [...planningViews, biometricsView];
+  const weekNav = document.querySelector('.calendar-header');
+
+  allViews.forEach(v => v.classList.add('hidden'));
+  [viewCalendarBtn, viewLogBtn, viewBiometricsBtn].forEach(b => b.classList.remove('active'));
+  weekNav.style.visibility = 'visible';
+
   if (state.currentView === 'calendar') {
     calendarGrid.classList.remove('hidden');
-    logView.classList.add('hidden');
     viewCalendarBtn.classList.add('active');
-    viewLogBtn.classList.remove('active');
     renderCalendarView(state, weekStart);
-  } else {
-    calendarGrid.classList.add('hidden');
+  } else if (state.currentView === 'log') {
     logView.classList.remove('hidden');
-    viewCalendarBtn.classList.remove('active');
     viewLogBtn.classList.add('active');
     renderLogView(state, weekStart);
+  } else if (state.currentView === 'biometrics') {
+    biometricsView.classList.remove('hidden');
+    viewBiometricsBtn.classList.add('active');
+    weekNav.style.visibility = 'hidden';
+    renderBiometricsView(state);
   }
+  
   const urlInput = document.getElementById('config-url-input');
   if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }

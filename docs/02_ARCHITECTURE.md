@@ -34,11 +34,33 @@ Il file JSON può contenere una chiave opzionale `recipeBaseUrl` al livello prin
 }
 ```
 
-## 5. Struttura Dati Chiave: `weeklyPlan`
-Il `weeklyPlan`, salvato nel `localStorage`, è la struttura dati che contiene i pasti pianificati dall'utente. Per garantire la massima resilienza dei dati, **non vengono salvati solo gli ID dei pasti, ma una copia completa dell'intero oggetto del pasto** al momento della pianificazione.
+## 5. Strutture Dati Chiave
+L'applicazione si basa su due strutture dati principali salvate nel `localStorage` per garantire la massima resilienza dei dati.
+
+### 5.1. `weeklyPlan`
+Questa struttura contiene i pasti pianificati dall'utente. Per garantire la massima resilienza, **non vengono salvati solo gli ID dei pasti, ma una copia completa dell'intero oggetto del pasto** al momento della pianificazione.
 * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
 * **Formato Valore:** `{ "id": "1", "nomePasto": "...", ... }` (Oggetto completo del pasto)
-* **Razionale:** Questo approccio di "denormalizzazione" rende il piano settimanale dell'utente auto-consistente e indipendente dal file `config.json` originale. Anche se la configurazione remota dovesse cambiare o diventare irraggiungibile, i pasti già pianificati rimarranno visibili e integri, prevenendo la perdita di dati.
+* **Razionale:** Questo approccio di "denormalizzazione" rende il piano settimanale dell'utente auto-consistente e indipendente dal file `config.json` originale.
+
+### 5.2. `biometricData`
+Questa struttura è un array che contiene lo storico delle misurazioni biometriche dell'utente.
+* **Formato:** Un array di oggetti, dove ogni oggetto rappresenta una singola misurazione.
+* **Esempio Oggetto:**
+  ```json
+  {
+    "date": "2025-09-26",
+    "weight": 80.5,
+    "muscleMass": 60.1,
+    "fatMass": 15.2,
+    "water": 55.0,
+    "fatPercentage": 18.9,
+    "bmi": 24.8,
+    "basalMetabolism": 1800,
+    "notes": "Misurazione mattutina a digiuno."
+  }
+  ```
+* **Razionale:** Un semplice array ordinabile per data è la struttura più efficiente per memorizzare e successivamente visualizzare dati cronologici, sia in forma tabellare che grafica.
 
 ## 6. Dipendenze di Terze Parti
 Per il rendering delle ricette da file Markdown, l'applicazione si affida a due librerie esterne caricate via CDN:

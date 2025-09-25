@@ -1,14 +1,12 @@
-commit_message: "fix: Risolve condivisione backup su mobile cambiando tipo file in .txt"
+commit_message: "feat: Implementa tracciamento dati biometrici (Fase 1)"
 rationale: |
-  Questa patch risolve in modo definitivo il problema `NotAllowedError: Permission denied` che impediva il funzionamento della Web Share API su dispositivi mobili.
+  In linea con il piano approvato, questa patch introduce le fondamenta della nuova funzionalità di tracciamento biometrico, trasformando l'applicazione in uno strumento di monitoraggio del progresso personale.
 
-  1.  **Causa del Problema**: L'analisi approfondita ha rivelato che l'API non supporta la condivisione di file con il tipo MIME `application/json`. I browser applicano una policy di sicurezza restrittiva sui tipi di file condivisibili, e il JSON non è tra questi. Questo causava il rifiuto immediato della richiesta da parte del browser.
+  1.  **Aggiornamento Architetturale e Documentazione**: È stata introdotta una nuova struttura dati `biometricData` nello stato globale per memorizzare le misurazioni dell'utente. Questa modifica è stata formalizzata in `docs/02_ARCHITECTURE.md`, e le relative User Stories (US-26, US-27) sono state aggiunte a `docs/01_FUNCTIONALITY.md` per documentare le nuove capacità di inserimento e visualizzazione.
 
-  2.  **Soluzione Implementata**: Per conformarsi a questa policy, il formato del file di backup è stato modificato. In `src/ui/interactions.js`, il file viene ora generato come `text/plain` con estensione `.txt`. Questo tipo di file è universalmente supportato dall'API Web Share, abilitando la funzionalità di condivisione nativa come previsto.
+  2.  **Logica di Stato e Persistenza**: Il file `src/core/state.js` è stato esteso per gestire il ciclo di vita dei dati biometrici, includendo funzioni per aggiungere, aggiornare ed eliminare misurazioni. La persistenza è garantita tramite `localStorage` e, criticamente, la nuova struttura dati è stata integrata nelle funzioni di backup e ripristino in `src/ui/interactions.js`, assicurando la completa portabilità dei dati utente.
 
-  3.  **Compatibilità per il Ripristino**: La funzione di ripristino (`handleRestoreBackup`) è stata aggiornata per accettare sia i vecchi file `.json` che i nuovi `.txt`, garantendo la retrocompatibilità per gli utenti che hanno backup precedenti.
-
-  4.  **Documentazione**: Le User Stories `US-24` e `US-25` in `docs/01_FUNCTIONALITY.md` sono state aggiornate per riflettere il nuovo formato del file di backup.
+  3.  **Nuova Vista "Progressi"**: È stata creata una nuova vista dedicata nell'interfaccia utente. In `index.html` è stato aggiunto un pulsante allo switcher di navigazione e il contenitore per la nuova schermata. Il rendering di questa vista è gestito da `src/ui/renderer.js`, che ora include un form per l'inserimento dati e una tabella per la visualizzazione dello storico. I nuovi stili sono stati aggiunti a `style.css` e tutte le stringhe di testo sono state centralizzate in `src/utils/constants.js`.
 patches:
   - file: docs/01_FUNCTIONALITY.md
     content: |
@@ -36,9 +34,427 @@ patches:
       * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
       * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
       * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
+      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
+      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare una tabella con lo storico di tutte le misurazioni biometriche che ho inserito, ordinate per data.
+  - file: docs/02_ARCHITECTURE.md
+    content: |
+      # Architettura: HealtyPro (ex NutriPlan)
+
+      ## 1. Principi Guida
+      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
+      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è stata ridisegnata per essere essenziale e intuitiva. La base di codice sottostante rimane semplice e basata su Vanilla JS.
+      * **Data-Driven:** La logica di business (regole, pasti) è definita nel file JSON di configurazione.
+      * **Maintainability (SRP):** I testi dell'interfaccia (stringhe) sono centralizzati e ogni file ha una sola responsabilità.
+
+      ## 2. Architettura PWA
+      L'applicazione include due componenti chiave per la funzionalità PWA:
+      * **`manifest.json`**: Fornisce i metadati per l'installazione (nome, icone, colori).
+      * **`sw.js` (Service Worker)**: Mette in cache i file statici dell'app ("app shell") per abilitare il funzionamento offline. Include una logica di pulizia per le cache obsolete.
+
+      ## 3. Refactoring dell'Interfaccia Utente (UI/UX)
+      L'architettura logica (core/state.js, api/configService.js) rimane invariata per semplicità e robustezza. Lo strato di presentazione (`index.html`, `style.css`, `ui/renderer.js`) è stato invece oggetto di un refactoring completo per adottare un nuovo design system. Questo disaccoppia la logica dal suo aspetto visivo, permettendo future evoluzioni senza intaccare il nucleo funzionale.
+
+      ## 4. Formato Dati: `planner-config.json`
+      Il file JSON può contenere una chiave opzionale `recipeBaseUrl` al livello principale per specificare la directory base delle ricette. Ogni pasto può avere un `recipeId` per collegare una ricetta Markdown. L'URL finale sarà costruito come `recipeBaseUrl + recipeId + '.md'`.
+      ```json
+      {
+        "recipeBaseUrl": "[https://raw.githubusercontent.com/user/repo/main/recipes/](https://raw.githubusercontent.com/user/repo/main/recipes/)",
+        "rules": [
+          {
+            "tag": "contiene-soia",
+            "type": "daily-block",
+            "limit": 1,
+            "message": "Non più di 1 pasto con soia al giorno."
+          }
+        ],
+        "meals": [
+          { "id": "1", "nomePasto": "Tofu Scrambled", "tipoPasto": "Pranzo", "calories_min": 550, "recipeId": "00001", "etichette": ["contiene-soia"] },
+          { "id": "2", "nomePasto": "Insalata Greca", "tipoPasto": "Cena", "calories_min": 300, "recipeId": "00002" }
+        ]
+      }
+      ```
+
+      ## 5. Strutture Dati Chiave
+      L'applicazione si basa su due strutture dati principali salvate nel `localStorage` per garantire la massima resilienza dei dati.
+
+      ### 5.1. `weeklyPlan`
+      Questa struttura contiene i pasti pianificati dall'utente. Per garantire la massima resilienza, **non vengono salvati solo gli ID dei pasti, ma una copia completa dell'intero oggetto del pasto** al momento della pianificazione.
+      * **Formato Chiave:** `"AAAA-MM-GG-TipoPasto"` (es. `"2025-09-22-Pranzo"`)
+      * **Formato Valore:** `{ "id": "1", "nomePasto": "...", ... }` (Oggetto completo del pasto)
+      * **Razionale:** Questo approccio di "denormalizzazione" rende il piano settimanale dell'utente auto-consistente e indipendente dal file `config.json` originale.
+
+      ### 5.2. `biometricData`
+      Questa struttura è un array che contiene lo storico delle misurazioni biometriche dell'utente.
+      * **Formato:** Un array di oggetti, dove ogni oggetto rappresenta una singola misurazione.
+      * **Esempio Oggetto:**
+        ```json
+        {
+          "date": "2025-09-26",
+          "weight": 80.5,
+          "muscleMass": 60.1,
+          "fatMass": 15.2,
+          "water": 55.0,
+          "fatPercentage": 18.9,
+          "bmi": 24.8,
+          "basalMetabolism": 1800,
+          "notes": "Misurazione mattutina a digiuno."
+        }
+        ```
+      * **Razionale:** Un semplice array ordinabile per data è la struttura più efficiente per memorizzare e successivamente visualizzare dati cronologici, sia in forma tabellare che grafica.
+
+      ## 6. Dipendenze di Terze Parti
+      Per il rendering delle ricette da file Markdown, l'applicazione si affida a due librerie esterne caricate via CDN:
+      * **Marked.js**: Una libreria veloce e completa per il parsing di Markdown in HTML.
+      * **DOMPurify**: Una libreria essenziale per la sicurezza, utilizzata per sanificare l'output HTML generato da Marked.js prima di inserirlo nel DOM, prevenendo attacchi XSS.
+
+      ## 7. Struttura dei File (Invariata)
+      ```
+      .
+      ├── index.html
+      ├── style.css
+      ├── manifest.json
+      ├── sw.js
+      ├── icon.svg
+      └── src/
+          ├── api/
+          │   └── configService.js
+          ├── core/
+          │   ├── state.js
+          │   └── validation.js
+          ├── ui/
+          │   ├── renderer.js
+          │   ├── interactions.js
+          │   └── notifications.js
+          └── utils/
+              └── constants.js
+      ```
+  - file: index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="style.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="app-title">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
+                  <h1 id="main-title"></h1>
+              </div>
+          </header>
+
+          <div id="app-container">
+              <div id="global-alert" class="global-alert hidden">
+                  <p id="global-alert-message"></p>
+                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
+              </div>
+
+              <section class="data-source-container">
+                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
+                  <button id="load-config-btn" class="btn btn-primary"></button>
+                  <button id="share-config-btn" class="btn-view" title="Condividi Configurazione">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"></path></svg>
+                  </button>
+                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
+              </section>
+
+              <main class="main-container">
+                  <section class="view-container">
+                      <header class="calendar-header">
+                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
+                          <h2 id="week-title"></h2>
+                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
+                      </header>
+                      <div class="calendar-controls">
+                        <div class="view-switcher">
+                            <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
+                            </button>
+                            <button id="view-log-btn" class="btn-view" title="Vista Registro">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
+                            </button>
+                            <button id="view-biometrics-btn" class="btn-view" title="Vista Progressi">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"></path><path d="M13 7h-2v6h2V7zm-2 8h2v2h-2v-2z"></path></svg>
+                            </button>
+                        </div>
+                        <button id="copy-week-btn" class="btn btn-secondary"></button>
+                      </div>
+                      <div id="calendar-grid" class="calendar-grid"></div>
+                      <div id="log-view" class="log-view hidden"></div>
+                      <div id="biometrics-view" class="biometrics-view hidden">
+                          <h3 id="biometrics-title"></h3>
+                          <form id="biometrics-form" class="biometrics-form">
+                              </form>
+                          <h3 id="biometrics-history-title"></h3>
+                          <div class="table-container">
+                              <table id="biometrics-table">
+                                  <thead></thead>
+                                  <tbody></tbody>
+                              </table>
+                          </div>
+                      </div>
+                  </section>
+              </main>
+
+              <footer class="app-footer">
+                  <button id="restore-btn" class="btn btn-secondary"></button>
+                  <button id="backup-btn" class="btn btn-secondary"></button>
+                  <button id="reset-btn" class="btn btn-secondary"></button>
+              </footer>
+          </div>
+
+          <div id="info-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="info-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
+                  </div>
+                  <div class="modal-body">
+                      <p id="info-modal-desc"></p>
+                      <pre><code id="info-modal-json-example"></code></pre>
+                  </div>
+              </div>
+          </div>
+
+          <div id="selection-modal" class="modal-overlay modal-hidden">
+              <div class="modal-content">
+                  <div class="modal-header">
+                    <h3 id="selection-modal-title"></h3>
+                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
+                  </div>
+                  <div id="selection-modal-list" class="modal-body selection-list"></div>
+              </div>
+          </div>
+
+          <div id="day-editor-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="day-editor-title"></h3>
+                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
+                </div>
+                <div id="day-editor-body" class="modal-body day-editor-list"></div>
+            </div>
+          </div>
+          
+          <div id="confirm-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="confirm-modal-title"></h3>
+                </div>
+                <div class="modal-body">
+                  <p id="confirm-modal-message"></p>
+                </div>
+                <div class="modal-footer">
+                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+                  <button id="confirm-modal-confirm-btn" class="btn"></button>
+                </div>
+            </div>
+          </div>
+
+          <div id="recipe-modal" class="modal-overlay modal-hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                  <h3 id="recipe-modal-title"></h3>
+                  <button class="modal-close-btn" data-target="recipe-modal">&times;</button>
+                </div>
+                <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+            </div>
+          </div>
+
+      </body>
+      </html>
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS } from '../utils/constants.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        biometricData: [],
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'calendar', // 'calendar', 'log', or 'biometrics'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        state.recipeBaseUrl = config.recipeBaseUrl || '';
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+
+        if (plan) {
+          try {
+            state.weeklyPlan = JSON.parse(plan);
+          } catch (e) {
+            console.error("Error parsing weeklyPlan from localStorage", e);
+            state.weeklyPlan = {};
+          }
+        }
+        if (url) {
+          state.configUrl = url;
+        }
+        if (biometrics) {
+          try {
+            state.biometricData = JSON.parse(biometrics);
+          } catch (e) {
+            console.error("Error parsing biometricData from localStorage", e);
+            state.biometricData = [];
+          }
+        }
+      }
+
+      export function setAppState(backupData) {
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal }; // Store a full copy of the meal object
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetEntirePlan() {
+        state.weeklyPlan = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (['calendar', 'log', 'biometrics'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject }; // Store a copy
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/ui/interactions.js
     content: |
-      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState } from '../core/state.js';
+      import { resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView, copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry, deleteBiometricEntry } from '../core/state.js';
       import { fetchAndParseConfig } from '../api/configService.js';
       import { showNotification } from './notifications.js';
       import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
@@ -110,7 +526,8 @@ patches:
         const state = getState();
         const backupData = {
           configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan
+          weeklyPlan: state.weeklyPlan,
+          biometricData: state.biometricData
         };
         const fileName = 'healtypro_backup.txt';
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
@@ -194,6 +611,48 @@ patches:
           'danger'
         );
       }
+      
+      function handleBiometricsForm(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const entry = {};
+        for (let [key, value] of formData.entries()) {
+          entry[key] = value;
+        }
+        addOrUpdateBiometricEntry(entry);
+        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+      }
+
+      function handleBiometricsTableClick(e) {
+        const btnEdit = e.target.closest('.btn-edit-biometrics');
+        const btnDelete = e.target.closest('.btn-delete-biometrics');
+
+        if (btnEdit) {
+            const date = btnEdit.dataset.date;
+            const state = getState();
+            const entry = state.biometricData.find(e => e.date === date);
+            if (entry) {
+                const form = document.getElementById('biometrics-form');
+                for (const key in entry) {
+                    if (form.elements[key]) {
+                        form.elements[key].value = entry[key];
+                    }
+                }
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+        } else if (btnDelete) {
+            const date = btnDelete.dataset.date;
+            showConfirmModal(
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE,
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+                () => {
+                    deleteBiometricEntry(date);
+                    showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info');
+                },
+                'danger'
+            );
+        }
+      }
 
       export function initializeEventListeners() {
         document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
@@ -222,11 +681,14 @@ patches:
 
         document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
         document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('biometrics-view').addEventListener('submit', handleBiometricsForm);
+        document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
         document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
         document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
 
         document.getElementById('view-calendar-btn').addEventListener('click', () => setView('calendar'));
         document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('view-biometrics-btn').addEventListener('click', () => setView('biometrics'));
         document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
         document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
 
@@ -234,5 +696,696 @@ patches:
             document.getElementById('global-alert').classList.add('hidden');
         });
       }
-commands:
-  - "echo 'Funzionalità di condivisione nativa ripristinata e resa pienamente funzionante.'"
+  - file: src/ui/renderer.js
+    content: |
+      import { getState, updateWeeklyPlan } from '../core/state.js';
+      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
+      import { showNotification } from './notifications.js';
+
+      const calendarGrid = document.getElementById('calendar-grid');
+      const logView = document.getElementById('log-view');
+      const biometricsView = document.getElementById('biometrics-view');
+      const weekTitleEl = document.getElementById('week-title');
+      const viewCalendarBtn = document.getElementById('view-calendar-btn');
+      const viewLogBtn = document.getElementById('view-log-btn');
+      const viewBiometricsBtn = document.getElementById('view-biometrics-btn');
+      const globalAlert = document.getElementById('global-alert');
+      const globalAlertMessage = document.getElementById('global-alert-message');
+
+      const selectionModal = document.getElementById('selection-modal');
+      const selectionModalTitle = document.getElementById('selection-modal-title');
+      const selectionModalList = document.getElementById('selection-modal-list');
+      const dayEditorModal = document.getElementById('day-editor-modal');
+      const dayEditorTitle = document.getElementById('day-editor-title');
+      const dayEditorBody = document.getElementById('day-editor-body');
+
+      const confirmModal = document.getElementById('confirm-modal');
+      const confirmModalTitle = document.getElementById('confirm-modal-title');
+      const confirmModalMessage = document.getElementById('confirm-modal-message');
+      const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+      const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
+
+      const recipeModal = document.getElementById('recipe-modal');
+      const recipeModalTitle = document.getElementById('recipe-modal-title');
+      const recipeModalBody = document.getElementById('recipe-modal-body');
+
+      let currentEditingDayISO = null;
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || !meal.calories_min) return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0;
+        let max = 0;
+        MEAL_TYPES.forEach(type => {
+          const slotId = `${isoDate}-${type}`;
+          const meal = weeklyPlan[slotId]; // Meal is now the full object
+          if (meal && meal.calories_min) {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
+        return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+                  </button>`;
+        }
+        return '';
+      }
+
+      export async function showRecipeModal(meal) {
+        const state = getState();
+        if (!meal) return;
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModalTitle.textContent = meal.nomePasto;
+        recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          const markdown = await response.text();
+          recipeModalBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+        } catch (error) {
+          recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
+        }
+      }
+
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        confirmModalTitle.textContent = title;
+        confirmModalMessage.textContent = message;
+        confirmModalConfirmBtn.className = `btn btn-${type}`;
+        confirmModalConfirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        confirmModalCancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          confirmModalCancelBtn.removeEventListener('click', cancelHandler);
+          confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
+        };
+
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => {
+          onConfirm();
+          cleanup();
+        };
+        
+        confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
+        
+        confirmModal.classList.remove('modal-hidden');
+      }
+
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const mealType = slotId.substring(11);
+        selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        selectionModalList.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        const closeButton = selectionModal.querySelector('.modal-close-btn');
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+          closeButton.removeEventListener('click', closeAndReturn);
+          selectionModal.removeEventListener('click', overlayClickHandler);
+        };
+        const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
+        selectionModalList.onclick = (e) => {
+          const item = e.target.closest('.selection-item');
+          if(item) {
+            updateWeeklyPlan(slotId, item.dataset.mealId);
+            closeAndReturn();
+          }
+        };
+        closeButton.addEventListener('click', closeAndReturn, { once: true });
+        selectionModal.addEventListener('click', overlayClickHandler);
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        dayEditorTitle.textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const meal = state.weeklyPlan[slotId]; // Get the full meal object directly
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            const recipeButtonHTML = getRecipeButtonHTML(meal, state);
+            mealDetailsHTML = `
+              <div class="meal-details">
+                <span class="meal-details__name">${meal.nomePasto}</span>
+                <div class="meal-actions">
+                  ${recipeButtonHTML}
+                  <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
+                </div>
+              </div>`;
+          }
+
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+
+        dayEditorBody.onclick = (e) => {
+          const btnAdd = e.target.closest('.btn-add-meal');
+          const btnRemove = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+
+          if (btnAdd) {
+            dayEditorModal.classList.add('modal-hidden');
+            openSelectionModal(btnAdd.dataset.slotId);
+          } else if (btnRemove) {
+            updateWeeklyPlan(btnRemove.dataset.slotId, null);
+            openDayEditorModal(isoDate);
+          } else if (btnRecipe) {
+            const mealId = btnRecipe.dataset.mealId;
+            const meal = Object.values(state.weeklyPlan).find(m => m && m.id === mealId) || state.masterMealList.find(m => m.id === mealId);
+            if (meal) showRecipeModal(meal);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+      }
+
+      function renderCalendarView(state, weekStart) {
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        logView.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => {
+            const slotId = `${isoDate}-${type}`;
+            return { type, meal: state.weeklyPlan[slotId] };
+          }).filter(item => item.meal);
+          
+          if (dayMeals.length > 0) {
+            const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+            const dayLog = document.createElement('div');
+            dayLog.className = 'log-day';
+            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
+              + dayMeals.map(item => {
+                const recipeButtonHTML = getRecipeButtonHTML(item.meal, state);
+                return `
+                  <div class="log-item">
+                    <div class="log-item__name">
+                      <strong>${item.type}:</strong>
+                      <span>${item.meal.nomePasto}</span>
+                      ${recipeButtonHTML}
+                    </div>
+                    <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
+                  </div>
+                `;
+              }).join('');
+            logView.appendChild(dayLog);
+          }
+        }
+        if (logView.innerHTML === '') {
+          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+        }
+      }
+
+      function renderBiometricsView(state) {
+        const form = document.getElementById('biometrics-form');
+        const tableBody = document.querySelector('#biometrics-table tbody');
+        const tableHead = document.querySelector('#biometrics-table thead');
+
+        const today = toISODateString(new Date());
+
+        form.innerHTML = `
+            ${BIOMETRIC_FIELDS.map(field => `
+                <div class="form-group">
+                    <label for="bio-${field.id}">${field.label}</label>
+                    ${field.type === 'textarea' ?
+                        `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` :
+                        `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${today}"` : ''}>`
+                    }
+                </div>
+            `).join('')}
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button>
+                <button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button>
+            </div>
+        `;
+
+        tableHead.innerHTML = `<tr>${BIOMETRIC_FIELDS.map(f => `<th>${f.label}</th>`).join('')}<th>Azioni</th></tr>`;
+
+        tableBody.innerHTML = state.biometricData.map(entry => `
+            <tr data-date="${entry.date}">
+                ${BIOMETRIC_FIELDS.map(field => `<td>${entry[field.id] || ''}</td>`).join('')}
+                <td class="biometrics-actions">
+                    <button class="btn-edit-biometrics" data-date="${entry.date}" title="Modifica">✏️</button>
+                    <button class="btn-delete-biometrics" data-date="${entry.date}" title="Elimina">🗑️</button>
+                </td>
+            </tr>
+        `).join('');
+      }
+
+      export function renderApp() {
+        const state = getState();
+        if (Object.keys(state.weeklyPlan).length === 0 && state.masterMealList.length === 0 && state.currentView !== 'biometrics') {
+            globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
+            globalAlert.classList.remove('hidden');
+        } else {
+            globalAlert.classList.add('hidden');
+        }
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+
+        const planningViews = [calendarGrid, logView];
+        const allViews = [...planningViews, biometricsView];
+        const weekNav = document.querySelector('.calendar-header');
+
+        allViews.forEach(v => v.classList.add('hidden'));
+        [viewCalendarBtn, viewLogBtn, viewBiometricsBtn].forEach(b => b.classList.remove('active'));
+        weekNav.style.visibility = 'visible';
+
+        if (state.currentView === 'calendar') {
+          calendarGrid.classList.remove('hidden');
+          viewCalendarBtn.classList.add('active');
+          renderCalendarView(state, weekStart);
+        } else if (state.currentView === 'log') {
+          logView.classList.remove('hidden');
+          viewLogBtn.classList.add('active');
+          renderLogView(state, weekStart);
+        } else if (state.currentView === 'biometrics') {
+          biometricsView.classList.remove('hidden');
+          viewBiometricsBtn.classList.add('active');
+          weekNav.style.visibility = 'hidden';
+          renderBiometricsView(state);
+        }
+        
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: src/utils/constants.js
+    content: |
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [
+        'Colazione',
+        'Spuntino Mattutino',
+        'Pranzo',
+        'Spuntino Pomeridiano',
+        'Cena'
+      ];
+      export const BIOMETRIC_FIELDS = [
+        { id: 'date', label: 'Data', type: 'date', props: 'required' },
+        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'muscleMass', label: 'Massa Muscolare (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatMass', label: 'Massa Grassa (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+        { id: 'basalMetabolism', label: 'Metabolismo Basale (kcal)', type: 'number', props: 'step="1"' },
+        { id: 'notes', label: 'Note', type: 'textarea' }
+      ];
+
+      export const UI_TEXT = {
+        MAIN_TITLE: 'HealtyPro',
+        SUBTITLE: 'Crea e gestisci piani alimentari flessibili. Carica la tua configurazione e inizia.',
+        LOAD_BUTTON: 'Carica',
+        COPY_WEEK_BTN: 'Copia Precedente',
+        SHARE_CONFIG_BTN: 'Condividi Config',
+        BACKUP_BTN: 'Salva Backup',
+        RESTORE_BTN: 'Ripristina Backup',
+        WEEKLY_PLAN_TITLE: 'Piano Settimanale',
+        CALENDAR_PLACEHOLDER: 'Carica una configurazione per visualizzare il calendario.',
+        RESET_BUTTON: 'Pulisci Settimana',
+        INFO_MODAL_TITLE: 'Formato `config.json` Richiesto',
+        INFO_MODAL_DESC: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.',
+        SELECT_MEAL_TITLE: 'Scegli',
+        NO_MEALS_AVAILABLE: 'Nessun pasto di questo tipo disponibile.',
+        KCAL_LABEL: 'Kcal',
+        CONFIG_URL_EMPTY_ERROR: 'Per favore, inserisci un URL.',
+        CONFIG_LOAD_SUCCESS: 'Configurazione caricata!',
+        COPY_WEEK_CONFIRM_TITLE: 'Copia Settimana',
+        COPY_WEEK_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?',
+        COPY_WEEK_SUCCESS: 'Piano settimanale copiato!',
+        RESET_WEEK_CONFIRM_TITLE: 'Pulisci Settimana',
+        RESET_WEEK_CONFIRM_MSG: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.',
+        RESET_WEEK_SUCCESS: 'Settimana pulita!',
+        SHARE_NO_URL_INFO: 'Nessun URL di configurazione da condividere.',
+        SHARE_SUCCESS: 'Link di condivisione copiato!',
+        SHARE_ERROR: 'Impossibile copiare il link.',
+        BACKUP_SHARE_TITLE: 'Backup Dati HealtyPro',
+        BACKUP_SUCCESS: 'Backup salvato con successo!',
+        RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
+        RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
+        RESTORE_SUCCESS: 'Backup ripristinato con successo!',
+        RESTORE_INVALID_FILE: 'File di backup non valido o corrotto.',
+        EDITOR_MODAL_TITLE_PREFIX: 'Editor:',
+        ADD_MEAL_BTN: 'Aggiungi',
+        RECIPE_BUTTON_TITLE: 'Mostra ricetta',
+        RECIPE_MODAL_LOADING: 'Caricamento ricetta...',
+        RECIPE_MODAL_LOAD_ERROR: "Impossibile caricare la ricetta. Controlla l'URL e la connessione.",
+        RECIPE_LOAD_FAIL_MSG: 'Caricamento ricetta fallito',
+        LOG_VIEW_EMPTY: 'Nessun pasto pianificato per questa settimana.',
+        CONFIRM_MODAL_CONFIRM_BTN: 'Conferma',
+        CONFIRM_MODAL_CANCEL_BTN: 'Annulla',
+        LOAD_SHARED_CONFIG_TITLE: 'Caricare Nuova Configurazione?',
+        LOAD_SHARED_CONFIG_MSG: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.',
+        BIOMETRICS_FORM_TITLE: 'Inserisci Misurazione',
+        BIOMETRICS_HISTORY_TITLE: 'Storico Misurazioni',
+        BIOMETRICS_SAVE_BTN: 'Salva Dati',
+        BIOMETRICS_CLEAR_BTN: 'Annulla',
+        BIOMETRICS_SAVE_SUCCESS: 'Dati biometrici salvati!',
+        BIOMETRICS_DELETE_CONFIRM_TITLE: 'Elimina Misurazione',
+        BIOMETRICS_DELETE_CONFIRM_MSG: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.',
+        BIOMETRICS_DELETE_SUCCESS: 'Misurazione eliminata.',
+        INFO_MODAL_EXAMPLE_JSON:
+      `{
+        "rules": [
+          {
+            "tag": "contiene-soia",
+            "type": "daily-block",
+            "limit": 1,
+            "message": "Non più di 1 pasto con soia al giorno."
+          }
+        ],
+        "meals": [
+          { 
+            "id": "1", 
+            "tipoPasto": "Pranzo", 
+            "calories_min": 550, 
+            "calories_max": 600, 
+            "etichette": ["contiene-soia"] 
+          },
+          { 
+            "id": "2", 
+            "tipoPasto": "Cena", 
+            "calories_min": 300 
+          }
+        ]
+      }`
+      };
+  - file: style.css
+    content: |
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
+
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 1rem;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.4s ease;
+        cursor: pointer;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
+
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
+      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+      .alert-close-btn:hover { color: var(--text-color); }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      .app-footer {
+          padding-top: 1.5rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+          gap: 0.75rem;
+      }
+
+      /* --- CALENDAR & LOG VIEW --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
+      }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { 
+        color: var(--primary-color); border-bottom: 1px solid var(--border-color); 
+        padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; 
+        display: flex; justify-content: space-between; align-items: center;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { 
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+
+      /* --- BIOMETRICS VIEW --- */
+      .biometrics-view h3 { color: var(--primary-color); margin-bottom: 1rem; margin-top: 2rem; }
+      .biometrics-form {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+          padding: 1.5rem;
+          background: var(--card-color);
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
+      }
+      .form-group { display: flex; flex-direction: column; }
+      .form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      .form-group input, .form-group textarea {
+          padding: 0.75rem; border: 1px solid var(--border-color);
+          border-radius: 8px; font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
+      .form-group textarea { min-height: 80px; resize: vertical; }
+      .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
+      .table-container { overflow-x: auto; }
+      #biometrics-table {
+          width: 100%; border-collapse: collapse; margin-top: 1rem;
+          background-color: var(--card-color); border-radius: 8px;
+          border: 1px solid var(--border-color); overflow: hidden;
+      }
+      #biometrics-table th, #biometrics-table td {
+          padding: 0.75rem 1rem; text-align: left;
+          border-bottom: 1px solid var(--border-color);
+          white-space: nowrap;
+      }
+      #biometrics-table thead th { background-color: var(--bg-color); font-size: 0.85rem; text-transform: uppercase; color: var(--text-color-muted); }
+      #biometrics-table tbody tr:last-child td { border-bottom: none; }
+      #biometrics-table tbody tr:hover { background-color: var(--bg-color); }
+      .biometrics-actions button { background: none; border: none; cursor: pointer; font-size: 1.2rem; }
+
+      /* --- BUTTONS --- */
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { 
+        display: flex; align-items: center; gap: 1rem;
+        padding: 0.75rem; background: var(--bg-color); 
+        border-radius: 8px; margin-bottom: 0.75rem;
+      }
+      .day-editor-slot:last-child { margin-bottom: 0; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+      .meal-details__name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+      .btn-view-recipe:hover { color: var(--text-color); }
+
+      .recipe-body { line-height: 1.6; }
+      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+      .recipe-body li { margin-bottom: 0.5rem; }
+      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
+      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
+      .recipe-body th { background-color: var(--bg-color); }
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }
