@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healtypro-v1';
+const CACHE_NAME = 'healtypro-v2';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
