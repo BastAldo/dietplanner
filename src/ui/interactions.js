@@ -54,22 +54,42 @@ function handleShareConfig() {
   });
 }
 
-function handleSaveBackup() {
+async function handleSaveBackup() {
   const state = getState();
   const backupData = {
     configUrl: state.configUrl,
     weeklyPlan: state.weeklyPlan
   };
+  const fileName = 'healtypro_backup.json';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'healtypro_backup.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+  
+  // Use Web Share API if available (modern mobile browsers)
+  if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName)] })) {
+    try {
+      const file = new File([blob], fileName, { type: 'application/json' });
+      await navigator.share({
+        title: UI_TEXT.BACKUP_SHARE_TITLE,
+        files: [file],
+      });
+      showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Share API error:', error);
+        showNotification(UI_TEXT.BACKUP_SHARE_ERROR, 'error');
+      }
+    }
+  } else {
+    // Fallback to direct download for desktop browsers
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+  }
 }
 
 function handleRestoreBackup() {

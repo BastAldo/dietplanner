@@ -1,12 +1,10 @@
-commit_message: "feat: Implementa ripristino backup, allinea branding e rimuovi codice morto"
+commit_message: "feat: Migliora UX backup con Web Share API e corregge UI"
 rationale: |
-  In linea con il piano d'azione approvato, questa patch introduce tre cambiamenti strategici per migliorare la robustezza e la manutenibilità dell'applicazione.
+  In risposta al feedback dell'utente, questa patch migliora l'esperienza d'uso su dispositivi mobili e corregge un'imperfezione stilistica.
 
-  1.  **Implementazione del Ripristino Backup (US-25)**: È stata aggiunta la funzionalità critica di ripristino da un file di backup locale. Questo completa il ciclo di backup/restore, permettendo agli utenti di ricaricare i propri dati in modo sicuro. La logica è stata implementata in `src/ui/interactions.js` con un flusso di conferma per l'utente, e i relativi elementi UI sono stati aggiunti a `index.html` e `src/utils/constants.js`.
+  1.  **Integrazione della Web Share API**: La funzionalità di salvataggio del backup (`handleSaveBackup` in `src/ui/interactions.js`) è stata potenziata. Ora rileva se il browser supporta la Web Share API. Se supportata (tipicamente su mobile), invoca la finestra di condivisione nativa del sistema operativo, permettendo all'utente di salvare il file di backup in modo intuitivo e familiare (es. su Google Drive, File locali, o inviarlo tramite app di messaggistica). Sui sistemi non supportati (desktop), viene mantenuto il comportamento di download diretto come fallback, garantendo la compatibilità universale. La User Story `US-24` è stata aggiornata per riflettere questo comportamento avanzato.
 
-  2.  **Allineamento Branding a "HealtyPro"**: In conformità con la documentazione (`00_HEALTYPRO_SPEC.md`), il branding dell'applicazione è stato aggiornato da "NutriPlan" a "HealtyPro" in tutti i file rilevanti, inclusi `manifest.json`, `sw.js` e le costanti UI. Come richiesto, i testi principali sono stati centralizzati nel file `constants.js` per garantire coerenza.
-
-  3.  **Rimozione Codice Morto**: Sono stati eliminati i file JavaScript obsoleti (`mealService.js`, `calendar.js`, `library.js`) che erano residui della precedente architettura. Questa pulizia riduce la complessità della codebase e la allinea all'architettura documentata, migliorando la leggibilità e la manutenibilità futura.
+  2.  **Correzione Stile Footer**: È stato risolto un problema di layout nel footer dell'applicazione. Aggiungendo la proprietà `gap` alla classe `.app-footer` in `style.css`, i pulsanti ora sono correttamente spaziati, migliorando la leggibilità e l'estetica generale dell'interfaccia.
 patches:
   - file: docs/01_FUNCTIONALITY.md
     content: |
@@ -32,386 +30,209 @@ patches:
       * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
       * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
       * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
-      * **US-24 (Backup Dati Locale):** Come utente, voglio poter scaricare un singolo file JSON contenente tutti i miei dati (`configUrl` e `weeklyPlan`) per conservarne una copia di backup sicura sul mio computer.
+      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo per inviarlo ad altre app o salvarlo in una posizione a mia scelta.
       * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
-  - file: index.html
+  - file: style.css
     content: |
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#1a1a1d">
-          <title>HealtyPro</title>
-          <link rel="stylesheet" href="style.css">
-          <link rel="manifest" href="manifest.json">
-          <link rel="icon" href="favicon.ico" type="image/x-icon">
-          <link rel="apple-touch-icon" href="icon.svg">
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
-          <script src="src/main.js" type="module" defer></script>
-      </head>
-      <body>
-          <div id="toast-container" class="toast-container"></div>
-
-          <header class="app-header">
-              <div class="app-title">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
-                  <h1 id="main-title"></h1>
-              </div>
-          </header>
-
-          <div id="app-container">
-              <div id="global-alert" class="global-alert hidden">
-                  <p id="global-alert-message"></p>
-                  <button id="global-alert-close" class="alert-close-btn">&times;</button>
-              </div>
-
-              <section class="data-source-container">
-                  <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
-                  <button id="load-config-btn" class="btn btn-primary"></button>
-                  <button id="share-config-btn" class="btn-view" title="Condividi Configurazione">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"></path></svg>
-                  </button>
-                  <span id="info-icon" title="Mostra formato JSON richiesto">ℹ️</span>
-              </section>
-
-              <main class="main-container">
-                  <section class="view-container">
-                      <header class="calendar-header">
-                          <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
-                          <h2 id="week-title"></h2>
-                          <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
-                      </header>
-                      <div class="calendar-controls">
-                        <div class="view-switcher">
-                            <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zM5 22h14c1.103 0 2-.897 2-2V6c0-1.103-.897-2-2-2h-2V2h-2v2H9V2H7v2H5c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2zM5 6h14v2H5V6z"></path></svg>
-                            </button>
-                            <button id="view-log-btn" class="btn-view" title="Vista Registro">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"></path></svg>
-                            </button>
-                        </div>
-                        <button id="copy-week-btn" class="btn btn-secondary"></button>
-                      </div>
-                      <div id="calendar-grid" class="calendar-grid"></div>
-                      <div id="log-view" class="log-view hidden"></div>
-                  </section>
-              </main>
-
-              <footer class="app-footer">
-                  <button id="restore-btn" class="btn btn-secondary"></button>
-                  <button id="backup-btn" class="btn btn-secondary"></button>
-                  <button id="reset-btn" class="btn btn-secondary"></button>
-              </footer>
-          </div>
-
-          <div id="info-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <div class="modal-header">
-                    <h3 id="info-modal-title"></h3>
-                    <button class="modal-close-btn" data-target="info-modal">&times;</button>
-                  </div>
-                  <div class="modal-body">
-                      <p id="info-modal-desc"></p>
-                      <pre><code id="info-modal-json-example"></code></pre>
-                  </div>
-              </div>
-          </div>
-
-          <div id="selection-modal" class="modal-overlay modal-hidden">
-              <div class="modal-content">
-                  <div class="modal-header">
-                    <h3 id="selection-modal-title"></h3>
-                    <button class="modal-close-btn" data-target="selection-modal">&times;</button>
-                  </div>
-                  <div id="selection-modal-list" class="modal-body selection-list"></div>
-              </div>
-          </div>
-
-          <div id="day-editor-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="day-editor-title"></h3>
-                  <button class="modal-close-btn" data-target="day-editor-modal">&times;</button>
-                </div>
-                <div id="day-editor-body" class="modal-body day-editor-list"></div>
-            </div>
-          </div>
-          
-          <div id="confirm-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="confirm-modal-title"></h3>
-                </div>
-                <div class="modal-body">
-                  <p id="confirm-modal-message"></p>
-                </div>
-                <div class="modal-footer">
-                  <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
-                  <button id="confirm-modal-confirm-btn" class="btn"></button>
-                </div>
-            </div>
-          </div>
-
-          <div id="recipe-modal" class="modal-overlay modal-hidden">
-            <div class="modal-content">
-                <div class="modal-header">
-                  <h3 id="recipe-modal-title"></h3>
-                  <button class="modal-close-btn" data-target="recipe-modal">&times;</button>
-                </div>
-                <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-            </div>
-          </div>
-
-      </body>
-      </html>
-  - file: manifest.json
-    content: |
-      {
-        "name": "HealtyPro",
-        "short_name": "HealtyPro",
-        "start_url": "/dietplanner/",
-        "display": "standalone",
-        "background_color": "#121212",
-        "theme_color": "#1E1E1E",
-        "description": "Un assistente per creare e gestire piani alimentari flessibili.",
-        "icons": [
-          {
-            "src": "icons/icon-192x192.png",
-            "sizes": "192x192",
-            "type": "image/png"
-          },
-          {
-            "src": "icons/icon-512x512.png",
-            "sizes": "512x512",
-            "type": "image/png"
-          }
-        ],
-        "screenshots": [
-          {
-            "src": "screenshots/screen_mobile.png",
-            "sizes": "540x720",
-            "type": "image/png",
-            "form_factor": "narrow"
-          },
-          {
-            "src": "screenshots/screen_desktop.png",
-            "sizes": "1280x720",
-            "type": "image/png",
-            "form_factor": "wide"
-          }
-        ]
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
       }
-  - file: sw.js
-    content: |
-      const CACHE_NAME = 'healtypro-v3';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'style.css',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/core/state.js',
-        'src/core/validation.js',
-        'src/ui/interactions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/utils/constants.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
 
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed;
+        top: 80px;
+        right: 1rem;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.4s ease;
+        cursor: pointer;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translateX(0);
+      }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
 
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                // Return true if you want to remove this cache,
-                // and false otherwise.
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
+      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+      .alert-close-btn:hover { color: var(--text-color); }
 
-      self.addEventListener('fetch', (event) => {
-        // Only apply cache-first strategy to same-origin requests.
-        // This prevents errors with cross-origin requests like Google Fonts or remote JSON files.
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
-        } else {
-          // For all other requests, go to the network directly.
-          event.respondWith(fetch(event.request));
-        }
-      });
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES } from '../utils/constants.js';
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color);
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
 
-      let state = {
-        rules: [],
-        masterMealList: [],
-        weeklyPlan: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        currentView: 'calendar', // 'calendar' or 'log'
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-
-      export function setPlannerConfig(config) {
-        state.rules = config.rules || [];
-        state.masterMealList = config.meals || [];
-        state.recipeBaseUrl = config.recipeBaseUrl || '';
-        notify();
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      .app-footer {
+          padding-top: 1.5rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+          gap: 0.75rem;
       }
 
-      export function setConfigUrl(url) {
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
+      /* --- CALENDAR & LOG VIEW --- */
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .calendar-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; cursor: pointer; transition: border-color 0.2s, transform 0.2s;
       }
+      .day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
 
-      export function saveStateToLocalStorage() {
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { 
+        color: var(--primary-color); border-bottom: 1px solid var(--border-color); 
+        padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; 
+        display: flex; justify-content: space-between; align-items: center;
       }
-
-      export function loadStateFromLocalStorage() {
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        if (plan) {
-          try {
-            state.weeklyPlan = JSON.parse(plan);
-          } catch (e) {
-            console.error("Error parsing weeklyPlan from localStorage", e);
-            state.weeklyPlan = {};
-          }
-        }
-        if (url) {
-          state.configUrl = url;
-        }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { 
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem;
+        border-bottom: 1px solid var(--border-color);
       }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
 
-      export function setAppState(backupData) {
-        if (backupData.weeklyPlan) {
-          state.weeklyPlan = backupData.weeklyPlan;
-        }
-        if (backupData.configUrl) {
-          state.configUrl = backupData.configUrl;
-        }
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+
+      /* --- BUTTONS --- */
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+      .calendar-header .btn-secondary { padding: 0.5rem 1rem; }
+
+      /* --- MODAL STYLES --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { 
+        display: flex; align-items: center; gap: 1rem;
+        padding: 0.75rem; background: var(--bg-color); 
+        border-radius: 8px; margin-bottom: 0.75rem;
       }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal }; // Store a full copy of the meal object
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
+      .day-editor-slot:last-child { margin-bottom: 0; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+      .meal-details__name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
       }
+      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+      .btn-view-recipe:hover { color: var(--text-color); }
 
-      export function resetEntirePlan() {
-        state.weeklyPlan = {};
-        saveStateToLocalStorage();
-        notify();
-      }
+      .recipe-body { line-height: 1.6; }
+      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+      .recipe-body li { margin-bottom: 0.5rem; }
+      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
+      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
+      .recipe-body th { background-color: var(--bg-color); }
 
-      export function resetCurrentWeek() {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        if (view === 'calendar' || view === 'log') {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function copyPreviousWeek() {
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject }; // Store a copy
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-        }
-        saveStateToLocalStorage();
-        notify();
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
   - file: src/ui/interactions.js
     content: |
@@ -471,22 +292,42 @@ patches:
         });
       }
 
-      function handleSaveBackup() {
+      async function handleSaveBackup() {
         const state = getState();
         const backupData = {
           configUrl: state.configUrl,
           weeklyPlan: state.weeklyPlan
         };
+        const fileName = 'healtypro_backup.json';
         const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'healtypro_backup.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+        
+        // Use Web Share API if available (modern mobile browsers)
+        if (navigator.canShare && navigator.canShare({ files: [new File([blob], fileName)] })) {
+          try {
+            const file = new File([blob], fileName, { type: 'application/json' });
+            await navigator.share({
+              title: UI_TEXT.BACKUP_SHARE_TITLE,
+              files: [file],
+            });
+            showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.error('Share API error:', error);
+              showNotification(UI_TEXT.BACKUP_SHARE_ERROR, 'error');
+            }
+          }
+        } else {
+          // Fallback to direct download for desktop browsers
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+        }
       }
 
       function handleRestoreBackup() {
@@ -588,304 +429,6 @@ patches:
             document.getElementById('global-alert').classList.add('hidden');
         });
       }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState, updateWeeklyPlan } from '../core/state.js';
-      import { DAYS, MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-      import { showNotification } from './notifications.js';
-
-      const calendarGrid = document.getElementById('calendar-grid');
-      const logView = document.getElementById('log-view');
-      const weekTitleEl = document.getElementById('week-title');
-      const viewCalendarBtn = document.getElementById('view-calendar-btn');
-      const viewLogBtn = document.getElementById('view-log-btn');
-      const globalAlert = document.getElementById('global-alert');
-      const globalAlertMessage = document.getElementById('global-alert-message');
-
-      const selectionModal = document.getElementById('selection-modal');
-      const selectionModalTitle = document.getElementById('selection-modal-title');
-      const selectionModalList = document.getElementById('selection-modal-list');
-      const dayEditorModal = document.getElementById('day-editor-modal');
-      const dayEditorTitle = document.getElementById('day-editor-title');
-      const dayEditorBody = document.getElementById('day-editor-body');
-
-      const confirmModal = document.getElementById('confirm-modal');
-      const confirmModalTitle = document.getElementById('confirm-modal-title');
-      const confirmModalMessage = document.getElementById('confirm-modal-message');
-      const confirmModalCancelBtn = document.getElementById('confirm-modal-cancel-btn');
-      const confirmModalConfirmBtn = document.getElementById('confirm-modal-confirm-btn');
-
-      const recipeModal = document.getElementById('recipe-modal');
-      const recipeModalTitle = document.getElementById('recipe-modal-title');
-      const recipeModalBody = document.getElementById('recipe-modal-body');
-
-      let currentEditingDayISO = null;
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function formatMealCalories(meal) {
-        if (!meal || !meal.calories_min) return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0;
-        let max = 0;
-        MEAL_TYPES.forEach(type => {
-          const slotId = `${isoDate}-${type}`;
-          const meal = weeklyPlan[slotId]; // Meal is now the full object
-          if (meal && meal.calories_min) {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        if (min === max) return `${UI_TEXT.KCAL_LABEL}: ${min}`;
-        return `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
-                  </button>`;
-        }
-        return '';
-      }
-
-      export async function showRecipeModal(meal) {
-        const state = getState();
-        if (!meal) return;
-        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
-        recipeModalTitle.textContent = meal.nomePasto;
-        recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
-        recipeModal.classList.remove('modal-hidden');
-
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
-          const markdown = await response.text();
-          recipeModalBody.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
-        } catch (error) {
-          recipeModalBody.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
-          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
-        }
-      }
-
-      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
-        confirmModalTitle.textContent = title;
-        confirmModalMessage.textContent = message;
-        confirmModalConfirmBtn.className = `btn btn-${type}`;
-        confirmModalConfirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
-        confirmModalCancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
-
-        const cleanup = () => {
-          confirmModal.classList.add('modal-hidden');
-          confirmModalCancelBtn.removeEventListener('click', cancelHandler);
-          confirmModalConfirmBtn.removeEventListener('click', confirmHandler);
-        };
-
-        const cancelHandler = () => cleanup();
-        const confirmHandler = () => {
-          onConfirm();
-          cleanup();
-        };
-        
-        confirmModalCancelBtn.addEventListener('click', cancelHandler, { once: true });
-        confirmModalConfirmBtn.addEventListener('click', confirmHandler, { once: true });
-        
-        confirmModal.classList.remove('modal-hidden');
-      }
-
-      export function openSelectionModal(slotId) {
-        const state = getState();
-        const mealType = slotId.substring(11);
-        selectionModalTitle.textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        selectionModalList.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        const closeButton = selectionModal.querySelector('.modal-close-btn');
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
-          closeButton.removeEventListener('click', closeAndReturn);
-          selectionModal.removeEventListener('click', overlayClickHandler);
-        };
-        const overlayClickHandler = (e) => { if (e.target === selectionModal) closeAndReturn(); };
-        selectionModalList.onclick = (e) => {
-          const item = e.target.closest('.selection-item');
-          if(item) {
-            updateWeeklyPlan(slotId, item.dataset.mealId);
-            closeAndReturn();
-          }
-        };
-        closeButton.addEventListener('click', closeAndReturn, { once: true });
-        selectionModal.addEventListener('click', overlayClickHandler);
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openDayEditorModal(isoDate) {
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        dayEditorTitle.textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        dayEditorBody.innerHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const meal = state.weeklyPlan[slotId]; // Get the full meal object directly
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            const recipeButtonHTML = getRecipeButtonHTML(meal, state);
-            mealDetailsHTML = `
-              <div class="meal-details">
-                <span class="meal-details__name">${meal.nomePasto}</span>
-                <div class="meal-actions">
-                  ${recipeButtonHTML}
-                  <button class="btn-remove-meal" data-slot-id="${slotId}">&times;</button>
-                </div>
-              </div>`;
-          }
-
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-
-        dayEditorBody.onclick = (e) => {
-          const btnAdd = e.target.closest('.btn-add-meal');
-          const btnRemove = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-
-          if (btnAdd) {
-            dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(btnAdd.dataset.slotId);
-          } else if (btnRemove) {
-            updateWeeklyPlan(btnRemove.dataset.slotId, null);
-            openDayEditorModal(isoDate);
-          } else if (btnRecipe) {
-            const mealId = btnRecipe.dataset.mealId;
-            const meal = Object.values(state.weeklyPlan).find(m => m && m.id === mealId) || state.masterMealList.find(m => m.id === mealId);
-            if (meal) showRecipeModal(meal);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-      }
-
-      function renderCalendarView(state, weekStart) {
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => {
-            const slotId = `${isoDate}-${type}`;
-            return { type, meal: state.weeklyPlan[slotId] };
-          }).filter(item => item.meal);
-          
-          if (dayMeals.length > 0) {
-            const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${dailyCalories}</span></h3>` 
-              + dayMeals.map(item => {
-                const recipeButtonHTML = getRecipeButtonHTML(item.meal, state);
-                return `
-                  <div class="log-item">
-                    <div class="log-item__name">
-                      <strong>${item.type}:</strong>
-                      <span>${item.meal.nomePasto}</span>
-                      ${recipeButtonHTML}
-                    </div>
-                    <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
-                  </div>
-                `;
-              }).join('');
-            logView.appendChild(dayLog);
-          }
-        }
-        if (logView.innerHTML === '') {
-          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-        }
-      }
-
-      export function renderApp() {
-        const state = getState();
-        if (Object.keys(state.weeklyPlan).length === 0 && state.masterMealList.length === 0) {
-            globalAlertMessage.textContent = UI_TEXT.CALENDAR_PLACEHOLDER;
-            globalAlert.classList.remove('hidden');
-        } else {
-            globalAlert.classList.add('hidden');
-        }
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        weekTitleEl.textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        if (state.currentView === 'calendar') {
-          calendarGrid.classList.remove('hidden');
-          logView.classList.add('hidden');
-          viewCalendarBtn.classList.add('active');
-          viewLogBtn.classList.remove('active');
-          renderCalendarView(state, weekStart);
-        } else {
-          calendarGrid.classList.add('hidden');
-          logView.classList.remove('hidden');
-          viewCalendarBtn.classList.remove('active');
-          viewLogBtn.classList.add('active');
-          renderLogView(state, weekStart);
-        }
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
-      }
   - file: src/utils/constants.js
     content: |
       export const DEFAULT_CONFIG_URL = '';
@@ -928,7 +471,9 @@ patches:
         SHARE_NO_URL_INFO: 'Nessun URL di configurazione da condividere.',
         SHARE_SUCCESS: 'Link di condivisione copiato!',
         SHARE_ERROR: 'Impossibile copiare il link.',
-        BACKUP_SUCCESS: 'Backup scaricato con successo!',
+        BACKUP_SHARE_TITLE: 'Backup Dati HealtyPro',
+        BACKUP_SHARE_ERROR: 'Impossibile condividere il backup.',
+        BACKUP_SUCCESS: 'Backup salvato con successo!',
         RESTORE_CONFIRM_TITLE: 'Ripristina Backup',
         RESTORE_CONFIRM_MSG: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.',
         RESTORE_SUCCESS: 'Backup ripristinato con successo!',
@@ -970,11 +515,5 @@ patches:
         ]
       }`
       };
-  - file: src/api/mealService.js
-    content: ''
-  - file: src/ui/calendar.js
-    content: ''
-  - file: src/ui/library.js
-    content: ''
 commands:
-  - "echo 'Funzionalità di ripristino implementata, codice allineato e pulito.'"
+  - "echo 'UX del backup migliorata con Web Share API e UI del footer corretta.'"
