@@ -196,3 +196,4 @@ export function initializeEventListeners() {
       document.getElementById('global-alert').classList.add('hidden');
   });
 }
+console.log("aldo")

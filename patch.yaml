@@ -408,5 +408,6 @@ patches:
             document.getElementById('global-alert').classList.add('hidden');
         });
       }
+      console.log("aldo")
 commands:
   - "echo 'Funzionalità di backup resa robusta con fallback e UI del footer corretta.'"
