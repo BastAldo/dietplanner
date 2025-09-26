@@ -230,7 +230,7 @@ export function initializeEventListeners() {
   document.querySelectorAll('.modal-close-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const modalId = e.target.dataset.target;
+      const modalId = e.currentTarget.dataset.target;
       if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
     });
   });

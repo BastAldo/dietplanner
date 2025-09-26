@@ -1,46 +1,253 @@
-commit_message: "fix(ui): Corregge i viewBox delle icone per risolvere il troncamento"
+commit_message: "fix(ui): Ripristina la funzionalità del pulsante di chiusura nei modal"
 rationale: |
-  Questa patch corregge un problema visivo per cui tutte le icone personalizzate apparivano troncate.
+  Questa patch corregge un bug critico che impediva la chiusura dei modal tramite il pulsante 'X' in alto a destra.
 
-  L'analisi ha rivelato che il problema era causato da un'incoerenza tra i dati del percorso (`path`) di ogni icona e il suo `viewBox` (la "tela" di disegno) definito nel file `src/ui/icons.js`. La funzione `renderIcon` forzava quasi tutte le icone su una tela di default di `512x512`, tagliando le parti dei disegni che erano stati creati per tele di dimensioni diverse.
+  L'analisi ha rivelato che il problema era causato da un riferimento errato nell'event listener in `src/ui/interactions.js`. Quando l'utente cliccava sull'icona SVG all'interno del pulsante, `e.target` si riferiva all'SVG stesso, che non conteneva l'attributo `data-target` necessario per identificare il modale da chiudere.
 
-  La soluzione consiste nell'aggiornare l'oggetto `viewBoxes` in `src/ui/icons.js`, mappando ogni singola icona alla sua corretta e specifica dimensione di `viewBox`. Questo assicura che ogni icona venga renderizzata completamente, senza tagli, risolvendo il problema di troncamento in tutta l'applicazione e garantendo una visualizzazione fedele del design.
+  La soluzione implementata sostituisce `e.target` con `e.currentTarget`. A differenza di `e.target`, `e.currentTarget` si riferisce sempre all'elemento su cui è stato registrato l'event listener (il `<button>`), garantendo che l'attributo `data-target` venga letto correttamente indipendentemente dal punto esatto del click. Questo ripristina la funzionalità prevista, in linea con la documentazione (`docs/03_STYLE_GUIDE.md`) e migliora l'esperienza utente.
 patches:
-  - file: src/ui/icons.js
+  - file: src/ui/interactions.js
     content: |
-      const ICONS = {
-        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
-        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
-        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
-        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
-        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
-        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
-        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
-        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
-        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
-        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
-        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>'
-      };
+      import {
+        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
+        deleteBiometricEntry, saveUserProfile
+      } from '../core/state.js';
+      import { calculateBMR } from '../core/calculations.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
+      import { showNotification } from './notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
+      import { UI_TEXT } from '../utils/constants.js';
 
-      const viewBoxes = {
-        APP_LOGO: '0 0 512 512',
-        PLANNER: '0 0 544 544',
-        PROFILE: '0 0 528 576',
-        WEIGHT_SCALE: '0 0 640 512',
-        SHARE: '0 0 544 576',
-        INFO: '0 0 576 576',
-        LOG_VIEW: '0 0 544 576',
-        RECIPE: '0 0 640 576',
-        TRASH: '0 0 448 512',
-        CLOSE: '0 0 640 512',
-        KEBAB_MENU: '0 0 376 544'
-      };
+      async function handleLoadConfig() {
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) { showNotification(error.message, 'error'); }
+      }
 
-      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
-        const iconPath = ICONS[name];
-        if (!iconPath) return '';
-        const viewBox = viewBoxes[name] || '0 0 512 512';
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      function handleCalendarClick(e) {
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
+      }
+
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) { showRecipeModal(meal); }
+        }
+      }
+
+      function handleShareConfig() {
+        const state = getState();
+        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
+        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+      }
+
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      async function handleSaveBackup() {
+        const state = getState();
+        const backupData = {
+          configUrl: state.configUrl,
+          weeklyPlan: state.weeklyPlan,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
+          }
+        } else { triggerDownload(blob, fileName); }
+      }
+
+      function handleRestoreBackup() {
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              'danger'
+                          );
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
+
+      function handleCopyWeek() {
+        showConfirmModal(
+          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        showConfirmModal(
+          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
+        );
+      }
+
+      function handleBiometricsForm(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const entry = {};
+        for (let [key, value] of formData.entries()) { entry[key] = value; }
+        addOrUpdateBiometricEntry(entry);
+        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+        e.target.reset();
+        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
+      }
+
+      function handleBiometricsListClick(e) {
+        const btnMenu = e.target.closest('.btn-actions-menu');
+        if (btnMenu) {
+            const dropdown = btnMenu.nextElementSibling;
+            const allDropdowns = document.querySelectorAll('.actions-dropdown');
+            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+            dropdown.classList.toggle('show');
+            return;
+        }
+
+        const btnEdit = e.target.closest('.btn-edit-biometrics');
+        if (btnEdit) {
+            const date = btnEdit.dataset.date;
+            const entry = getState().biometricData.find(e => e.date === date);
+            if (entry) {
+                const form = document.getElementById('biometrics-form');
+                for (const key in entry) {
+                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
+                }
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+            const dropdown = btnEdit.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        const btnDelete = e.target.closest('.btn-delete-biometrics');
+        if (btnDelete) {
+            const date = btnDelete.dataset.date;
+            showConfirmModal(
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
+            );
+            const dropdown = btnDelete.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        // Close dropdown if clicking outside
+        if (!e.target.closest('.biometrics-actions')) {
+            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+        }
+      }
+
+      function handleProfileForm(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const profile = {};
+        for (let [key, value] of formData.entries()) { profile[key] = value; }
+        saveUserProfile(profile);
+        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
+      }
+
+      function handleWeightInputChange(e) {
+        const weight = e.target.value;
+        const { userProfile } = getState();
+        const bmrField = document.getElementById('bio-basalMetabolism');
+        const bmr = calculateBMR(userProfile, weight);
+        if (bmr !== null) {
+          bmrField.value = bmr;
+        } else {
+          bmrField.value = '';
+          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function initializeEventListeners() {
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.biometrics-actions')) {
+                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+            }
+        });
+        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
+        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
+        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
+
+        document.getElementById('progress-page').addEventListener('input', e => {
+          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
+        });
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const modalId = e.currentTarget.dataset.target;
+            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+          });
+        });
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
+        });
+        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
       }
 commands:
- - "echo 'ViewBox delle icone corretto. Il problema di troncamento è stato risolto.'"
+  - "echo 'Bug fix applicato. La chiusura dei modal tramite il pulsante X ora funziona correttamente.'"
