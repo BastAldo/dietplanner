@@ -1,6 +1,7 @@
 import { calculateBMR } from '../core/calculations.js';
 import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
+import { renderCharts } from './charts.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -75,13 +76,15 @@ export function renderProfilePage(state) {
 }
 
 export function renderChartsPage(state) {
-    // Placeholder function for chart rendering logic (Phase 2)
-    console.log("Rendering charts page, logic to be implemented.");
     const placeholder = document.getElementById('biometrics-chart-placeholder');
+    const canvas = document.getElementById('biometrics-chart-canvas');
     if (state.biometricData.length < 2) {
-        placeholder.classList.remove('hidden');
         placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+        placeholder.classList.remove('hidden');
+        canvas.classList.add('hidden');
     } else {
         placeholder.classList.add('hidden');
+        canvas.classList.remove('hidden');
     }
+    renderCharts(state);
 }

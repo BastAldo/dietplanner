@@ -1,255 +1,351 @@
-commit_message: "fix(navigation): Associa l'evento click al pulsante di navigazione Grafici"
+commit_message: "feat(charts): Implementa la logica di rendering per i grafici"
 rationale: |
-  Questa patch corregge un bug introdotto nel commit precedente che impediva l'accesso alla nuova vista "Grafici".
+  Questo commit completa la Fase 2 del piano, implementando la logica di visualizzazione per i grafici statici.
 
-  Il problema era causato dalla mancata registrazione di un event listener per il nuovo pulsante `#nav-charts` nel file `src/ui/interactions.js`. A causa di questa omissione, il click sul pulsante non innescava la funzione `setView('charts')`, lasciando l'interfaccia utente invariata.
+  Le modifiche principali sono:
+  - **Nuovo Modulo Grafici (`src/ui/charts.js`)**: È stato creato un nuovo file dedicato che si occupa esclusivamente del rendering dei grafici. Questo modulo contiene la logica per:
+    1. Estrarre e aggregare i dati calorici settimanali dallo stato dell'applicazione.
+    2. Estrarre e formattare lo storico del peso dai dati biometrici.
+    3. Utilizzare Chart.js per renderizzare un grafico a barre (calorie) e un grafico a linee (peso), stilizzati secondo la guida di stile del progetto.
+    4. Gestire correttamente il ciclo di vita delle istanze dei grafici, distruggendo quelle precedenti prima di ogni nuovo rendering per evitare memory leak.
+  - **Integrazione nel Renderer**: Il file `src/ui/pageRenderers.js` è stato aggiornato per importare e utilizzare il nuovo modulo `charts.js`, sostituendo la logica placeholder precedente.
+  - **Service Worker**: Il nuovo file `src/ui/charts.js` è stato aggiunto alla cache del Service Worker in `sw.js` per garantire la piena funzionalità offline.
 
-  La soluzione consiste nell'aggiungere la riga di codice `document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));` all'interno della funzione `initializeEventListeners`. Questo collega correttamente l'azione dell'utente alla logica di cambio vista, ripristinando la funzionalità di navigazione come previsto e abilitando l'accesso alla pagina dei grafici.
+  Questa implementazione fornisce agli utenti una dashboard visiva immediata, mostrando dati chiave in un formato chiaro e accessibile.
 patches:
-  - file: src/ui/interactions.js
+  - file: src/ui/charts.js
     content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
-        deleteBiometricEntry, saveUserProfile
-      } from '../core/state.js';
-      import { calculateBMR } from '../core/calculations.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
-      import { UI_TEXT } from '../utils/constants.js';
+      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      let plannerChartInstance = null;
+      let biometricsChartInstance = null;
+
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
       }
 
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
+      function getChartColors() {
+          const style = getComputedStyle(document.documentElement);
+          return {
+              primary: style.getPropertyValue('--primary-color').trim(),
+              secondary: style.getPropertyValue('--secondary-color').trim(),
+              textColor: style.getPropertyValue('--text-color').trim(),
+              borderColor: style.getPropertyValue('--border-color').trim(),
+              bgColor: style.getPropertyValue('--bg-color').trim()
+          };
       }
 
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) { showRecipeModal(meal); }
+      function calculateWeeklyCalorieData(state) {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weeklyData = { labels: [], minCalories: [], maxCalories: [] };
+
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          weeklyData.labels.push(DAYS[i]);
+
+          let dailyMin = 0, dailyMax = 0;
+          MEAL_TYPES.forEach(type => {
+            const meal = state.weeklyPlan[`${isoDate}-${type}`];
+            if (meal && meal.calories_min) {
+              const minCals = Number(meal.calories_min) || 0;
+              const maxCals = Number(meal.calories_max) || minCals;
+              dailyMin += minCals;
+              dailyMax += maxCals;
+            }
+          });
+          weeklyData.minCalories.push(dailyMin);
+          weeklyData.maxCalories.push(dailyMax);
         }
+        return weeklyData;
       }
 
-      function handleShareConfig() {
-        const state = getState();
-        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
-      }
+      function renderPlannerChart(state) {
+        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
+        if (plannerChartInstance) {
+          plannerChartInstance.destroy();
+        }
 
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
-      }
+        const weeklyData = calculateWeeklyCalorieData(state);
+        const colors = getChartColors();
 
-      async function handleSaveBackup() {
-        const state = getState();
-        const backupData = {
-          configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile
-        };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
+        plannerChartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: weeklyData.labels,
+            datasets: [{
+              label: 'Kcal Min',
+              data: weeklyData.minCalories,
+              backgroundColor: colors.primary,
+              borderColor: colors.primary,
+              borderWidth: 1
+            }, {
+              label: 'Kcal Max',
+              data: weeklyData.maxCalories,
+              backgroundColor: colors.secondary,
+              borderColor: colors.secondary,
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { color: colors.textColor },
+                grid: { color: colors.borderColor }
+              },
+              x: {
+                ticks: { color: colors.textColor },
+                grid: { display: false }
+              }
+            },
+            plugins: {
+              legend: {
+                labels: { color: colors.textColor }
+              }
             }
           }
-        } else { triggerDownload(blob, fileName); }
-      }
-
-      function handleRestoreBackup() {
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                          showConfirmModal(
-                              UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              UI_TEXT.RESTORE_CONFIRM_MSG,
-                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              'danger'
-                          );
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
-      }
-
-      function handleCopyWeek() {
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      function handleBiometricsForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const entry = {};
-        for (let [key, value] of formData.entries()) { entry[key] = value; }
-        addOrUpdateBiometricEntry(entry);
-        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
-        e.target.reset();
-        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
-      }
-
-      function handleBiometricsListClick(e) {
-        const btnMenu = e.target.closest('.btn-actions-menu');
-        if (btnMenu) {
-            const dropdown = btnMenu.nextElementSibling;
-            const allDropdowns = document.querySelectorAll('.actions-dropdown');
-            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
-            dropdown.classList.toggle('show');
-            return;
-        }
-
-        const btnEdit = e.target.closest('.btn-edit-biometrics');
-        if (btnEdit) {
-            const date = btnEdit.dataset.date;
-            const entry = getState().biometricData.find(e => e.date === date);
-            if (entry) {
-                const form = document.getElementById('biometrics-form');
-                for (const key in entry) {
-                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
-                }
-                form.scrollIntoView({ behavior: 'smooth' });
-            }
-            const dropdown = btnEdit.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        const btnDelete = e.target.closest('.btn-delete-biometrics');
-        if (btnDelete) {
-            const date = btnDelete.dataset.date;
-            showConfirmModal(
-                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-            );
-            const dropdown = btnDelete.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        // Close dropdown if clicking outside
-        if (!e.target.closest('.biometrics-actions')) {
-            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-        }
-      }
-
-      function handleProfileForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const profile = {};
-        for (let [key, value] of formData.entries()) { profile[key] = value; }
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
-      }
-
-      function handleWeightInputChange(e) {
-        const weight = e.target.value;
-        const { userProfile } = getState();
-        const bmrField = document.getElementById('bio-basalMetabolism');
-        const bmr = calculateBMR(userProfile, weight);
-        if (bmr !== null) {
-          bmrField.value = bmr;
-        } else {
-          bmrField.value = '';
-          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function initializeEventListeners() {
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.biometrics-actions')) {
-                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-            }
         });
-        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
-        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
-        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
-        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
-        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
-        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
+      }
 
-        document.getElementById('progress-page').addEventListener('input', e => {
-          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
+      function getBiometricsData(state) {
+        const data = [...state.biometricData].reverse(); // oldest to newest
+        const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+        const weights = data.map(entry => entry.weight);
+        return { labels, weights };
+      }
+
+      function renderBiometricsChart(state) {
+        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
+        const placeholder = document.getElementById('biometrics-chart-placeholder');
+        const canvas = document.getElementById('biometrics-chart-canvas');
+
+        if (biometricsChartInstance) {
+          biometricsChartInstance.destroy();
+        }
+
+        if (state.biometricData.length < 2) {
+          canvas.classList.add('hidden');
+          placeholder.classList.remove('hidden');
+          return;
+        }
+        
+        canvas.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+
+        const { labels, weights } = getBiometricsData(state);
+        const colors = getChartColors();
+
+        biometricsChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Peso (kg)',
+              data: weights,
+              fill: false,
+              borderColor: colors.primary,
+              tension: 0.1,
+              pointBackgroundColor: colors.secondary,
+              pointRadius: 5
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                ticks: { color: colors.textColor },
+                grid: { color: colors.borderColor }
+              },
+              x: {
+                ticks: { color: colors.textColor },
+                grid: { display: false }
+              }
+            },
+            plugins: {
+              legend: {
+                labels: { color: colors.textColor }
+              }
+            }
+          }
         });
+      }
+      
+      export function renderCharts(state) {
+          renderPlannerChart(state);
+          renderBiometricsChart(state);
+      }
+  - file: src/ui/pageRenderers.js
+    content: |
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+      import { renderCharts } from './charts.js';
 
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const modalId = e.currentTarget.dataset.target;
-            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
           });
-        });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
-        });
-        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
       }
-      console.log("debug grafici1")
+
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
+
+        // Render Form
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        // Render Biometrics List as Cards
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
+        }
+
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderChartsPage(state) {
+          const placeholder = document.getElementById('biometrics-chart-placeholder');
+          const canvas = document.getElementById('biometrics-chart-canvas');
+          if (state.biometricData.length < 2) {
+              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+              placeholder.classList.remove('hidden');
+              canvas.classList.add('hidden');
+          } else {
+              placeholder.classList.add('hidden');
+              canvas.classList.remove('hidden');
+          }
+          renderCharts(state);
+      }
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v7';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/modals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
 commands:
-  - "echo 'Bug fix applicato. La navigazione alla vista Grafici è ora funzionante.'"
+  - "echo 'Fase 2 completata. La logica per il rendering dei grafici è stata implementata.'"
