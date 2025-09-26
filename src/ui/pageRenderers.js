@@ -53,7 +53,7 @@ export function renderBiometricsPage(state) {
               </div>`;
       }).join('');
   } else {
-      listContainer.innerHTML = `<p class="placeholder-text">Nessuna misurazione ancora registrata.</p>`;
+      listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
   }
 
   const weightInput = form.elements.weight;

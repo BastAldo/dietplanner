@@ -1,10 +1,14 @@
-commit_message: "fix: Rende la navigazione dell'header responsive su mobile"
+commit_message: "refactor: Migliora coerenza UI, codice e documentazione"
 rationale: |
-  Questa patch risolve un problema di layout per cui i pulsanti di navigazione nell'header ("Planner", "Progressi", "Profilo") causavano uno "spaginamento" su schermi di piccole dimensioni.
+  Questa patch implementa una serie di miglioramenti qualitativi in tutto il progetto, come da piano approvato.
 
-  Seguendo il piano approvato, sono state apportate le seguenti modifiche:
-  1.  **HTML (`index.html`)**: Ogni pulsante di navigazione ora contiene un'icona SVG rappresentativa e il testo originale è stato avvolto in un tag `<span>`. Questa struttura permette un controllo CSS granulare sulla visibilità di icone e testo.
-  2.  **CSS (`styles/base.css`)**: Sono state introdotte nuove regole e una media query. Su schermi con larghezza inferiore a 768px, solo le icone sono visibili, risolvendo il problema di overflow. Su schermi più grandi, sia le icone che le etichette di testo vengono mostrate per garantire la massima chiarezza, aderendo ai principi di un design "mobile-first".
+  1.  **Icona "Progressi" Aggiornata (`index.html`)**: L'icona generica per la sezione "Progressi" è stata sostituita con una più appropriata e intuitiva icona a forma di bilancia, migliorando la coerenza tematica dell'interfaccia.
+
+  2.  **Documentazione Allineata (`docs/01_FUNCTIONALITY.md`)**: La User Story US-27 è stata aggiornata per riflettere l'attuale implementazione dell'interfaccia a card, eliminando il riferimento obsoleto alla "tabella". La documentazione è ora allineata allo stato del prodotto.
+
+  3.  **Centralizzazione Testi (`src/ui/pageRenderers.js`)**: L'ultima stringa di testo hardcoded ("Nessuna misurazione ancora registrata.") è stata rimossa e sostituita da una costante, completando il processo di centralizzazione.
+
+  4.  **Refactoring Costanti (`src/utils/constants.js`)**: Per aumentare la coerenza interna del codice, la struttura della costante `UI_TEXT` è stata allineata a quella di `BIOMETRIC_FIELDS`. È stato creato un array di oggetti `UI_TEXT_CONFIG` più strutturato, dal quale l'oggetto `UI_TEXT` viene ora generato dinamicamente per garantire la retrocompatibilità con il resto dell'applicazione senza necessità di ulteriori modifiche.
 patches:
   - file: index.html
     content: |
@@ -41,7 +45,7 @@ patches:
                           <span></span>
                       </button>
                       <button id="nav-progress" class="btn-nav">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 18h16v2H4zm11-6.414-2.707-2.707-3.586 3.586L4 12.052V14h16v-2h-3.293z"></path></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm2.293 13.293-3 3-1.586-1.586L11 15.414l-1.293-1.293-1.414 1.414 2.293 2.293L12 19.121l3.707-3.707-1.414-1.414L13 15.414l1.293-1.293zM12 4c-2.022 0-3.834.7-5.263 2.05A7.954 7.954 0 0 0 4 12c0 1.831.624 3.533 1.737 4.95C7.166 18.3 8.978 19 11 19v-2c-1.299 0-2.45-.418-3.344-1.28C6.773 14.849 6.232 13.488 6 12H4c.232-2.488 1.773-4.151 2.656-5.02C8.549 5.25 10.299 5 12 5c2.313 0 4.295 1.433 5 3h2c-.705-2.567-3.687-4-7-4z"></path></svg>
                           <span></span>
                       </button>
                       <button id="nav-profile" class="btn-nav">
@@ -64,162 +68,208 @@ patches:
               </div>
       </body>
       </html>
-  - file: styles/base.css
+  - file: docs/01_FUNCTIONALITY.md
     content: |
-      /* --- GLOBAL STYLES & MOBILE FIRST --- */
-      :root {
-          --bg-color: #1a1a1d;
-          --card-color: #2c2c34;
-          --primary-color: #9575cd;
-          --secondary-color: #4db6ac;
-          --text-color: #f4f4f9;
-          --text-color-muted: #aaa;
-          --border-color: #40404a;
-          --danger-color: #ef5350;
-          --success-color: #66bb6a;
-          --warning-color: #fdd835;
-          --info-color: var(--primary-color);
-      }
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html { font-size: 16px; }
-      body {
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-          padding-top: 60px;
-      }
-      .hidden { display: none !important; }
+      # Funzionalità: HealtyPro (ex NutriPlan)
 
-      /* --- TOAST NOTIFICATIONS --- */
-      .toast-container {
-        position: fixed; top: 80px; right: 1rem; z-index: 2000;
-        display: flex; flex-direction: column; gap: 0.5rem;
-      }
-      .toast {
-        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
-        border-radius: 8px; border-left: 5px solid var(--info-color);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
-        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
-      }
-      .toast.show { opacity: 1; transform: translateX(0); }
-      .toast.is-success { border-left-color: var(--success-color); }
-      .toast.is-error { border-left-color: var(--danger-color); }
-      .toast.is-info { border-left-color: var(--secondary-color); }
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico e regole di validazione personalizzate.
 
-      /* --- GLOBAL ALERT BANNER --- */
-      .global-alert {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 1rem; background-color: var(--card-color);
-        border-left: 5px solid var(--warning-color); border-radius: 8px;
-        margin-bottom: 1.5rem; color: var(--text-color);
-      }
-      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
-      .alert-close-btn:hover { color: var(--text-color); }
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
 
-      /* --- PERSISTENT HEADER --- */
-      .app-header {
-          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
-          background-color: rgba(44, 44, 52, 0.85);
-          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
-      }
-      .header-content {
-        width: 100%; max-width: 1200px; display: flex;
-        justify-content: space-between; align-items: center;
-      }
-      .app-title { display: flex; align-items: center; gap: 0.75rem; }
-      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
-      .main-nav { display: flex; gap: 0.5rem; }
-      .btn-nav {
-        background: transparent; border: none; color: var(--text-color-muted);
-        padding: 0.5rem; border-radius: 8px; cursor: pointer; font-weight: bold;
-        transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
-      }
-      .btn-nav svg { fill: currentColor; }
-      .btn-nav span { display: none; } /* Hide text on mobile by default */
-      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
-      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
-
-      /* --- MAIN LAYOUT & CONTAINERS --- */
-      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-      .page-view { width: 100%; }
-      .app-footer {
-          padding: 1.5rem 1rem; margin-top: 1.5rem;
-          border-top: 1px solid var(--border-color);
-          display: flex; justify-content: center;
-          gap: 0.75rem;
-      }
-
-      /* --- GENERAL COMPONENTS --- */
-      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
-      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
-      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
-      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
-      .btn:hover { opacity: 0.85; }
-      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
-
-      /* Responsive Nav */
-      @media (min-width: 768px) {
-          .btn-nav { padding: 0.5rem 1rem; }
-          .btn-nav span { display: inline; } /* Show text on larger screens */
-      }
-  - file: src/ui/renderer.js
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file JSON remoto.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel JSON (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno direttamente sulla card del calendario.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile, cliccando su un'icona presente sia nell'editor del giorno che nella vista registro.
+      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `config.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
+      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
+      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
+      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
+      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche come una lista di card. Su mobile, le card sono presentate come una galleria a scorrimento orizzontale per una consultazione ottimale.
+      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
+      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
+      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
+  - file: src/utils/constants.js
     content: |
-      import { getState } from '../core/state.js';
-      import { renderPlannerPage } from './plannerRenderer.js';
-      import { renderBiometricsPage, renderProfilePage } from './pageRenderers.js';
-      import { UI_TEXT } from '../utils/constants.js';
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
 
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
-        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
-        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
-        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
-        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+      export const PROFILE_FIELDS = [
+        { id: 'firstName', label: 'Nome', type: 'text' },
+        { id: 'lastName', label: 'Cognome', type: 'text' },
+        { id: 'nickname', label: 'Nickname', type: 'text' },
+        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
+        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
+        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
+      ];
+
+      export const BIOMETRIC_FIELDS = [
+        { id: 'date', label: 'Data', type: 'date', props: 'required' },
+        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
+        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
+        { id: 'notes', label: 'Note', type: 'textarea' }
+      ];
+
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_PROGRESS', text: 'Progressi' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'LOAD_BUTTON', text: 'Carica' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CALENDAR_PLACEHOLDER', text: 'Carica una configurazione per visualizzare il calendario.' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' }
+      ];
+
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
+  - file: src/ui/pageRenderers.js
+    content: |
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
       }
 
-      export function renderApp() {
-        const state = getState();
-        const plannerPage = document.getElementById('planner-page');
-        const progressPage = document.getElementById('progress-page');
-        const profilePage = document.getElementById('profile-page');
-        const navPlannerBtn = document.getElementById('nav-planner');
-        const navProgressBtn = document.getElementById('nav-progress');
-        const navProfileBtn = document.getElementById('nav-profile');
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+          });
+      }
 
-        [plannerPage, progressPage, profilePage].forEach(p => p.classList.add('hidden'));
-        [navPlannerBtn, navProgressBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
 
-        if (state.currentView === 'planner' || state.currentView === 'log') {
-          plannerPage.classList.remove('hidden');
-          navPlannerBtn.classList.add('active');
-          renderPlannerPage(state);
-        } else if (state.currentView === 'progress') {
-          progressPage.classList.remove('hidden');
-          navProgressBtn.classList.add('active');
-          renderBiometricsPage(state);
-        } else if (state.currentView === 'profile') {
-          profilePage.classList.remove('hidden');
-          navProfileBtn.classList.add('active');
-          renderProfilePage(state);
+        // Render Form
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        // Render Biometrics List as Cards
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg>
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
         }
 
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
       }
 commands:
-  - "echo 'Navigazione dell''header aggiornata per essere responsive.'"
+  - "echo 'Miglioramenti qualitativi applicati con successo.'"

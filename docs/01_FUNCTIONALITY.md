@@ -23,7 +23,7 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
 * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
 * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
-* **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare una tabella con lo storico di tutte le misurazioni biometriche che ho inserito, ordinate per data.
+* **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche come una lista di card. Su mobile, le card sono presentate come una galleria a scorrimento orizzontale per una consultazione ottimale.
 * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
 * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
 * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
