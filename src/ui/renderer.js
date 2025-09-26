@@ -1,6 +1,7 @@
 import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
 import { renderBiometricsPage, renderProfilePage } from './pageRenderers.js';
+import { UI_TEXT } from '../utils/constants.js';
 
 export function populateInitialText() {
   document.title = UI_TEXT.MAIN_TITLE;
