@@ -13,14 +13,22 @@ const ICONS = {
 };
 
 const viewBoxes = {
-  KEBAB_MENU: '0 0 128 512',
-  CLOSE: '0 0 384 512',
-  DEFAULT: '0 0 512 512'
-}
+  APP_LOGO: '0 0 512 512',
+  PLANNER: '0 0 544 544',
+  PROFILE: '0 0 528 576',
+  WEIGHT_SCALE: '0 0 640 512',
+  SHARE: '0 0 544 576',
+  INFO: '0 0 576 576',
+  LOG_VIEW: '0 0 544 576',
+  RECIPE: '0 0 640 576',
+  TRASH: '0 0 448 512',
+  CLOSE: '0 0 640 512',
+  KEBAB_MENU: '0 0 376 544'
+};
 
 export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
   const iconPath = ICONS[name];
   if (!iconPath) return '';
-  const viewBox = viewBoxes[name] || viewBoxes.DEFAULT;
+  const viewBox = viewBoxes[name] || '0 0 512 512';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
 }
