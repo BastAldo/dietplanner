@@ -208,6 +208,7 @@ export function initializeEventListeners() {
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
   document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
   document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+  document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
   document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
