@@ -127,11 +127,21 @@ function handleBiometricsForm(e) {
   for (let [key, value] of formData.entries()) { entry[key] = value; }
   addOrUpdateBiometricEntry(entry);
   showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+  e.target.reset();
+  document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
 }
 
-function handleBiometricsTableClick(e) {
+function handleBiometricsListClick(e) {
+  const btnMenu = e.target.closest('.btn-actions-menu');
+  if (btnMenu) {
+      const dropdown = btnMenu.nextElementSibling;
+      const allDropdowns = document.querySelectorAll('.actions-dropdown');
+      allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+      dropdown.classList.toggle('show');
+      return;
+  }
+
   const btnEdit = e.target.closest('.btn-edit-biometrics');
-  const btnDelete = e.target.closest('.btn-delete-biometrics');
   if (btnEdit) {
       const date = btnEdit.dataset.date;
       const entry = getState().biometricData.find(e => e.date === date);
@@ -142,12 +152,26 @@ function handleBiometricsTableClick(e) {
           }
           form.scrollIntoView({ behavior: 'smooth' });
       }
-  } else if (btnDelete) {
+      const dropdown = btnEdit.closest('.actions-dropdown');
+      if (dropdown) dropdown.classList.remove('show');
+      return;
+  }
+
+  const btnDelete = e.target.closest('.btn-delete-biometrics');
+  if (btnDelete) {
       const date = btnDelete.dataset.date;
       showConfirmModal(
           UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
           () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
       );
+      const dropdown = btnDelete.closest('.actions-dropdown');
+      if (dropdown) dropdown.classList.remove('show');
+      return;
+  }
+
+  // Close dropdown if clicking outside
+  if (!e.target.closest('.biometrics-actions')) {
+      document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
   }
 }
 
@@ -174,6 +198,11 @@ function handleWeightInputChange(e) {
 }
 
 export function initializeEventListeners() {
+  document.addEventListener('click', (e) => {
+      if (!e.target.closest('.biometrics-actions')) {
+          document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+      }
+  });
   document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
   document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
@@ -191,9 +220,9 @@ export function initializeEventListeners() {
   document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
   document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
   document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-  document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
+  document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
   document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
-  
+
   document.getElementById('progress-page').addEventListener('input', e => {
     if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
   });

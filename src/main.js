@@ -72,4 +72,3 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-console.log("test refactor js")

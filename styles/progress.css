@@ -4,6 +4,7 @@
     display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 1.5rem; padding: 1.5rem; background: var(--card-color);
     border-radius: 8px; border: 1px solid var(--border-color);
+    margin-bottom: 2rem;
 }
 .form-group { display: flex; flex-direction: column; }
 .form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
@@ -20,10 +21,72 @@
 .form-group fieldset label { display: inline-flex; align-items: center; margin-right: 1.5rem; }
 .form-group fieldset input { margin-right: 0.5rem; }
 .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
-.table-container { overflow-x: auto; }
-#biometrics-table { width: 100%; border-collapse: collapse; margin-top: 2rem; background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }
-#biometrics-table th, #biometrics-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
-#biometrics-table thead th { background-color: var(--bg-color); font-size: 0.85rem; text-transform: uppercase; color: var(--text-color-muted); }
-#biometrics-table tbody tr:last-child td { border-bottom: none; }
-#biometrics-table tbody tr:hover { background-color: var(--bg-color); }
-.biometrics-actions button { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 0.25rem; }
+
+/* New Biometrics Card List Styles */
+.biometrics-list-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+}
+.biometrics-list-container::-webkit-scrollbar { display: none; /* Safari & Chrome */ }
+.biometrics-list {
+    display: flex;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    scroll-snap-type: x mandatory;
+}
+.biometric-card {
+    flex: 0 0 90%;
+    scroll-snap-align: start;
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    position: relative;
+}
+.biometric-card__header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 1rem;
+}
+.biometric-card__date { font-size: 1.25rem; font-weight: bold; color: var(--primary-color); }
+.biometric-card__body {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+.biometric-card__item { display: flex; flex-direction: column; }
+.biometric-card__label { font-size: 0.8rem; color: var(--text-color-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
+.biometric-card__value { font-size: 1.1rem; font-weight: 500; }
+.biometric-card__notes { grid-column: 1 / -1; }
+.biometric-card__notes .biometric-card__value { font-size: 0.95rem; white-space: pre-wrap; font-style: italic; color: var(--text-color-muted); }
+
+/* Actions Menu */
+.biometrics-actions { position: relative; }
+.btn-actions-menu { background: none; border: none; cursor: pointer; color: var(--text-color-muted); padding: 0.5rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.btn-actions-menu:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+.actions-dropdown {
+    display: none; position: absolute; top: 100%; right: 0;
+    background: var(--bg-color); border: 1px solid var(--border-color);
+    border-radius: 8px; padding: 0.5rem; z-index: 10;
+    min-width: 120px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.actions-dropdown.show { display: block; }
+.actions-dropdown button {
+    background: none; border: none; color: var(--text-color);
+    width: 100%; text-align: left; padding: 0.75rem;
+    border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+}
+.actions-dropdown button:hover { background-color: var(--card-color); }
+.actions-dropdown button.delete { color: var(--danger-color); }
+
+/* Desktop Layout */
+@media (min-width: 768px) {
+    .biometrics-list {
+        flex-wrap: wrap;
+    }
+    .biometric-card {
+        flex-basis: 100%; /* Full width cards in a single column */
+    }
+    .biometric-card__body {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+}

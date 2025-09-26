@@ -19,7 +19,7 @@ export const PROFILE_FIELDS = [
 export const BIOMETRIC_FIELDS = [
   { id: 'date', label: 'Data', type: 'date', props: 'required' },
   { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
-  { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
+  { id: 'muscleMass', label: 'Massa M. (kg)', type: 'number', props: 'step="0.1"' },
   { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
   { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
   { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },

@@ -5,18 +5,61 @@ function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 }
 
+function formatReadableDate(isoDate) {
+    const date = new Date(isoDate);
+    return date.toLocaleDateString('it-IT', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+}
+
 export function renderBiometricsPage(state) {
   const form = document.getElementById('biometrics-form');
-  const tableBody = document.querySelector('#biometrics-table tbody');
-  const tableHead = document.querySelector('#biometrics-table thead');
+  const listContainer = document.getElementById('biometrics-list');
+
+  // Render Form
   form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-  tableHead.innerHTML = `<tr>${BIOMETRIC_FIELDS.map(f => `<th>${f.label}</th>`).join('')}<th>Azioni</th></tr>`;
-  tableBody.innerHTML = state.biometricData.map(entry => `<tr data-date="${entry.date}">${BIOMETRIC_FIELDS.map(field => `<td>${entry[field.id] || ''}</td>`).join('')}<td class="biometrics-actions"><button class="btn-edit-biometrics" data-date="${entry.date}" title="Modifica">✏️</button><button class="btn-delete-biometrics" data-date="${entry.date}" title="Elimina">🗑️</button></td></tr>`).join('');
-  
+
+  // Render Biometrics List as Cards
+  if (state.biometricData.length > 0) {
+      listContainer.innerHTML = state.biometricData.map(entry => {
+          const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+              .map(field => `
+                  <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                      <span class="biometric-card__label">${field.label}</span>
+                      <span class="biometric-card__value">${entry[field.id]}</span>
+                  </div>
+              `).join('');
+
+          return `
+              <div class="biometric-card" data-date="${entry.date}">
+                  <div class="biometric-card__header">
+                      <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                      <div class="biometrics-actions">
+                          <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg>
+                          </button>
+                          <div class="actions-dropdown">
+                              <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
+                              <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
+                          </div>
+                      </div>
+                  </div>
+                  <div class="biometric-card__body">
+                      ${fieldsHTML}
+                  </div>
+              </div>`;
+      }).join('');
+  } else {
+      listContainer.innerHTML = `<p class="placeholder-text">Nessuna misurazione ancora registrata.</p>`;
+  }
+
   const weightInput = form.elements.weight;
   const bmrInput = form.elements.basalMetabolism;
   const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-  
+
   const bmr = calculateBMR(state.userProfile, weightForCalc);
   if (bmr !== null) {
     bmrInput.value = bmr;
