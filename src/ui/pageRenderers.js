@@ -73,3 +73,15 @@ export function renderProfilePage(state) {
   const form = document.getElementById('profile-form');
   form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
 }
+
+export function renderChartsPage(state) {
+    // Placeholder function for chart rendering logic (Phase 2)
+    console.log("Rendering charts page, logic to be implemented.");
+    const placeholder = document.getElementById('biometrics-chart-placeholder');
+    if (state.biometricData.length < 2) {
+        placeholder.classList.remove('hidden');
+        placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+    } else {
+        placeholder.classList.add('hidden');
+    }
+}

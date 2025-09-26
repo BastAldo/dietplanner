@@ -9,7 +9,7 @@ let state = {
   configUrl: '',
   recipeBaseUrl: '',
   focusedDate: new Date(),
-  currentView: 'planner', // 'planner', 'log', 'progress', or 'profile'
+  currentView: 'planner', // 'planner', 'log', 'progress', 'charts', or 'profile'
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
@@ -127,7 +127,7 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
-  if (['planner', 'log', 'progress', 'profile'].includes(view)) {
+  if (['planner', 'log', 'progress', 'profile', 'charts'].includes(view)) {
     state.currentView = view;
     notify();
   }

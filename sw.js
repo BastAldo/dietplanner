@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healtypro-v5';
+const CACHE_NAME = 'healtypro-v6';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
@@ -6,9 +6,11 @@ const APP_SHELL_FILES = [
   'styles/planner.css',
   'styles/progress.css',
   'styles/modals.css',
+  'styles/charts.css',
   'templates/planner.html',
   'templates/progress.html',
   'templates/profile.html',
+  'templates/charts.html',
   'templates/modals.html',
   'src/main.js',
   'src/api/configService.js',

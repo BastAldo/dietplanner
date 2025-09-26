@@ -1,253 +1,696 @@
-commit_message: "fix(ui): Ripristina la funzionalità del pulsante di chiusura nei modal"
+commit_message: "feat(charts): Aggiunge la struttura e la navigazione per la vista grafici"
 rationale: |
-  Questa patch corregge un bug critico che impediva la chiusura dei modal tramite il pulsante 'X' in alto a destra.
+  Questo commit introduce le fondamenta per la nuova funzionalità di visualizzazione grafica, come definito nella Fase 1 del piano approvato.
 
-  L'analisi ha rivelato che il problema era causato da un riferimento errato nell'event listener in `src/ui/interactions.js`. Quando l'utente cliccava sull'icona SVG all'interno del pulsante, `e.target` si riferiva all'SVG stesso, che non conteneva l'attributo `data-target` necessario per identificare il modale da chiudere.
+  Sono state apportate le seguenti modifiche strutturali:
+  - **Architettura**: È stata aggiunta la libreria Chart.js via CDN in `index.html` per abilitare la renderizzazione dei grafici.
+  - **Struttura UI**: Sono stati creati i nuovi file `templates/charts.html` per la vista e `styles/charts.css` per lo stile associato, garantendo la separazione delle responsabilità.
+  - **Navigazione**: L'interfaccia principale è stata aggiornata con un nuovo pulsante "Grafici" nell'header, completo di un'icona dedicata aggiunta a `src/ui/icons.js`. La logica di navigazione e gestione dello stato in `src/core/state.js`, `src/ui/renderer.js` e `src/utils/constants.js` è stata estesa per supportare la nuova vista.
+  - **Integrazione**: Il `viewLoader` è stato aggiornato per caricare il nuovo template HTML e il Service Worker (`sw.js`) ora mette in cache le nuove risorse per il funzionamento offline.
 
-  La soluzione implementata sostituisce `e.target` con `e.currentTarget`. A differenza di `e.target`, `e.currentTarget` si riferisce sempre all'elemento su cui è stato registrato l'event listener (il `<button>`), garantendo che l'attributo `data-target` venga letto correttamente indipendentemente dal punto esatto del click. Questo ripristina la funzionalità prevista, in linea con la documentazione (`docs/03_STYLE_GUIDE.md`) e migliora l'esperienza utente.
+  Questa implementazione prepara l'applicazione per la Fase 2, dove verrà sviluppata la logica specifica per il rendering dei grafici.
 patches:
-  - file: src/ui/interactions.js
+  - file: index.html
     content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
-        deleteBiometricEntry, saveUserProfile
-      } from '../core/state.js';
-      import { calculateBMR } from '../core/calculations.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
-      import { UI_TEXT } from '../utils/constants.js';
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="styles/base.css">
+          <link rel="stylesheet" href="styles/planner.css">
+          <link rel="stylesheet" href="styles/progress.css">
+          <link rel="stylesheet" href="styles/modals.css">
+          <link rel="stylesheet" href="styles/charts.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
 
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-progress" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-charts" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-profile" class="btn-nav">
+                          <span></span>
+                      </button>
+                  </nav>
+              </div>
+          </header>
+
+          <main id="app-container">
+              </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="modal-container">
+              </div>
+      </body>
+      </html>
+  - file: styles/charts.css
+    content: |
+      /* --- CHARTS PAGE --- */
+      .charts-container {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
       }
 
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
+      .chart-card {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
       }
 
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) { showRecipeModal(meal); }
-        }
+      .chart-card h4 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
+          text-align: center;
       }
 
-      function handleShareConfig() {
-        const state = getState();
-        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
-      }
-
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
-      }
-
-      async function handleSaveBackup() {
-        const state = getState();
-        const backupData = {
-          configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile
-        };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
-            }
+      @media (min-width: 1024px) {
+          .charts-container {
+              grid-template-columns: repeat(2, 1fr);
           }
-        } else { triggerDownload(blob, fileName); }
+      }
+  - file: templates/charts.html
+    content: |
+      <div id="charts-page" class="page-view hidden">
+          <h3 id="charts-title"></h3>
+          <div class="charts-container">
+              <div class="chart-card">
+                  <h4 id="planner-chart-title"></h4>
+                  <canvas id="planner-chart-canvas"></canvas>
+              </div>
+              <div class="chart-card">
+                  <h4 id="biometrics-chart-title"></h4>
+                  <canvas id="biometrics-chart-canvas"></canvas>
+                   <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
+              </div>
+          </div>
+      </div>
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE } from '../utils/constants.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', or 'profile'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config) {
+        state.rules = config.rules || [];
+        state.masterMealList = config.meals || [];
+        state.recipeBaseUrl = config.recipeBaseUrl || '';
+        notify();
       }
 
-      function handleRestoreBackup() {
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                          showConfirmModal(
-                              UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              UI_TEXT.RESTORE_CONFIRM_MSG,
-                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              'danger'
-                          );
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
       }
 
-      function handleCopyWeek() {
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
       }
 
-      function handleResetWeek() {
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
       }
 
-      function handleBiometricsForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const entry = {};
-        for (let [key, value] of formData.entries()) { entry[key] = value; }
-        addOrUpdateBiometricEntry(entry);
-        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
-        e.target.reset();
-        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
+      export function setAppState(backupData) {
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
       }
 
-      function handleBiometricsListClick(e) {
-        const btnMenu = e.target.closest('.btn-actions-menu');
-        if (btnMenu) {
-            const dropdown = btnMenu.nextElementSibling;
-            const allDropdowns = document.querySelectorAll('.actions-dropdown');
-            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
-            dropdown.classList.toggle('show');
-            return;
-        }
-
-        const btnEdit = e.target.closest('.btn-edit-biometrics');
-        if (btnEdit) {
-            const date = btnEdit.dataset.date;
-            const entry = getState().biometricData.find(e => e.date === date);
-            if (entry) {
-                const form = document.getElementById('biometrics-form');
-                for (const key in entry) {
-                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
-                }
-                form.scrollIntoView({ behavior: 'smooth' });
-            }
-            const dropdown = btnEdit.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        const btnDelete = e.target.closest('.btn-delete-biometrics');
-        if (btnDelete) {
-            const date = btnDelete.dataset.date;
-            showConfirmModal(
-                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-            );
-            const dropdown = btnDelete.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        // Close dropdown if clicking outside
-        if (!e.target.closest('.biometrics-actions')) {
-            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-        }
+      export function saveUserProfile(profile) {
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
       }
 
-      function handleProfileForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const profile = {};
-        for (let [key, value] of formData.entries()) { profile[key] = value; }
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
-      }
-
-      function handleWeightInputChange(e) {
-        const weight = e.target.value;
-        const { userProfile } = getState();
-        const bmrField = document.getElementById('bio-basalMetabolism');
-        const bmr = calculateBMR(userProfile, weight);
-        if (bmr !== null) {
-          bmrField.value = bmr;
+      export function addOrUpdateBiometricEntry(entry) {
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
         } else {
-          bmrField.value = '';
-          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (['planner', 'log', 'progress', 'profile', 'charts'].includes(view)) {
+          state.currentView = view;
+          notify();
         }
       }
 
-      export function initializeEventListeners() {
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.biometrics-actions')) {
-                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
             }
-        });
-        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
-        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
-        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
-        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
-        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
-
-        document.getElementById('progress-page').addEventListener('input', e => {
-          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
-        });
-
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const modalId = e.currentTarget.dataset.target;
-            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
           });
-        });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
-        });
-        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+        }
+        saveStateToLocalStorage();
+        notify();
       }
+  - file: src/ui/icons.js
+    content: |
+      const ICONS = {
+        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
+        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
+        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
+        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
+        BAR_CHART: '<path d="M120 288V480H48c-17.7 0-32-14.3-32-32V320c0-17.7 14.3-32 32-32h72zm128 0V480H192V288h56zm128 0V480H320V288h56zm128 0V480H448V288h56zM544 64H32C14.3 64 0 78.3 0 96V416c0 53 43 96 96 96H544c53 0 96-43 96-96V96c0-17.7-14.3-32-32-32z"/>',
+        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
+        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
+        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
+        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
+        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
+        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
+        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>'
+      };
+
+      const viewBoxes = {
+        APP_LOGO: '0 0 512 512',
+        PLANNER: '0 0 544 544',
+        PROFILE: '0 0 528 576',
+        WEIGHT_SCALE: '0 0 640 512',
+        BAR_CHART: '0 0 640 512',
+        SHARE: '0 0 544 576',
+        INFO: '0 0 576 576',
+        LOG_VIEW: '0 0 544 576',
+        RECIPE: '0 0 640 576',
+        TRASH: '0 0 448 512',
+        CLOSE: '0 0 640 512',
+        KEBAB_MENU: '0 0 376 544'
+      };
+
+      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
+        const iconPath = ICONS[name];
+        if (!iconPath) return '';
+        const viewBox = viewBoxes[name] || '0 0 512 512';
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      }
+  - file: src/ui/pageRenderers.js
+    content: |
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+          });
+      }
+
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
+
+        // Render Form
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        // Render Biometrics List as Cards
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
+        }
+
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderChartsPage(state) {
+          // Placeholder function for chart rendering logic (Phase 2)
+          console.log("Rendering charts page, logic to be implemented.");
+          const placeholder = document.getElementById('biometrics-chart-placeholder');
+          if (state.biometricData.length < 2) {
+              placeholder.classList.remove('hidden');
+              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+          } else {
+              placeholder.classList.add('hidden');
+          }
+      }
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
+      import { UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const profilePage = document.getElementById('profile-page');
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        [plannerPage, progressPage, chartsPage, profilePage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: src/ui/viewLoader.js
+    content: |
+      async function fetchAndInject(url, containerId) {
+          try {
+              const response = await fetch(url);
+              if (!response.ok) {
+                  throw new Error(`Failed to load template: ${url}`);
+              }
+              const content = await response.text();
+              document.getElementById(containerId).innerHTML += content;
+          } catch (error) {
+              console.error(error);
+          }
+      }
+
+      export async function loadViews() {
+          const appContainer = document.getElementById('app-container');
+          const modalContainer = document.getElementById('modal-container');
+          
+          // Svuota i container per evitare duplicati in caso di ricaricamento a caldo (hot-reloading)
+          appContainer.innerHTML = '';
+          modalContainer.innerHTML = '';
+
+          // Carica le viste principali
+          await fetchAndInject('templates/planner.html', 'app-container');
+          await fetchAndInject('templates/progress.html', 'app-container');
+          await fetchAndInject('templates/charts.html', 'app-container');
+          await fetchAndInject('templates/profile.html', 'app-container');
+          
+          // Carica i modali
+          await fetchAndInject('templates/modals.html', 'modal-container');
+      }
+  - file: src/utils/constants.js
+    content: |
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+
+      export const PROFILE_FIELDS = [
+        { id: 'firstName', label: 'Nome', type: 'text' },
+        { id: 'lastName', label: 'Cognome', type: 'text' },
+        { id: 'nickname', label: 'Nickname', type: 'text' },
+        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
+        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
+        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
+      ];
+
+      export const BIOMETRIC_FIELDS = [
+        { id: 'date', label: 'Data', type: 'date', props: 'required' },
+        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
+        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
+        { id: 'notes', label: 'Note', type: 'textarea' }
+      ];
+
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_PROGRESS', text: 'Progressi' },
+        { id: 'NAV_CHARTS', text: 'Grafici' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'LOAD_BUTTON', text: 'Carica' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CALENDAR_PLACEHOLDER', text: 'Carica una configurazione per visualizzare il calendario.' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' }
+      ];
+
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v6';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/modals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
 commands:
-  - "echo 'Bug fix applicato. La chiusura dei modal tramite il pulsante X ora funziona correttamente.'"
+  - "echo 'Fase 1 completata. La struttura per la vista grafici è stata aggiunta.'"

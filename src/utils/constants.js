@@ -32,6 +32,7 @@ const UI_TEXT_CONFIG = [
   { id: 'MAIN_TITLE', text: 'HealtyPro' },
   { id: 'NAV_PLANNER', text: 'Planner' },
   { id: 'NAV_PROGRESS', text: 'Progressi' },
+  { id: 'NAV_CHARTS', text: 'Grafici' },
   { id: 'NAV_PROFILE', text: 'Profilo' },
   { id: 'LOAD_BUTTON', text: 'Carica' },
   { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
@@ -85,7 +86,11 @@ const UI_TEXT_CONFIG = [
   { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
   { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
   { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-  { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' }
+  { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+  { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+  { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+  { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+  { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
