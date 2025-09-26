@@ -308,5 +308,6 @@ patches:
           }
           renderCharts(state);
       }
+      console.log("debug grafici 2")
 commands:
   - "echo 'Refactoring del modulo grafici completato. Il bug di rendering è stato risolto.'"

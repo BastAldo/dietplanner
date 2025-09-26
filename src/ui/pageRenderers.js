@@ -88,3 +88,4 @@ export function renderChartsPage(state) {
     }
     renderCharts(state);
 }
+console.log("debug grafici 2")
