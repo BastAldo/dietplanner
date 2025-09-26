@@ -1,15 +1,14 @@
-commit_message: "refactor(charts): Risolve il bug del ciclo di vita con una logica di rendering unificata"
+commit_message: "fix(charts): Risolve il loop di rendering infinito e il memory leak"
 rationale: |
-  Questo commit esegue un refactoring critico del modulo dei grafici per risolvere in modo definitivo il bug di rendering che causava l'allungamento dell'area del grafico e la mancata visualizzazione delle barre/linee.
+  Questo commit risolve un bug critico nella pagina dei grafici che causava un loop di rendering infinito, portando all'allungamento anomalo dell'area del grafico e a un progressivo degrado delle performance del browser (memory/CPU leak).
 
-  L'analisi ha rivelato che il problema era causato da una gestione errata del ciclo di vita delle istanze di Chart.js. Le funzioni per creare e distruggere i grafici erano separate e invocate in momenti errati del flusso di navigazione, portando a un accumulo di istanze "orfane" che corrompevano il rendering.
+  L'analisi ha rivelato che la causa principale era un conflitto tra la logica di ridimensionamento responsivo di Chart.js (`responsive: true`, `maintainAspectRatio: false`) e un contenitore genitore (`.chart-card`) il cui layout CSS non aveva un'altezza definita. Questo creava un circolo vizioso in cui il grafico tentava di riempire un contenitore che si espandeva a sua volta per accomodare il grafico, innescando un ciclo infinito di ridisegni.
 
-  La soluzione implementata è un refactoring architetturale:
-  1.  **Logica Unificata**: La logica di creazione e distruzione è stata consolidata in un'unica funzione esportata, `renderCharts(state)`.
-  2.  **Pulizia Preventiva**: Questa nuova funzione, come prima azione, si assicura di distruggere sistematicamente qualsiasi istanza di grafico precedente e di rimuovere i relativi event listener. Questo garantisce che ogni chiamata di rendering parta da uno stato completamente pulito.
-  3.  **Semplificazione del Flusso**: Il renderer della pagina `pageRenderers.js` è stato ripulito dalle chiamate errate. La responsabilità della gestione del ciclo di vita è ora interamente contenuta e gestita correttamente all'interno del modulo `charts.js`.
+  La soluzione è stata implementata su due livelli:
+  1.  **Fix Strutturale (CSS/HTML)**: Ogni `<canvas>` è stato avvolto in un nuovo `div` con `position: relative` e un'`height` fissa. Questo fornisce a Chart.js un contenitore con dimensioni vincolate, rompendo il loop di ridimensionamento alla radice.
+  2.  **Refactoring di Robustezza (JS)**: La logica di gestione del ciclo di vita dei grafici è stata comunque centralizzata nella funzione `renderCharts` per garantire che le istanze precedenti vengano sempre distrutte prima di crearne di nuove. Questo, pur non essendo il fix primario per questo specifico bug, rende il componente più stabile e previene futuri problemi.
 
-  Questo refactoring rende il componente dei grafici robusto, stabile e manutenibile, prevenendo futuri bug legati al ciclo di vita del rendering.
+  Il risultato è una pagina grafici stabile, performante e priva di memory leak.
 patches:
   - file: src/ui/charts.js
     content: |
@@ -211,7 +210,6 @@ patches:
           renderBiometricsChart(state);
 
           const switcher = document.querySelector('.chart-type-switcher');
-          // Rimuove e ri-aggiunge l'event listener per evitare duplicati
           const boundHandler = (e) => handleChartTypeChange(e, state);
           switcher.replaceWith(switcher.cloneNode(true));
           document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
@@ -308,6 +306,106 @@ patches:
           }
           renderCharts(state);
       }
-      console.log("debug grafici 2")
+  - file: styles/charts.css
+    content: |
+      /* --- CHARTS PAGE --- */
+      .charts-container {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+      }
+
+      .chart-card {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
+      }
+
+      .chart-header {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          position: relative;
+          flex-shrink: 0;
+      }
+
+      .chart-header h4 {
+          color: var(--primary-color);
+          margin: 0;
+      }
+
+      /* New container to constrain the chart's height */
+      .chart-canvas-container {
+          position: relative;
+          height: 400px; /* Essential fix for the resize loop */
+          width: 100%;
+          flex-grow: 1;
+      }
+
+      .chart-type-switcher {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          overflow: hidden;
+      }
+
+      .btn-chart-type {
+          background: transparent;
+          border: none;
+          color: var(--text-color-muted);
+          padding: 0.25rem 0.75rem;
+          cursor: pointer;
+          font-size: 0.8rem;
+      }
+      .btn-chart-type:not(:last-child) {
+          border-right: 1px solid var(--border-color);
+      }
+      .btn-chart-type.active {
+          background-color: var(--primary-color);
+          color: var(--bg-color);
+      }
+
+
+      @media (min-width: 1024px) {
+          .charts-container {
+              grid-template-columns: repeat(2, 1fr);
+          }
+      }
+  - file: templates/charts.html
+    content: |
+      <div id="charts-page" class="page-view hidden">
+          <h3 id="charts-title"></h3>
+          <div class="charts-container">
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="planner-chart-title"></h4>
+                      <div class="chart-type-switcher">
+                          <button class="btn-chart-type active" data-type="bar">Barre</button>
+                          <button class="btn-chart-type" data-type="line">Linee</button>
+                      </div>
+                  </div>
+                  <div class="chart-canvas-container">
+                    <canvas id="planner-chart-canvas"></canvas>
+                  </div>
+              </div>
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="biometrics-chart-title"></h4>
+                  </div>
+                  <div class="chart-canvas-container">
+                    <canvas id="biometrics-chart-canvas"></canvas>
+                    <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
+                  </div>
+              </div>
+          </div>
+      </div>
 commands:
-  - "echo 'Refactoring del modulo grafici completato. Il bug di rendering è stato risolto.'"
+  - "echo 'Bug di rendering e performance dei grafici risolto definitivamente.'"

@@ -196,7 +196,6 @@ export function renderCharts(state) {
     renderBiometricsChart(state);
 
     const switcher = document.querySelector('.chart-type-switcher');
-    // Rimuove e ri-aggiunge l'event listener per evitare duplicati
     const boundHandler = (e) => handleChartTypeChange(e, state);
     switcher.replaceWith(switcher.cloneNode(true));
     document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);

@@ -10,6 +10,8 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .chart-header {
@@ -18,11 +20,20 @@
     align-items: center;
     margin-bottom: 1.5rem;
     position: relative;
+    flex-shrink: 0;
 }
 
 .chart-header h4 {
     color: var(--primary-color);
     margin: 0;
+}
+
+/* New container to constrain the chart's height */
+.chart-canvas-container {
+    position: relative;
+    height: 400px; /* Essential fix for the resize loop */
+    width: 100%;
+    flex-grow: 1;
 }
 
 .chart-type-switcher {
