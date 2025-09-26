@@ -1,437 +1,225 @@
-commit_message: "feat: Riprogetta la pagina Progressi con layout a card responsive"
+commit_message: "fix: Rende la navigazione dell'header responsive su mobile"
 rationale: |
-  Questa patch implementa una riprogettazione completa della sezione 'Progressi' come da piano approvato, abbandonando la vecchia tabella in favore di un layout a card moderno e responsive.
+  Questa patch risolve un problema di layout per cui i pulsanti di navigazione nell'header ("Planner", "Progressi", "Profilo") causavano uno "spaginamento" su schermi di piccole dimensioni.
 
-  Le modifiche principali sono:
-  1.  **Struttura HTML (`progress.html`)**: La `<table>` è stata sostituita da un contenitore `div` più flessibile.
-  2.  **Stili CSS (`progress.css`)**: Sono stati aggiunti nuovi stili per creare un layout a "galleria" scorrevole su mobile e una griglia compatta su desktop, risolvendo i problemi di spaginamento. Le azioni di modifica/cancellazione sono ora in un menu a comparsa più elegante.
-  3.  **Logica di Rendering (`pageRenderers.js`)**: La funzione `renderBiometricsPage` è stata riscritta per generare le nuove card al posto delle righe della tabella.
-  4.  **Gestione Interazioni (`interactions.js`)**: L'event handler è stato aggiornato per funzionare con la nuova struttura a card e il menu delle azioni, garantendo che la funzionalità di modifica e cancellazione rimanga invariata.
+  Seguendo il piano approvato, sono state apportate le seguenti modifiche:
+  1.  **HTML (`index.html`)**: Ogni pulsante di navigazione ora contiene un'icona SVG rappresentativa e il testo originale è stato avvolto in un tag `<span>`. Questa struttura permette un controllo CSS granulare sulla visibilità di icone e testo.
+  2.  **CSS (`styles/base.css`)**: Sono state introdotte nuove regole e una media query. Su schermi con larghezza inferiore a 768px, solo le icone sono visibili, risolvendo il problema di overflow. Su schermi più grandi, sia le icone che le etichette di testo vengono mostrate per garantire la massima chiarezza, aderendo ai principi di un design "mobile-first".
 patches:
-  - file: templates/progress.html
+  - file: index.html
     content: |
-      <div id="progress-page" class="page-view hidden">
-          <div id="biometrics-view" class="biometrics-view">
-              <h3 id="biometrics-title"></h3>
-              <form id="biometrics-form" class="biometrics-form"></form>
-              <h3 id="biometrics-history-title"></h3>
-              <div id="biometrics-list-container" class="biometrics-list-container">
-                  <div id="biometrics-list" class="biometrics-list"></div>
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="styles/base.css">
+          <link rel="stylesheet" href="styles/planner.css">
+          <link rel="stylesheet" href="styles/progress.css">
+          <link rel="stylesheet" href="styles/modals.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zM8.293 16.707l1.414-1.414L12 17.586l2.293-2.293 1.414 1.414L12 20.414l-3.707-3.707zM12 3.586l2.293 2.293-1.414 1.414L12 5l-2.293 2.293-1.414-1.414L12 3.586z"></path></svg>
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"></path></svg>
+                          <span></span>
+                      </button>
+                      <button id="nav-progress" class="btn-nav">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 18h16v2H4zm11-6.414-2.707-2.707-3.586 3.586L4 12.052V14h16v-2h-3.293z"></path></svg>
+                          <span></span>
+                      </button>
+                      <button id="nav-profile" class="btn-nav">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm0 8a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm9 11v-1a7 7 0 0 0-7-7h-4a7 7 0 0 0-7 7v1h2v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1z"></path></svg>
+                          <span></span>
+                      </button>
+                  </nav>
               </div>
-          </div>
-      </div>
-  - file: styles/progress.css
+          </header>
+
+          <main id="app-container">
+              </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="modal-container">
+              </div>
+      </body>
+      </html>
+  - file: styles/base.css
     content: |
-      /* --- PROGRESS & PROFILE PAGES --- */
-      .biometrics-view h3, .profile-page h3 { color: var(--primary-color); margin-bottom: 1.5rem; }
-      .biometrics-form, .profile-form {
-          display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 1.5rem; padding: 1.5rem; background: var(--card-color);
-          border-radius: 8px; border: 1px solid var(--border-color);
-          margin-bottom: 2rem;
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
       }
-      .form-group { display: flex; flex-direction: column; }
-      .form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-      .form-group input, .form-group textarea, .form-group fieldset {
-          padding: 0.75rem; border: 1px solid var(--border-color);
-          border-radius: 8px; font-size: 1rem; background-color: var(--bg-color);
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
           color: var(--text-color);
+          padding-top: 60px;
       }
-      .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
-      .form-group input[readonly] { background-color: #222; color: var(--text-color-muted); }
-      .form-group textarea { min-height: 80px; resize: vertical; }
-      .form-group fieldset { border: 1px solid var(--border-color); padding: 0.75rem; }
-      .form-group fieldset legend { padding: 0 0.5rem; color: var(--text-color-muted); font-size: 0.9rem; }
-      .form-group fieldset label { display: inline-flex; align-items: center; margin-right: 1.5rem; }
-      .form-group fieldset input { margin-right: 0.5rem; }
-      .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
+      .hidden { display: none !important; }
 
-      /* New Biometrics Card List Styles */
-      .biometrics-list-container {
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none; /* Firefox */
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed; top: 80px; right: 1rem; z-index: 2000;
+        display: flex; flex-direction: column; gap: 0.5rem;
       }
-      .biometrics-list-container::-webkit-scrollbar { display: none; /* Safari & Chrome */ }
-      .biometrics-list {
-          display: flex;
-          gap: 1rem;
-          padding-bottom: 1rem;
-          scroll-snap-type: x mandatory;
+      .toast {
+        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
+        border-radius: 8px; border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
+        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
       }
-      .biometric-card {
-          flex: 0 0 90%;
-          scroll-snap-align: start;
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          position: relative;
-      }
-      .biometric-card__header {
-          display: flex; justify-content: space-between; align-items: flex-start;
-          margin-bottom: 1rem;
-      }
-      .biometric-card__date { font-size: 1.25rem; font-weight: bold; color: var(--primary-color); }
-      .biometric-card__body {
-          display: grid; grid-template-columns: repeat(2, 1fr);
-          gap: 1rem;
-      }
-      .biometric-card__item { display: flex; flex-direction: column; }
-      .biometric-card__label { font-size: 0.8rem; color: var(--text-color-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
-      .biometric-card__value { font-size: 1.1rem; font-weight: 500; }
-      .biometric-card__notes { grid-column: 1 / -1; }
-      .biometric-card__notes .biometric-card__value { font-size: 0.95rem; white-space: pre-wrap; font-style: italic; color: var(--text-color-muted); }
+      .toast.show { opacity: 1; transform: translateX(0); }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
 
-      /* Actions Menu */
-      .biometrics-actions { position: relative; }
-      .btn-actions-menu { background: none; border: none; cursor: pointer; color: var(--text-color-muted); padding: 0.5rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-      .btn-actions-menu:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .actions-dropdown {
-          display: none; position: absolute; top: 100%; right: 0;
-          background: var(--bg-color); border: 1px solid var(--border-color);
-          border-radius: 8px; padding: 0.5rem; z-index: 10;
-          min-width: 120px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
       }
-      .actions-dropdown.show { display: block; }
-      .actions-dropdown button {
-          background: none; border: none; color: var(--text-color);
-          width: 100%; text-align: left; padding: 0.75rem;
-          border-radius: 4px; cursor: pointer; font-size: 0.9rem;
-      }
-      .actions-dropdown button:hover { background-color: var(--card-color); }
-      .actions-dropdown button.delete { color: var(--danger-color); }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }
+      .alert-close-btn:hover { color: var(--text-color); }
 
-      /* Desktop Layout */
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
+      }
+      .header-content {
+        width: 100%; max-width: 1200px; display: flex;
+        justify-content: space-between; align-items: center;
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+      .main-nav { display: flex; gap: 0.5rem; }
+      .btn-nav {
+        background: transparent; border: none; color: var(--text-color-muted);
+        padding: 0.5rem; border-radius: 8px; cursor: pointer; font-weight: bold;
+        transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
+      }
+      .btn-nav svg { fill: currentColor; }
+      .btn-nav span { display: none; } /* Hide text on mobile by default */
+      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
+      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .page-view { width: 100%; }
+      .app-footer {
+          padding: 1.5rem 1rem; margin-top: 1.5rem;
+          border-top: 1px solid var(--border-color);
+          display: flex; justify-content: center;
+          gap: 0.75rem;
+      }
+
+      /* --- GENERAL COMPONENTS --- */
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+
+      /* Responsive Nav */
       @media (min-width: 768px) {
-          .biometrics-list {
-              flex-wrap: wrap;
-          }
-          .biometric-card {
-              flex-basis: 100%; /* Full width cards in a single column */
-          }
-          .biometric-card__body {
-              grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-          }
+          .btn-nav { padding: 0.5rem 1rem; }
+          .btn-nav span { display: inline; } /* Show text on larger screens */
       }
-  - file: src/ui/pageRenderers.js
+  - file: src/ui/renderer.js
     content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-
-        // Render Form
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        // Render Biometrics List as Cards
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path></svg>
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">Nessuna misurazione ancora registrata.</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-  - file: src/ui/interactions.js
-    content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
-        deleteBiometricEntry, saveUserProfile
-      } from '../core/state.js';
-      import { calculateBMR } from '../core/calculations.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage } from './pageRenderers.js';
       import { UI_TEXT } from '../utils/constants.js';
 
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
       }
 
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) { showRecipeModal(meal); }
-        }
-      }
-
-      function handleShareConfig() {
+      export function renderApp() {
         const state = getState();
-        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
-      }
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const profilePage = document.getElementById('profile-page');
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navProfileBtn = document.getElementById('nav-profile');
 
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
-      }
+        [plannerPage, progressPage, profilePage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
 
-      async function handleSaveBackup() {
-        const state = getState();
-        const backupData = {
-          configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile
-        };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
-            }
-          }
-        } else { triggerDownload(blob, fileName); }
-      }
-
-      function handleRestoreBackup() {
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                          showConfirmModal(
-                              UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              UI_TEXT.RESTORE_CONFIRM_MSG,
-                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              'danger'
-                          );
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
-      }
-
-      function handleCopyWeek() {
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      function handleBiometricsForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const entry = {};
-        for (let [key, value] of formData.entries()) { entry[key] = value; }
-        addOrUpdateBiometricEntry(entry);
-        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
-        e.target.reset();
-        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
-      }
-
-      function handleBiometricsListClick(e) {
-        const btnMenu = e.target.closest('.btn-actions-menu');
-        if (btnMenu) {
-            const dropdown = btnMenu.nextElementSibling;
-            const allDropdowns = document.querySelectorAll('.actions-dropdown');
-            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
-            dropdown.classList.toggle('show');
-            return;
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
         }
 
-        const btnEdit = e.target.closest('.btn-edit-biometrics');
-        if (btnEdit) {
-            const date = btnEdit.dataset.date;
-            const entry = getState().biometricData.find(e => e.date === date);
-            if (entry) {
-                const form = document.getElementById('biometrics-form');
-                for (const key in entry) {
-                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
-                }
-                form.scrollIntoView({ behavior: 'smooth' });
-            }
-            const dropdown = btnEdit.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        const btnDelete = e.target.closest('.btn-delete-biometrics');
-        if (btnDelete) {
-            const date = btnDelete.dataset.date;
-            showConfirmModal(
-                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-            );
-            const dropdown = btnDelete.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        // Close dropdown if clicking outside
-        if (!e.target.closest('.biometrics-actions')) {
-            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-        }
-      }
-
-      function handleProfileForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const profile = {};
-        for (let [key, value] of formData.entries()) { profile[key] = value; }
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
-      }
-
-      function handleWeightInputChange(e) {
-        const weight = e.target.value;
-        const { userProfile } = getState();
-        const bmrField = document.getElementById('bio-basalMetabolism');
-        const bmr = calculateBMR(userProfile, weight);
-        if (bmr !== null) {
-          bmrField.value = bmr;
-        } else {
-          bmrField.value = '';
-          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function initializeEventListeners() {
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.biometrics-actions')) {
-                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-            }
-        });
-        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
-        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
-        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
-        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
-        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
-
-        document.getElementById('progress-page').addEventListener('input', e => {
-          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
-        });
-
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const modalId = e.target.dataset.target;
-            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
-          });
-        });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
-        });
-        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
 commands:
-  - "echo 'Pagina Progressi riprogettata con successo.'"
+  - "echo 'Navigazione dell''header aggiornata per essere responsive.'"

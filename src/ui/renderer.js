@@ -6,9 +6,9 @@ import { UI_TEXT } from '../utils/constants.js';
 export function populateInitialText() {
   document.title = UI_TEXT.MAIN_TITLE;
   document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-  document.getElementById('nav-planner').textContent = UI_TEXT.NAV_PLANNER;
-  document.getElementById('nav-progress').textContent = UI_TEXT.NAV_PROGRESS;
-  document.getElementById('nav-profile').textContent = UI_TEXT.NAV_PROFILE;
+  document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+  document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+  document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
   document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
