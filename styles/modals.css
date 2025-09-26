@@ -6,6 +6,7 @@
 .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
 .modal-header h3 { color: var(--primary-color); }
 .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+.modal-close-btn svg { width: 1em; height: 1em; }
 .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
 .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
 .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
@@ -22,7 +23,7 @@
 .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
 .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-.btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; }
+.btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
 .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
 .btn-view-recipe:hover { color: var(--text-color); }
 .recipe-body { line-height: 1.6; }
