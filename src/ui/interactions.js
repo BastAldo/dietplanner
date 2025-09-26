@@ -240,3 +240,4 @@ export function initializeEventListeners() {
   });
   document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
 }
+console.log("debug grafici1")
