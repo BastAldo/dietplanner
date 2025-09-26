@@ -6,7 +6,7 @@ import {
 import { calculateBMR } from '../core/calculations.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
-import { openDayEditorModal, showConfirmModal, showRecipeModal } from './renderer.js';
+import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
 import { UI_TEXT } from '../utils/constants.js';
 
 async function handleLoadConfig() {
@@ -194,7 +194,6 @@ export function initializeEventListeners() {
   document.getElementById('biometrics-table').addEventListener('click', handleBiometricsTableClick);
   document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
   
-  // Listener per il calcolo BMR in tempo reale
   document.getElementById('progress-page').addEventListener('input', e => {
     if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
   });

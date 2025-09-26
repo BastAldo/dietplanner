@@ -1,5 +1,6 @@
 import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
-import { renderApp, populateInitialText, showConfirmModal } from './ui/renderer.js';
+import { renderApp, populateInitialText } from './ui/renderer.js';
+import { showConfirmModal } from './ui/modals.js';
 import { initializeEventListeners } from './ui/interactions.js';
 import { loadViews } from './ui/viewLoader.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
