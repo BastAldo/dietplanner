@@ -2,6 +2,8 @@ import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 
 let plannerChartInstance = null;
 let biometricsChartInstance = null;
+let currentPlannerChartType = 'bar';
+let stateCache = null;
 
 const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
@@ -25,7 +27,7 @@ function getChartColors() {
 
 function calculateWeeklyCalorieData(state) {
   const weekStart = getWeekStartDate(state.focusedDate);
-  const weeklyData = { labels: [], minCalories: [], maxCalories: [] };
+  const weeklyData = { labels: [], calories: [] };
 
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
@@ -43,38 +45,50 @@ function calculateWeeklyCalorieData(state) {
         dailyMax += maxCals;
       }
     });
-    weeklyData.minCalories.push(dailyMin);
-    weeklyData.maxCalories.push(dailyMax);
+    weeklyData.calories.push([dailyMin, dailyMax]);
   }
   return weeklyData;
 }
 
-function renderPlannerChart(state) {
+function renderPlannerChart() {
+  if (!stateCache) return;
   const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
   if (plannerChartInstance) {
     plannerChartInstance.destroy();
   }
 
-  const weeklyData = calculateWeeklyCalorieData(state);
+  const weeklyData = calculateWeeklyCalorieData(stateCache);
   const colors = getChartColors();
+  const isLineChart = currentPlannerChartType === 'line';
+
+  const datasets = isLineChart ?
+  [{
+      label: 'Kcal Min',
+      data: weeklyData.calories.map(c => c[0]),
+      borderColor: colors.secondary,
+      fill: false,
+      tension: 0.1
+  },{
+      label: 'Kcal Max',
+      data: weeklyData.calories.map(c => c[1]),
+      borderColor: colors.primary,
+      fill: '-1',
+      backgroundColor: colors.primary + '33', // Primary color with alpha
+      tension: 0.1
+  }]
+  :
+  [{
+      label: 'Kcal (Min-Max)',
+      data: weeklyData.calories,
+      backgroundColor: colors.primary,
+      borderColor: colors.secondary
+  }];
 
   plannerChartInstance = new Chart(ctx, {
-    type: 'bar',
+    type: currentPlannerChartType,
     data: {
       labels: weeklyData.labels,
-      datasets: [{
-        label: 'Kcal Min',
-        data: weeklyData.minCalories,
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-        borderWidth: 1
-      }, {
-        label: 'Kcal Max',
-        data: weeklyData.maxCalories,
-        backgroundColor: colors.secondary,
-        borderColor: colors.secondary,
-        borderWidth: 1
-      }]
+      datasets: datasets
     },
     options: {
       responsive: true,
@@ -92,7 +106,22 @@ function renderPlannerChart(state) {
       },
       plugins: {
         legend: {
+          display: isLineChart,
           labels: { color: colors.textColor }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              if (isLineChart) {
+                return `${context.dataset.label}: ${context.parsed.y}`;
+              }
+              const value = context.raw;
+              if (value[0] === value[1]) {
+                return `Kcal: ${value[0]}`;
+              }
+              return `Kcal: ${value[0]} - ${value[1]}`;
+            }
+          }
         }
       }
     }
@@ -163,7 +192,36 @@ function renderBiometricsChart(state) {
   });
 }
 
-export function renderCharts(state) {
-    renderPlannerChart(state);
+function handleChartTypeChange(event) {
+    const type = event.target.dataset.type;
+    if (type && type !== currentPlannerChartType) {
+        currentPlannerChartType = type;
+        document.querySelectorAll('.btn-chart-type').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.type === type);
+        });
+        renderPlannerChart();
+    }
+}
+
+export function initCharts(state) {
+    stateCache = state;
+    renderPlannerChart();
     renderBiometricsChart(state);
+    document.querySelector('.chart-type-switcher').addEventListener('click', handleChartTypeChange);
+}
+
+export function destroyCharts() {
+    if (plannerChartInstance) {
+        plannerChartInstance.destroy();
+        plannerChartInstance = null;
+    }
+    if (biometricsChartInstance) {
+        biometricsChartInstance.destroy();
+        biometricsChartInstance = null;
+    }
+    const switcher = document.querySelector('.chart-type-switcher');
+    if (switcher) {
+        switcher.removeEventListener('click', handleChartTypeChange);
+    }
+    stateCache = null;
 }

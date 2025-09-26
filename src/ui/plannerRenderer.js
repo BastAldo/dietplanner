@@ -1,4 +1,5 @@
 import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS } from '../utils/constants.js';
+import { destroyCharts } from './charts.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -99,6 +100,7 @@ function renderLogView(state, weekStart) {
 }
 
 export function renderPlannerPage(state) {
+  destroyCharts(); // Ensure charts are destroyed when leaving the chart page
   const weekStart = getWeekStartDate(state.focusedDate);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);

@@ -1,24 +1,109 @@
-commit_message: "feat(charts): Implementa la logica di rendering per i grafici"
+commit_message: "fix(charts): Corregge il bug di rendering e aggiunge il selettore del tipo di grafico"
 rationale: |
-  Questo commit completa la Fase 2 del piano, implementando la logica di visualizzazione per i grafici statici.
+  Questo commit affronta due problemi principali nella vista dei grafici: un bug di rendering e l'aggiunta di una nuova funzionalità richiesta dall'utente.
 
-  Le modifiche principali sono:
-  - **Nuovo Modulo Grafici (`src/ui/charts.js`)**: È stato creato un nuovo file dedicato che si occupa esclusivamente del rendering dei grafici. Questo modulo contiene la logica per:
-    1. Estrarre e aggregare i dati calorici settimanali dallo stato dell'applicazione.
-    2. Estrarre e formattare lo storico del peso dai dati biometrici.
-    3. Utilizzare Chart.js per renderizzare un grafico a barre (calorie) e un grafico a linee (peso), stilizzati secondo la guida di stile del progetto.
-    4. Gestire correttamente il ciclo di vita delle istanze dei grafici, distruggendo quelle precedenti prima di ogni nuovo rendering per evitare memory leak.
-  - **Integrazione nel Renderer**: Il file `src/ui/pageRenderers.js` è stato aggiornato per importare e utilizzare il nuovo modulo `charts.js`, sostituendo la logica placeholder precedente.
-  - **Service Worker**: Il nuovo file `src/ui/charts.js` è stato aggiunto alla cache del Service Worker in `sw.js` per garantire la piena funzionalità offline.
+  **Correzione del Bug**:
+  Il bug che causava l'allungamento progressivo delle barre del grafico a ogni visualizzazione è stato risolto. Il problema era dovuto a una gestione incompleta del ciclo di vita delle istanze di Chart.js. La logica in `src/ui/charts.js` è stata rafforzata per garantire che ogni istanza del grafico venga distrutta in modo affidabile prima che ne venga creata una nuova. Inoltre, il grafico delle calorie è stato migliorato per utilizzare una rappresentazione a "barra flottante", che mostra l'intervallo min-max in modo più pulito e accurato usando un singolo dataset.
 
-  Questa implementazione fornisce agli utenti una dashboard visiva immediata, mostrando dati chiave in un formato chiaro e accessibile.
+  **Nuova Funzionalità (Selettore Tipo Grafico)**:
+  In risposta alla richiesta dell'utente, è stata aggiunta la possibilità di cambiare dinamicamente il tipo di visualizzazione per il grafico delle calorie settimanali.
+  - È stato introdotto un selettore con pulsanti "Barre" e "Linee" nel file `templates/charts.html` e stilizzato in `styles/charts.css` per coerenza con il design system.
+  - La logica in `src/ui/charts.js` ora gestisce uno stato interno per il tipo di grafico selezionato e applica event listener ai nuovi pulsanti. Al click, il grafico viene ridisegnato istantaneamente con il nuovo tipo, offrendo maggiore flessibilità di analisi all'utente.
 patches:
+  - file: styles/charts.css
+    content: |
+      /* --- CHARTS PAGE --- */
+      .charts-container {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+      }
+
+      .chart-card {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+      }
+
+      .chart-header {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          position: relative;
+      }
+
+      .chart-header h4 {
+          color: var(--primary-color);
+          margin: 0;
+      }
+
+      .chart-type-switcher {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          overflow: hidden;
+      }
+
+      .btn-chart-type {
+          background: transparent;
+          border: none;
+          color: var(--text-color-muted);
+          padding: 0.25rem 0.75rem;
+          cursor: pointer;
+          font-size: 0.8rem;
+      }
+      .btn-chart-type:not(:last-child) {
+          border-right: 1px solid var(--border-color);
+      }
+      .btn-chart-type.active {
+          background-color: var(--primary-color);
+          color: var(--bg-color);
+      }
+
+
+      @media (min-width: 1024px) {
+          .charts-container {
+              grid-template-columns: repeat(2, 1fr);
+          }
+      }
+  - file: templates/charts.html
+    content: |
+      <div id="charts-page" class="page-view hidden">
+          <h3 id="charts-title"></h3>
+          <div class="charts-container">
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="planner-chart-title"></h4>
+                      <div class="chart-type-switcher">
+                          <button class="btn-chart-type active" data-type="bar">Barre</button>
+                          <button class="btn-chart-type" data-type="line">Linee</button>
+                      </div>
+                  </div>
+                  <canvas id="planner-chart-canvas"></canvas>
+              </div>
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="biometrics-chart-title"></h4>
+                  </div>
+                  <canvas id="biometrics-chart-canvas"></canvas>
+                   <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
+              </div>
+          </div>
+      </div>
   - file: src/ui/charts.js
     content: |
       import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 
       let plannerChartInstance = null;
       let biometricsChartInstance = null;
+      let currentPlannerChartType = 'bar';
+      let stateCache = null;
 
       const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
@@ -42,7 +127,7 @@ patches:
 
       function calculateWeeklyCalorieData(state) {
         const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], minCalories: [], maxCalories: [] };
+        const weeklyData = { labels: [], calories: [] };
 
         for (let i = 0; i < 7; i++) {
           const dayDate = new Date(weekStart);
@@ -60,38 +145,50 @@ patches:
               dailyMax += maxCals;
             }
           });
-          weeklyData.minCalories.push(dailyMin);
-          weeklyData.maxCalories.push(dailyMax);
+          weeklyData.calories.push([dailyMin, dailyMax]);
         }
         return weeklyData;
       }
 
-      function renderPlannerChart(state) {
+      function renderPlannerChart() {
+        if (!stateCache) return;
         const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
         if (plannerChartInstance) {
           plannerChartInstance.destroy();
         }
 
-        const weeklyData = calculateWeeklyCalorieData(state);
+        const weeklyData = calculateWeeklyCalorieData(stateCache);
         const colors = getChartColors();
+        const isLineChart = currentPlannerChartType === 'line';
+
+        const datasets = isLineChart ?
+        [{
+            label: 'Kcal Min',
+            data: weeklyData.calories.map(c => c[0]),
+            borderColor: colors.secondary,
+            fill: false,
+            tension: 0.1
+        },{
+            label: 'Kcal Max',
+            data: weeklyData.calories.map(c => c[1]),
+            borderColor: colors.primary,
+            fill: '-1',
+            backgroundColor: colors.primary + '33', // Primary color with alpha
+            tension: 0.1
+        }]
+        :
+        [{
+            label: 'Kcal (Min-Max)',
+            data: weeklyData.calories,
+            backgroundColor: colors.primary,
+            borderColor: colors.secondary
+        }];
 
         plannerChartInstance = new Chart(ctx, {
-          type: 'bar',
+          type: currentPlannerChartType,
           data: {
             labels: weeklyData.labels,
-            datasets: [{
-              label: 'Kcal Min',
-              data: weeklyData.minCalories,
-              backgroundColor: colors.primary,
-              borderColor: colors.primary,
-              borderWidth: 1
-            }, {
-              label: 'Kcal Max',
-              data: weeklyData.maxCalories,
-              backgroundColor: colors.secondary,
-              borderColor: colors.secondary,
-              borderWidth: 1
-            }]
+            datasets: datasets
           },
           options: {
             responsive: true,
@@ -109,7 +206,22 @@ patches:
             },
             plugins: {
               legend: {
+                display: isLineChart,
                 labels: { color: colors.textColor }
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    if (isLineChart) {
+                      return `${context.dataset.label}: ${context.parsed.y}`;
+                    }
+                    const value = context.raw;
+                    if (value[0] === value[1]) {
+                      return `Kcal: ${value[0]}`;
+                    }
+                    return `Kcal: ${value[0]} - ${value[1]}`;
+                  }
+                }
               }
             }
           }
@@ -179,17 +291,46 @@ patches:
           }
         });
       }
-      
-      export function renderCharts(state) {
-          renderPlannerChart(state);
+
+      function handleChartTypeChange(event) {
+          const type = event.target.dataset.type;
+          if (type && type !== currentPlannerChartType) {
+              currentPlannerChartType = type;
+              document.querySelectorAll('.btn-chart-type').forEach(btn => {
+                  btn.classList.toggle('active', btn.dataset.type === type);
+              });
+              renderPlannerChart();
+          }
+      }
+
+      export function initCharts(state) {
+          stateCache = state;
+          renderPlannerChart();
           renderBiometricsChart(state);
+          document.querySelector('.chart-type-switcher').addEventListener('click', handleChartTypeChange);
+      }
+
+      export function destroyCharts() {
+          if (plannerChartInstance) {
+              plannerChartInstance.destroy();
+              plannerChartInstance = null;
+          }
+          if (biometricsChartInstance) {
+              biometricsChartInstance.destroy();
+              biometricsChartInstance = null;
+          }
+          const switcher = document.querySelector('.chart-type-switcher');
+          if (switcher) {
+              switcher.removeEventListener('click', handleChartTypeChange);
+          }
+          stateCache = null;
       }
   - file: src/ui/pageRenderers.js
     content: |
       import { calculateBMR } from '../core/calculations.js';
       import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
       import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
+      import { initCharts, destroyCharts } from './charts.js';
 
       function toISODateString(date) {
         return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -206,6 +347,7 @@ patches:
       }
 
       export function renderBiometricsPage(state) {
+        destroyCharts(); // Ensure charts are destroyed when leaving the chart page
         const form = document.getElementById('biometrics-form');
         const listContainer = document.getElementById('biometrics-list');
 
@@ -259,6 +401,7 @@ patches:
       }
 
       export function renderProfilePage(state) {
+        destroyCharts(); // Ensure charts are destroyed when leaving the chart page
         const form = document.getElementById('profile-form');
         form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
       }
@@ -274,78 +417,137 @@ patches:
               placeholder.classList.add('hidden');
               canvas.classList.remove('hidden');
           }
-          renderCharts(state);
+          initCharts(state);
       }
-  - file: sw.js
+  - file: src/ui/plannerRenderer.js
     content: |
-      const CACHE_NAME = 'healtypro-v7';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/modals.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/ui/interactions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/utils/constants.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
+      import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS } from '../utils/constants.js';
+      import { destroyCharts } from './charts.js';
 
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
 
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
 
-      self.addEventListener('fetch', (event) => {
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
-        } else {
-          event.respondWith(fetch(event.request));
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || !meal.calories_min) return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0, max = 0;
+        MEAL_TYPES.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
+          if (meal && meal.calories_min) {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+                  </button>`;
         }
-      });
+        return '';
+      }
+
+      function renderCalendarView(state, weekStart) {
+        const calendarGrid = document.getElementById('calendar-grid');
+        const todayISO = toISODateString(new Date());
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          if (isoDate === todayISO) {
+            dayCell.classList.add('is-today');
+          }
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        const logView = document.getElementById('log-view');
+        const todayISO = toISODateString(new Date());
+        logView.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+          if (dayMeals.length > 0) {
+            const dayLog = document.createElement('div');
+            dayLog.className = 'log-day';
+             if (isoDate === todayISO) {
+              dayLog.classList.add('is-today');
+            }
+            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
+              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+            logView.appendChild(dayLog);
+          }
+        }
+        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+      }
+
+      export function renderPlannerPage(state) {
+        destroyCharts(); // Ensure charts are destroyed when leaving the chart page
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+        
+        const calendarGrid = document.getElementById('calendar-grid');
+        const logView = document.getElementById('log-view');
+        const viewCalendarBtn = document.getElementById('view-calendar-btn');
+        const viewLogBtn = document.getElementById('view-log-btn');
+
+        if (state.currentView === 'planner') {
+            calendarGrid.classList.remove('hidden');
+            logView.classList.add('hidden');
+            viewCalendarBtn.classList.add('active');
+            viewLogBtn.classList.remove('active');
+        } else if (state.currentView === 'log') {
+            calendarGrid.classList.add('hidden');
+            logView.classList.remove('hidden');
+            viewCalendarBtn.classList.remove('active');
+            viewLogBtn.classList.add('active');
+        }
+
+        renderCalendarView(state, weekStart);
+        renderLogView(state, weekStart);
+      }
 commands:
-  - "echo 'Fase 2 completata. La logica per il rendering dei grafici è stata implementata.'"
+  - "echo 'Bug di rendering dei grafici corretto e selettore del tipo di grafico implementato.'"

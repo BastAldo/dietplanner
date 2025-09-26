@@ -1,7 +1,7 @@
 import { calculateBMR } from '../core/calculations.js';
 import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
-import { renderCharts } from './charts.js';
+import { initCharts, destroyCharts } from './charts.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -18,6 +18,7 @@ function formatReadableDate(isoDate) {
 }
 
 export function renderBiometricsPage(state) {
+  destroyCharts(); // Ensure charts are destroyed when leaving the chart page
   const form = document.getElementById('biometrics-form');
   const listContainer = document.getElementById('biometrics-list');
 
@@ -71,6 +72,7 @@ export function renderBiometricsPage(state) {
 }
 
 export function renderProfilePage(state) {
+  destroyCharts(); // Ensure charts are destroyed when leaving the chart page
   const form = document.getElementById('profile-form');
   form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
 }
@@ -86,5 +88,5 @@ export function renderChartsPage(state) {
         placeholder.classList.add('hidden');
         canvas.classList.remove('hidden');
     }
-    renderCharts(state);
+    initCharts(state);
 }
