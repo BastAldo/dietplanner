@@ -1,15 +1,184 @@
-commit_message: "refactor(ui): Sostituisce tutte le icone dell'app con SVG da Font Awesome"
+commit_message: "feat(arch): Centralizza la gestione delle icone in un file dedicato"
 rationale: |
-  Questa patch esegue una migrazione completa di tutte le icone dell'applicazione, sostituendo gli SVG personalizzati con le loro controparti SVG da Font Awesome.
+  Questa patch implementa una significativa miglioria architetturale, come suggerito dall'utente, centralizzando la definizione di tutte le icone SVG in un unico file dedicato (`src/ui/icons.js`).
 
-  Questa decisione strategica, presa in accordo con l'utente, risolve i problemi di inconsistenza e bassa qualità del design riscontrati in precedenza. L'adozione di un'unica libreria professionale come fonte per tutti gli asset grafici garantisce:
-  1.  **Coerenza Visiva**: Tutte le icone ora condividono lo stesso stile, peso visivo e linguaggio di design.
-  2.  **Alta Qualità**: Vengono utilizzate icone professionali, eliminando ogni ambiguità o imperfezione.
-  3.  **Mantenibilità**: La gestione delle icone è ora standardizzata. Tutte le icone sono SVG a traccia singola, basate su `fill`, che si integrano perfettamente con il CSS esistente senza eccezioni.
-  4.  **Nessuna Dipendenza Esterna**: L'approccio mantiene l'integrità della PWA, poiché gli SVG sono inclusi direttamente nel codice, garantendo il funzionamento offline.
+  Questo approccio, analogo a quello utilizzato per le costanti di testo, offre numerosi vantaggi:
+  1.  **Manutenibilità (SRP)**: Il design delle icone è ora separato dalla struttura HTML e dalla logica JavaScript. Qualsiasi modifica a un'icona viene effettuata in un solo punto.
+  2.  **Coerenza Garantita**: Una funzione helper `renderIcon` costruisce ogni SVG, garantendo che tutte le icone condividano attributi comuni (`viewBox`, `fill`, etc.), risolvendo problemi di stile e dimensione.
+  3.  **Controllo del Design**: Fornisce un unico punto di controllo per la gestione dello stile visivo di tutte le icone dell'applicazione.
+  4.  **Codice Pulito**: Rimuove grandi blocchi di codice SVG da file HTML e JavaScript, migliorandone notevolmente la leggibilità.
 
-  Sono stati aggiornati i file HTML e le funzioni JavaScript che generano markup dinamico per riflettere la nuova libreria di icone.
+  Sono stati refattorizzati tutti i file che utilizzavano icone SVG per adottare il nuovo sistema centralizzato. È stato creato il nuovo file `src/ui/icons.js` e il service worker è stato aggiornato per includerlo nella cache.
 patches:
+  - file: src/ui/icons.js
+    content: |
+      const ICONS = {
+        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
+        PLANNER: '<path d="M152 24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48H80V24c0-13.3-10.7-24-24-24S32 10.7 32 24V48H16C7.2 48 0 55.2 0 64v48c0 8.8 7.2 16 16 16h416c8.8 0 16-7.2 16-16V64c0-8.8-7.2-16-16-16h-16V24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48h-24V24zM432 176H16v288c0 26.5 21.5 48 48 48h320c26.5 0 48-21.5 48-48V176z"/>',
+        PROFILE: '<path d="M224 256c70.7 0 128-57.3 128-128S294.7 0 224 0S96 57.3 96 128s57.3 128 128 128zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/>',
+        WEIGHT_SCALE: '<path d="M448 96c0-17.7-14.3-32-32-32H304c-8.8 0-16-7.2-16-16s7.2-16 16-16h112c35.3 0 64 28.7 64 64v320c0 35.3-28.7 64-64 64H96c-35.3 0-64-28.7-64-64V96c0-35.3 28.7-64 64-64h112c8.8 0 16 7.2 16 16s-7.2 16-16 16H96c-17.7 0-32 14.3-32 32v320c0 17.7 14.3 32 32 32h352c17.7 0 32-14.3 32-32V96zM256 224c-17.7 0-32 14.3-32 32s14.3 32 32 32s32-14.3 32-32s-14.3-32-32-32zm-64-32c0 17.7-14.3 32-32 32s-32-14.3-32-32s14.3-32 32-32s32 14.3 32 32zm192 0c0 17.7-14.3 32-32 32s-32-14.3-32-32s14.3-32 32-32s32 14.3 32 32z"/>',
+        SHARE: '<path d="M448 248c0-10.6-4.1-20.6-11.5-28L313.1 94.6c-4.7-4.7-11.2-7.4-17.9-7.4H288V32c0-17.7-14.3-32-32-32s-32 14.3-32 32v55.2H128V32c0-17.7-14.3-32-32-32S64 14.3 64 32v55.2H56.9c-6.7 0-13.2 2.7-17.9 7.4L11.5 220C4.1 227.4 0 237.4 0 248v176c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V248zM352 424c0 6.6-5.4 12-12 12H108c-6.6 0-12-5.4-12-12V320h256v104zM244 380c0 11-9 20-20 20s-20-9-20-20s9-20 20-20s20 9 20 20z"/>',
+        INFO: '<path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-200a32 32 0 1 1 0-64 32 32 0 1 1 0 64z"/>',
+        LOG_VIEW: '<path d="M160 96a96 96 0 1 0 192 0A96 96 0 1 0 160 96zm80 152V320c0 13.3-10.7 24-24 24s-24-10.7-24-24V248c0-13.3 10.7-24 24-24s24 10.7 24 24zM96 128a128 128 0 1 1 256 0A128 128 0 1 1 96 128zM32 448c0-35.3 28.7-64 64-64H352c35.3 0 64 28.7 64 64v32c0 17.7-14.3 32-32 32H64c-17.7 0-32-14.3-32-32V448z"/>',
+        RECIPE: '<path d="M256 32a224 224 0 1 0 0 448 224 224 0 1 0 0-448zM122.3 135.8c-1.3-4.3-5.2-7.2-9.8-7.2s-8.5 2.9-9.8 7.2l-1.4 4.5c-2.3 7.5-1.1 15.6 3.2 22.1s10.6 10.3 18 10.3h.2c7.4 0 13.8-3.8 18-10.3s5.5-14.6 3.2-22.1l-1.4-4.5zM158.4 397.7c-2.2-7.5-8.4-12.6-16.1-12.6s-13.9 5.1-16.1 12.6l-5.6 19.2c-3.2 11-2.6 22.8 1.8 33.2s11.2 18.2 20 18.2h.2c8.7 0 15.6-7.7 20-18.2s5-22.2 1.8-33.2l-5.6-19.2zM288 112a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zM408 304a16 16 0 1 0 0-32 16 16 0 1 0 0 32z"/>',
+        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
+        CLOSE: '<path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/>',
+        KEBAB_MENU: '<path d="M64 360a56 56 0 1 0 0 112 56 56 0 1 0 0-112zm0-160a56 56 0 1 0 0 112 56 56 0 1 0 0-112zM120 96a56 56 0 1 0 -112 0 56 56 0 1 0 112 0z"/>'
+      };
+
+      const viewBoxes = {
+        KEBAB_MENU: '0 0 128 512',
+        CLOSE: '0 0 384 512',
+        DEFAULT: '0 0 512 512'
+      }
+      
+      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
+        const iconPath = ICONS[name];
+        if (!iconPath) return '';
+        const viewBox = viewBoxes[name] || viewBoxes.DEFAULT;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      }
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v5';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/modals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage } from './pageRenderers.js';
+      import { UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const profilePage = document.getElementById('profile-page');
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        [plannerPage, progressPage, profilePage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
   - file: index.html
     content: |
       <!DOCTYPE html>
@@ -36,28 +205,16 @@ patches:
           <header class="app-header">
               <div class="header-content">
                   <div class="app-title">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="24" height="24">
-                          <path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>
-                      </svg>
                       <h1 id="main-title"></h1>
                   </div>
                   <nav id="main-nav" class="main-nav">
                       <button id="nav-planner" class="btn-nav">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="24" height="24">
-                              <path d="M152 24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48H80V24c0-13.3-10.7-24-24-24S32 10.7 32 24V48H16C7.2 48 0 55.2 0 64v48c0 8.8 7.2 16 16 16h416c8.8 0 16-7.2 16-16V64c0-8.8-7.2-16-16-16h-16V24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48h-24V24zM432 176H16v288c0 26.5 21.5 48 48 48h320c26.5 0 48-21.5 48-48V176z"/>
-                          </svg>
                           <span></span>
                       </button>
                       <button id="nav-progress" class="btn-nav">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="24" height="24">
-                              <path d="M135.2 117.4C140.6 108.3 151.7 104 163.2 104h185.6c11.5 0 22.6 4.3 30.1 13.4l1.3 .2zM320 224c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm-48-80c53 0 96 43 96 96s-43 96-96 96s-96-43-96-96s43-96 96-96zm-160 0c53 0 96 43 96 96s-43 96-96 96s-96-43-96-96s43-96 96-96zM480 224c0 26.5-21.5 48-48 48s-48-21.5-48-48s21.5-48 48-48s48 21.5 48 48zM96 368c0 8.8 7.2 16 16 16H400c8.8 0 16-7.2 16-16s-7.2-16-16-16H112c-8.8 0-16 7.2-16 16z"/>
-                          </svg>
                           <span></span>
                       </button>
                       <button id="nav-profile" class="btn-nav">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="24" height="24">
-                              <path d="M224 256c70.7 0 128-57.3 128-128S294.7 0 224 0S96 57.3 96 128s57.3 128 128 128zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/>
-                          </svg>
                           <span></span>
                       </button>
                   </nav>
@@ -80,21 +237,15 @@ patches:
     content: |
       <div id="global-alert" class="global-alert hidden">
           <p id="global-alert-message"></p>
-          <button id="global-alert-close" class="alert-close-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor" width="24" height="24" style="width: 1em; height: 1em;"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg>
-          </button>
+          <button id="global-alert-close" class="alert-close-btn"></button>
       </div>
 
       <div id="planner-page" class="page-view">
           <section class="data-source-container">
               <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
               <button id="load-config-btn" class="btn btn-primary"></button>
-              <button id="share-config-btn" class="btn-view" title="Condividi Configurazione">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="24" height="24"><path d="M448 248c0-10.6-4.1-20.6-11.5-28L313.1 94.6c-4.7-4.7-11.2-7.4-17.9-7.4H288V32c0-17.7-14.3-32-32-32s-32 14.3-32 32v55.2H128V32c0-17.7-14.3-32-32-32S64 14.3 64 32v55.2H56.9c-6.7 0-13.2 2.7-17.9 7.4L11.5 220C4.1 227.4 0 237.4 0 248v176c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V248zM352 424c0 6.6-5.4 12-12 12H108c-6.6 0-12-5.4-12-12V320h256v104zM244 380c0 11-9 20-20 20s-20-9-20-20s9-20 20-20s20 9 20 20z"/></svg>
-              </button>
-              <button id="info-icon" class="btn-view" title="Mostra formato JSON richiesto">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="24" height="24"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-200a32 32 0 1 1 0-64 32 32 0 1 1 0 64z"/></svg>
-              </button>
+              <button id="share-config-btn" class="btn-view" title="Condividi Configurazione"></button>
+              <button id="info-icon" class="btn-view" title="Mostra formato JSON richiesto"></button>
           </section>
           <section class="view-container">
               <header class="calendar-header">
@@ -104,12 +255,8 @@ patches:
               </header>
                <div class="planner-controls-wrapper">
                   <div class="view-switcher">
-                      <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="24" height="24"><path d="M152 24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48H80V24c0-13.3-10.7-24-24-24S32 10.7 32 24V48H16C7.2 48 0 55.2 0 64v48c0 8.8 7.2 16 16 16h416c8.8 0 16-7.2 16-16V64c0-8.8-7.2-16-16-16h-16V24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48h-24V24zM432 176H16v288c0 26.5 21.5 48 48 48h320c26.5 0 48-21.5 48-48V176z"/></svg>
-                      </button>
-                      <button id="view-log-btn" class="btn-view" title="Vista Registro">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="24" height="24"><path d="M160 96a96 96 0 1 0 192 0A96 96 0 1 0 160 96zm80 152V320c0 13.3-10.7 24-24 24s-24-10.7-24-24V248c0-13.3 10.7-24 24-24s24 10.7 24 24zM96 128a128 128 0 1 1 256 0A128 128 0 1 1 96 128zM32 448c0-35.3 28.7-64 64-64H352c35.3 0 64 28.7 64 64v32c0 17.7-14.3 32-32 32H64c-17.7 0-32-14.3-32-32V448z"/></svg>
-                      </button>
+                      <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario"></button>
+                      <button id="view-log-btn" class="btn-view" title="Vista Registro"></button>
                   </div>
                   <div class="planner-actions">
                     <button id="copy-week-btn" class="btn btn-secondary"></button>
@@ -120,11 +267,67 @@ patches:
               <div id="log-view" class="log-view hidden"></div>
           </section>
       </div>
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
   - file: src/ui/modals.js
     content: |
       import { getState, updateWeeklyPlan } from '../core/state.js';
       import { showNotification } from './notifications.js';
       import { UI_TEXT, MEAL_TYPES } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
 
       let currentEditingDayISO = null;
 
@@ -136,7 +339,7 @@ patches:
       function getRecipeButtonHTML(meal, state) {
         if (state.recipeBaseUrl && meal && meal.recipeId) {
           return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="20" height="20"><path d="M256 32a224 224 0 1 0 0 448 224 224 0 1 0 0-448zM122.3 135.8c-1.3-4.3-5.2-7.2-9.8-7.2s-8.5 2.9-9.8 7.2l-1.4 4.5c-2.3 7.5-1.1 15.6 3.2 22.1s10.6 10.3 18 10.3h.2c7.4 0 13.8-3.8 18-10.3s5.5-14.6 3.2-22.1l-1.4-4.5zM158.4 397.7c-2.2-7.5-8.4-12.6-16.1-12.6s-13.9 5.1-16.1 12.6l-5.6 19.2c-3.2 11-2.6 22.8 1.8 33.2s11.2 18.2 20 18.2h.2c8.7 0 15.6-7.7 20-18.2s5-22.2 1.8-33.2l-5.6-19.2zM288 112a32 32 0 1 0 -64 0 32 32 0 1 0 64 0zM408 304a16 16 0 1 0 0-32 16 16 0 1 0 0 32z"/></svg>
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
                   </button>`;
         }
         return '';
@@ -212,7 +415,7 @@ patches:
           const meal = state.weeklyPlan[slotId];
           let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
           if (meal) {
-            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="1em" height="1em"><path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/></svg></button></div></div>`;
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
           }
           return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
         }).join('');
@@ -229,102 +432,11 @@ patches:
         };
         dayEditorModal.classList.remove('modal-hidden');
       }
-  - file: styles/modals.css
-    content: |
-      /* --- MODALS --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn svg { width: 1em; height: 1em; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-      .day-editor-list { display: flex; flex-direction: column; }
-      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.75rem; }
-      .day-editor-slot:last-child { margin-bottom: 0; }
-      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-      .meal-details-container { flex-grow: 1; min-width: 0; }
-      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
-      .btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-      .btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
-      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
-      .btn-view-recipe:hover { color: var(--text-color); }
-      .recipe-body { line-height: 1.6; }
-      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
-      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
-      .recipe-body li { margin-bottom: 0.5rem; }
-      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
-      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
-      .recipe-body th { background-color: var(--bg-color); }
-  - file: templates/modals.html
-    content: |
-      <div id="info-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="info-modal-title"></h3>
-                <button class="modal-close-btn" data-target="info-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg></button>
-              </div>
-              <div class="modal-body">
-                  <p id="info-modal-desc"></p>
-                  <pre><code id="info-modal-json-example"></code></pre>
-              </div>
-          </div>
-      </div>
-      <div id="selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="selection-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg></button>
-              </div>
-              <div id="selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="day-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="day-editor-title"></h3>
-              <button class="modal-close-btn" data-target="day-editor-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg></button>
-            </div>
-            <div id="day-editor-body" class="modal-body day-editor-list"></div>
-        </div>
-      </div>
-      <div id="confirm-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="confirm-modal-title"></h3>
-            </div>
-            <div class="modal-body">
-              <p id="confirm-modal-message"></p>
-            </div>
-            <div class="modal-footer">
-              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
-              <button id="confirm-modal-confirm-btn" class="btn"></button>
-            </div>
-        </div>
-      </div>
-      <div id="recipe-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="recipe-modal-title"></h3>
-              <button class="modal-close-btn" data-target="recipe-modal"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg></button>
-            </div>
-            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-        </div>
-      </div>
   - file: src/ui/pageRenderers.js
     content: |
       import { calculateBMR } from '../core/calculations.js';
       import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
 
       function toISODateString(date) {
         return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -364,7 +476,7 @@ patches:
                             <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
                             <div class="biometrics-actions">
                                 <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 512" fill="currentColor" width="24" height="24" style="width: 1em; height: 1em;"><path d="M64 360a56 56 0 1 0 0 112 56 56 0 1 0 0-112zm0-160a56 56 0 1 0 0 112 56 56 0 1 0 0-112zM120 96a56 56 0 1 0 -112 0 56 56 0 1 0 112 0z"/></svg>
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
                                 </button>
                                 <div class="actions-dropdown">
                                     <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
@@ -397,112 +509,5 @@ patches:
         const form = document.getElementById('profile-form');
         form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
       }
-  - file: styles/base.css
-    content: |
-      /* --- GLOBAL STYLES & MOBILE FIRST --- */
-      :root {
-          --bg-color: #1a1a1d;
-          --card-color: #2c2c34;
-          --primary-color: #9575cd;
-          --secondary-color: #4db6ac;
-          --text-color: #f4f4f9;
-          --text-color-muted: #aaa;
-          --border-color: #40404a;
-          --danger-color: #ef5350;
-          --success-color: #66bb6a;
-          --warning-color: #fdd835;
-          --info-color: var(--primary-color);
-      }
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html { font-size: 16px; }
-      body {
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-          padding-top: 60px;
-      }
-      .hidden { display: none !important; }
-
-      /* --- TOAST NOTIFICATIONS --- */
-      .toast-container {
-        position: fixed; top: 80px; right: 1rem; z-index: 2000;
-        display: flex; flex-direction: column; gap: 0.5rem;
-      }
-      .toast {
-        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
-        border-radius: 8px; border-left: 5px solid var(--info-color);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
-        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
-      }
-      .toast.show { opacity: 1; transform: translateX(0); }
-      .toast.is-success { border-left-color: var(--success-color); }
-      .toast.is-error { border-left-color: var(--danger-color); }
-      .toast.is-info { border-left-color: var(--secondary-color); }
-
-      /* --- GLOBAL ALERT BANNER --- */
-      .global-alert {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 1rem; background-color: var(--card-color);
-        border-left: 5px solid var(--warning-color); border-radius: 8px;
-        margin-bottom: 1.5rem; color: var(--text-color);
-      }
-      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; padding: 0; }
-      .alert-close-btn svg { display: block; }
-      .alert-close-btn:hover { color: var(--text-color); }
-
-      /* --- PERSISTENT HEADER --- */
-      .app-header {
-          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
-          background-color: rgba(44, 44, 52, 0.85);
-          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
-      }
-      .header-content {
-        width: 100%; max-width: 1200px; display: flex;
-        justify-content: space-between; align-items: center;
-      }
-      .app-title { display: flex; align-items: center; gap: 0.75rem; }
-      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
-      .main-nav { display: flex; gap: 0.5rem; }
-      .btn-nav {
-        background: transparent; border: none; color: var(--text-color-muted);
-        padding: 0.5rem; border-radius: 8px; cursor: pointer; font-weight: bold;
-        transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
-      }
-      .btn-nav svg { fill: currentColor; }
-      .btn-nav span { display: none; } /* Hide text on mobile by default */
-      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
-      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      #info-icon { padding: 0.5rem; }
-
-      /* --- MAIN LAYOUT & CONTAINERS --- */
-      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-      .page-view { width: 100%; }
-      .app-footer {
-          padding: 1.5rem 1rem; margin-top: 1.5rem;
-          border-top: 1px solid var(--border-color);
-          display: flex; justify-content: center;
-          gap: 0.75rem;
-      }
-
-      /* --- GENERAL COMPONENTS --- */
-      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
-      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
-      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
-      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
-      .btn:hover { opacity: 0.85; }
-      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
-
-      /* Responsive Nav */
-      @media (min-width: 768px) {
-          .btn-nav { padding: 0.5rem 1rem; }
-          .btn-nav span { display: inline; } /* Show text on larger screens */
-      }
 commands:
-  - "echo 'Migrazione a icone SVG da Font Awesome completata.'"
+ - "echo 'Sistema di icone centralizzato implementato con successo.'"

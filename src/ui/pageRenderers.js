@@ -1,5 +1,6 @@
 import { calculateBMR } from '../core/calculations.js';
 import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
+import { renderIcon } from './icons.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -39,7 +40,7 @@ export function renderBiometricsPage(state) {
                       <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
                       <div class="biometrics-actions">
                           <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
-                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 512" fill="currentColor" width="24" height="24" style="width: 1em; height: 1em;"><path d="M64 360a56 56 0 1 0 0 112 56 56 0 1 0 0-112zm0-160a56 56 0 1 0 0 112 56 56 0 1 0 0-112zM120 96a56 56 0 1 0 -112 0 56 56 0 1 0 112 0z"/></svg>
+                              ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
                           </button>
                           <div class="actions-dropdown">
                               <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>

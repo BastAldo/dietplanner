@@ -1,20 +1,14 @@
 <div id="global-alert" class="global-alert hidden">
     <p id="global-alert-message"></p>
-    <button id="global-alert-close" class="alert-close-btn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" fill="currentColor" width="24" height="24" style="width: 1em; height: 1em;"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg>
-    </button>
+    <button id="global-alert-close" class="alert-close-btn"></button>
 </div>
 
 <div id="planner-page" class="page-view">
     <section class="data-source-container">
         <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
         <button id="load-config-btn" class="btn btn-primary"></button>
-        <button id="share-config-btn" class="btn-view" title="Condividi Configurazione">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="24" height="24"><path d="M448 248c0-10.6-4.1-20.6-11.5-28L313.1 94.6c-4.7-4.7-11.2-7.4-17.9-7.4H288V32c0-17.7-14.3-32-32-32s-32 14.3-32 32v55.2H128V32c0-17.7-14.3-32-32-32S64 14.3 64 32v55.2H56.9c-6.7 0-13.2 2.7-17.9 7.4L11.5 220C4.1 227.4 0 237.4 0 248v176c0 35.3 28.7 64 64 64h320c35.3 0 64-28.7 64-64V248zM352 424c0 6.6-5.4 12-12 12H108c-6.6 0-12-5.4-12-12V320h256v104zM244 380c0 11-9 20-20 20s-20-9-20-20s9-20 20-20s20 9 20 20z"/></svg>
-        </button>
-        <button id="info-icon" class="btn-view" title="Mostra formato JSON richiesto">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="24" height="24"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM216 336h24V272H216c-13.3 0-24-10.7-24-24s10.7-24 24-24h48c13.3 0 24 10.7 24 24v88h8c13.3 0 24 10.7 24 24s-10.7 24-24 24H216c-13.3 0-24-10.7-24-24s10.7-24 24-24zm40-200a32 32 0 1 1 0-64 32 32 0 1 1 0 64z"/></svg>
-        </button>
+        <button id="share-config-btn" class="btn-view" title="Condividi Configurazione"></button>
+        <button id="info-icon" class="btn-view" title="Mostra formato JSON richiesto"></button>
     </section>
     <section class="view-container">
         <header class="calendar-header">
@@ -24,12 +18,8 @@
         </header>
          <div class="planner-controls-wrapper">
             <div class="view-switcher">
-                <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" width="24" height="24"><path d="M152 24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48H80V24c0-13.3-10.7-24-24-24S32 10.7 32 24V48H16C7.2 48 0 55.2 0 64v48c0 8.8 7.2 16 16 16h416c8.8 0 16-7.2 16-16V64c0-8.8-7.2-16-16-16h-16V24c0-13.3-10.7-24-24-24s-24 10.7-24 24V48h-24V24zM432 176H16v288c0 26.5 21.5 48 48 48h320c26.5 0 48-21.5 48-48V176z"/></svg>
-                </button>
-                <button id="view-log-btn" class="btn-view" title="Vista Registro">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" width="24" height="24"><path d="M160 96a96 96 0 1 0 192 0A96 96 0 1 0 160 96zm80 152V320c0 13.3-10.7 24-24 24s-24-10.7-24-24V248c0-13.3 10.7-24 24-24s24 10.7 24 24zM96 128a128 128 0 1 1 256 0A128 128 0 1 1 96 128zM32 448c0-35.3 28.7-64 64-64H352c35.3 0 64 28.7 64 64v32c0 17.7-14.3 32-32 32H64c-17.7 0-32-14.3-32-32V448z"/></svg>
-                </button>
+                <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario"></button>
+                <button id="view-log-btn" class="btn-view" title="Vista Registro"></button>
             </div>
             <div class="planner-actions">
               <button id="copy-week-btn" class="btn btn-secondary"></button>

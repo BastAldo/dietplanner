@@ -2,6 +2,23 @@ import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
 import { renderBiometricsPage, renderProfilePage } from './pageRenderers.js';
 import { UI_TEXT } from '../utils/constants.js';
+import { renderIcon } from './icons.js';
+
+function populateIcons() {
+    document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+    document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+    document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+    document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+    document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+    document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+    document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+    document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+    document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+    
+    document.querySelectorAll('.modal-close-btn').forEach(btn => {
+        btn.innerHTML = renderIcon('CLOSE');
+    });
+}
 
 export function populateInitialText() {
   document.title = UI_TEXT.MAIN_TITLE;
@@ -20,6 +37,7 @@ export function populateInitialText() {
   document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
   document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
   document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+  populateIcons();
 }
 
 export function renderApp() {
