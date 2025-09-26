@@ -1,4 +1,4 @@
-import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
 
 let plannerChartInstance = null;
 let biometricsChartInstance = null;
@@ -20,7 +20,9 @@ function getChartColors() {
         secondary: style.getPropertyValue('--secondary-color').trim(),
         textColor: style.getPropertyValue('--text-color').trim(),
         borderColor: style.getPropertyValue('--border-color').trim(),
-        bgColor: style.getPropertyValue('--bg-color').trim()
+        danger: style.getPropertyValue('--danger-color').trim(),
+        success: style.getPropertyValue('--success-color').trim(),
+        warning: style.getPropertyValue('--warning-color').trim()
     };
 }
 
@@ -123,30 +125,46 @@ function renderPlannerChart(state) {
 }
 
 function getBiometricsData(state) {
-  const data = [...state.biometricData].reverse();
+  const data = [...state.biometricData].reverse(); // Assicura ordine cronologico
   const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-  const weights = data.map(entry => entry.weight);
-  return { labels, weights };
+  
+  const datasets = {};
+  const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
+
+  numericFields.forEach(field => {
+      datasets[field.id] = {
+          label: field.label,
+          data: data.map(entry => entry[field.id] || null) // Usa null per dati mancanti
+      };
+  });
+
+  return { labels, datasets };
 }
 
 function renderBiometricsChart(state) {
-  const { labels, weights } = getBiometricsData(state);
+  const { labels, datasets } = getBiometricsData(state);
   const colors = getChartColors();
+  const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
+  
+  const chartDatasets = Object.values(datasets)
+      .map((dataset, index) => ({
+          label: dataset.label,
+          data: dataset.data,
+          fill: false,
+          borderColor: colorCycle[index % colorCycle.length],
+          tension: 0.1,
+          pointBackgroundColor: colorCycle[index % colorCycle.length],
+          pointRadius: 4
+      }))
+      .filter(d => d.data.some(val => val !== null)); // Mostra solo se ci sono dati
+
   const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
 
   biometricsChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
-      datasets: [{
-        label: 'Peso (kg)',
-        data: weights,
-        fill: false,
-        borderColor: colors.primary,
-        tension: 0.1,
-        pointBackgroundColor: colors.secondary,
-        pointRadius: 5
-      }]
+      datasets: chartDatasets
     },
     options: {
       responsive: true,
@@ -163,6 +181,7 @@ function renderBiometricsChart(state) {
       },
       plugins: {
         legend: {
+          display: true, // Mostra sempre la legenda
           labels: { color: colors.textColor }
         }
       }

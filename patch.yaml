@@ -1,18 +1,17 @@
-commit_message: "fix(charts): Risolve il loop di rendering infinito e il memory leak"
+commit_message: "feat(charts): Migliora layout e arricchisce il grafico biometrico"
 rationale: |
-  Questo commit risolve un bug critico nella pagina dei grafici che causava un loop di rendering infinito, portando all'allungamento anomalo dell'area del grafico e a un progressivo degrado delle performance del browser (memory/CPU leak).
+  Questo commit implementa diversi miglioramenti alla pagina dei grafici basati sul feedback dell'utente, con l'obiettivo di aumentare la leggibilità e l'utilità dei dati visualizzati.
 
-  L'analisi ha rivelato che la causa principale era un conflitto tra la logica di ridimensionamento responsivo di Chart.js (`responsive: true`, `maintainAspectRatio: false`) e un contenitore genitore (`.chart-card`) il cui layout CSS non aveva un'altezza definita. Questo creava un circolo vizioso in cui il grafico tentava di riempire un contenitore che si espandeva a sua volta per accomodare il grafico, innescando un ciclo infinito di ridisegni.
+  Le modifiche principali sono:
+  1.  **Layout a Colonna Singola**: I grafici sono ora impilati verticalmente su tutte le dimensioni dello schermo. Questo layout migliora l'uso dello spazio orizzontale, rendendo ogni grafico più largo e più facile da leggere, specialmente su tablet e schermi di medie dimensioni. La modifica è stata ottenuta rimuovendo la regola `grid-template-columns` per schermi desktop.
+  2.  **Arricchimento Dati Biometrici**: Il grafico dei dati biometrici è stato potenziato per visualizzare non solo il peso, ma anche altre metriche chiave come la massa muscolare, la massa grassa e la percentuale di grasso. La funzione di rendering ora genera dinamicamente un dataset per ogni metrica disponibile, con colori distinti per una facile identificazione tramite la legenda.
+  3.  **Ordinamento Cronologico Confermato**: È stato verificato che l'asse temporale del grafico biometrico sia già corretto, mostrando i dati in ordine cronologico dal più vecchio (a sinistra) al più recente (a destra).
 
-  La soluzione è stata implementata su due livelli:
-  1.  **Fix Strutturale (CSS/HTML)**: Ogni `<canvas>` è stato avvolto in un nuovo `div` con `position: relative` e un'`height` fissa. Questo fornisce a Chart.js un contenitore con dimensioni vincolate, rompendo il loop di ridimensionamento alla radice.
-  2.  **Refactoring di Robustezza (JS)**: La logica di gestione del ciclo di vita dei grafici è stata comunque centralizzata nella funzione `renderCharts` per garantire che le istanze precedenti vengano sempre distrutte prima di crearne di nuove. Questo, pur non essendo il fix primario per questo specifico bug, rende il componente più stabile e previene futuri problemi.
-
-  Il risultato è una pagina grafici stabile, performante e priva di memory leak.
+  Questi aggiornamenti rendono la sezione dei grafici uno strumento di analisi più potente e intuitivo per l'utente.
 patches:
   - file: src/ui/charts.js
     content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
 
       let plannerChartInstance = null;
       let biometricsChartInstance = null;
@@ -34,7 +33,9 @@ patches:
               secondary: style.getPropertyValue('--secondary-color').trim(),
               textColor: style.getPropertyValue('--text-color').trim(),
               borderColor: style.getPropertyValue('--border-color').trim(),
-              bgColor: style.getPropertyValue('--bg-color').trim()
+              danger: style.getPropertyValue('--danger-color').trim(),
+              success: style.getPropertyValue('--success-color').trim(),
+              warning: style.getPropertyValue('--warning-color').trim()
           };
       }
 
@@ -137,30 +138,46 @@ patches:
       }
 
       function getBiometricsData(state) {
-        const data = [...state.biometricData].reverse();
+        const data = [...state.biometricData].reverse(); // Assicura ordine cronologico
         const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        const weights = data.map(entry => entry.weight);
-        return { labels, weights };
+        
+        const datasets = {};
+        const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
+
+        numericFields.forEach(field => {
+            datasets[field.id] = {
+                label: field.label,
+                data: data.map(entry => entry[field.id] || null) // Usa null per dati mancanti
+            };
+        });
+
+        return { labels, datasets };
       }
 
       function renderBiometricsChart(state) {
-        const { labels, weights } = getBiometricsData(state);
+        const { labels, datasets } = getBiometricsData(state);
         const colors = getChartColors();
+        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
+        
+        const chartDatasets = Object.values(datasets)
+            .map((dataset, index) => ({
+                label: dataset.label,
+                data: dataset.data,
+                fill: false,
+                borderColor: colorCycle[index % colorCycle.length],
+                tension: 0.1,
+                pointBackgroundColor: colorCycle[index % colorCycle.length],
+                pointRadius: 4
+            }))
+            .filter(d => d.data.some(val => val !== null)); // Mostra solo se ci sono dati
+
         const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
 
         biometricsChartInstance = new Chart(ctx, {
           type: 'line',
           data: {
             labels: labels,
-            datasets: [{
-              label: 'Peso (kg)',
-              data: weights,
-              fill: false,
-              borderColor: colors.primary,
-              tension: 0.1,
-              pointBackgroundColor: colors.secondary,
-              pointRadius: 5
-            }]
+            datasets: chartDatasets
           },
           options: {
             responsive: true,
@@ -177,6 +194,7 @@ patches:
             },
             plugins: {
               legend: {
+                display: true, // Mostra sempre la legenda
                 labels: { color: colors.textColor }
               }
             }
@@ -213,98 +231,6 @@ patches:
           const boundHandler = (e) => handleChartTypeChange(e, state);
           switcher.replaceWith(switcher.cloneNode(true));
           document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
-      }
-  - file: src/ui/pageRenderers.js
-    content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-
-        // Render Form
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        // Render Biometrics List as Cards
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
       }
   - file: styles/charts.css
     content: |
@@ -373,39 +299,11 @@ patches:
           color: var(--bg-color);
       }
 
-
-      @media (min-width: 1024px) {
+      /* Rimuove il layout a due colonne per desktop per impilare i grafici */
+      /* @media (min-width: 1024px) {
           .charts-container {
               grid-template-columns: repeat(2, 1fr);
           }
-      }
-  - file: templates/charts.html
-    content: |
-      <div id="charts-page" class="page-view hidden">
-          <h3 id="charts-title"></h3>
-          <div class="charts-container">
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="planner-chart-title"></h4>
-                      <div class="chart-type-switcher">
-                          <button class="btn-chart-type active" data-type="bar">Barre</button>
-                          <button class="btn-chart-type" data-type="line">Linee</button>
-                      </div>
-                  </div>
-                  <div class="chart-canvas-container">
-                    <canvas id="planner-chart-canvas"></canvas>
-                  </div>
-              </div>
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="biometrics-chart-title"></h4>
-                  </div>
-                  <div class="chart-canvas-container">
-                    <canvas id="biometrics-chart-canvas"></canvas>
-                    <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
-                  </div>
-              </div>
-          </div>
-      </div>
+      } */
 commands:
-  - "echo 'Bug di rendering e performance dei grafici risolto definitivamente.'"
+  - "echo 'Layout dei grafici aggiornato e grafico biometrico arricchito con dati multipli.'"
