@@ -3,7 +3,6 @@ import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 let plannerChartInstance = null;
 let biometricsChartInstance = null;
 let currentPlannerChartType = 'bar';
-let stateCache = null;
 
 const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
@@ -50,17 +49,11 @@ function calculateWeeklyCalorieData(state) {
   return weeklyData;
 }
 
-function renderPlannerChart() {
-  if (!stateCache) return;
-  const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-  if (plannerChartInstance) {
-    plannerChartInstance.destroy();
-  }
-
-  const weeklyData = calculateWeeklyCalorieData(stateCache);
+function renderPlannerChart(state) {
+  const weeklyData = calculateWeeklyCalorieData(state);
   const colors = getChartColors();
   const isLineChart = currentPlannerChartType === 'line';
-
+  
   const datasets = isLineChart ?
   [{
       label: 'Kcal Min',
@@ -73,7 +66,7 @@ function renderPlannerChart() {
       data: weeklyData.calories.map(c => c[1]),
       borderColor: colors.primary,
       fill: '-1',
-      backgroundColor: colors.primary + '33', // Primary color with alpha
+      backgroundColor: colors.primary + '33',
       tension: 0.1
   }]
   :
@@ -83,7 +76,8 @@ function renderPlannerChart() {
       backgroundColor: colors.primary,
       borderColor: colors.secondary
   }];
-
+  
+  const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
   plannerChartInstance = new Chart(ctx, {
     type: currentPlannerChartType,
     data: {
@@ -129,32 +123,16 @@ function renderPlannerChart() {
 }
 
 function getBiometricsData(state) {
-  const data = [...state.biometricData].reverse(); // oldest to newest
+  const data = [...state.biometricData].reverse();
   const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
   const weights = data.map(entry => entry.weight);
   return { labels, weights };
 }
 
 function renderBiometricsChart(state) {
-  const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-  const placeholder = document.getElementById('biometrics-chart-placeholder');
-  const canvas = document.getElementById('biometrics-chart-canvas');
-
-  if (biometricsChartInstance) {
-    biometricsChartInstance.destroy();
-  }
-
-  if (state.biometricData.length < 2) {
-    canvas.classList.add('hidden');
-    placeholder.classList.remove('hidden');
-    return;
-  }
-  
-  canvas.classList.remove('hidden');
-  placeholder.classList.add('hidden');
-
   const { labels, weights } = getBiometricsData(state);
   const colors = getChartColors();
+  const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
 
   biometricsChartInstance = new Chart(ctx, {
     type: 'line',
@@ -192,36 +170,33 @@ function renderBiometricsChart(state) {
   });
 }
 
-function handleChartTypeChange(event) {
+function handleChartTypeChange(event, state) {
     const type = event.target.dataset.type;
     if (type && type !== currentPlannerChartType) {
         currentPlannerChartType = type;
         document.querySelectorAll('.btn-chart-type').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.type === type);
         });
-        renderPlannerChart();
+        if (plannerChartInstance) {
+          plannerChartInstance.destroy();
+        }
+        renderPlannerChart(state);
     }
 }
 
-export function initCharts(state) {
-    stateCache = state;
-    renderPlannerChart();
-    renderBiometricsChart(state);
-    document.querySelector('.chart-type-switcher').addEventListener('click', handleChartTypeChange);
-}
-
-export function destroyCharts() {
+export function renderCharts(state) {
     if (plannerChartInstance) {
         plannerChartInstance.destroy();
-        plannerChartInstance = null;
     }
     if (biometricsChartInstance) {
         biometricsChartInstance.destroy();
-        biometricsChartInstance = null;
     }
+
+    renderPlannerChart(state);
+    renderBiometricsChart(state);
+
     const switcher = document.querySelector('.chart-type-switcher');
-    if (switcher) {
-        switcher.removeEventListener('click', handleChartTypeChange);
-    }
-    stateCache = null;
+    const boundHandler = (e) => handleChartTypeChange(e, state);
+    switcher.replaceWith(switcher.cloneNode(true));
+    document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
 }

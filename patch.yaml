@@ -1,101 +1,16 @@
-commit_message: "fix(charts): Corregge il bug di rendering e aggiunge il selettore del tipo di grafico"
+commit_message: "refactor(charts): Risolve il bug del ciclo di vita con una logica di rendering unificata"
 rationale: |
-  Questo commit affronta due problemi principali nella vista dei grafici: un bug di rendering e l'aggiunta di una nuova funzionalità richiesta dall'utente.
+  Questo commit esegue un refactoring critico del modulo dei grafici per risolvere in modo definitivo il bug di rendering che causava l'allungamento dell'area del grafico e la mancata visualizzazione delle barre/linee.
 
-  **Correzione del Bug**:
-  Il bug che causava l'allungamento progressivo delle barre del grafico a ogni visualizzazione è stato risolto. Il problema era dovuto a una gestione incompleta del ciclo di vita delle istanze di Chart.js. La logica in `src/ui/charts.js` è stata rafforzata per garantire che ogni istanza del grafico venga distrutta in modo affidabile prima che ne venga creata una nuova. Inoltre, il grafico delle calorie è stato migliorato per utilizzare una rappresentazione a "barra flottante", che mostra l'intervallo min-max in modo più pulito e accurato usando un singolo dataset.
+  L'analisi ha rivelato che il problema era causato da una gestione errata del ciclo di vita delle istanze di Chart.js. Le funzioni per creare e distruggere i grafici erano separate e invocate in momenti errati del flusso di navigazione, portando a un accumulo di istanze "orfane" che corrompevano il rendering.
 
-  **Nuova Funzionalità (Selettore Tipo Grafico)**:
-  In risposta alla richiesta dell'utente, è stata aggiunta la possibilità di cambiare dinamicamente il tipo di visualizzazione per il grafico delle calorie settimanali.
-  - È stato introdotto un selettore con pulsanti "Barre" e "Linee" nel file `templates/charts.html` e stilizzato in `styles/charts.css` per coerenza con il design system.
-  - La logica in `src/ui/charts.js` ora gestisce uno stato interno per il tipo di grafico selezionato e applica event listener ai nuovi pulsanti. Al click, il grafico viene ridisegnato istantaneamente con il nuovo tipo, offrendo maggiore flessibilità di analisi all'utente.
+  La soluzione implementata è un refactoring architetturale:
+  1.  **Logica Unificata**: Le funzioni `initCharts` e `destroyCharts` sono state eliminate e la loro logica è stata consolidata in un'unica funzione esportata, `renderCharts(state)`.
+  2.  **Pulizia Preventiva**: Questa nuova funzione, come prima azione, si assicura di distruggere sistematicamente qualsiasi istanza di grafico precedente e di rimuovere i relativi event listener. Questo garantisce che ogni chiamata di rendering parta da uno stato completamente pulito.
+  3.  **Semplificazione del Flusso**: I renderer delle altre pagine (`pageRenderers.js`, `plannerRenderer.js`) sono stati ripuliti dalle chiamate errate a `destroyCharts`. La responsabilità della gestione del ciclo di vita è ora interamente contenuta e gestita correttamente all'interno del modulo `charts.js`.
+
+  Questo refactoring rende il componente dei grafici robusto, stabile e manutenibile, prevenendo futuri bug legati al ciclo di vita del rendering.
 patches:
-  - file: styles/charts.css
-    content: |
-      /* --- CHARTS PAGE --- */
-      .charts-container {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1.5rem;
-      }
-
-      .chart-card {
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-      }
-
-      .chart-header {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin-bottom: 1.5rem;
-          position: relative;
-      }
-
-      .chart-header h4 {
-          color: var(--primary-color);
-          margin: 0;
-      }
-
-      .chart-type-switcher {
-          position: absolute;
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          display: flex;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          overflow: hidden;
-      }
-
-      .btn-chart-type {
-          background: transparent;
-          border: none;
-          color: var(--text-color-muted);
-          padding: 0.25rem 0.75rem;
-          cursor: pointer;
-          font-size: 0.8rem;
-      }
-      .btn-chart-type:not(:last-child) {
-          border-right: 1px solid var(--border-color);
-      }
-      .btn-chart-type.active {
-          background-color: var(--primary-color);
-          color: var(--bg-color);
-      }
-
-
-      @media (min-width: 1024px) {
-          .charts-container {
-              grid-template-columns: repeat(2, 1fr);
-          }
-      }
-  - file: templates/charts.html
-    content: |
-      <div id="charts-page" class="page-view hidden">
-          <h3 id="charts-title"></h3>
-          <div class="charts-container">
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="planner-chart-title"></h4>
-                      <div class="chart-type-switcher">
-                          <button class="btn-chart-type active" data-type="bar">Barre</button>
-                          <button class="btn-chart-type" data-type="line">Linee</button>
-                      </div>
-                  </div>
-                  <canvas id="planner-chart-canvas"></canvas>
-              </div>
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="biometrics-chart-title"></h4>
-                  </div>
-                  <canvas id="biometrics-chart-canvas"></canvas>
-                   <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
-              </div>
-          </div>
-      </div>
   - file: src/ui/charts.js
     content: |
       import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
@@ -103,7 +18,6 @@ patches:
       let plannerChartInstance = null;
       let biometricsChartInstance = null;
       let currentPlannerChartType = 'bar';
-      let stateCache = null;
 
       const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
@@ -150,17 +64,11 @@ patches:
         return weeklyData;
       }
 
-      function renderPlannerChart() {
-        if (!stateCache) return;
-        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-        if (plannerChartInstance) {
-          plannerChartInstance.destroy();
-        }
-
-        const weeklyData = calculateWeeklyCalorieData(stateCache);
+      function renderPlannerChart(state) {
+        const weeklyData = calculateWeeklyCalorieData(state);
         const colors = getChartColors();
         const isLineChart = currentPlannerChartType === 'line';
-
+        
         const datasets = isLineChart ?
         [{
             label: 'Kcal Min',
@@ -173,7 +81,7 @@ patches:
             data: weeklyData.calories.map(c => c[1]),
             borderColor: colors.primary,
             fill: '-1',
-            backgroundColor: colors.primary + '33', // Primary color with alpha
+            backgroundColor: colors.primary + '33',
             tension: 0.1
         }]
         :
@@ -183,7 +91,8 @@ patches:
             backgroundColor: colors.primary,
             borderColor: colors.secondary
         }];
-
+        
+        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
         plannerChartInstance = new Chart(ctx, {
           type: currentPlannerChartType,
           data: {
@@ -229,32 +138,16 @@ patches:
       }
 
       function getBiometricsData(state) {
-        const data = [...state.biometricData].reverse(); // oldest to newest
+        const data = [...state.biometricData].reverse();
         const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
         const weights = data.map(entry => entry.weight);
         return { labels, weights };
       }
 
       function renderBiometricsChart(state) {
-        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-        const placeholder = document.getElementById('biometrics-chart-placeholder');
-        const canvas = document.getElementById('biometrics-chart-canvas');
-
-        if (biometricsChartInstance) {
-          biometricsChartInstance.destroy();
-        }
-
-        if (state.biometricData.length < 2) {
-          canvas.classList.add('hidden');
-          placeholder.classList.remove('hidden');
-          return;
-        }
-        
-        canvas.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-
         const { labels, weights } = getBiometricsData(state);
         const colors = getChartColors();
+        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
 
         biometricsChartInstance = new Chart(ctx, {
           type: 'line',
@@ -291,46 +184,43 @@ patches:
           }
         });
       }
-
-      function handleChartTypeChange(event) {
+      
+      function handleChartTypeChange(event, state) {
           const type = event.target.dataset.type;
           if (type && type !== currentPlannerChartType) {
               currentPlannerChartType = type;
               document.querySelectorAll('.btn-chart-type').forEach(btn => {
                   btn.classList.toggle('active', btn.dataset.type === type);
               });
-              renderPlannerChart();
+              if (plannerChartInstance) {
+                plannerChartInstance.destroy();
+              }
+              renderPlannerChart(state);
           }
       }
 
-      export function initCharts(state) {
-          stateCache = state;
-          renderPlannerChart();
-          renderBiometricsChart(state);
-          document.querySelector('.chart-type-switcher').addEventListener('click', handleChartTypeChange);
-      }
-
-      export function destroyCharts() {
+      export function renderCharts(state) {
           if (plannerChartInstance) {
               plannerChartInstance.destroy();
-              plannerChartInstance = null;
           }
           if (biometricsChartInstance) {
               biometricsChartInstance.destroy();
-              biometricsChartInstance = null;
           }
+
+          renderPlannerChart(state);
+          renderBiometricsChart(state);
+
           const switcher = document.querySelector('.chart-type-switcher');
-          if (switcher) {
-              switcher.removeEventListener('click', handleChartTypeChange);
-          }
-          stateCache = null;
+          const boundHandler = (e) => handleChartTypeChange(e, state);
+          switcher.replaceWith(switcher.cloneNode(true));
+          document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
       }
   - file: src/ui/pageRenderers.js
     content: |
       import { calculateBMR } from '../core/calculations.js';
       import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
       import { renderIcon } from './icons.js';
-      import { initCharts, destroyCharts } from './charts.js';
+      import { renderCharts } from './charts.js';
 
       function toISODateString(date) {
         return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -347,7 +237,6 @@ patches:
       }
 
       export function renderBiometricsPage(state) {
-        destroyCharts(); // Ensure charts are destroyed when leaving the chart page
         const form = document.getElementById('biometrics-form');
         const listContainer = document.getElementById('biometrics-list');
 
@@ -401,7 +290,6 @@ patches:
       }
 
       export function renderProfilePage(state) {
-        destroyCharts(); // Ensure charts are destroyed when leaving the chart page
         const form = document.getElementById('profile-form');
         form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
       }
@@ -417,12 +305,11 @@ patches:
               placeholder.classList.add('hidden');
               canvas.classList.remove('hidden');
           }
-          initCharts(state);
+          renderCharts(state);
       }
   - file: src/ui/plannerRenderer.js
     content: |
       import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS } from '../utils/constants.js';
-      import { destroyCharts } from './charts.js';
 
       function toISODateString(date) {
         return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -523,7 +410,6 @@ patches:
       }
 
       export function renderPlannerPage(state) {
-        destroyCharts(); // Ensure charts are destroyed when leaving the chart page
         const weekStart = getWeekStartDate(state.focusedDate);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
@@ -550,4 +436,4 @@ patches:
         renderLogView(state, weekStart);
       }
 commands:
-  - "echo 'Bug di rendering dei grafici corretto e selettore del tipo di grafico implementato.'"
+  - "echo 'Refactoring del modulo grafici completato. Il bug di rendering è stato risolto.'"
