@@ -1,238 +1,68 @@
-commit_message: "fix(charts): Assicura l'ordine cronologico nel grafico biometrico"
+commit_message: "feat(calculator): Aggiunge il calcolo delle calorie per ingredienti a pezzo"
 rationale: |
-  Questo commit corregge il comportamento contro-intuitivo del grafico dei dati biometrici, che mostrava le misurazioni in ordine cronologico inverso (dal più recente al più vecchio).
+  Questo commit estende il sistema di calcolo calorico per risolvere il problema degli ingredienti misurati in "pezzi" (es. "1 banana") che precedentemente risultavano avere zero calorie.
 
-  La causa del problema era un'errata dipendenza dall'ordine dei dati nello stato dell'applicazione. La funzione `getBiometricsData` in `src/ui/charts.js` tentava di invertire un array già ordinato per la vista a lista, portando a un risultato inaspettato sul grafico.
+  La modifica principale consiste nell'introduzione di un nuovo campo opzionale, `g_per_pezzo`, nello schema del file `ingredienti.json`. Questo campo permette di definire il peso medio in grammi per un singolo pezzo di un ingrediente.
 
-  La modifica implementa una soluzione più robusta:
-  1.  **Ordinamento Esplicito**: Invece di usare `.reverse()`, ora viene eseguito un ordinamento cronologico esplicito (`(a, b) => new Date(a.date) - new Date(b.date)`) direttamente sui dati destinati al grafico.
-  2.  **Disaccoppiamento della Logica**: Questa modifica disaccoppia la logica di visualizzazione del grafico da quella di memorizzazione dei dati, garantendo che il grafico mostri sempre una progressione temporale corretta da sinistra a destra, indipendentemente da come i dati sono ordinati in altre parti dell'applicazione.
+  Le modifiche apportate sono:
+  1.  **Aggiornamento del `calorieCalculator.js`**: La logica di calcolo è stata potenziata. Ora, se un ingrediente in un pasto è definito tramite `quantita_pezzi`, il calcolatore cercherà il campo `g_per_pezzo` nel file `ingredienti.json`. Se lo trova, calcolerà le calorie corrette moltiplicando il numero di pezzi per il peso per pezzo e per le calorie per grammo. In assenza di questo dato, le calorie rimarranno zero, mantenendo la retrocompatibilità.
+  2.  **Miglioramento della Flessibilità**: Questa modifica rende il sistema di calcolo più robusto e flessibile, consentendo di gestire correttamente un'ampia varietà di ingredienti senza dover modificare il codice dell'applicazione. La logica rimane centralizzata nel calcolatore e i dati di peso rimangono, correttamente, nel file di configurazione degli ingredienti.
 
-  Il risultato è un grafico dell'andamento biometrico corretto, intuitivo e più affidabile.
+  Per abilitare il calcolo per la banana, l'utente dovrà aggiornare la corrispondente voce in `ingredienti.json` come segue:
+  `{ "id": "banana", "nome": "Banana", "kcal_per_100g": 89, "g_per_pezzo": 120 }`
 patches:
-  - file: src/ui/charts.js
+  - file: src/core/calorieCalculator.js
     content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
-
-      let plannerChartInstance = null;
-      let biometricsChartInstance = null;
-      let currentPlannerChartType = 'bar';
-
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
+      function getIngredientById(id, ingredients) {
+        return ingredients.find(ing => ing.id === id);
       }
 
-      function getChartColors() {
-          const style = getComputedStyle(document.documentElement);
-          return {
-              primary: style.getPropertyValue('--primary-color').trim(),
-              secondary: style.getPropertyValue('--secondary-color').trim(),
-              textColor: style.getPropertyValue('--text-color').trim(),
-              borderColor: style.getPropertyValue('--border-color').trim(),
-              danger: style.getPropertyValue('--danger-color').trim(),
-              success: style.getPropertyValue('--success-color').trim(),
-              warning: style.getPropertyValue('--warning-color').trim()
-          };
-      }
+      function calculateIngredientCaloriesRange(ingredientItem, ingredientData) {
+        if (!ingredientData || typeof ingredientData.kcal_per_100g !== 'number') return { min: 0, max: 0 };
 
-      function calculateWeeklyCalorieData(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], calories: [] };
+        const kcalPerGram = ingredientData.kcal_per_100g / 100;
+        let min = 0, max = 0;
 
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          weeklyData.labels.push(DAYS[i]);
-
-          let dailyMin = 0, dailyMax = 0;
-          MEAL_TYPES.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            if (meal && typeof meal.calories_min === 'number') {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              dailyMin += minCals;
-              dailyMax += maxCals;
-            }
-          });
-          weeklyData.calories.push([dailyMin, dailyMax]);
+        if (ingredientItem.quantita_g) {
+          min = max = kcalPerGram * ingredientItem.quantita_g;
+        } else if (ingredientItem.quantita_g_min && ingredientItem.quantita_g_max) {
+          min = kcalPerGram * ingredientItem.quantita_g_min;
+          max = kcalPerGram * ingredientItem.quantita_g_max;
+        } else if (ingredientItem.quantita_g_min) {
+          min = max = kcalPerGram * ingredientItem.quantita_g_min;
+        } else if (ingredientItem.quantita_pezzi && typeof ingredientData.g_per_pezzo === 'number') {
+          const totalGrams = ingredientItem.quantita_pezzi * ingredientData.g_per_pezzo;
+          min = max = kcalPerGram * totalGrams;
         }
-        return weeklyData;
+        
+        return { min, max };
       }
 
-      function renderPlannerChart(state) {
-        const weeklyData = calculateWeeklyCalorieData(state);
-        const colors = getChartColors();
-        const isLineChart = currentPlannerChartType === 'line';
-        
-        const datasets = isLineChart ?
-        [{
-            label: 'Kcal Min',
-            data: weeklyData.calories.map(c => c[0]),
-            borderColor: colors.secondary,
-            fill: false,
-            tension: 0.1
-        },{
-            label: 'Kcal Max',
-            data: weeklyData.calories.map(c => c[1]),
-            borderColor: colors.primary,
-            fill: '-1',
-            backgroundColor: colors.primary + '33',
-            tension: 0.1
-        }]
-        :
-        [{
-            label: 'Kcal (Min-Max)',
-            data: weeklyData.calories,
-            backgroundColor: colors.primary,
-            borderColor: colors.secondary
-        }];
-        
-        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-        plannerChartInstance = new Chart(ctx, {
-          type: currentPlannerChartType,
-          data: {
-            labels: weeklyData.labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
+
+      export function processMealsWithCalories(meals, ingredients) {
+        if (!meals || !ingredients) return [];
+
+        return meals.map(meal => {
+          let totalMinCalories = 0;
+          let totalMaxCalories = 0;
+
+          if (meal.ingredienti && Array.isArray(meal.ingredienti)) {
+            meal.ingredienti.forEach(item => {
+              const ingredientData = getIngredientById(item.id, ingredients);
+              if (ingredientData) {
+                const range = calculateIngredientCaloriesRange(item, ingredientData);
+                totalMinCalories += range.min;
+                totalMaxCalories += range.max;
               }
-            },
-            plugins: {
-              legend: {
-                display: isLineChart,
-                labels: { color: colors.textColor }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    if (isLineChart) {
-                      return `${context.dataset.label}: ${context.parsed.y}`;
-                    }
-                    const value = context.raw;
-                    if (value[0] === value[1]) {
-                      return `Kcal: ${value[0]}`;
-                    }
-                    return `Kcal: ${value[0]} - ${value[1]}`;
-                  }
-                }
-              }
-            }
+            });
           }
+
+          return {
+            ...meal,
+            calories_min: Math.round(totalMinCalories),
+            calories_max: Math.round(totalMaxCalories)
+          };
         });
-      }
-
-      function getBiometricsData(state) {
-        // Ordina esplicitamente i dati in ordine cronologico per il grafico
-        const data = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        
-        const datasets = {};
-        const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
-
-        numericFields.forEach(field => {
-            datasets[field.id] = {
-                label: field.label,
-                data: data.map(entry => entry[field.id] || null) // Usa null per dati mancanti
-            };
-        });
-
-        return { labels, datasets };
-      }
-
-      function renderBiometricsChart(state) {
-        const { labels, datasets } = getBiometricsData(state);
-        const colors = getChartColors();
-        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
-        
-        const chartDatasets = Object.values(datasets)
-            .map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                fill: false,
-                borderColor: colorCycle[index % colorCycle.length],
-                tension: 0.1,
-                pointBackgroundColor: colorCycle[index % colorCycle.length],
-                pointRadius: 4
-            }))
-            .filter(d => d.data.some(val => val !== null)); // Mostra solo se ci sono dati
-
-        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-
-        biometricsChartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: chartDatasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: true, // Mostra sempre la legenda
-                labels: { color: colors.textColor }
-              }
-            }
-          }
-        });
-      }
-
-      function handleChartTypeChange(event, state) {
-          const type = event.target.dataset.type;
-          if (type && type !== currentPlannerChartType) {
-              currentPlannerChartType = type;
-              document.querySelectorAll('.btn-chart-type').forEach(btn => {
-                  btn.classList.toggle('active', btn.dataset.type === type);
-              });
-              if (plannerChartInstance) {
-                plannerChartInstance.destroy();
-              }
-              renderPlannerChart(state);
-          }
-      }
-
-      export function renderCharts(state) {
-          if (plannerChartInstance) {
-              plannerChartInstance.destroy();
-          }
-          if (biometricsChartInstance) {
-              biometricsChartInstance.destroy();
-          }
-
-          renderPlannerChart(state);
-          renderBiometricsChart(state);
-
-          const switcher = document.querySelector('.chart-type-switcher');
-          const boundHandler = (e) => handleChartTypeChange(e, state);
-          switcher.replaceWith(switcher.cloneNode(true));
-          document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
       }
 commands:
-  - "echo 'L''ordine di visualizzazione del grafico biometrico è stato corretto per mostrare i dati in ordine cronologico.'"
+  - "echo 'Calcolatore aggiornato. Aggiungi g_per_pezzo ai tuoi ingredienti per abilitare il calcolo.'"

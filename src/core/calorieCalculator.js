@@ -2,25 +2,6 @@ function getIngredientById(id, ingredients) {
   return ingredients.find(ing => ing.id === id);
 }
 
-function calculateIngredientCalories(ingredientItem, ingredientData) {
-  if (!ingredientData || typeof ingredientData.kcal_per_100g !== 'number') return 0;
-
-  let quantityG = 0;
-  if (ingredientItem.quantita_g) {
-    quantityG = ingredientItem.quantita_g;
-  } else if (ingredientItem.quantita_g_min) {
-    quantityG = ingredientItem.quantita_g_min;
-  } else if (ingredientItem.quantita_pezzi) {
-    // Nota: questa è una semplificazione. Per una maggiore precisione,
-    // il peso per pezzo dovrebbe essere definito negli ingredienti.
-    // Per ora, assumiamo un peso medio se non specificato altrimenti.
-    // Dato che non abbiamo un peso per pezzo, non possiamo calcolare le calorie.
-    return 0;
-  }
-
-  return (ingredientData.kcal_per_100g / 100) * quantityG;
-}
-
 function calculateIngredientCaloriesRange(ingredientItem, ingredientData) {
   if (!ingredientData || typeof ingredientData.kcal_per_100g !== 'number') return { min: 0, max: 0 };
 
@@ -34,11 +15,11 @@ function calculateIngredientCaloriesRange(ingredientItem, ingredientData) {
     max = kcalPerGram * ingredientItem.quantita_g_max;
   } else if (ingredientItem.quantita_g_min) {
     min = max = kcalPerGram * ingredientItem.quantita_g_min;
-  } else if (ingredientItem.quantita_pezzi) {
-     // Per ora, il calcolo per "pezzi" non è supportato se non c'è un peso associato.
-     // In futuro, l'oggetto ingrediente potrebbe avere 'g_per_pezzo'.
-     min = max = 0; // O un valore di default se preferito
+  } else if (ingredientItem.quantita_pezzi && typeof ingredientData.g_per_pezzo === 'number') {
+    const totalGrams = ingredientItem.quantita_pezzi * ingredientData.g_per_pezzo;
+    min = max = kcalPerGram * totalGrams;
   }
+  
   return { min, max };
 }
 
