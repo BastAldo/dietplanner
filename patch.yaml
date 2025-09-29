@@ -1,16 +1,14 @@
-commit_message: "feat(training): Integra le fondamenta per la gestione degli allenamenti"
+commit_message: "feat(training): Implementa la selezione e rimozione degli allenamenti"
 rationale: |
-  Questo commit introduce le modifiche architetturali necessarie per integrare la gestione degli allenamenti all'interno del flusso "day-centric" esistente, come definito nel piano d'azione approvato.
+  Questo commit rende funzionale la pianificazione degli allenamenti, permettendo agli utenti di aggiungere e rimuovere workout dalla vista "Editor del Giorno".
 
-  Le modifiche principali sono:
-  1.  **Estensione dello Stato**: Il file `src/core/state.js` è stato aggiornato per includere `weeklyWorkouts` e `masterWorkoutList`. La persistenza nel `localStorage` è stata estesa per salvare anche i dati degli allenamenti.
-  2.  **Aggiornamento del Servizio di Configurazione**: Il `configService.js` ora carica un terzo file, `esercizi.json`, derivando il suo percorso in modo analogo a `ingredienti.json`. Questo permette di definire gli allenamenti in un file di configurazione remoto.
-  3.  **Integrazione nell'UI**:
-      * Il modale "Editor del Giorno" (`src/ui/modals.js`) è stato modificato per includere una nuova sezione "Allenamento", permettendo di aggiungere e visualizzare workout per la giornata selezionata.
-      * La vista calendario (`src/ui/plannerRenderer.js`) è stata aggiornata per mostrare un riepilogo degli allenamenti pianificati direttamente sulla card del giorno, a fianco delle calorie.
-  4.  **Nuove Costanti**: Sono state aggiunte nuove costanti in `src/utils/constants.js` per gestire le chiavi del `localStorage` e gli identificatori degli slot di allenamento.
+  Le modifiche principali sono state:
+  1.  **Logica di Stato**: È stata introdotta la funzione `updateWeeklyWorkout` in `src/core/state.js` per gestire in modo atomico le modifiche all'oggetto `weeklyWorkouts`, mantenendo la coerenza con la gestione dei pasti.
+  2.  **Modale di Selezione**: È stato creato un nuovo modale per la selezione degli allenamenti in `templates/modals.html` e la relativa logica di rendering (`openWorkoutSelectionModal`) in `src/ui/modals.js`. Questo riutilizza lo stesso pattern UX della selezione dei pasti.
+  3.  **Interattività dell'Editor**: La funzione `openDayEditorModal` in `src/ui/modals.js` è stata estesa per gestire i click sui pulsanti di aggiunta e rimozione degli allenamenti, orchestrando il flusso tra i modali e aggiornando lo stato.
+  4.  **Costanti UI**: Sono state aggiunte nuove costanti di testo in `src/utils/constants.js` per i titoli e i pulsanti relativi alla nuova funzionalità, mantenendo il codice pulito e facilmente localizzabile.
 
-  Queste modifiche creano la base indispensabile su cui costruire le funzionalità interattive del trainer nelle fasi successive, mantenendo la coerenza architettonica del progetto.
+  Con questo aggiornamento, il ciclo completo di CRUD (Create, Read, Update, Delete) per la pianificazione degli allenamenti a livello di UI è stato completato, rendendo la funzionalità testabile e pronta per l'uso.
 patches:
   - file: src/core/state.js
     content: |
@@ -139,6 +137,19 @@ patches:
         notify();
       }
 
+      export function updateWeeklyWorkout(slotId, workoutId) {
+          if (workoutId) {
+              const workout = state.masterWorkoutList.find(w => w.id === workoutId);
+              if (workout) {
+                  state.weeklyWorkouts[slotId] = { ...workout };
+              }
+          } else {
+              delete state.weeklyWorkouts[slotId];
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
       export function resetCurrentWeek() {
         const weekStart = getWeekStartDate(state.focusedDate);
         for (let i = 0; i < 7; i++) {
@@ -151,6 +162,11 @@ patches:
                     delete state.weeklyPlan[slotId];
                 }
             });
+            // Also reset workout
+            const workoutSlotId = `${isoDate}-Allenamento`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
         }
         saveStateToLocalStorage();
         notify();
@@ -195,171 +211,22 @@ patches:
               delete state.weeklyPlan[destSlotId];
             }
           });
+
+          const sourceWorkoutSlot = `${sourceISO}-Allenamento`;
+          const destWorkoutSlot = `${destISO}-Allenamento`;
+          const workoutObject = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutObject) {
+              state.weeklyWorkouts[destWorkoutSlot] = { ...workoutObject };
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
         }
         saveStateToLocalStorage();
         notify();
       }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
-      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
-      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
-      export const WORKOUT_SLOT_ID = 'Allenamento';
-
-      export const PROFILE_FIELDS = [
-        { id: 'firstName', label: 'Nome', type: 'text' },
-        { id: 'lastName', label: 'Cognome', type: 'text' },
-        { id: 'nickname', label: 'Nickname', type: 'text' },
-        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
-        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
-      ];
-
-      export const BIOMETRIC_FIELDS = [
-        { id: 'date', label: 'Data', type: 'date', props: 'required' },
-        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
-        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
-        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
-        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
-        { id: 'notes', label: 'Note', type: 'textarea' }
-      ];
-
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_PROGRESS', text: 'Progressi' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CALENDAR_PLACEHOLDER', text: 'Carica una configurazione per visualizzare il calendario.' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' }
-      ];
-
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
-  - file: src/api/configService.js
-    content: |
-      async function fetchJson(url) {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Errore di rete caricando ${url}: ${response.status}`);
-          return response.json();
-      }
-
-      export async function fetchAndParseConfig(mealsUrl) {
-          if (!mealsUrl) throw new Error("Per favore, inserisci un URL valido per i pasti.");
-
-          try {
-              const mealsConfig = await fetchJson(mealsUrl);
-              if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
-                  throw new Error("Il file dei pasti non è valido. Manca la chiave 'meals' o non è un array.");
-              }
-
-              const baseUrl = new URL(mealsUrl);
-              const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/'));
-
-              // Deriva l'URL degli ingredienti
-              const ingredientsUrl = `${baseUrl.origin}${basePath}/ingredienti.json`;
-              const ingredientsConfig = await fetchJson(ingredientsUrl);
-              if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
-                  throw new Error("Il file degli ingredienti non è valido. Manca la chiave 'ingredienti' o non è un array.");
-              }
-
-              // Deriva l'URL degli esercizi (opzionale)
-              let exercises = [];
-              try {
-                  const exercisesUrl = `${baseUrl.origin}${basePath}/esercizi.json`;
-                  const exercisesConfig = await fetchJson(exercisesUrl);
-                  if (exercisesConfig.esercizi && Array.isArray(exercisesConfig.esercizi)) {
-                      exercises = exercisesConfig.esercizi;
-                  }
-              } catch (e) {
-                  console.warn("File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.");
-              }
-
-              // Combina le configurazioni
-              return {
-                  rules: mealsConfig.rules || [],
-                  meals: mealsConfig.meals,
-                  ingredienti: ingredientsConfig.ingredienti,
-                  esercizi: exercises
-              };
-
-          } catch (error) {
-              console.error("Fallimento nel caricamento della configurazione:", error);
-              throw new Error(`Impossibile caricare la configurazione completa. Controlla la console.`);
-          }
-      }
   - file: src/ui/modals.js
     content: |
-      import { getState, updateWeeklyPlan } from '../core/state.js';
+      import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../core/state.js';
       import { showNotification } from './notifications.js';
       import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
       import { renderIcon } from './icons.js';
@@ -455,6 +322,29 @@ patches:
         selectionModal.classList.remove('modal-hidden');
       }
 
+      export function openWorkoutSelectionModal(slotId) {
+        const state = getState();
+        const workoutSelectionModal = document.getElementById('workout-selection-modal');
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_WORKOUT_TITLE;
+        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+        const relevantWorkouts = state.masterWorkoutList;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(workout => `<div class="selection-item" data-workout-id="${workout.id}"><h4>${workout.nome}</h4></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          workoutSelectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if (item) {
+            updateWeeklyWorkout(slotId, item.dataset.workoutId);
+            closeAndReturn();
+          }
+        };
+        workoutSelectionModal.classList.remove('modal-hidden');
+      }
+
       export function openDayEditorModal(isoDate) {
         currentEditingDayISO = isoDate;
         const state = getState();
@@ -476,9 +366,8 @@ patches:
 
         const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
         const plannedWorkout = state.weeklyWorkouts[workoutSlotId];
-        let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">Aggiungi Allenamento</button>`;
+        let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_WORKOUT_BTN}</button>`;
         if (plannedWorkout) {
-            // Qui visualizzeremo i dettagli dell'allenamento. Per ora, un placeholder.
             workoutDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${plannedWorkout.nome}</span><div class="meal-actions"><button class="btn-remove-workout" data-slot-id="${workoutSlotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
         }
         const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
@@ -486,156 +375,201 @@ patches:
         body.innerHTML = mealSlotsHTML + workoutSlotHTML;
 
         body.onclick = e => {
-          const btnAdd = e.target.closest('.btn-add-meal');
-          const btnRemove = e.target.closest('.btn-remove-meal');
+          const btnAddMeal = e.target.closest('.btn-add-meal');
+          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
           const btnRecipe = e.target.closest('.btn-view-recipe');
-          // Aggiungere logica per bottoni workout
-          if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
-          else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
+          const btnAddWorkout = e.target.closest('.btn-add-workout');
+          const btnRemoveWorkout = e.target.closest('.btn-remove-workout');
+
+          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
+          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
           else if (btnRecipe) {
             const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
             if (meal) showRecipeModal(meal);
           }
+          else if (btnAddWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutSelectionModal(btnAddWorkout.dataset.slotId);
+          }
+          else if (btnRemoveWorkout) {
+            updateWeeklyWorkout(btnRemoveWorkout.dataset.slotId, null);
+            openDayEditorModal(isoDate);
+          }
         };
         dayEditorModal.classList.remove('modal-hidden');
       }
-  - file: src/ui/plannerRenderer.js
+  - file: src/utils/constants.js
     content: |
-      import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+      export const WORKOUT_SLOT_ID = 'Allenamento';
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
+      export const PROFILE_FIELDS = [
+        { id: 'firstName', label: 'Nome', type: 'text' },
+        { id: 'lastName', label: 'Cognome', type: 'text' },
+        { id: 'nickname', label: 'Nickname', type: 'text' },
+        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
+        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
+        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
+      ];
 
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
+      export const BIOMETRIC_FIELDS = [
+        { id: 'date', label: 'Data', type: 'date', props: 'required' },
+        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
+        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
+        { id: 'notes', label: 'Note', type: 'textarea' }
+      ];
 
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_PROGRESS', text: 'Progressi' },
+        { id: 'NAV_CHARTS', text: 'Grafici' },
+        { id: 'NAV_RECIPES', text: 'Ricette' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'LOAD_BUTTON', text: 'Carica' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CALENDAR_PLACEHOLDER', text: 'Carica una configurazione per visualizzare il calendario.' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
+        { id: 'ADD_WORKOUT_BTN', text: 'Aggiungi Allenamento' },
+        { id: 'SELECT_WORKOUT_TITLE', text: 'Scegli Allenamento' },
+        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun allenamento disponibile.' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
+        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
+        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' }
+      ];
 
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function calculateDailyWorkout(isoDate, weeklyWorkouts) {
-        const workout = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-        if (!workout) return '';
-        return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${workout.nome}</div>`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        // Ensure we check the full meal object from master list for recipeId
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const dailyWorkout = calculateDailyWorkout(isoDate, state.weeklyWorkouts);
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div>${dailyWorkout}</div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          if (dayMeals.length > 0) {
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-             if (isoDate === todayISO) {
-              dayLog.classList.add('is-today');
-            }
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
-              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-            logView.appendChild(dayLog);
-          }
-        }
-        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-      }
-
-      export function renderPlannerPage(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
-
-        if (state.currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (state.currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
-        }
-
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
-      }
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
 commands:
-  - echo "Le fondamenta per la gestione degli allenamenti sono state integrate con successo."
+- echo "L'interfaccia per aggiungere e rimuovere allenamenti è ora attiva."

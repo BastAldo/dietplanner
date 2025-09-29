@@ -123,6 +123,19 @@ export function updateWeeklyPlan(slotId, mealId) {
   notify();
 }
 
+export function updateWeeklyWorkout(slotId, workoutId) {
+    if (workoutId) {
+        const workout = state.masterWorkoutList.find(w => w.id === workoutId);
+        if (workout) {
+            state.weeklyWorkouts[slotId] = { ...workout };
+        }
+    } else {
+        delete state.weeklyWorkouts[slotId];
+    }
+    saveStateToLocalStorage();
+    notify();
+}
+
 export function resetCurrentWeek() {
   const weekStart = getWeekStartDate(state.focusedDate);
   for (let i = 0; i < 7; i++) {
@@ -135,6 +148,11 @@ export function resetCurrentWeek() {
               delete state.weeklyPlan[slotId];
           }
       });
+      // Also reset workout
+      const workoutSlotId = `${isoDate}-Allenamento`;
+      if (state.weeklyWorkouts[workoutSlotId]) {
+          delete state.weeklyWorkouts[workoutSlotId];
+      }
   }
   saveStateToLocalStorage();
   notify();
@@ -179,6 +197,15 @@ export function copyPreviousWeek() {
         delete state.weeklyPlan[destSlotId];
       }
     });
+
+    const sourceWorkoutSlot = `${sourceISO}-Allenamento`;
+    const destWorkoutSlot = `${destISO}-Allenamento`;
+    const workoutObject = state.weeklyWorkouts[sourceWorkoutSlot];
+    if (workoutObject) {
+        state.weeklyWorkouts[destWorkoutSlot] = { ...workoutObject };
+    } else {
+        delete state.weeklyWorkouts[destWorkoutSlot];
+    }
   }
   saveStateToLocalStorage();
   notify();

@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan } from '../core/state.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../core/state.js';
 import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
@@ -94,6 +94,29 @@ export function openSelectionModal(slotId) {
   selectionModal.classList.remove('modal-hidden');
 }
 
+export function openWorkoutSelectionModal(slotId) {
+  const state = getState();
+  const workoutSelectionModal = document.getElementById('workout-selection-modal');
+  workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_WORKOUT_TITLE;
+  const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+  const relevantWorkouts = state.masterWorkoutList;
+  list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(workout => `<div class="selection-item" data-workout-id="${workout.id}"><h4>${workout.nome}</h4></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+  
+  const closeAndReturn = () => {
+    workoutSelectionModal.classList.add('modal-hidden');
+    if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+  };
+
+  list.onclick = e => {
+    const item = e.target.closest('.selection-item');
+    if (item) {
+      updateWeeklyWorkout(slotId, item.dataset.workoutId);
+      closeAndReturn();
+    }
+  };
+  workoutSelectionModal.classList.remove('modal-hidden');
+}
+
 export function openDayEditorModal(isoDate) {
   currentEditingDayISO = isoDate;
   const state = getState();
@@ -115,9 +138,8 @@ export function openDayEditorModal(isoDate) {
 
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
   const plannedWorkout = state.weeklyWorkouts[workoutSlotId];
-  let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">Aggiungi Allenamento</button>`;
+  let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_WORKOUT_BTN}</button>`;
   if (plannedWorkout) {
-      // Qui visualizzeremo i dettagli dell'allenamento. Per ora, un placeholder.
       workoutDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${plannedWorkout.nome}</span><div class="meal-actions"><button class="btn-remove-workout" data-slot-id="${workoutSlotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
   }
   const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
@@ -125,15 +147,25 @@ export function openDayEditorModal(isoDate) {
   body.innerHTML = mealSlotsHTML + workoutSlotHTML;
 
   body.onclick = e => {
-    const btnAdd = e.target.closest('.btn-add-meal');
-    const btnRemove = e.target.closest('.btn-remove-meal');
+    const btnAddMeal = e.target.closest('.btn-add-meal');
+    const btnRemoveMeal = e.target.closest('.btn-remove-meal');
     const btnRecipe = e.target.closest('.btn-view-recipe');
-    // Aggiungere logica per bottoni workout
-    if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
-    else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
+    const btnAddWorkout = e.target.closest('.btn-add-workout');
+    const btnRemoveWorkout = e.target.closest('.btn-remove-workout');
+
+    if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
+    else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
     else if (btnRecipe) {
       const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
       if (meal) showRecipeModal(meal);
+    }
+    else if (btnAddWorkout) {
+      dayEditorModal.classList.add('modal-hidden');
+      openWorkoutSelectionModal(btnAddWorkout.dataset.slotId);
+    }
+    else if (btnRemoveWorkout) {
+      updateWeeklyWorkout(btnRemoveWorkout.dataset.slotId, null);
+      openDayEditorModal(isoDate);
     }
   };
   dayEditorModal.classList.remove('modal-hidden');
