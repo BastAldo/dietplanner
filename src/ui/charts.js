@@ -39,7 +39,7 @@ function calculateWeeklyCalorieData(state) {
     let dailyMin = 0, dailyMax = 0;
     MEAL_TYPES.forEach(type => {
       const meal = state.weeklyPlan[`${isoDate}-${type}`];
-      if (meal && meal.calories_min) {
+      if (meal && typeof meal.calories_min === 'number') {
         const minCals = Number(meal.calories_min) || 0;
         const maxCals = Number(meal.calories_max) || minCals;
         dailyMin += minCals;

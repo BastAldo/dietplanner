@@ -21,10 +21,10 @@ function formatFullDate(isoDate) {
 }
 
 function formatMealCalories(meal) {
-  if (!meal || !meal.calories_min) return '';
+  if (!meal || typeof meal.calories_min !== 'number') return '';
   const minCals = Number(meal.calories_min) || 0;
   const maxCals = Number(meal.calories_max) || minCals;
-  if (minCals === 0) return '';
+  if (minCals === 0 && maxCals === 0) return '';
   const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
   if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
   return `${minCals} - ${maxCals} ${kcalLabel}`;
@@ -34,7 +34,7 @@ function calculateDailyCalories(isoDate, weeklyPlan) {
   let min = 0, max = 0;
   MEAL_TYPES.forEach(type => {
     const meal = weeklyPlan[`${isoDate}-${type}`];
-    if (meal && meal.calories_min) {
+    if (meal && typeof meal.calories_min === 'number') {
       const minCals = Number(meal.calories_min) || 0;
       const maxCals = Number(meal.calories_max) || minCals;
       min += minCals;
