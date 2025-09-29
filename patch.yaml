@@ -1,1163 +1,194 @@
-commit_message: "feat: Aggiunge la pagina Ricette e corregge il bug di visualizzazione"
+commit_message: "fix(ui): Uniforma la spaziatura dei titoli delle pagine"
 rationale: |
-  Questo commit introduce una nuova funzionalità e risolve un bug critico.
+  Questo commit risolve un'incoerenza visiva in cui i titoli delle pagine "Grafici", "Ricette" e "Profilo" erano troppo vicini al loro contenuto.
 
-  **Nuova Funzionalità: Pagina Ricette (US-32)**
-  È stata aggiunta una nuova vista dedicata, "Ricette", accessibile dalla navigazione principale. Questa pagina elenca tutti i pasti della configurazione corrente che dispongono di una ricetta, permettendo all'utente di visualizzarle direttamente senza doverle prima pianificare in un giorno specifico. Questo migliora l'esplorazione e la consultazione delle opzioni alimentari.
-  L'implementazione segue l'architettura a viste esistente, con l'aggiunta di `recipes.html`, `recipes.css`, e `recipesRenderer.js`.
+  Le modifiche apportate sono:
+  1.  **Stile Profilo Corretto**: Il selettore CSS in `styles/progress.css` è stato modificato da `.profile-page h3` a `#profile-page h3` per corrispondere correttamente all'ID dell'elemento nel DOM, applicando così il `margin-bottom` previsto.
+  2.  **Stile Grafici Aggiunto**: È stata aggiunta una regola in `styles/charts.css` per applicare un `margin-bottom` di `1.5rem` al titolo della pagina, allineandolo allo stile delle altre sezioni.
+  3.  **Stile Ricette Aggiunto**: In modo analogo, è stata introdotta una regola in `styles/recipes.css` per garantire la corretta spaziatura verticale del titolo.
 
-  **Bugfix: Visualizzazione Ricetta non funzionante**
-  È stato corretto un bug che impediva l'apertura delle ricette dal modale "Editor del Giorno" e dalla vista "Log". Il problema era dovuto al fatto che l'oggetto `meal` recuperato dal `weeklyPlan` non conteneva sempre il `recipeId`. La logica è stata aggiornata per recuperare sempre il pasto completo dalla `masterMealList` utilizzando il suo ID, garantendo così l'accesso a tutte le proprietà necessarie.
-  Inoltre, le icone delle ricette sono state uniformate utilizzando il sistema `renderIcon` per coerenza stilistica.
+  Con queste modifiche, tutte le pagine principali dell'applicazione ora seguono uno standard di spaziatura coerente, migliorando la leggibilità e l'esperienza utente complessiva, come richiesto dal feedback visivo.
 patches:
-  - file: docs/01_FUNCTIONALITY.md
+  - file: styles/charts.css
     content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
-
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico dinamico e regole di validazione personalizzate.
-
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
-
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file `pasti.json` remoto. L'applicazione si aspetta di trovare, nella stessa directory, un file complementare chiamato `ingredienti.json`.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel `pasti.json` (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno. Le calorie vengono calcolate dinamicamente dall'applicazione basandosi sui dati del file `ingredienti.json`. Il sistema è in grado di calcolare le calorie anche per ingredienti misurati in "pezzi" (es. `quantita_pezzi: 1`), a condizione che nel file `ingredienti.json` sia specificato il peso medio per pezzo tramite il campo opzionale `g_per_pezzo`.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
-      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
-      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile. L'URL della ricetta viene derivato automaticamente dal percorso del file di configurazione, cercando i file in una sottocartella `ricette/`.
-      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `pasti.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
-      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
-      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
-      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
-      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche come una lista di card.
-      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
-      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
-      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
-      * **US-32 (Galleria Ricette):** L'utente può accedere a una pagina che elenca tutti i pasti con ricette disponibili per una rapida consultazione.
-  - file: index.html
-    content: |
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#1a1a1d">
-          <title>HealtyPro</title>
-          <link rel="stylesheet" href="styles/base.css">
-          <link rel="stylesheet" href="styles/planner.css">
-          <link rel="stylesheet" href="styles/progress.css">
-          <link rel="stylesheet" href="styles/modals.css">
-          <link rel="stylesheet" href="styles/charts.css">
-          <link rel="stylesheet" href="styles/recipes.css">
-          <link rel="manifest" href="manifest.json">
-          <link rel="icon" href="favicon.ico" type="image/x-icon">
-          <link rel="apple-touch-icon" href="icon.svg">
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-          <script src="src/main.js" type="module" defer></script>
-      </head>
-      <body>
-          <div id="toast-container" class="toast-container"></div>
-
-          <header class="app-header">
-              <div class="header-content">
-                  <div class="app-title">
-                      <h1 id="main-title"></h1>
-                  </div>
-                  <nav id="main-nav" class="main-nav">
-                      <button id="nav-planner" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-progress" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-charts" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-recipes" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-profile" class="btn-nav">
-                          <span></span>
-                      </button>
-                  </nav>
-              </div>
-          </header>
-
-          <main id="app-container">
-              </main>
-
-          <footer class="app-footer">
-              <button id="restore-btn" class="btn btn-secondary"></button>
-              <button id="backup-btn" class="btn btn-secondary"></button>
-          </footer>
-
-          <div id="modal-container">
-              </div>
-      </body>
-      </html>
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        weeklyPlan: {},
-        biometricData: [],
-        userProfile: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', or 'profile'
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-
-      export function setPlannerConfig(config, url) {
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-
-        // Calcola calorie e popola la master list
-        state.masterMealList = processMealsWithCalories(meals, ingredients);
-
-        // Deriva e imposta la recipeBaseUrl
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else {
-            state.recipeBaseUrl = '';
-        }
-
-        notify();
+      /* --- CHARTS PAGE --- */
+      #charts-page > h3 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
       }
 
-      export function setConfigUrl(url) {
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
+      .charts-container {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
       }
 
-      export function saveStateToLocalStorage() {
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      .chart-card {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
       }
 
-      export function loadStateFromLocalStorage() {
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (url) { state.configUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      .chart-header {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          position: relative;
+          flex-shrink: 0;
       }
 
-      export function setAppState(backupData) {
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.configUrl = backupData.configUrl || '';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
+      .chart-header h4 {
+          color: var(--primary-color);
+          margin: 0;
       }
 
-      export function saveUserProfile(profile) {
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
+      /* New container to constrain the chart's height */
+      .chart-canvas-container {
+          position: relative;
+          height: 400px; /* Essential fix for the resize loop */
+          width: 100%;
+          flex-grow: 1;
       }
 
-      export function addOrUpdateBiometricEntry(entry) {
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
+      .chart-type-switcher {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          overflow: hidden;
       }
 
-      export function deleteBiometricEntry(date) {
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
+      .btn-chart-type {
+          background: transparent;
+          border: none;
+          color: var(--text-color-muted);
+          padding: 0.25rem 0.75rem;
+          cursor: pointer;
+          font-size: 0.8rem;
+      }
+      .btn-chart-type:not(:last-child) {
+          border-right: 1px solid var(--border-color);
+      }
+      .btn-chart-type.active {
+          background-color: var(--primary-color);
+          color: var(--bg-color);
       }
 
-      export function updateWeeklyPlan(slotId, mealId) {
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
+      /* Rimuove il layout a due colonne per desktop per impilare i grafici */
+      /* @media (min-width: 1024px) {
+          .charts-container {
+              grid-template-columns: repeat(2, 1fr);
           }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function resetCurrentWeek() {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes'].includes(view)) {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function copyPreviousWeek() {
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-  - file: src/ui/icons.js
+      } */
+  - file: styles/progress.css
     content: |
-      const ICONS = {
-        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
-        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
-        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
-        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
-        BAR_CHART: '<path d="M120 288V480H48c-17.7 0-32-14.3-32-32V320c0-17.7 14.3-32 32-32h72zm128 0V480H192V288h56zm128 0V480H320V288h56zm128 0V480H448V288h56zM544 64H32C14.3 64 0 78.3 0 96V416c0 53 43 96 96 96H544c53 0 96-43 96-96V96c0-17.7-14.3-32-32-32z"/>',
-        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
-        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
-        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
-        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
-        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
-        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
-        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>',
-        BOOK: '<path d="M568 32H128C92.7 32 64 60.7 64 96V512c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zM128 512V96h320v352c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32zm352-32c0 17.7-14.3 32-32 32H416V96h32c17.7 0 32 14.3 32 32V480z"/>'
-      };
-
-      const viewBoxes = {
-        APP_LOGO: '0 0 512 512',
-        PLANNER: '0 0 544 544',
-        PROFILE: '0 0 528 576',
-        WEIGHT_SCALE: '0 0 640 512',
-        BAR_CHART: '0 0 640 512',
-        SHARE: '0 0 544 576',
-        INFO: '0 0 576 576',
-        LOG_VIEW: '0 0 544 576',
-        RECIPE: '0 0 640 576',
-        TRASH: '0 0 448 512',
-        CLOSE: '0 0 640 512',
-        KEBAB_MENU: '0 0 376 544',
-        BOOK: '0 0 576 576'
-      };
-
-      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
-        const iconPath = ICONS[name];
-        if (!iconPath) return '';
-        const viewBox = viewBoxes[name] || '0 0 512 512';
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      /* --- PROGRESS & PROFILE PAGES --- */
+      .biometrics-view h3, #profile-page h3 { color: var(--primary-color); margin-bottom: 1.5rem; }
+      .biometrics-form, .profile-form {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 1.5rem; padding: 1.5rem; background: var(--card-color);
+          border-radius: 8px; border: 1px solid var(--border-color);
+          margin-bottom: 2rem;
       }
-  - file: src/ui/interactions.js
-    content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
-        deleteBiometricEntry, saveUserProfile
-      } from '../core/state.js';
-      import { calculateBMR } from '../core/calculations.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
-      import { UI_TEXT } from '../utils/constants.js';
-
-      async function handleLoadConfig() {
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      .form-group { display: flex; flex-direction: column; }
+      .form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      .form-group input, .form-group textarea, .form-group fieldset {
+          padding: 0.75rem; border: 1px solid var(--border-color);
+          border-radius: 8px; font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
       }
+      .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
+      .form-group input[readonly] { background-color: #222; color: var(--text-color-muted); }
+      .form-group textarea { min-height: 80px; resize: vertical; }
+      .form-group fieldset { border: 1px solid var(--border-color); padding: 0.75rem; }
+      .form-group fieldset legend { padding: 0 0.5rem; color: var(--text-color-muted); font-size: 0.9rem; }
+      .form-group fieldset label { display: inline-flex; align-items: center; margin-right: 1.5rem; }
+      .form-group fieldset input { margin-right: 0.5rem; }
+      .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
 
-      function handleCalendarClick(e) {
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
+      /* New Biometrics Card List Styles */
+      .biometrics-list-container {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none; /* Firefox */
       }
-
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) { showRecipeModal(meal); }
-        }
+      .biometrics-list-container::-webkit-scrollbar { display: none; /* Safari & Chrome */ }
+      .biometrics-list {
+          display: flex;
+          gap: 1rem;
+          padding-bottom: 1rem;
+          scroll-snap-type: x mandatory;
       }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) { showRecipeModal(meal); }
-        }
+      .biometric-card {
+          flex: 0 0 90%;
+          scroll-snap-align: start;
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          position: relative;
       }
-
-      function handleShareConfig() {
-        const state = getState();
-        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+      .biometric-card__header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          margin-bottom: 1rem;
       }
-
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      .biometric-card__date { font-size: 1.25rem; font-weight: bold; color: var(--primary-color); }
+      .biometric-card__body {
+          display: grid; grid-template-columns: repeat(2, 1fr);
+          gap: 1rem;
       }
+      .biometric-card__item { display: flex; flex-direction: column; }
+      .biometric-card__label { font-size: 0.8rem; color: var(--text-color-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
+      .biometric-card__value { font-size: 1.1rem; font-weight: 500; }
+      .biometric-card__notes { grid-column: 1 / -1; }
+      .biometric-card__notes .biometric-card__value { font-size: 0.95rem; white-space: pre-wrap; font-style: italic; color: var(--text-color-muted); }
 
-      async function handleSaveBackup() {
-        const state = getState();
-        const backupData = {
-          configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile
-        };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
-            }
+      /* Actions Menu */
+      .biometrics-actions { position: relative; }
+      .btn-actions-menu { background: none; border: none; cursor: pointer; color: var(--text-color-muted); padding: 0.5rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .btn-actions-menu:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .actions-dropdown {
+          display: none; position: absolute; top: 100%; right: 0;
+          background: var(--bg-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 0.5rem; z-index: 10;
+          min-width: 120px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      }
+      .actions-dropdown.show { display: block; }
+      .actions-dropdown button {
+          background: none; border: none; color: var(--text-color);
+          width: 100%; text-align: left; padding: 0.75rem;
+          border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+      }
+      .actions-dropdown button:hover { background-color: var(--card-color); }
+      .actions-dropdown button.delete { color: var(--danger-color); }
+
+      /* Desktop Layout */
+      @media (min-width: 768px) {
+          .biometrics-list {
+              flex-wrap: wrap;
           }
-        } else { triggerDownload(blob, fileName); }
-      }
-
-      function handleRestoreBackup() {
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                          showConfirmModal(
-                              UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              UI_TEXT.RESTORE_CONFIRM_MSG,
-                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              'danger'
-                          );
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
-      }
-
-      function handleCopyWeek() {
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      function handleBiometricsForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const entry = {};
-        for (let [key, value] of formData.entries()) { entry[key] = value; }
-        addOrUpdateBiometricEntry(entry);
-        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
-        e.target.reset();
-        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
-      }
-
-      function handleBiometricsListClick(e) {
-        const btnMenu = e.target.closest('.btn-actions-menu');
-        if (btnMenu) {
-            const dropdown = btnMenu.nextElementSibling;
-            const allDropdowns = document.querySelectorAll('.actions-dropdown');
-            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
-            dropdown.classList.toggle('show');
-            return;
-        }
-
-        const btnEdit = e.target.closest('.btn-edit-biometrics');
-        if (btnEdit) {
-            const date = btnEdit.dataset.date;
-            const entry = getState().biometricData.find(e => e.date === date);
-            if (entry) {
-                const form = document.getElementById('biometrics-form');
-                for (const key in entry) {
-                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
-                }
-                form.scrollIntoView({ behavior: 'smooth' });
-            }
-            const dropdown = btnEdit.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        const btnDelete = e.target.closest('.btn-delete-biometrics');
-        if (btnDelete) {
-            const date = btnDelete.dataset.date;
-            showConfirmModal(
-                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-            );
-            const dropdown = btnDelete.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        // Close dropdown if clicking outside
-        if (!e.target.closest('.biometrics-actions')) {
-            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-        }
-      }
-
-      function handleProfileForm(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const profile = {};
-        for (let [key, value] of formData.entries()) { profile[key] = value; }
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
-      }
-
-      function handleWeightInputChange(e) {
-        const weight = e.target.value;
-        const { userProfile } = getState();
-        const bmrField = document.getElementById('bio-basalMetabolism');
-        const bmr = calculateBMR(userProfile, weight);
-        if (bmr !== null) {
-          bmrField.value = bmr;
-        } else {
-          bmrField.value = '';
-          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function initializeEventListeners() {
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.biometrics-actions')) {
-                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-            }
-        });
-        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
-        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
-        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
-        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
-        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
-        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
-        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
-
-        document.getElementById('progress-page').addEventListener('input', e => {
-          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
-        });
-
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const modalId = e.currentTarget.dataset.target;
-            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
-          });
-        });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
-        });
-        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
-      }
-      console.log("debug grafici1")
-  - file: src/ui/modals.js
-    content: |
-      import { getState, updateWeeklyPlan } from '../core/state.js';
-      import { showNotification } from './notifications.js';
-      import { UI_TEXT, MEAL_TYPES } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-
-      let currentEditingDayISO = null;
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      function formatIngredients(meal) {
-          if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
-          
-          const ingredientsList = meal.ingredienti.map(item => {
-              let quantity = '';
-              if (item.quantita_g) quantity = `${item.quantita_g}g`;
-              else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
-              else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
-              else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
-              
-              // In un'implementazione futura, il nome dell'ingrediente potrebbe essere recuperato
-              // dalla lista di ingredienti master per una visualizzazione più user-friendly.
-              // Per ora, usiamo l'id.
-              return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
-          }).join(', ');
-          
-          return `<p>${ingredientsList}</p>`;
-      }
-
-      export async function showRecipeModal(meal) {
-        if (!meal) return;
-        const state = getState();
-        const recipeModal = document.getElementById('recipe-modal');
-        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
-        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
-        const body = recipeModal.querySelector('#recipe-modal-body');
-        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
-        recipeModal.classList.remove('modal-hidden');
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
-          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
-        } catch (error) {
-          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
-          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
-        }
-      }
-
-      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
-        const confirmModal = document.getElementById('confirm-modal');
-        confirmModal.querySelector('#confirm-modal-title').textContent = title;
-        confirmModal.querySelector('#confirm-modal-message').textContent = message;
-        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
-        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
-        confirmBtn.className = `btn btn-${type}`;
-        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
-        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
-        const cleanup = () => {
-          confirmModal.classList.add('modal-hidden');
-          cancelBtn.removeEventListener('click', cancelHandler);
-          confirmBtn.removeEventListener('click', confirmHandler);
-        };
-        const cancelHandler = () => cleanup();
-        const confirmHandler = () => { onConfirm(); cleanup(); };
-        cancelBtn.addEventListener('click', cancelHandler, { once: true });
-        confirmBtn.addEventListener('click', confirmHandler, { once: true });
-        confirmModal.classList.remove('modal-hidden');
-      }
-
-      export function openSelectionModal(slotId) {
-        const state = getState();
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const list = selectionModal.querySelector('#selection-modal-list');
-        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
-        };
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openDayEditorModal(isoDate) {
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const dayEditorModal = document.getElementById('day-editor-modal');
-        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        const body = dayEditorModal.querySelector('#day-editor-body');
-        body.innerHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const plannedMeal = state.weeklyPlan[slotId];
-          // Always get the full meal object from masterMealList to ensure all properties are present
-          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          .biometric-card {
+              flex-basis: 100%; /* Full width cards in a single column */
           }
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-        body.onclick = e => {
-          const btnAdd = e.target.closest('.btn-add-meal');
-          const btnRemove = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-          if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
-          else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
-          else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
-      }
-  - file: src/ui/plannerRenderer.js
-    content: |
-      import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        // Ensure we check the full meal object from master list for recipeId
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          if (dayMeals.length > 0) {
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-             if (isoDate === todayISO) {
-              dayLog.classList.add('is-today');
-            }
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
-              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-            logView.appendChild(dayLog);
-          }
-        }
-        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-      }
-
-      export function renderPlannerPage(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
-
-        if (state.currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (state.currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
-        }
-
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState } from '../core/state.js';
-      import { renderPlannerPage } from './plannerRenderer.js';
-      import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
-      import { renderRecipesPage } from './recipesRenderer.js';
-      import { UI_TEXT } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-
-      function populateIcons() {
-          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
-          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
-          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
-          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
-          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
-          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
-          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
-          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
-          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
-          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
-          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
-          
-          document.querySelectorAll('.modal-close-btn').forEach(btn => {
-              btn.innerHTML = renderIcon('CLOSE');
-          });
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
-        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
-        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
-        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
-        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
-        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
-        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
-        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
-        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
-        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
-        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
-        populateIcons();
-      }
-
-      export function renderApp() {
-        const state = getState();
-        const plannerPage = document.getElementById('planner-page');
-        const progressPage = document.getElementById('progress-page');
-        const chartsPage = document.getElementById('charts-page');
-        const recipesPage = document.getElementById('recipes-page');
-        const profilePage = document.getElementById('profile-page');
-        const navPlannerBtn = document.getElementById('nav-planner');
-        const navProgressBtn = document.getElementById('nav-progress');
-        const navChartsBtn = document.getElementById('nav-charts');
-        const navRecipesBtn = document.getElementById('nav-recipes');
-        const navProfileBtn = document.getElementById('nav-profile');
-
-        [plannerPage, progressPage, chartsPage, recipesPage, profilePage].forEach(p => p.classList.add('hidden'));
-        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
-
-        if (state.currentView === 'planner' || state.currentView === 'log') {
-          plannerPage.classList.remove('hidden');
-          navPlannerBtn.classList.add('active');
-          renderPlannerPage(state);
-        } else if (state.currentView === 'progress') {
-          progressPage.classList.remove('hidden');
-          navProgressBtn.classList.add('active');
-          renderBiometricsPage(state);
-        } else if (state.currentView === 'charts') {
-          chartsPage.classList.remove('hidden');
-          navChartsBtn.classList.add('active');
-          renderChartsPage(state);
-        } else if (state.currentView === 'recipes') {
-          recipesPage.classList.remove('hidden');
-          navRecipesBtn.classList.add('active');
-          renderRecipesPage(state);
-        } else if (state.currentView === 'profile') {
-          profilePage.classList.remove('hidden');
-          navProfileBtn.classList.add('active');
-          renderProfilePage(state);
-        }
-
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
-      }
-  - file: src/ui/viewLoader.js
-    content: |
-      async function fetchAndInject(url, containerId) {
-          try {
-              const response = await fetch(url);
-              if (!response.ok) {
-                  throw new Error(`Failed to load template: ${url}`);
-              }
-              const content = await response.text();
-              document.getElementById(containerId).innerHTML += content;
-          } catch (error) {
-              console.error(error);
+          .biometric-card__body {
+              grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
           }
       }
-
-      export async function loadViews() {
-          const appContainer = document.getElementById('app-container');
-          const modalContainer = document.getElementById('modal-container');
-          
-          // Svuota i container per evitare duplicati in caso di ricaricamento a caldo (hot-reloading)
-          appContainer.innerHTML = '';
-          modalContainer.innerHTML = '';
-
-          // Carica le viste principali
-          await fetchAndInject('templates/planner.html', 'app-container');
-          await fetchAndInject('templates/progress.html', 'app-container');
-          await fetchAndInject('templates/charts.html', 'app-container');
-          await fetchAndInject('templates/recipes.html', 'app-container');
-          await fetchAndInject('templates/profile.html', 'app-container');
-          
-          // Carica i modali
-          await fetchAndInject('templates/modals.html', 'modal-container');
-      }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
-      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
-
-      export const PROFILE_FIELDS = [
-        { id: 'firstName', label: 'Nome', type: 'text' },
-        { id: 'lastName', label: 'Cognome', type: 'text' },
-        { id: 'nickname', label: 'Nickname', type: 'text' },
-        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
-        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
-      ];
-
-      export const BIOMETRIC_FIELDS = [
-        { id: 'date', label: 'Data', type: 'date', props: 'required' },
-        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
-        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
-        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
-        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
-        { id: 'notes', label: 'Note', type: 'textarea' }
-      ];
-
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_PROGRESS', text: 'Progressi' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CALENDAR_PLACEHOLDER', text: 'Carica una configurazione per visualizzare il calendario.' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' }
-      ];
-
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
-  - file: sw.js
-    content: |
-      const CACHE_NAME = 'healtypro-v8';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'styles/recipes.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/recipes.html',
-        'templates/modals.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/ui/interactions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/recipesRenderer.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/utils/constants.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
-
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
-
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
-
-      self.addEventListener('fetch', (event) => {
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
-        } else {
-          event.respondWith(fetch(event.request));
-        }
-      });
-  - file: templates/recipes.html
-    content: |
-      <div id="recipes-page" class="page-view hidden">
-          <h3 id="recipes-title"></h3>
-          <div id="recipes-list" class="recipes-list"></div>
-      </div>
   - file: styles/recipes.css
     content: |
       /* --- RECIPES PAGE --- */
+      #recipes-page > h3 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
+      }
+
       .recipes-list {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -1188,40 +219,5 @@ patches:
         color: var(--text-color-muted);
         line-height: 1.4;
       }
-  - file: src/ui/recipesRenderer.js
-    content: |
-      import { UI_TEXT } from '../utils/constants.js';
-
-      function formatIngredients(meal) {
-          if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
-          
-          const ingredientsList = meal.ingredienti.map(item => {
-              let quantity = '';
-              if (item.quantita_g) quantity = `${item.quantita_g}g`;
-              else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
-              else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
-              else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
-              
-              return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
-          }).join(', ');
-          
-          return `<p>${ingredientsList}</p>`;
-      }
-
-      export function renderRecipesPage(state) {
-          const listContainer = document.getElementById('recipes-list');
-          const mealsWithRecipes = state.masterMealList.filter(meal => meal.recipeId);
-
-          if (mealsWithRecipes.length > 0) {
-              listContainer.innerHTML = mealsWithRecipes.map(meal => `
-                  <div class="recipe-list-item" data-meal-id="${meal.id}">
-                      <h4>${meal.nomePasto}</h4>
-                      ${formatIngredients(meal)}
-                  </div>
-              `).join('');
-          } else {
-              listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-          }
-      }
 commands:
-  - echo "Pagina Ricette implementata e bug di visualizzazione corretto."
+  - echo "Spaziatura dei titoli uniformata con successo in tutte le pagine."

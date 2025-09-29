@@ -1,4 +1,9 @@
 /* --- RECIPES PAGE --- */
+#recipes-page > h3 {
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+}
+
 .recipes-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

@@ -1,4 +1,9 @@
 /* --- CHARTS PAGE --- */
+#charts-page > h3 {
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+}
+
 .charts-container {
     display: grid;
     grid-template-columns: 1fr;
