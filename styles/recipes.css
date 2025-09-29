@@ -1,0 +1,31 @@
+/* --- RECIPES PAGE --- */
+.recipes-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.recipe-list-item {
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recipe-list-item:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-3px);
+}
+
+.recipe-list-item h4 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.recipe-list-item p {
+  font-size: 0.9rem;
+  color: var(--text-color-muted);
+  line-height: 1.4;
+}

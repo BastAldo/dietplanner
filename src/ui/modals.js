@@ -105,7 +105,10 @@ export function openDayEditorModal(isoDate) {
   const body = dayEditorModal.querySelector('#day-editor-body');
   body.innerHTML = MEAL_TYPES.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
-    const meal = state.weeklyPlan[slotId];
+    const plannedMeal = state.weeklyPlan[slotId];
+    // Always get the full meal object from masterMealList to ensure all properties are present
+    const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
+    
     let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
     if (meal) {
       mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
@@ -119,7 +122,7 @@ export function openDayEditorModal(isoDate) {
     if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
     else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
     else if (btnRecipe) {
-      const meal = Object.values(state.weeklyPlan).find(m => m && m.id === btnRecipe.dataset.mealId) || state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+      const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
       if (meal) showRecipeModal(meal);
     }
   };

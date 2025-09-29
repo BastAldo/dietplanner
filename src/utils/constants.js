@@ -33,6 +33,7 @@ const UI_TEXT_CONFIG = [
   { id: 'NAV_PLANNER', text: 'Planner' },
   { id: 'NAV_PROGRESS', text: 'Progressi' },
   { id: 'NAV_CHARTS', text: 'Grafici' },
+  { id: 'NAV_RECIPES', text: 'Ricette' },
   { id: 'NAV_PROFILE', text: 'Profilo' },
   { id: 'LOAD_BUTTON', text: 'Carica' },
   { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
@@ -90,7 +91,9 @@ const UI_TEXT_CONFIG = [
   { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
   { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
   { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-  { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' }
+  { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
+  { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
+  { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

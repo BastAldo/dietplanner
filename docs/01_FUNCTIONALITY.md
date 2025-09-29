@@ -27,3 +27,4 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
 * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
 * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
+* **US-32 (Galleria Ricette):** L'utente può accedere a una pagina che elenca tutti i pasti con ricette disponibili per una rapida consultazione.

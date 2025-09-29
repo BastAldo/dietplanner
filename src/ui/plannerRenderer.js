@@ -1,4 +1,5 @@
 import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS } from '../utils/constants.js';
+import { renderIcon } from './icons.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -46,9 +47,11 @@ function calculateDailyCalories(isoDate, weeklyPlan) {
 }
 
 function getRecipeButtonHTML(meal, state) {
-  if (state.recipeBaseUrl && meal && meal.recipeId) {
-    return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M20 3H4c-1.103 0-2 .897-2 2v14c0 1.103.897 2 2 2h16c1.103 0 2-.897 2-2V5c0-1.103-.897-2-2-2zM4 19V5h7v14H4zm9 0V5h7l.001 14H13z"></path><path d="M9 7h2v2H9z"></path></svg>
+  // Ensure we check the full meal object from master list for recipeId
+  const fullMeal = state.masterMealList.find(m => m.id === meal.id);
+  if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
+    return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+              ${renderIcon('RECIPE', { width: 20, height: 20 })}
             </button>`;
   }
   return '';

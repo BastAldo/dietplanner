@@ -25,6 +25,15 @@ function handleCalendarClick(e) {
   if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
 }
 
+function handleRecipeClick(e) {
+  const recipeItem = e.target.closest('.recipe-list-item');
+  if (recipeItem) {
+    const state = getState();
+    const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+    if (meal) { showRecipeModal(meal); }
+  }
+}
+
 function handleLogViewClick(e) {
   const btnRecipe = e.target.closest('.btn-view-recipe');
   if (btnRecipe) {
@@ -209,11 +218,13 @@ export function initializeEventListeners() {
   document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
   document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
   document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
+  document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
   document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
   document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
   document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
   document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
   document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+  document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
   document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
   document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
   document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
