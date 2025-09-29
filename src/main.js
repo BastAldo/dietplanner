@@ -10,16 +10,16 @@ import { UI_TEXT } from './utils/constants.js';
 
 async function loadConfig(url) {
   if (!url) {
-    setPlannerConfig({}); // Clear master list if no URL
+    setPlannerConfig({}, url); // Clear master list if no URL
     return;
   };
   try {
     const config = await fetchAndParseConfig(url);
-    setPlannerConfig(config);
+    setPlannerConfig(config, url);
     showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
   } catch (error) {
     showNotification(error.message, 'error');
-    setPlannerConfig({}); // Clear master list on error
+    setPlannerConfig({}, url); // Clear master list on error
   }
 }
 
@@ -57,6 +57,7 @@ async function init() {
         UI_TEXT.LOAD_SHARED_CONFIG_MSG,
         () => {
           setConfigUrl(decodedUrl);
+          document.getElementById('config-url-input').value = decodedUrl;
           loadConfig(decodedUrl);
         },
         'primary'

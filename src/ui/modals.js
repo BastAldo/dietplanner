@@ -19,6 +19,25 @@ function getRecipeButtonHTML(meal, state) {
   return '';
 }
 
+function formatIngredients(meal) {
+    if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
+    
+    const ingredientsList = meal.ingredienti.map(item => {
+        let quantity = '';
+        if (item.quantita_g) quantity = `${item.quantita_g}g`;
+        else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
+        else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
+        else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
+        
+        // In un'implementazione futura, il nome dell'ingrediente potrebbe essere recuperato
+        // dalla lista di ingredienti master per una visualizzazione più user-friendly.
+        // Per ora, usiamo l'id.
+        return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
+    }).join(', ');
+    
+    return `<p>${ingredientsList}</p>`;
+}
+
 export async function showRecipeModal(meal) {
   if (!meal) return;
   const state = getState();
@@ -66,7 +85,7 @@ export function openSelectionModal(slotId) {
   selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
   const list = selectionModal.querySelector('#selection-modal-list');
   const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-  list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4><p>${meal.ingredienti || ''}</p></div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+  list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
   const closeAndReturn = () => {
     selectionModal.classList.add('modal-hidden');
     if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);

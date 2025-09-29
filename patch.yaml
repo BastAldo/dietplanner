@@ -1,309 +1,510 @@
-commit_message: "feat(charts): Migliora layout e arricchisce il grafico biometrico"
+commit_message: "feat(data): Ristruttura la gestione dei pasti e calcola le calorie dinamicamente"
 rationale: |
-  Questo commit implementa diversi miglioramenti alla pagina dei grafici basati sul feedback dell'utente, con l'obiettivo di aumentare la leggibilità e l'utilità dei dati visualizzati.
+  Questo commit introduce una profonda ristrutturazione della gestione dei dati, separando la definizione dei pasti da quella degli ingredienti e introducendo un sistema di calcolo calorico dinamico. L'obiettivo è aumentare la modularità, la manutenibilità e la flessibilità dell'applicazione, come da piano approvato.
 
   Le modifiche principali sono:
-  1.  **Layout a Colonna Singola**: I grafici sono ora impilati verticalmente su tutte le dimensioni dello schermo. Questo layout migliora l'uso dello spazio orizzontale, rendendo ogni grafico più largo e più facile da leggere, specialmente su tablet e schermi di medie dimensioni. La modifica è stata ottenuta rimuovendo la regola `grid-template-columns` per schermi desktop.
-  2.  **Arricchimento Dati Biometrici**: Il grafico dei dati biometrici è stato potenziato per visualizzare non solo il peso, ma anche altre metriche chiave come la massa muscolare, la massa grassa e la percentuale di grasso. La funzione di rendering ora genera dinamicamente un dataset per ogni metrica disponibile, con colori distinti per una facile identificazione tramite la legenda.
-  3.  **Ordinamento Cronologico Confermato**: È stato verificato che l'asse temporale del grafico biometrico sia già corretto, mostrando i dati in ordine cronologico dal più vecchio (a sinistra) al più recente (a destra).
-
-  Questi aggiornamenti rendono la sezione dei grafici uno strumento di analisi più potente e intuitivo per l'utente.
+  1.  **Struttura Dati Modulare**: La configurazione ora si basa su due file separati (`pasti.json` e `ingredienti.json`) che vengono caricati in modo orchestrato. Questo disaccoppia i dati e semplifica gli aggiornamenti.
+  2.  **Calcolo Dinamico delle Calorie**: È stato introdotto un nuovo modulo, `src/core/calorieCalculator.js`, con la responsabilità esclusiva di calcolare le calorie minime e massime per ogni pasto basandosi sui suoi ingredienti. Questo elimina la necessità di avere calorie pre-calcolate e hardcoded nei dati dei pasti.
+  3.  **URL di Configurazione Semplificati**: La `recipeBaseUrl` non è più un campo di configurazione manuale. Viene ora derivata automaticamente dall'URL del file dei pasti, seguendo una convenzione di struttura delle cartelle (`/ricette/`). Questo riduce la complessità e il rischio di errori.
+  4.  **Refactoring del Caricamento**: Le funzioni in `configService.js` e `main.js` sono state aggiornate per gestire il nuovo flusso di caricamento multi-file.
+  5.  **Aggiornamento UI**: Il modale di selezione dei pasti è stato aggiornato per visualizzare correttamente la nuova struttura dati degli ingredienti.
 patches:
-  - file: src/ui/charts.js
+  - file: src/core/calorieCalculator.js
     content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
+      function getIngredientById(id, ingredients) {
+        return ingredients.find(ing => ing.id === id);
+      }
 
-      let plannerChartInstance = null;
-      let biometricsChartInstance = null;
-      let currentPlannerChartType = 'bar';
+      function calculateIngredientCalories(ingredientItem, ingredientData) {
+        if (!ingredientData || typeof ingredientData.kcal_per_100g !== 'number') return 0;
 
+        let quantityG = 0;
+        if (ingredientItem.quantita_g) {
+          quantityG = ingredientItem.quantita_g;
+        } else if (ingredientItem.quantita_g_min) {
+          quantityG = ingredientItem.quantita_g_min;
+        } else if (ingredientItem.quantita_pezzi) {
+          // Nota: questa è una semplificazione. Per una maggiore precisione,
+          // il peso per pezzo dovrebbe essere definito negli ingredienti.
+          // Per ora, assumiamo un peso medio se non specificato altrimenti.
+          // Dato che non abbiamo un peso per pezzo, non possiamo calcolare le calorie.
+          return 0;
+        }
+
+        return (ingredientData.kcal_per_100g / 100) * quantityG;
+      }
+
+      function calculateIngredientCaloriesRange(ingredientItem, ingredientData) {
+        if (!ingredientData || typeof ingredientData.kcal_per_100g !== 'number') return { min: 0, max: 0 };
+
+        const kcalPerGram = ingredientData.kcal_per_100g / 100;
+        let min = 0, max = 0;
+
+        if (ingredientItem.quantita_g) {
+          min = max = kcalPerGram * ingredientItem.quantita_g;
+        } else if (ingredientItem.quantita_g_min && ingredientItem.quantita_g_max) {
+          min = kcalPerGram * ingredientItem.quantita_g_min;
+          max = kcalPerGram * ingredientItem.quantita_g_max;
+        } else if (ingredientItem.quantita_g_min) {
+          min = max = kcalPerGram * ingredientItem.quantita_g_min;
+        } else if (ingredientItem.quantita_pezzi) {
+           // Per ora, il calcolo per "pezzi" non è supportato se non c'è un peso associato.
+           // In futuro, l'oggetto ingrediente potrebbe avere 'g_per_pezzo'.
+           min = max = 0; // O un valore di default se preferito
+        }
+        return { min, max };
+      }
+
+
+      export function processMealsWithCalories(meals, ingredients) {
+        if (!meals || !ingredients) return [];
+
+        return meals.map(meal => {
+          let totalMinCalories = 0;
+          let totalMaxCalories = 0;
+
+          if (meal.ingredienti && Array.isArray(meal.ingredienti)) {
+            meal.ingredienti.forEach(item => {
+              const ingredientData = getIngredientById(item.id, ingredients);
+              if (ingredientData) {
+                const range = calculateIngredientCaloriesRange(item, ingredientData);
+                totalMinCalories += range.min;
+                totalMaxCalories += range.max;
+              }
+            });
+          }
+
+          return {
+            ...meal,
+            calories_min: Math.round(totalMinCalories),
+            calories_max: Math.round(totalMaxCalories)
+          };
+        });
+      }
+  - file: src/api/configService.js
+    content: |
+      async function fetchJson(url) {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete caricando ${url}: ${response.status}`);
+          return response.json();
+      }
+
+      export async function fetchAndParseConfig(mealsUrl) {
+          if (!mealsUrl) throw new Error("Per favore, inserisci un URL valido per i pasti.");
+
+          try {
+              const mealsConfig = await fetchJson(mealsUrl);
+              if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
+                  throw new Error("Il file dei pasti non è valido. Manca la chiave 'meals' o non è un array.");
+              }
+
+              // Deriva l'URL degli ingredienti
+              const baseIngredientsUrl = new URL(mealsUrl);
+              const ingredientsPath = baseIngredientsUrl.pathname.substring(0, baseIngredientsUrl.pathname.lastIndexOf('/')) + '/ingredienti.json';
+              const ingredientsUrl = `${baseIngredientsUrl.origin}${ingredientsPath}`;
+
+              const ingredientsConfig = await fetchJson(ingredientsUrl);
+              if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
+                  throw new Error("Il file degli ingredienti non è valido. Manca la chiave 'ingredienti' o non è un array.");
+              }
+
+              // Combina le configurazioni
+              return {
+                  rules: mealsConfig.rules || [],
+                  meals: mealsConfig.meals,
+                  ingredienti: ingredientsConfig.ingredienti
+              };
+
+          } catch (error) {
+              console.error("Fallimento nel caricamento della configurazione:", error);
+              throw new Error(`Impossibile caricare la configurazione completa. Controlla la console.`);
+          }
+      }
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        weeklyPlan: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', or 'profile'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
       const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
-      function getWeekStartDate(date) {
+      const getWeekStartDate = (date) => {
         const d = new Date(date);
         const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config, url) {
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
       }
 
-      function getChartColors() {
-          const style = getComputedStyle(document.documentElement);
-          return {
-              primary: style.getPropertyValue('--primary-color').trim(),
-              secondary: style.getPropertyValue('--secondary-color').trim(),
-              textColor: style.getPropertyValue('--text-color').trim(),
-              borderColor: style.getPropertyValue('--border-color').trim(),
-              danger: style.getPropertyValue('--danger-color').trim(),
-              success: style.getPropertyValue('--success-color').trim(),
-              warning: style.getPropertyValue('--warning-color').trim()
-          };
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
       }
 
-      function calculateWeeklyCalorieData(state) {
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function resetCurrentWeek() {
         const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], calories: [] };
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (['planner', 'log', 'progress', 'profile', 'charts'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
 
         for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          weeklyData.labels.push(DAYS[i]);
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
 
-          let dailyMin = 0, dailyMax = 0;
-          MEAL_TYPES.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            if (meal && meal.calories_min) {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              dailyMin += minCals;
-              dailyMax += maxCals;
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
             }
           });
-          weeklyData.calories.push([dailyMin, dailyMax]);
         }
-        return weeklyData;
+        saveStateToLocalStorage();
+        notify();
       }
-
-      function renderPlannerChart(state) {
-        const weeklyData = calculateWeeklyCalorieData(state);
-        const colors = getChartColors();
-        const isLineChart = currentPlannerChartType === 'line';
-        
-        const datasets = isLineChart ?
-        [{
-            label: 'Kcal Min',
-            data: weeklyData.calories.map(c => c[0]),
-            borderColor: colors.secondary,
-            fill: false,
-            tension: 0.1
-        },{
-            label: 'Kcal Max',
-            data: weeklyData.calories.map(c => c[1]),
-            borderColor: colors.primary,
-            fill: '-1',
-            backgroundColor: colors.primary + '33',
-            tension: 0.1
-        }]
-        :
-        [{
-            label: 'Kcal (Min-Max)',
-            data: weeklyData.calories,
-            backgroundColor: colors.primary,
-            borderColor: colors.secondary
-        }];
-        
-        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-        plannerChartInstance = new Chart(ctx, {
-          type: currentPlannerChartType,
-          data: {
-            labels: weeklyData.labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: isLineChart,
-                labels: { color: colors.textColor }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    if (isLineChart) {
-                      return `${context.dataset.label}: ${context.parsed.y}`;
-                    }
-                    const value = context.raw;
-                    if (value[0] === value[1]) {
-                      return `Kcal: ${value[0]}`;
-                    }
-                    return `Kcal: ${value[0]} - ${value[1]}`;
-                  }
-                }
-              }
-            }
-          }
-        });
-      }
-
-      function getBiometricsData(state) {
-        const data = [...state.biometricData].reverse(); // Assicura ordine cronologico
-        const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        
-        const datasets = {};
-        const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
-
-        numericFields.forEach(field => {
-            datasets[field.id] = {
-                label: field.label,
-                data: data.map(entry => entry[field.id] || null) // Usa null per dati mancanti
-            };
-        });
-
-        return { labels, datasets };
-      }
-
-      function renderBiometricsChart(state) {
-        const { labels, datasets } = getBiometricsData(state);
-        const colors = getChartColors();
-        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
-        
-        const chartDatasets = Object.values(datasets)
-            .map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                fill: false,
-                borderColor: colorCycle[index % colorCycle.length],
-                tension: 0.1,
-                pointBackgroundColor: colorCycle[index % colorCycle.length],
-                pointRadius: 4
-            }))
-            .filter(d => d.data.some(val => val !== null)); // Mostra solo se ci sono dati
-
-        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-
-        biometricsChartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: chartDatasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: true, // Mostra sempre la legenda
-                labels: { color: colors.textColor }
-              }
-            }
-          }
-        });
-      }
-      
-      function handleChartTypeChange(event, state) {
-          const type = event.target.dataset.type;
-          if (type && type !== currentPlannerChartType) {
-              currentPlannerChartType = type;
-              document.querySelectorAll('.btn-chart-type').forEach(btn => {
-                  btn.classList.toggle('active', btn.dataset.type === type);
-              });
-              if (plannerChartInstance) {
-                plannerChartInstance.destroy();
-              }
-              renderPlannerChart(state);
-          }
-      }
-
-      export function renderCharts(state) {
-          if (plannerChartInstance) {
-              plannerChartInstance.destroy();
-          }
-          if (biometricsChartInstance) {
-              biometricsChartInstance.destroy();
-          }
-
-          renderPlannerChart(state);
-          renderBiometricsChart(state);
-
-          const switcher = document.querySelector('.chart-type-switcher');
-          const boundHandler = (e) => handleChartTypeChange(e, state);
-          switcher.replaceWith(switcher.cloneNode(true));
-          document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
-      }
-  - file: styles/charts.css
+  - file: src/ui/modals.js
     content: |
-      /* --- CHARTS PAGE --- */
-      .charts-container {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1.5rem;
+      import { getState, updateWeeklyPlan } from '../core/state.js';
+      import { showNotification } from './notifications.js';
+      import { UI_TEXT, MEAL_TYPES } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      let currentEditingDayISO = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
       }
 
-      .chart-card {
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          display: flex;
-          flex-direction: column;
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
       }
 
-      .chart-header {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin-bottom: 1.5rem;
-          position: relative;
-          flex-shrink: 0;
+      function formatIngredients(meal) {
+          if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
+          
+          const ingredientsList = meal.ingredienti.map(item => {
+              let quantity = '';
+              if (item.quantita_g) quantity = `${item.quantita_g}g`;
+              else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
+              else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
+              else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
+              
+              // In un'implementazione futura, il nome dell'ingrediente potrebbe essere recuperato
+              // dalla lista di ingredienti master per una visualizzazione più user-friendly.
+              // Per ora, usiamo l'id.
+              return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
+          }).join(', ');
+          
+          return `<p>${ingredientsList}</p>`;
       }
 
-      .chart-header h4 {
-          color: var(--primary-color);
-          margin: 0;
+      export async function showRecipeModal(meal) {
+        if (!meal) return;
+        const state = getState();
+        const recipeModal = document.getElementById('recipe-modal');
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
+        const body = recipeModal.querySelector('#recipe-modal-body');
+        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
+        } catch (error) {
+          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
+        }
       }
 
-      /* New container to constrain the chart's height */
-      .chart-canvas-container {
-          position: relative;
-          height: 400px; /* Essential fix for the resize loop */
-          width: 100%;
-          flex-grow: 1;
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        const confirmModal = document.getElementById('confirm-modal');
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
+        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
+        confirmBtn.className = `btn btn-${type}`;
+        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          cancelBtn.removeEventListener('click', cancelHandler);
+          confirmBtn.removeEventListener('click', confirmHandler);
+        };
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        cancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModal.classList.remove('modal-hidden');
       }
 
-      .chart-type-switcher {
-          position: absolute;
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          display: flex;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          overflow: hidden;
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const mealType = slotId.substring(11);
+        const selectionModal = document.getElementById('selection-modal');
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+        };
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
+        };
+        selectionModal.classList.remove('modal-hidden');
       }
 
-      .btn-chart-type {
-          background: transparent;
-          border: none;
-          color: var(--text-color-muted);
-          padding: 0.25rem 0.75rem;
-          cursor: pointer;
-          font-size: 0.8rem;
-      }
-      .btn-chart-type:not(:last-child) {
-          border-right: 1px solid var(--border-color);
-      }
-      .btn-chart-type.active {
-          background-color: var(--primary-color);
-          color: var(--bg-color);
-      }
-
-      /* Rimuove il layout a due colonne per desktop per impilare i grafici */
-      /* @media (min-width: 1024px) {
-          .charts-container {
-              grid-template-columns: repeat(2, 1fr);
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const dayEditorModal = document.getElementById('day-editor-modal');
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
+        body.innerHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const meal = state.weeklyPlan[slotId];
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
           }
-      } */
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+        body.onclick = e => {
+          const btnAdd = e.target.closest('.btn-add-meal');
+          const btnRemove = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
+          else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = Object.values(state.weeklyPlan).find(m => m && m.id === btnRecipe.dataset.mealId) || state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: src/main.js
+    content: |
+      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
+      import { renderApp, populateInitialText } from './ui/renderer.js';
+      import { showConfirmModal } from './ui/modals.js';
+      import { initializeEventListeners } from './ui/interactions.js';
+      import { loadViews } from './ui/viewLoader.js';
+      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+      import { fetchAndParseConfig } from './api/configService.js';
+      import { showNotification } from './ui/notifications.js';
+      import { UI_TEXT } from './utils/constants.js';
+
+      async function loadConfig(url) {
+        if (!url) {
+          setPlannerConfig({}, url); // Clear master list if no URL
+          return;
+        };
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+          setPlannerConfig({}, url); // Clear master list on error
+        }
+      }
+
+      function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/dietplanner/sw.js')
+              .then(registration => console.log('ServiceWorker registration successful'))
+              .catch(err => console.log('ServiceWorker registration failed: ', err));
+          });
+        }
+      }
+
+      async function init() {
+        await loadViews();
+        document.addEventListener('stateChange', renderApp);
+        
+        loadStateFromLocalStorage();
+        let initialState = getState();
+        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+
+        populateInitialText();
+        initializeEventListeners();
+        renderApp(); // Initial render with local data
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const configUrlFromParam = urlParams.get('configUrl');
+
+        if (configUrlFromParam) {
+          const decodedUrl = decodeURIComponent(configUrlFromParam);
+          initialState = getState(); // Get fresh state
+          if (decodedUrl !== initialState.configUrl) {
+            showConfirmModal(
+              UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+              UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+              () => {
+                setConfigUrl(decodedUrl);
+                document.getElementById('config-url-input').value = decodedUrl;
+                loadConfig(decodedUrl);
+              },
+              'primary'
+            );
+          } else {
+            await loadConfig(initialState.configUrl);
+          }
+        } else {
+          await loadConfig(initialState.configUrl);
+        }
+        
+        registerServiceWorker();
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
 commands:
-  - "echo 'Layout dei grafici aggiornato e grafico biometrico arricchito con dati multipli.'"
+  - "echo 'Ristrutturazione dei dati completata. L''applicazione ora calcola dinamicamente le calorie.'"

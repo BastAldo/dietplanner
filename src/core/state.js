@@ -1,4 +1,5 @@
 import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE } from '../utils/constants.js';
+import { processMealsWithCalories } from './calorieCalculator.js';
 
 let state = {
   rules: [],
@@ -24,10 +25,23 @@ const getWeekStartDate = (date) => {
 
 export const getState = () => ({ ...state });
 
-export function setPlannerConfig(config) {
+export function setPlannerConfig(config, url) {
   state.rules = config.rules || [];
-  state.masterMealList = config.meals || [];
-  state.recipeBaseUrl = config.recipeBaseUrl || '';
+  const ingredients = config.ingredienti || [];
+  const meals = config.meals || [];
+
+  // Calcola calorie e popola la master list
+  state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+  // Deriva e imposta la recipeBaseUrl
+  if (url) {
+      const baseUrl = new URL(url);
+      const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+      state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+  } else {
+      state.recipeBaseUrl = '';
+  }
+
   notify();
 }
 
