@@ -1,68 +1,90 @@
-commit_message: "feat(calculator): Aggiunge il calcolo delle calorie per ingredienti a pezzo"
+commit_message: "docs: Aggiorna la documentazione di funzionalità e architettura"
 rationale: |
-  Questo commit estende il sistema di calcolo calorico per risolvere il problema degli ingredienti misurati in "pezzi" (es. "1 banana") che precedentemente risultavano avere zero calorie.
+  Questo commit allinea la documentazione del progetto (`01_FUNCTIONALITY.md` and `02_ARCHITECTURE.md`) con le recenti modifiche architetturali, assicurando che rimanga una fonte di verità accurata e affidabile.
 
-  La modifica principale consiste nell'introduzione di un nuovo campo opzionale, `g_per_pezzo`, nello schema del file `ingredienti.json`. Questo campo permette di definire il peso medio in grammi per un singolo pezzo di un ingrediente.
+  Le modifiche principali alla documentazione sono:
+  1.  **Architettura dei Dati Aggiornata**: Il documento di architettura ora descrive correttamente la nuova struttura dati basata su due file (`pasti.json`, `ingredienti.json`), il processo di caricamento orchestrato e la derivazione automatica della `recipeBaseUrl`, riflettendo il principio "Convention over Configuration".
+  2.  **Documentazione del Calcolatore**: È stata aggiunta una sezione dedicata al nuovo modulo `src/core/calorieCalculator.js`, spiegando il suo ruolo centrale nel calcolo dinamico delle calorie e il suo allineamento con il Single Responsibility Principle.
+  3.  **Funzionalità Chiarite**: Il documento delle funzionalità è stato aggiornato per riflettere i nuovi requisiti di caricamento dei dati (US-1) e per descrivere in dettaglio la nuova capacità del sistema di calcolare le calorie per ingredienti misurati in "pezzi" tramite il campo `g_per_pezzo` (US-16).
 
-  Le modifiche apportate sono:
-  1.  **Aggiornamento del `calorieCalculator.js`**: La logica di calcolo è stata potenziata. Ora, se un ingrediente in un pasto è definito tramite `quantita_pezzi`, il calcolatore cercherà il campo `g_per_pezzo` nel file `ingredienti.json`. Se lo trova, calcolerà le calorie corrette moltiplicando il numero di pezzi per il peso per pezzo e per le calorie per grammo. In assenza di questo dato, le calorie rimarranno zero, mantenendo la retrocompatibilità.
-  2.  **Miglioramento della Flessibilità**: Questa modifica rende il sistema di calcolo più robusto e flessibile, consentendo di gestire correttamente un'ampia varietà di ingredienti senza dover modificare il codice dell'applicazione. La logica rimane centralizzata nel calcolatore e i dati di peso rimangono, correttamente, nel file di configurazione degli ingredienti.
-
-  Per abilitare il calcolo per la banana, l'utente dovrà aggiornare la corrispondente voce in `ingredienti.json` come segue:
-  `{ "id": "banana", "nome": "Banana", "kcal_per_100g": 89, "g_per_pezzo": 120 }`
+  Questi aggiornamenti sono cruciali per la manutenibilità a lungo termine del progetto e per garantire che tutti gli sviluppatori abbiano una comprensione chiara dello stato attuale del sistema.
 patches:
-  - file: src/core/calorieCalculator.js
+  - file: docs/01_FUNCTIONALITY.md
     content: |
-      function getIngredientById(id, ingredients) {
-        return ingredients.find(ing => ing.id === id);
-      }
+      # Funzionalità: HealtyPro (ex NutriPlan)
 
-      function calculateIngredientCaloriesRange(ingredientItem, ingredientData) {
-        if (!ingredientData || typeof ingredientData.kcal_per_100g !== 'number') return { min: 0, max: 0 };
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico dinamico e regole di validazione personalizzate.
 
-        const kcalPerGram = ingredientData.kcal_per_100g / 100;
-        let min = 0, max = 0;
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
 
-        if (ingredientItem.quantita_g) {
-          min = max = kcalPerGram * ingredientItem.quantita_g;
-        } else if (ingredientItem.quantita_g_min && ingredientItem.quantita_g_max) {
-          min = kcalPerGram * ingredientItem.quantita_g_min;
-          max = kcalPerGram * ingredientItem.quantita_g_max;
-        } else if (ingredientItem.quantita_g_min) {
-          min = max = kcalPerGram * ingredientItem.quantita_g_min;
-        } else if (ingredientItem.quantita_pezzi && typeof ingredientData.g_per_pezzo === 'number') {
-          const totalGrams = ingredientItem.quantita_pezzi * ingredientData.g_per_pezzo;
-          min = max = kcalPerGram * totalGrams;
-        }
-        
-        return { min, max };
-      }
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file `pasti.json` remoto. L'applicazione si aspetta di trovare, nella stessa directory, un file complementare chiamato `ingredienti.json`.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel `pasti.json` (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno. Le calorie vengono calcolate dinamicamente dall'applicazione basandosi sui dati del file `ingredienti.json`. Il sistema è in grado di calcolare le calorie anche per ingredienti misurati in "pezzi" (es. `quantita_pezzi: 1`), a condizione che nel file `ingredienti.json` sia specificato il peso medio per pezzo tramite il campo opzionale `g_per_pezzo`.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile. L'URL della ricetta viene derivato automaticamente dal percorso del file di configurazione, cercando i file in una sottocartella `ricette/`.
+      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `pasti.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
+      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
+      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
+      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
+      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche come una lista di card.
+      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
+      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
+      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
+  - file: docs/02_ARCHITECTURE.md
+    content: |
+      # Architettura: HealtyPro (ex NutriPlan)
 
+      ## 1. Principi Guida
+      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
+      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è essenziale e intuitiva, basata su Vanilla JS.
+      * **Data-Driven & Convention over Configuration:** La logica di business è definita in file di configurazione remoti (`pasti.json`, `ingredienti.json`). L'applicazione si basa su convenzioni di struttura: dato l'URL di `pasti.json`, deduce automaticamente i percorsi per `ingredienti.json` (stessa directory) e per le ricette (sottodirectory `ricette/`).
+      * **Maintainability (SRP):** Ogni modulo ha una singola, chiara responsabilità.
 
-      export function processMealsWithCalories(meals, ingredients) {
-        if (!meals || !ingredients) return [];
+      ## 2. Architettura SPA Multi-Vista
+      L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce quale vista mostrare in base allo stato.
 
-        return meals.map(meal => {
-          let totalMinCalories = 0;
-          let totalMaxCalories = 0;
+      ## 3. Architettura PWA
+      * **`manifest.json`**: Fornisce i metadati per l'installazione.
+      * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
 
-          if (meal.ingredienti && Array.isArray(meal.ingredienti)) {
-            meal.ingredienti.forEach(item => {
-              const ingredientData = getIngredientById(item.id, ingredients);
-              if (ingredientData) {
-                const range = calculateIngredientCaloriesRange(item, ingredientData);
-                totalMinCalories += range.min;
-                totalMaxCalories += range.max;
-              }
-            });
-          }
+      ## 4. Logica di Business
+      ### 4.1. Calcolo del BMR (`src/core/calculations.js`)
+      Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
 
-          return {
-            ...meal,
-            calories_min: Math.round(totalMinCalories),
-            calories_max: Math.round(totalMaxCalories)
-          };
-        });
-      }
+      ### 4.2. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
+      Questo modulo è un pilastro della nuova architettura e ha la sola responsabilità di calcolare le calorie dei pasti. Riceve la lista dei pasti e la lista degli ingredienti e arricchisce ogni pasto con le proprietà `calories_min` e `calories_max`. Questo disaccoppia completamente la logica di calcolo dalla definizione dei dati, permettendo di gestire logiche complesse (es. range, quantità in pezzi) in modo centralizzato e testabile.
+
+      ## 5. Gestione dei Dati
+      ### 5.1. Caricamento Dati (`src/api/configService.js`)
+      Il caricamento non è più un singolo fetch. Il servizio ora orchestra un caricamento a due fasi:
+      1.  Recupera il file `pasti.json` dall'URL fornito dall'utente.
+      2.  Deriva e recupera il file `ingredienti.json` dalla stessa directory.
+      3.  Restituisce un oggetto di configurazione unificato all'applicazione.
+
+      ### 5.2. Strutture Dati Chiave
+      L'applicazione si basa su dati esterni e dati utente salvati nel `localStorage`.
+
+      * **Configurazione Remota**:
+          * **`pasti.json`**: Un file contenente un array di oggetti `meals`. Ogni pasto definisce il suo nome, tipo e un array di `ingredienti` referenziati tramite `id` e quantità.
+          * **`ingredienti.json`**: Un file contenente un array di `ingredienti`. Ogni ingrediente ha un `id`, un nome, `kcal_per_100g` e un campo opzionale `g_per_pezzo` per il calcolo calorico di item non misurati in grammi.
+
+      * **Dati Utente Locali**:
+          * **`userProfile`**: Oggetto con i dati anagrafici dell'utente.
+          * **`weeklyPlan`**: Oggetto che mappa gli slot giornalieri (`YYYY-MM-DD-MealType`) agli oggetti pasto pianificati.
+          * **`biometricData`**: Array con lo storico delle misurazioni biometriche.
+
+      ## 6. Dipendenze di Terze Parti
+      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette da Markdown.
+      * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
 commands:
-  - "echo 'Calcolatore aggiornato. Aggiungi g_per_pezzo ai tuoi ingredienti per abilitare il calcolo.'"
+  - "echo 'Documentazione di funzionalità e architettura aggiornata per riflettere lo stato corrente del progetto.'"
