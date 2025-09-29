@@ -1,6 +1,6 @@
 import { getState, updateWeeklyPlan } from '../core/state.js';
 import { showNotification } from './notifications.js';
-import { UI_TEXT, MEAL_TYPES } from '../utils/constants.js';
+import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
 
 let currentEditingDayISO = null;
@@ -29,9 +29,6 @@ function formatIngredients(meal) {
         else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
         else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
         
-        // In un'implementazione futura, il nome dell'ingrediente potrebbe essere recuperato
-        // dalla lista di ingredienti master per una visualizzazione più user-friendly.
-        // Per ora, usiamo l'id.
         return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
     }).join(', ');
     
@@ -103,10 +100,10 @@ export function openDayEditorModal(isoDate) {
   const dayEditorModal = document.getElementById('day-editor-modal');
   dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
   const body = dayEditorModal.querySelector('#day-editor-body');
-  body.innerHTML = MEAL_TYPES.map(mealType => {
+  
+  const mealSlotsHTML = MEAL_TYPES.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
     const plannedMeal = state.weeklyPlan[slotId];
-    // Always get the full meal object from masterMealList to ensure all properties are present
     const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
     
     let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
@@ -115,10 +112,23 @@ export function openDayEditorModal(isoDate) {
     }
     return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
   }).join('');
+
+  const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+  const plannedWorkout = state.weeklyWorkouts[workoutSlotId];
+  let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">Aggiungi Allenamento</button>`;
+  if (plannedWorkout) {
+      // Qui visualizzeremo i dettagli dell'allenamento. Per ora, un placeholder.
+      workoutDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${plannedWorkout.nome}</span><div class="meal-actions"><button class="btn-remove-workout" data-slot-id="${workoutSlotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+  }
+  const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+
+  body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+
   body.onclick = e => {
     const btnAdd = e.target.closest('.btn-add-meal');
     const btnRemove = e.target.closest('.btn-remove-meal');
     const btnRecipe = e.target.closest('.btn-view-recipe');
+    // Aggiungere logica per bottoni workout
     if (btnAdd) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAdd.dataset.slotId); }
     else if (btnRemove) { updateWeeklyPlan(btnRemove.dataset.slotId, null); openDayEditorModal(isoDate); }
     else if (btnRecipe) {

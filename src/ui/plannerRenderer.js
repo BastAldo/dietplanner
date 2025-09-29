@@ -1,4 +1,4 @@
-import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS } from '../utils/constants.js';
+import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
 
 function toISODateString(date) {
@@ -46,6 +46,12 @@ function calculateDailyCalories(isoDate, weeklyPlan) {
   return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
+function calculateDailyWorkout(isoDate, weeklyWorkouts) {
+  const workout = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+  if (!workout) return '';
+  return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${workout.nome}</div>`;
+}
+
 function getRecipeButtonHTML(meal, state) {
   // Ensure we check the full meal object from master list for recipeId
   const fullMeal = state.masterMealList.find(m => m.id === meal.id);
@@ -67,13 +73,14 @@ function renderCalendarView(state, weekStart) {
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
     const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+    const dailyWorkout = calculateDailyWorkout(isoDate, state.weeklyWorkouts);
     const dayCell = document.createElement('div');
     dayCell.className = 'day-cell';
     if (isoDate === todayISO) {
       dayCell.classList.add('is-today');
     }
     dayCell.dataset.date = isoDate;
-    dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div></div>`;
+    dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div>${dailyWorkout}</div>`;
     calendarGrid.appendChild(dayCell);
   }
 }

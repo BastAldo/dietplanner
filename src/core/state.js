@@ -1,10 +1,12 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 
 let state = {
   rules: [],
   masterMealList: [],
+  masterWorkoutList: [],
   weeklyPlan: {},
+  weeklyWorkouts: {},
   biometricData: [],
   userProfile: {},
   configUrl: '',
@@ -29,6 +31,7 @@ export function setPlannerConfig(config, url) {
   state.rules = config.rules || [];
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
+  state.masterWorkoutList = config.esercizi || [];
 
   // Calcola calorie e popola la master list
   state.masterMealList = processMealsWithCalories(meals, ingredients);
@@ -53,17 +56,20 @@ export function setConfigUrl(url) {
 
 export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+  localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
 }
 
 export function loadStateFromLocalStorage() {
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+  const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
   const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
 
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+  if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
   if (url) { state.configUrl = url; }
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
@@ -71,6 +77,7 @@ export function loadStateFromLocalStorage() {
 
 export function setAppState(backupData) {
   state.weeklyPlan = backupData.weeklyPlan || {};
+  state.weeklyWorkouts = backupData.weeklyWorkouts || {};
   state.configUrl = backupData.configUrl || '';
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
