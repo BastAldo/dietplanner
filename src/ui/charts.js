@@ -125,7 +125,8 @@ function renderPlannerChart(state) {
 }
 
 function getBiometricsData(state) {
-  const data = [...state.biometricData].reverse(); // Assicura ordine cronologico
+  // Ordina esplicitamente i dati in ordine cronologico per il grafico
+  const data = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
   const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
   
   const datasets = {};
