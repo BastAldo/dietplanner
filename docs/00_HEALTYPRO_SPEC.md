@@ -24,7 +24,7 @@ Il flusso utente di MTP è **"day-centric"** (incentrato sul giorno), il che lo 
 3.  **Esecuzione**: Avvia la sessione che viene eseguita passo dopo passo.
 4.  **Revisione**: Analizza il riepilogo finale.
 
-L'architettura si basa su un principio chiave per garantire la stabilità: il **Piano di Esecuzione Pre-compilato**. Prima che l'allenamento inizi, il sistema genera una semplice lista sequenziale di tutti i passaggi (esercizio, riposo, annuncio). Il modulo Trainer si limita a scorrere questa lista, eliminando la necessità di logiche complesse durante l'esecuzione.
+L'architettura si basa su un principio chiave: il **Workout Builder Composizionale**. L'utente non sceglie piani pre-fatti, ma costruisce la propria sessione di allenamento in modo flessibile, aggiungendo esercizi da una libreria, in modo del tutto analogo alla pianificazione dei pasti. Il sistema salva una lista di esercizi per ogni giorno, che verrà poi utilizzata dalla vista Trainer per l'esecuzione.
 
 ### 1.3. Sistema Visivo e Schermate (La Grafica)
 
@@ -42,6 +42,7 @@ L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **t
         | +----------+  +----------+  +----------+  +----------+ |
         | | LUN 22   |  | MAR 23   |  | MER 24   |  | GIO 25   | |
         | | Kcal: 2100|  | Kcal: 1850|  |          |  |          | |
+        | | Workout: 3|  | Workout: 5|  |          |  |          | |
         | +----------+  +----------+  +----------+  +----------+ |
         | +----------+  +----------+  +----------+               |
         | | VEN 26   |  | SAB 27   |  | DOM 28   |               |
@@ -49,17 +50,19 @@ L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **t
         | +----------+  +----------+  +----------+               |
         +------------------------------------------------------+
         ```
-    * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti del giorno.
+    * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti e gli esercizi del giorno.
         ```plaintext
         +------------------------------------------------------+
-        |  Editor Piano Alimentare - 23 Luglio            [X]  |
+        |  Editor Piano - 23 Luglio                       [X]  |
         |------------------------------------------------------|
         |  - Colazione:   [ Aggiungi pasto ]                   |
-        |  - Spuntino M:   [ Aggiungi pasto ]                   |
         |  - Pranzo:      Pollo e Riso       (Modifica/Rimuovi) |
-        |  - Spuntino P:   Yogurt Greco       (Modifica/Rimuovi) |
-        |  - Cena:        [ Aggiungi pasto ]                   |
-        |                                                      |
+        |  ...                                                 |
+        |------------------------------------------------------|
+        |  - Allenamento: Squat               (Modifica/Rimuovi) |
+        |                 Push-up             (Modifica/Rimuovi) |
+        |                 Plank               (Modifica/Rimuovi) |
+        |                 [ Aggiungi esercizio ]               |
         +------------------------------------------------------+
         ```
 
@@ -105,7 +108,7 @@ Questa sezione definisce come implementeremo i concetti di MTP all'interno della
     * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
     * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
 
-#### Fase 4 (Futura): Integrazione Funzionalità Workout
+#### Fase 4: Integrazione Funzionalità Workout (Composizionale)
 
 * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
-* **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi. La vista calendario mostrerà un riepilogo sia delle calorie che degli esercizi. Questo unificherà completamente le due anime dell'applicazione.
+* **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi da una libreria. La vista calendario mostrerà un riepilogo sia delle calorie che del numero di esercizi pianificati. Questo unificherà completamente le due anime dell'applicazione.

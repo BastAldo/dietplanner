@@ -15,15 +15,18 @@
 .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
 .day-editor-list { display: flex; flex-direction: column; }
 .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.75rem; }
+.day-editor-slot.workout-slot { flex-direction: column; align-items: stretch; }
 .day-editor-slot:last-child { margin-bottom: 0; }
 .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+.day-editor-slot.workout-slot .meal-type-label { margin-bottom: 0.75rem; width: auto; }
 .meal-details-container { flex-grow: 1; min-width: 0; }
-.meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
+.meal-details:last-child { border-bottom: none; }
 .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
-.btn-add-meal { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-.btn-add-meal:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-.btn-remove-meal { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
+.btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+.btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+.btn-remove-meal, .btn-remove-exercise { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
 .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
 .btn-view-recipe:hover { color: var(--text-color); }
 .recipe-body { line-height: 1.6; }

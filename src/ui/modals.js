@@ -97,10 +97,10 @@ export function openSelectionModal(slotId) {
 export function openWorkoutSelectionModal(slotId) {
   const state = getState();
   const workoutSelectionModal = document.getElementById('workout-selection-modal');
-  workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_WORKOUT_TITLE;
+  workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
   const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
   const relevantWorkouts = state.masterWorkoutList;
-  list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(workout => `<div class="selection-item" data-workout-id="${workout.id}"><h4>${workout.nome}</h4></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+  list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
   
   const closeAndReturn = () => {
     workoutSelectionModal.classList.add('modal-hidden');
@@ -110,7 +110,7 @@ export function openWorkoutSelectionModal(slotId) {
   list.onclick = e => {
     const item = e.target.closest('.selection-item');
     if (item) {
-      updateWeeklyWorkout(slotId, item.dataset.workoutId);
+      updateWeeklyWorkout(slotId, item.dataset.exerciseId);
       closeAndReturn();
     }
   };
@@ -137,12 +137,15 @@ export function openDayEditorModal(isoDate) {
   }).join('');
 
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-  const plannedWorkout = state.weeklyWorkouts[workoutSlotId];
-  let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_WORKOUT_BTN}</button>`;
-  if (plannedWorkout) {
-      workoutDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${plannedWorkout.nome}</span><div class="meal-actions"><button class="btn-remove-workout" data-slot-id="${workoutSlotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
-  }
-  const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+  const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+  
+  let workoutDetailsHTML = plannedWorkoutList.map(exercise => {
+      return `<div class="meal-details" data-instance-id="${exercise.instanceId}"><span class="meal-details__name">${exercise.name}</span><div class="meal-actions"><button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+  }).join('');
+
+  const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+
+  const workoutSlotHTML = `<div class="day-editor-slot workout-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}${addExerciseButton}</div></div>`;
 
   body.innerHTML = mealSlotsHTML + workoutSlotHTML;
 
@@ -150,8 +153,8 @@ export function openDayEditorModal(isoDate) {
     const btnAddMeal = e.target.closest('.btn-add-meal');
     const btnRemoveMeal = e.target.closest('.btn-remove-meal');
     const btnRecipe = e.target.closest('.btn-view-recipe');
-    const btnAddWorkout = e.target.closest('.btn-add-workout');
-    const btnRemoveWorkout = e.target.closest('.btn-remove-workout');
+    const btnAddExercise = e.target.closest('.btn-add-exercise');
+    const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
 
     if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
     else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
@@ -159,12 +162,12 @@ export function openDayEditorModal(isoDate) {
       const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
       if (meal) showRecipeModal(meal);
     }
-    else if (btnAddWorkout) {
+    else if (btnAddExercise) {
       dayEditorModal.classList.add('modal-hidden');
-      openWorkoutSelectionModal(btnAddWorkout.dataset.slotId);
+      openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
     }
-    else if (btnRemoveWorkout) {
-      updateWeeklyWorkout(btnRemoveWorkout.dataset.slotId, null);
+    else if (btnRemoveExercise) {
+      updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
       openDayEditorModal(isoDate);
     }
   };

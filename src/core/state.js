@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 
 let state = {
@@ -123,14 +123,25 @@ export function updateWeeklyPlan(slotId, mealId) {
   notify();
 }
 
-export function updateWeeklyWorkout(slotId, workoutId) {
-    if (workoutId) {
-        const workout = state.masterWorkoutList.find(w => w.id === workoutId);
-        if (workout) {
-            state.weeklyWorkouts[slotId] = { ...workout };
+export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+    if (!state.weeklyWorkouts[slotId]) {
+        state.weeklyWorkouts[slotId] = [];
+    }
+
+    if (exerciseId) { // Add or update an exercise
+        const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+        if (exercise) {
+            const newExerciseInstance = {
+                ...exercise,
+                instanceId: Date.now() // Unique ID for this specific instance
+            };
+            state.weeklyWorkouts[slotId].push(newExerciseInstance);
         }
-    } else {
-        delete state.weeklyWorkouts[slotId];
+    } else if (instanceId) { // Remove an exercise
+        state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+        if (state.weeklyWorkouts[slotId].length === 0) {
+            delete state.weeklyWorkouts[slotId];
+        }
     }
     saveStateToLocalStorage();
     notify();
@@ -148,8 +159,7 @@ export function resetCurrentWeek() {
               delete state.weeklyPlan[slotId];
           }
       });
-      // Also reset workout
-      const workoutSlotId = `${isoDate}-Allenamento`;
+      const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
       if (state.weeklyWorkouts[workoutSlotId]) {
           delete state.weeklyWorkouts[workoutSlotId];
       }
@@ -198,11 +208,11 @@ export function copyPreviousWeek() {
       }
     });
 
-    const sourceWorkoutSlot = `${sourceISO}-Allenamento`;
-    const destWorkoutSlot = `${destISO}-Allenamento`;
-    const workoutObject = state.weeklyWorkouts[sourceWorkoutSlot];
-    if (workoutObject) {
-        state.weeklyWorkouts[destWorkoutSlot] = { ...workoutObject };
+    const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+    const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+    const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+    if (workoutList && Array.isArray(workoutList)) {
+        state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
     } else {
         delete state.weeklyWorkouts[destWorkoutSlot];
     }

@@ -1,18 +1,185 @@
-commit_message: "feat(training): Implementa la selezione e rimozione degli allenamenti"
+commit_message: "refactor(training): Passa a un modello di workout composizionale"
 rationale: |
-  Questo commit rende funzionale la pianificazione degli allenamenti, permettendo agli utenti di aggiungere e rimuovere workout dalla vista "Editor del Giorno".
+  Questo commit rappresenta un refactoring strategico fondamentale, abbandonando il modello a "piani pre-compilati" in favore di un "workout builder composizionale", come da approvazione. Questa modifica allinea l'esperienza di pianificazione degli allenamenti a quella dei pasti, offrendo massima flessibilità all'utente.
 
-  Le modifiche principali sono state:
-  1.  **Logica di Stato**: È stata introdotta la funzione `updateWeeklyWorkout` in `src/core/state.js` per gestire in modo atomico le modifiche all'oggetto `weeklyWorkouts`, mantenendo la coerenza con la gestione dei pasti.
-  2.  **Modale di Selezione**: È stato creato un nuovo modale per la selezione degli allenamenti in `templates/modals.html` e la relativa logica di rendering (`openWorkoutSelectionModal`) in `src/ui/modals.js`. Questo riutilizza lo stesso pattern UX della selezione dei pasti.
-  3.  **Interattività dell'Editor**: La funzione `openDayEditorModal` in `src/ui/modals.js` è stata estesa per gestire i click sui pulsanti di aggiunta e rimozione degli allenamenti, orchestrando il flusso tra i modali e aggiornando lo stato.
-  4.  **Costanti UI**: Sono state aggiunte nuove costanti di testo in `src/utils/constants.js` per i titoli e i pulsanti relativi alla nuova funzionalità, mantenendo il codice pulito e facilmente localizzabile.
-
-  Con questo aggiornamento, il ciclo completo di CRUD (Create, Read, Update, Delete) per la pianificazione degli allenamenti a livello di UI è stato completato, rendendo la funzionalità testabile e pronta per l'uso.
+  Le modifiche principali sono:
+  1.  **Aggiornamento della Documentazione**: I documenti `docs/00_HEALTYPRO_SPEC.md` e `docs/02_ARCHITECTURE.md` sono stati riscritti per riflettere il nuovo paradigma. La struttura dati di `esercizi.json` è ora formalizzata come una libreria di singoli esercizi, e `weeklyWorkouts` come un array di esercizi pianificati per giorno.
+  2.  **Refactoring della Struttura Dati di Stato**: In `src/core/state.js`, `weeklyWorkouts` ora memorizza un array di esercizi per ogni slot giornaliero. La funzione `updateWeeklyWorkout` è stata completamente riscritta per gestire l'aggiunta e la rimozione di singoli esercizi (identificati da un `instanceId` univoco) da questo array.
+  3.  **Refactoring dell'Interfaccia Utente**:
+      * In `src/ui/modals.js`, l' "Editor del Giorno" ora renderizza una lista di esercizi pianificati e il pulsante "Aggiungi Allenamento" è diventato "Aggiungi Esercizio".
+      * Il modale di selezione ora mostra i singoli esercizi dalla libreria.
+  4.  **Visualizzazione Aggiornata**: Il file `src/ui/plannerRenderer.js` è stato aggiornato per visualizzare correttamente il riepilogo del workout (numero di esercizi) sulla card del giorno nel calendario.
+  5.  **Nuovo Formato `esercizi.json`**: La struttura dati attesa da `configService.js` è ora un semplice array di oggetti esercizio, ognuno con i propri attributi (serie, ripetizioni, tempo, etc.).
 patches:
+  - file: docs/00_HEALTYPRO_SPEC.md
+    content: |
+      # Progetto HealtyPro: Specifiche di Integrazione e Sviluppo
+
+      **Obiettivo**: Questo documento definisce la visione e il piano di sviluppo per `HealtyPro`, un'applicazione nata dalla fusione concettuale di `NutriPlan` e `Mio Trainer Personale` (MTP). Funge da unica fonte di verità per la prossima fase di sviluppo.
+
+      ## 1. Analisi dell'Applicazione di Riferimento (MTP)
+
+      Questa sezione analizza l'applicazione MTP basandosi esclusivamente sulla sua documentazione per estrarne i concetti di design e di flusso utente (UX) che intendiamo adottare.
+
+      ### 1.1. Funzionalità Core (Cosa Fa)
+
+      L'applicazione MTP è una SPA (Single Page Application) progettata per gestire il ciclo di vita di un allenamento attraverso tre viste principali:
+
+      * **Vista Calendario**: Una dashboard principale con una griglia settimanale. Ogni cella-giorno riassume gli esercizi programmati e permette di avviare l'allenamento.
+      * **Vista Trainer Interattivo**: Un'interfaccia che guida l'utente in tempo reale attraverso l'allenamento, con timer visivi e controlli di flusso (start/pausa/termina).
+      * **Vista Debriefing**: Una schermata di riepilogo che appare alla fine dell'allenamento e mostra un report dettagliato di ciò che è stato completato, interrotto o saltato.
+      * **Sistema di Modali**: L'editing degli allenamenti avviene tramite un modale che permette di aggiungere esercizi da una libreria e di riordinare gli item della sessione con drag-and-drop.
+
+      ### 1.2. Flusso Utente e Architettura Concettuale (Come lo Fa)
+
+      Il flusso utente di MTP è **"day-centric"** (incentrato sul giorno), il che lo rende molto intuitivo:
+
+      1.  **Visione d'Insieme**: L'utente sceglie un giorno dal calendario.
+      2.  **Editing Centralizzato**: Modifica l'intero piano di quel giorno in un unico modale.
+      3.  **Esecuzione**: Avvia la sessione che viene eseguita passo dopo passo.
+      4.  **Revisione**: Analizza il riepilogo finale.
+
+      L'architettura si basa su un principio chiave: il **Workout Builder Composizionale**. L'utente non sceglie piani pre-fatti, ma costruisce la propria sessione di allenamento in modo flessibile, aggiungendo esercizi da una libreria, in modo del tutto analogo alla pianificazione dei pasti. Il sistema salva una lista di esercizi per ogni giorno, che verrà poi utilizzata dalla vista Trainer per l'esecuzione.
+
+      ### 1.3. Sistema Visivo e Schermate (La Grafica)
+
+      L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **tema scuro**, minimale e funzionale.
+
+      * **Palette Colori**: I colori primari sono un viola (`--primary-color: #9575cd`) e un verde acqua (`--secondary-color: #4db6ac`) su uno sfondo scuro (`--bg-color: #1a1a1d`).
+      * **Componenti**: L'UI è basata su "card" con angoli arrotondati per tutti gli elementi interattivi (celle del calendario, item nei modali).
+      * **Schermate Principali (ASCII Mockup)**:
+
+          * **Calendario**: Una griglia responsive con navigazione settimanale.
+              ```plaintext
+              +------------------------------------------------------+
+              |  < Precedente    Settimana: 22 - 28 Luglio   Successiva >  |
+              +------------------------------------------------------+
+              | +----------+  +----------+  +----------+  +----------+ |
+              | | LUN 22   |  | MAR 23   |  | MER 24   |  | GIO 25   | |
+              | | Kcal: 2100|  | Kcal: 1850|  |          |  |          | |
+              | | Workout: 3|  | Workout: 5|  |          |  |          | |
+              | +----------+  +----------+  +----------+  +----------+ |
+              | +----------+  +----------+  +----------+               |
+              | | VEN 26   |  | SAB 27   |  | DOM 28   |               |
+              | |          |  | Kcal: 2200|  |          |               |
+              | +----------+  +----------+  +----------+               |
+              +------------------------------------------------------+
+              ```
+          * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti e gli esercizi del giorno.
+              ```plaintext
+              +------------------------------------------------------+
+              |  Editor Piano - 23 Luglio                       [X]  |
+              |------------------------------------------------------|
+              |  - Colazione:   [ Aggiungi pasto ]                   |
+              |  - Pranzo:      Pollo e Riso       (Modifica/Rimuovi) |
+              |  ...                                                 |
+              |------------------------------------------------------|
+              |  - Allenamento: Squat               (Modifica/Rimuovi) |
+              |                 Push-up             (Modifica/Rimuovi) |
+              |                 Plank               (Modifica/Rimuovi) |
+              |                 [ Aggiungi esercizio ]               |
+              +------------------------------------------------------+
+              ```
+
+      ---
+
+      ## 2. Piano di Sviluppo per HealtyPro (Cosa e Come Faremo)
+
+      Questa sezione definisce come implementeremo i concetti di MTP all'interno della base di codice di `NutriPlan`.
+
+      ### 2.1. Visione del Prodotto
+
+      `HealtyPro` sarà un'unica applicazione che unisce la pianificazione alimentare di `NutriPlan` con la filosofia di interazione di MTP. L'obiettivo è un'esperienza utente coesa, semplice e moderna.
+
+      ### 2.2. Principi Guida (La Nostra Filosofia)
+
+      1.  **La Semplicità è la Chiave**: Manterremo la base di codice di `NutriPlan` (`state.js`, `renderer.js`, ecc.) come nostra architettura. È semplice, funzionale e testata. Non importeremo alcuna logica o file `.js` da MTP.
+      2.  **Ispirazione, non Copia**: Adotteremo solo i *concetti visivi e di flusso* di MTP descritti sopra, implementandoli con il nostro codice pulito.
+      3.  **Documentazione come Guida**: Questo documento sarà il nostro riferimento. Ogni fase di sviluppo dovrà essere allineata a quanto qui descritto.
+
+      ### 2.3. Action Plan Dettagliato
+
+      #### Fase 1: Rinnovamento Visivo e Strutturale (L'Aspetto)
+
+      * **Azione**: Sostituire il contenuto di `index.html` e `style.css` di `NutriPlan`.
+      * **Dettagli**:
+          * `index.html` adotta la struttura con header fisso e container principale, mantenendo tutti gli `id` esistenti richiesti dagli script.
+          * `style.css` è stato completamente riscritto usando la palette colori e gli stili dei componenti definiti nella guida di stile.
+      * **Fix Critico - Service Worker**: Il `CACHE_NAME` in `sw.js` è stato aggiornato e un evento `activate` è stato aggiunto per garantire l'aggiornamento della cache e la pulizia delle versioni vecchie.
+
+      #### Fase 2: Refactoring del Calendario (La Vista Principale)
+
+      * **Azione**: Riscrivere la logica di rendering in `src/ui/renderer.js` e aggiornare le interazioni.
+      * **Dettagli**:
+          * La funzione `renderApp` disegna una griglia di 7 "day-cell" cliccabili che mostrano nome del giorno, data e totale calorico.
+          * È stata implementata la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
+
+      #### Fase 3: Implementazione del Modale "Editor del Giorno" (L'Interazione Core)
+
+      * **Azione**: Creare la logica per un modale di editing centralizzato con auto-aggiornamento.
+      * **Dettagli**:
+          * Il click su una "day-cell" apre il modale "Editor del Giorno".
+          * Questo modale mostra tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
+          * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
+          * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
+
+      #### Fase 4: Integrazione Funzionalità Workout (Composizionale)
+
+      * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
+      * **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi da una libreria. La vista calendario mostrerà un riepilogo sia delle calorie che del numero di esercizi pianificati. Questo unificherà completamente le due anime dell'applicazione.
+  - file: docs/02_ARCHITECTURE.md
+    content: |
+      # Architettura: HealtyPro (ex NutriPlan)
+
+      ## 1. Principi Guida
+      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
+      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è essenziale e intuitiva, basata su Vanilla JS.
+      * **Data-Driven & Convention over Configuration:** La logica di business è definita in file di configurazione remoti. L'applicazione si basa su convenzioni di struttura: dato l'URL di `pasti.json`, deduce automaticamente i percorsi per `ingredienti.json` (stessa directory), `esercizi.json` (stessa directory) e per le ricette (sottodirectory `ricette/`).
+      * **Maintainability (SRP):** Ogni modulo ha una singola, chiara responsabilità.
+
+      ## 2. Architettura SPA Multi-Vista
+      L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce quale vista mostrare in base allo stato.
+
+      ## 3. Architettura PWA
+      * **`manifest.json`**: Fornisce i metadati per l'installazione.
+      * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
+
+      ## 4. Logica di Business
+      ### 4.1. Workout Builder Composizionale
+      A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
+
+      ### 4.2. Calcolo del BMR (`src/core/calculations.js`)
+      Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
+
+      ### 4.3. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
+      Questo modulo è un pilastro della nuova architettura e ha la sola responsabilità di calcolare le calorie dei pasti. Riceve la lista dei pasti e la lista degli ingredienti e arricchisce ogni pasto con le proprietà `calories_min` e `calories_max`.
+
+      ## 5. Gestione dei Dati
+      ### 5.1. Caricamento Dati (`src/api/configService.js`)
+      Il caricamento non è più un singolo fetch. Il servizio ora orchestra un caricamento multi-fase:
+      1.  Recupera il file `pasti.json` dall'URL fornito dall'utente.
+      2.  Deriva e recupera il file `ingredienti.json` dalla stessa directory.
+      3.  Deriva e recupera il file `esercizi.json` (opzionale) dalla stessa directory.
+      4.  Restituisce un oggetto di configurazione unificato all'applicazione.
+
+      ### 5.2. Strutture Dati Chiave
+      * **Configurazione Remota**:
+          * **`pasti.json`**: Array di oggetti `meals`.
+          * **`ingredienti.json`**: Array di `ingredienti`.
+          * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione, modalità) e i valori di default per serie, ripetizioni, durata, riposo e `tempo` (un oggetto con `up`, `hold`, `down`).
+
+      * **Dati Utente Locali (`localStorage`)**:
+          * **`userProfile`**: Dati anagrafici dell'utente.
+          * **`weeklyPlan`**: Oggetto che mappa gli slot giornalieri (`YYYY-MM-DD-MealType`) ai pasti pianificati.
+          * **`weeklyWorkouts`**: Oggetto che mappa uno slot giornaliero (`YYYY-MM-DD-Allenamento`) a un **array di oggetti esercizio**. Ogni oggetto in questo array è una copia dell'esercizio dalla libreria, arricchito con un `instanceId` univoco per permetterne la gestione individuale.
+          * **`biometricData`**: Array con lo storico delle misurazioni biometriche.
+
+      ## 6. Dipendenze di Terze Parti
+      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette da Markdown.
+      * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
   - file: src/core/state.js
     content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS } from '../utils/constants.js';
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
       import { processMealsWithCalories } from './calorieCalculator.js';
 
       let state = {
@@ -137,14 +304,25 @@ patches:
         notify();
       }
 
-      export function updateWeeklyWorkout(slotId, workoutId) {
-          if (workoutId) {
-              const workout = state.masterWorkoutList.find(w => w.id === workoutId);
-              if (workout) {
-                  state.weeklyWorkouts[slotId] = { ...workout };
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add or update an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() // Unique ID for this specific instance
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
               }
-          } else {
-              delete state.weeklyWorkouts[slotId];
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
           }
           saveStateToLocalStorage();
           notify();
@@ -162,8 +340,7 @@ patches:
                     delete state.weeklyPlan[slotId];
                 }
             });
-            // Also reset workout
-            const workoutSlotId = `${isoDate}-Allenamento`;
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
             if (state.weeklyWorkouts[workoutSlotId]) {
                 delete state.weeklyWorkouts[workoutSlotId];
             }
@@ -212,11 +389,11 @@ patches:
             }
           });
 
-          const sourceWorkoutSlot = `${sourceISO}-Allenamento`;
-          const destWorkoutSlot = `${destISO}-Allenamento`;
-          const workoutObject = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutObject) {
-              state.weeklyWorkouts[destWorkoutSlot] = { ...workoutObject };
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
           } else {
               delete state.weeklyWorkouts[destWorkoutSlot];
           }
@@ -325,10 +502,10 @@ patches:
       export function openWorkoutSelectionModal(slotId) {
         const state = getState();
         const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_WORKOUT_TITLE;
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
         const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
         const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(workout => `<div class="selection-item" data-workout-id="${workout.id}"><h4>${workout.nome}</h4></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
         
         const closeAndReturn = () => {
           workoutSelectionModal.classList.add('modal-hidden');
@@ -338,7 +515,7 @@ patches:
         list.onclick = e => {
           const item = e.target.closest('.selection-item');
           if (item) {
-            updateWeeklyWorkout(slotId, item.dataset.workoutId);
+            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
             closeAndReturn();
           }
         };
@@ -365,12 +542,15 @@ patches:
         }).join('');
 
         const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkout = state.weeklyWorkouts[workoutSlotId];
-        let workoutDetailsHTML = `<button class="btn-add-workout" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_WORKOUT_BTN}</button>`;
-        if (plannedWorkout) {
-            workoutDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${plannedWorkout.nome}</span><div class="meal-actions"><button class="btn-remove-workout" data-slot-id="${workoutSlotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
-        }
-        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+        
+        let workoutDetailsHTML = plannedWorkoutList.map(exercise => {
+            return `<div class="meal-details" data-instance-id="${exercise.instanceId}"><span class="meal-details__name">${exercise.name}</span><div class="meal-actions"><button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+        }).join('');
+
+        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+
+        const workoutSlotHTML = `<div class="day-editor-slot workout-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}${addExerciseButton}</div></div>`;
 
         body.innerHTML = mealSlotsHTML + workoutSlotHTML;
 
@@ -378,8 +558,8 @@ patches:
           const btnAddMeal = e.target.closest('.btn-add-meal');
           const btnRemoveMeal = e.target.closest('.btn-remove-meal');
           const btnRecipe = e.target.closest('.btn-view-recipe');
-          const btnAddWorkout = e.target.closest('.btn-add-workout');
-          const btnRemoveWorkout = e.target.closest('.btn-remove-workout');
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
 
           if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
           else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
@@ -387,16 +567,156 @@ patches:
             const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
             if (meal) showRecipeModal(meal);
           }
-          else if (btnAddWorkout) {
+          else if (btnAddExercise) {
             dayEditorModal.classList.add('modal-hidden');
-            openWorkoutSelectionModal(btnAddWorkout.dataset.slotId);
+            openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
           }
-          else if (btnRemoveWorkout) {
-            updateWeeklyWorkout(btnRemoveWorkout.dataset.slotId, null);
+          else if (btnRemoveExercise) {
+            updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
             openDayEditorModal(isoDate);
           }
         };
         dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/plannerRenderer.js
+    content: |
+      import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || typeof meal.calories_min !== 'number') return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0 && maxCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0, max = 0;
+        MEAL_TYPES.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
+          if (meal && typeof meal.calories_min === 'number') {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function calculateDailyWorkoutSummary(isoDate, weeklyWorkouts) {
+        const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+        if (!workoutList || workoutList.length === 0) return '';
+        const exerciseCount = workoutList.length;
+        const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
+        return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        // Ensure we check the full meal object from master list for recipeId
+        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
+        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      function renderCalendarView(state, weekStart) {
+        const calendarGrid = document.getElementById('calendar-grid');
+        const todayISO = toISODateString(new Date());
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const dailyWorkout = calculateDailyWorkoutSummary(isoDate, state.weeklyWorkouts);
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          if (isoDate === todayISO) {
+            dayCell.classList.add('is-today');
+          }
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div>${dailyWorkout}</div>`;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        const logView = document.getElementById('log-view');
+        const todayISO = toISODateString(new Date());
+        logView.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+          if (dayMeals.length > 0) {
+            const dayLog = document.createElement('div');
+            dayLog.className = 'log-day';
+             if (isoDate === todayISO) {
+              dayLog.classList.add('is-today');
+            }
+            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
+              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+            logView.appendChild(dayLog);
+          }
+        }
+        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+      }
+
+      export function renderPlannerPage(state) {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+        
+        const calendarGrid = document.getElementById('calendar-grid');
+        const logView = document.getElementById('log-view');
+        const viewCalendarBtn = document.getElementById('view-calendar-btn');
+        const viewLogBtn = document.getElementById('view-log-btn');
+
+        if (state.currentView === 'planner') {
+            calendarGrid.classList.remove('hidden');
+            logView.classList.add('hidden');
+            viewCalendarBtn.classList.add('active');
+            viewLogBtn.classList.remove('active');
+        } else if (state.currentView === 'log') {
+            calendarGrid.classList.add('hidden');
+            logView.classList.remove('hidden');
+            viewCalendarBtn.classList.remove('active');
+            viewLogBtn.classList.add('active');
+        }
+
+        renderCalendarView(state, weekStart);
+        renderLogView(state, weekStart);
       }
   - file: src/utils/constants.js
     content: |
@@ -451,7 +771,7 @@ patches:
         { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
         { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
         { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
         { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
         { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
         { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
@@ -487,9 +807,9 @@ patches:
         { id: 'KCAL_LABEL', text: 'Kcal' },
         { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
         { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
-        { id: 'ADD_WORKOUT_BTN', text: 'Aggiungi Allenamento' },
-        { id: 'SELECT_WORKOUT_TITLE', text: 'Scegli Allenamento' },
-        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun allenamento disponibile.' },
+        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
+        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
         { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
         { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
         { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
@@ -507,69 +827,46 @@ patches:
         acc[id] = text;
         return acc;
       }, {});
-  - file: templates/modals.html
+  - file: styles/modals.css
     content: |
-      <div id="info-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="info-modal-title"></h3>
-                <button class="modal-close-btn" data-target="info-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <p id="info-modal-desc"></p>
-                  <pre><code id="info-modal-json-example"></code></pre>
-              </div>
-          </div>
-      </div>
-      <div id="selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="selection-modal"></button>
-              </div>
-              <div id="selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="workout-selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
-              </div>
-              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="day-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="day-editor-title"></h3>
-              <button class="modal-close-btn" data-target="day-editor-modal"></button>
-            </div>
-            <div id="day-editor-body" class="modal-body day-editor-list"></div>
-        </div>
-      </div>
-      <div id="confirm-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="confirm-modal-title"></h3>
-            </div>
-            <div class="modal-body">
-              <p id="confirm-modal-message"></p>
-            </div>
-            <div class="modal-footer">
-              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
-              <button id="confirm-modal-confirm-btn" class="btn"></button>
-            </div>
-        </div>
-      </div>
-      <div id="recipe-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="recipe-modal-title"></h3>
-              <button class="modal-close-btn" data-target="recipe-modal"></button>
-            </div>
-            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-        </div>
-      </div>
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .day-editor-list { display: flex; flex-direction: column; }
+      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.75rem; }
+      .day-editor-slot.workout-slot { flex-direction: column; align-items: stretch; }
+      .day-editor-slot:last-child { margin-bottom: 0; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .day-editor-slot.workout-slot .meal-type-label { margin-bottom: 0.75rem; width: auto; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
+      .meal-details:last-child { border-bottom: none; }
+      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      .btn-remove-meal, .btn-remove-exercise { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
+      .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
+      .btn-view-recipe:hover { color: var(--text-color); }
+      .recipe-body { line-height: 1.6; }
+      .recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
+      .recipe-body ul { list-style-position: inside; padding-left: 1rem; }
+      .recipe-body li { margin-bottom: 0.5rem; }
+      .recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
+      .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
+      .recipe-body th { background-color: var(--bg-color); }
 commands:
-- echo "L'interfaccia per aggiungere e rimuovere allenamenti è ora attiva."
+- echo "Refactoring a workout composizionale completato. L'architettura e l'UI ora supportano la creazione di allenamenti flessibili."
+- echo "Per favore, aggiorna il tuo file 'esercizi.json' remoto con la nuova struttura a libreria di esercizi singoli."

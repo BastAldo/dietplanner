@@ -46,10 +46,12 @@ function calculateDailyCalories(isoDate, weeklyPlan) {
   return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
-function calculateDailyWorkout(isoDate, weeklyWorkouts) {
-  const workout = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-  if (!workout) return '';
-  return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${workout.nome}</div>`;
+function calculateDailyWorkoutSummary(isoDate, weeklyWorkouts) {
+  const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+  if (!workoutList || workoutList.length === 0) return '';
+  const exerciseCount = workoutList.length;
+  const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
+  return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
 }
 
 function getRecipeButtonHTML(meal, state) {
@@ -73,7 +75,7 @@ function renderCalendarView(state, weekStart) {
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
     const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-    const dailyWorkout = calculateDailyWorkout(isoDate, state.weeklyWorkouts);
+    const dailyWorkout = calculateDailyWorkoutSummary(isoDate, state.weeklyWorkouts);
     const dayCell = document.createElement('div');
     dayCell.className = 'day-cell';
     if (isoDate === todayISO) {
