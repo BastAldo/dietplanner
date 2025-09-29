@@ -21,10 +21,12 @@
 .day-editor-slot.workout-slot .meal-type-label { margin-bottom: 0.75rem; width: auto; }
 .meal-details-container { flex-grow: 1; min-width: 0; }
 .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
-.meal-details:last-child { border-bottom: none; }
+.meal-details:last-of-type { border-bottom: none; }
 .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
-.btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+.exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
+.exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+.btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; margin-top: 0.5rem; }
 .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 .btn-remove-meal, .btn-remove-exercise { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
 .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }

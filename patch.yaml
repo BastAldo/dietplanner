@@ -1,406 +1,14 @@
-commit_message: "refactor(training): Passa a un modello di workout composizionale"
+commit_message: "feat(ui): Visualizza i dettagli degli esercizi nell'editor del giorno"
 rationale: |
-  Questo commit rappresenta un refactoring strategico fondamentale, abbandonando il modello a "piani pre-compilati" in favore di un "workout builder composizionale", come da approvazione. Questa modifica allinea l'esperienza di pianificazione degli allenamenti a quella dei pasti, offrendo massima flessibilità all'utente.
+  Questo commit implementa la Fase 1 del piano di miglioramento dell'editor di allenamenti, come da approvazione. Ora, quando un utente aggiunge un esercizio al proprio piano giornaliero, non vedrà più solo il nome, ma un riepilogo completo dei suoi parametri.
 
-  Le modifiche principali sono:
-  1.  **Aggiornamento della Documentazione**: I documenti `docs/00_HEALTYPRO_SPEC.md` e `docs/02_ARCHITECTURE.md` sono stati riscritti per riflettere il nuovo paradigma. La struttura dati di `esercizi.json` è ora formalizzata come una libreria di singoli esercizi, e `weeklyWorkouts` come un array di esercizi pianificati per giorno.
-  2.  **Refactoring della Struttura Dati di Stato**: In `src/core/state.js`, `weeklyWorkouts` ora memorizza un array di esercizi per ogni slot giornaliero. La funzione `updateWeeklyWorkout` è stata completamente riscritta per gestire l'aggiunta e la rimozione di singoli esercizi (identificati da un `instanceId` univoco) da questo array.
-  3.  **Refactoring dell'Interfaccia Utente**:
-      * In `src/ui/modals.js`, l' "Editor del Giorno" ora renderizza una lista di esercizi pianificati e il pulsante "Aggiungi Allenamento" è diventato "Aggiungi Esercizio".
-      * Il modale di selezione ora mostra i singoli esercizi dalla libreria.
-  4.  **Visualizzazione Aggiornata**: Il file `src/ui/plannerRenderer.js` è stato aggiornato per visualizzare correttamente il riepilogo del workout (numero di esercizi) sulla card del giorno nel calendario.
-  5.  **Nuovo Formato `esercizi.json`**: La struttura dati attesa da `configService.js` è ora un semplice array di oggetti esercizio, ognuno con i propri attributi (serie, ripetizioni, tempo, etc.).
+  Le modifiche apportate sono:
+  1.  **Helper Function (`modals.js`):** È stata creata una nuova funzione `formatExerciseDetails` in `src/ui/modals.js`. Questa funzione riceve un oggetto esercizio e restituisce una stringa formattata e leggibile che riassume serie, ripetizioni/durata, tempo di riposo e tempo di esecuzione (es. "3 x 8 | Riposo: 60s | Tempo: 1-0-2").
+  2.  **Rendering Aggiornato (`modals.js`):** La funzione `openDayEditorModal` è stata modificata per utilizzare il nuovo helper. Ora, per ogni esercizio nella lista, viene renderizzato sia il nome che il riepilogo dettagliato, fornendo all'utente un feedback immediato e completo sulla composizione del proprio allenamento.
+  3.  **Miglioramenti Stilistici (`modals.css`):** È stato aggiunto del CSS per formattare correttamente i nuovi dettagli. Il riepilogo appare sotto il nome dell'esercizio con un font più piccolo e un colore attenuato, migliorando la gerarchia visiva e la leggibilità all'interno del modale.
+
+  Questa modifica aumenta significativamente l'usabilità dell'editor, fornendo le informazioni necessarie per una pianificazione efficace e ponendo le basi per le future funzionalità di modifica.
 patches:
-  - file: docs/00_HEALTYPRO_SPEC.md
-    content: |
-      # Progetto HealtyPro: Specifiche di Integrazione e Sviluppo
-
-      **Obiettivo**: Questo documento definisce la visione e il piano di sviluppo per `HealtyPro`, un'applicazione nata dalla fusione concettuale di `NutriPlan` e `Mio Trainer Personale` (MTP). Funge da unica fonte di verità per la prossima fase di sviluppo.
-
-      ## 1. Analisi dell'Applicazione di Riferimento (MTP)
-
-      Questa sezione analizza l'applicazione MTP basandosi esclusivamente sulla sua documentazione per estrarne i concetti di design e di flusso utente (UX) che intendiamo adottare.
-
-      ### 1.1. Funzionalità Core (Cosa Fa)
-
-      L'applicazione MTP è una SPA (Single Page Application) progettata per gestire il ciclo di vita di un allenamento attraverso tre viste principali:
-
-      * **Vista Calendario**: Una dashboard principale con una griglia settimanale. Ogni cella-giorno riassume gli esercizi programmati e permette di avviare l'allenamento.
-      * **Vista Trainer Interattivo**: Un'interfaccia che guida l'utente in tempo reale attraverso l'allenamento, con timer visivi e controlli di flusso (start/pausa/termina).
-      * **Vista Debriefing**: Una schermata di riepilogo che appare alla fine dell'allenamento e mostra un report dettagliato di ciò che è stato completato, interrotto o saltato.
-      * **Sistema di Modali**: L'editing degli allenamenti avviene tramite un modale che permette di aggiungere esercizi da una libreria e di riordinare gli item della sessione con drag-and-drop.
-
-      ### 1.2. Flusso Utente e Architettura Concettuale (Come lo Fa)
-
-      Il flusso utente di MTP è **"day-centric"** (incentrato sul giorno), il che lo rende molto intuitivo:
-
-      1.  **Visione d'Insieme**: L'utente sceglie un giorno dal calendario.
-      2.  **Editing Centralizzato**: Modifica l'intero piano di quel giorno in un unico modale.
-      3.  **Esecuzione**: Avvia la sessione che viene eseguita passo dopo passo.
-      4.  **Revisione**: Analizza il riepilogo finale.
-
-      L'architettura si basa su un principio chiave: il **Workout Builder Composizionale**. L'utente non sceglie piani pre-fatti, ma costruisce la propria sessione di allenamento in modo flessibile, aggiungendo esercizi da una libreria, in modo del tutto analogo alla pianificazione dei pasti. Il sistema salva una lista di esercizi per ogni giorno, che verrà poi utilizzata dalla vista Trainer per l'esecuzione.
-
-      ### 1.3. Sistema Visivo e Schermate (La Grafica)
-
-      L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **tema scuro**, minimale e funzionale.
-
-      * **Palette Colori**: I colori primari sono un viola (`--primary-color: #9575cd`) e un verde acqua (`--secondary-color: #4db6ac`) su uno sfondo scuro (`--bg-color: #1a1a1d`).
-      * **Componenti**: L'UI è basata su "card" con angoli arrotondati per tutti gli elementi interattivi (celle del calendario, item nei modali).
-      * **Schermate Principali (ASCII Mockup)**:
-
-          * **Calendario**: Una griglia responsive con navigazione settimanale.
-              ```plaintext
-              +------------------------------------------------------+
-              |  < Precedente    Settimana: 22 - 28 Luglio   Successiva >  |
-              +------------------------------------------------------+
-              | +----------+  +----------+  +----------+  +----------+ |
-              | | LUN 22   |  | MAR 23   |  | MER 24   |  | GIO 25   | |
-              | | Kcal: 2100|  | Kcal: 1850|  |          |  |          | |
-              | | Workout: 3|  | Workout: 5|  |          |  |          | |
-              | +----------+  +----------+  +----------+  +----------+ |
-              | +----------+  +----------+  +----------+               |
-              | | VEN 26   |  | SAB 27   |  | DOM 28   |               |
-              | |          |  | Kcal: 2200|  |          |               |
-              | +----------+  +----------+  +----------+               |
-              +------------------------------------------------------+
-              ```
-          * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti e gli esercizi del giorno.
-              ```plaintext
-              +------------------------------------------------------+
-              |  Editor Piano - 23 Luglio                       [X]  |
-              |------------------------------------------------------|
-              |  - Colazione:   [ Aggiungi pasto ]                   |
-              |  - Pranzo:      Pollo e Riso       (Modifica/Rimuovi) |
-              |  ...                                                 |
-              |------------------------------------------------------|
-              |  - Allenamento: Squat               (Modifica/Rimuovi) |
-              |                 Push-up             (Modifica/Rimuovi) |
-              |                 Plank               (Modifica/Rimuovi) |
-              |                 [ Aggiungi esercizio ]               |
-              +------------------------------------------------------+
-              ```
-
-      ---
-
-      ## 2. Piano di Sviluppo per HealtyPro (Cosa e Come Faremo)
-
-      Questa sezione definisce come implementeremo i concetti di MTP all'interno della base di codice di `NutriPlan`.
-
-      ### 2.1. Visione del Prodotto
-
-      `HealtyPro` sarà un'unica applicazione che unisce la pianificazione alimentare di `NutriPlan` con la filosofia di interazione di MTP. L'obiettivo è un'esperienza utente coesa, semplice e moderna.
-
-      ### 2.2. Principi Guida (La Nostra Filosofia)
-
-      1.  **La Semplicità è la Chiave**: Manterremo la base di codice di `NutriPlan` (`state.js`, `renderer.js`, ecc.) come nostra architettura. È semplice, funzionale e testata. Non importeremo alcuna logica o file `.js` da MTP.
-      2.  **Ispirazione, non Copia**: Adotteremo solo i *concetti visivi e di flusso* di MTP descritti sopra, implementandoli con il nostro codice pulito.
-      3.  **Documentazione come Guida**: Questo documento sarà il nostro riferimento. Ogni fase di sviluppo dovrà essere allineata a quanto qui descritto.
-
-      ### 2.3. Action Plan Dettagliato
-
-      #### Fase 1: Rinnovamento Visivo e Strutturale (L'Aspetto)
-
-      * **Azione**: Sostituire il contenuto di `index.html` e `style.css` di `NutriPlan`.
-      * **Dettagli**:
-          * `index.html` adotta la struttura con header fisso e container principale, mantenendo tutti gli `id` esistenti richiesti dagli script.
-          * `style.css` è stato completamente riscritto usando la palette colori e gli stili dei componenti definiti nella guida di stile.
-      * **Fix Critico - Service Worker**: Il `CACHE_NAME` in `sw.js` è stato aggiornato e un evento `activate` è stato aggiunto per garantire l'aggiornamento della cache e la pulizia delle versioni vecchie.
-
-      #### Fase 2: Refactoring del Calendario (La Vista Principale)
-
-      * **Azione**: Riscrivere la logica di rendering in `src/ui/renderer.js` e aggiornare le interazioni.
-      * **Dettagli**:
-          * La funzione `renderApp` disegna una griglia di 7 "day-cell" cliccabili che mostrano nome del giorno, data e totale calorico.
-          * È stata implementata la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
-
-      #### Fase 3: Implementazione del Modale "Editor del Giorno" (L'Interazione Core)
-
-      * **Azione**: Creare la logica per un modale di editing centralizzato con auto-aggiornamento.
-      * **Dettagli**:
-          * Il click su una "day-cell" apre il modale "Editor del Giorno".
-          * Questo modale mostra tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
-          * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
-          * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
-
-      #### Fase 4: Integrazione Funzionalità Workout (Composizionale)
-
-      * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
-      * **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi da una libreria. La vista calendario mostrerà un riepilogo sia delle calorie che del numero di esercizi pianificati. Questo unificherà completamente le due anime dell'applicazione.
-  - file: docs/02_ARCHITECTURE.md
-    content: |
-      # Architettura: HealtyPro (ex NutriPlan)
-
-      ## 1. Principi Guida
-      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è essenziale e intuitiva, basata su Vanilla JS.
-      * **Data-Driven & Convention over Configuration:** La logica di business è definita in file di configurazione remoti. L'applicazione si basa su convenzioni di struttura: dato l'URL di `pasti.json`, deduce automaticamente i percorsi per `ingredienti.json` (stessa directory), `esercizi.json` (stessa directory) e per le ricette (sottodirectory `ricette/`).
-      * **Maintainability (SRP):** Ogni modulo ha una singola, chiara responsabilità.
-
-      ## 2. Architettura SPA Multi-Vista
-      L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce quale vista mostrare in base allo stato.
-
-      ## 3. Architettura PWA
-      * **`manifest.json`**: Fornisce i metadati per l'installazione.
-      * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
-
-      ## 4. Logica di Business
-      ### 4.1. Workout Builder Composizionale
-      A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
-
-      ### 4.2. Calcolo del BMR (`src/core/calculations.js`)
-      Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
-
-      ### 4.3. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
-      Questo modulo è un pilastro della nuova architettura e ha la sola responsabilità di calcolare le calorie dei pasti. Riceve la lista dei pasti e la lista degli ingredienti e arricchisce ogni pasto con le proprietà `calories_min` e `calories_max`.
-
-      ## 5. Gestione dei Dati
-      ### 5.1. Caricamento Dati (`src/api/configService.js`)
-      Il caricamento non è più un singolo fetch. Il servizio ora orchestra un caricamento multi-fase:
-      1.  Recupera il file `pasti.json` dall'URL fornito dall'utente.
-      2.  Deriva e recupera il file `ingredienti.json` dalla stessa directory.
-      3.  Deriva e recupera il file `esercizi.json` (opzionale) dalla stessa directory.
-      4.  Restituisce un oggetto di configurazione unificato all'applicazione.
-
-      ### 5.2. Strutture Dati Chiave
-      * **Configurazione Remota**:
-          * **`pasti.json`**: Array di oggetti `meals`.
-          * **`ingredienti.json`**: Array di `ingredienti`.
-          * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione, modalità) e i valori di default per serie, ripetizioni, durata, riposo e `tempo` (un oggetto con `up`, `hold`, `down`).
-
-      * **Dati Utente Locali (`localStorage`)**:
-          * **`userProfile`**: Dati anagrafici dell'utente.
-          * **`weeklyPlan`**: Oggetto che mappa gli slot giornalieri (`YYYY-MM-DD-MealType`) ai pasti pianificati.
-          * **`weeklyWorkouts`**: Oggetto che mappa uno slot giornaliero (`YYYY-MM-DD-Allenamento`) a un **array di oggetti esercizio**. Ogni oggetto in questo array è una copia dell'esercizio dalla libreria, arricchito con un `instanceId` univoco per permetterne la gestione individuale.
-          * **`biometricData`**: Array con lo storico delle misurazioni biometriche.
-
-      ## 6. Dipendenze di Terze Parti
-      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette da Markdown.
-      * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        biometricData: [],
-        userProfile: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', or 'profile'
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-
-      export function setPlannerConfig(config, url) {
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        // Calcola calorie e popola la master list
-        state.masterMealList = processMealsWithCalories(meals, ingredients);
-
-        // Deriva e imposta la recipeBaseUrl
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else {
-            state.recipeBaseUrl = '';
-        }
-
-        notify();
-      }
-
-      export function setConfigUrl(url) {
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-      }
-
-      export function loadStateFromLocalStorage() {
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (url) { state.configUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-      }
-
-      export function setAppState(backupData) {
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.configUrl = backupData.configUrl || '';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) { // Add or update an exercise
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = {
-                      ...exercise,
-                      instanceId: Date.now() // Unique ID for this specific instance
-                  };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) { // Remove an exercise
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[workoutSlotId];
-            }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes'].includes(view)) {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function copyPreviousWeek() {
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
   - file: src/ui/modals.js
     content: |
       import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../core/state.js';
@@ -438,6 +46,26 @@ patches:
           }).join(', ');
           
           return `<p>${ingredientsList}</p>`;
+      }
+
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets;
+        const rest = exercise.defaultRest;
+        let details;
+
+        if (exercise.type === 'reps') {
+            const reps = exercise.defaultReps;
+            details = `${sets} x ${reps} | Riposo: ${rest}s`;
+        } else if (exercise.type === 'time') {
+            const duration = exercise.defaultDuration;
+            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+        }
+
+        if (exercise.defaultTempo) {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
       }
 
       export async function showRecipeModal(meal) {
@@ -545,7 +173,16 @@ patches:
         const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
         
         let workoutDetailsHTML = plannedWorkoutList.map(exercise => {
-            return `<div class="meal-details" data-instance-id="${exercise.instanceId}"><span class="meal-details__name">${exercise.name}</span><div class="meal-actions"><button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details" data-instance-id="${exercise.instanceId}">
+                        <div class="exercise-info">
+                          <span class="meal-details__name">${exercise.name}</span>
+                          <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                          <button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
         }).join('');
 
         const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
@@ -578,255 +215,6 @@ patches:
         };
         dayEditorModal.classList.remove('modal-hidden');
       }
-  - file: src/ui/plannerRenderer.js
-    content: |
-      import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function calculateDailyWorkoutSummary(isoDate, weeklyWorkouts) {
-        const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-        if (!workoutList || workoutList.length === 0) return '';
-        const exerciseCount = workoutList.length;
-        const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
-        return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        // Ensure we check the full meal object from master list for recipeId
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const dailyWorkout = calculateDailyWorkoutSummary(isoDate, state.weeklyWorkouts);
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div>${dailyWorkout}</div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          if (dayMeals.length > 0) {
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-             if (isoDate === todayISO) {
-              dayLog.classList.add('is-today');
-            }
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
-              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-            logView.appendChild(dayLog);
-          }
-        }
-        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-      }
-
-      export function renderPlannerPage(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
-
-        if (state.currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (state.currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
-        }
-
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
-      }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
-      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
-      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
-      export const WORKOUT_SLOT_ID = 'Allenamento';
-
-      export const PROFILE_FIELDS = [
-        { id: 'firstName', label: 'Nome', type: 'text' },
-        { id: 'lastName', label: 'Cognome', type: 'text' },
-        { id: 'nickname', label: 'Nickname', type: 'text' },
-        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
-        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
-      ];
-
-      export const BIOMETRIC_FIELDS = [
-        { id: 'date', label: 'Data', type: 'date', props: 'required' },
-        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
-        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
-        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
-        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
-        { id: 'notes', label: 'Note', type: 'textarea' }
-      ];
-
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_PROGRESS', text: 'Progressi' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CALENDAR_PLACEHOLDER', text: 'Carica una configurazione per visualizzare il calendario.' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
-        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
-        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
-        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' }
-      ];
-
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
   - file: styles/modals.css
     content: |
       /* --- MODALS --- */
@@ -852,10 +240,12 @@ patches:
       .day-editor-slot.workout-slot .meal-type-label { margin-bottom: 0.75rem; width: auto; }
       .meal-details-container { flex-grow: 1; min-width: 0; }
       .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
-      .meal-details:last-child { border-bottom: none; }
+      .meal-details:last-of-type { border-bottom: none; }
       .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; margin-top: 0.5rem; }
       .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
       .btn-remove-meal, .btn-remove-exercise { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
       .btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
@@ -868,5 +258,4 @@ patches:
       .recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
       .recipe-body th { background-color: var(--bg-color); }
 commands:
-- echo "Refactoring a workout composizionale completato. L'architettura e l'UI ora supportano la creazione di allenamenti flessibili."
-- echo "Per favore, aggiorna il tuo file 'esercizi.json' remoto con la nuova struttura a libreria di esercizi singoli."
+  - echo "Fase 1 completata. L'editor del giorno ora mostra i dettagli completi per ogni esercizio pianificato."

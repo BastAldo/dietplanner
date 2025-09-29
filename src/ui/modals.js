@@ -35,6 +35,26 @@ function formatIngredients(meal) {
     return `<p>${ingredientsList}</p>`;
 }
 
+function formatExerciseDetails(exercise) {
+  const sets = exercise.defaultSets;
+  const rest = exercise.defaultRest;
+  let details;
+
+  if (exercise.type === 'reps') {
+      const reps = exercise.defaultReps;
+      details = `${sets} x ${reps} | Riposo: ${rest}s`;
+  } else if (exercise.type === 'time') {
+      const duration = exercise.defaultDuration;
+      details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+  }
+
+  if (exercise.defaultTempo) {
+      const { up, hold, down } = exercise.defaultTempo;
+      details += ` | Tempo: ${up}-${hold}-${down}`;
+  }
+  return details;
+}
+
 export async function showRecipeModal(meal) {
   if (!meal) return;
   const state = getState();
@@ -140,7 +160,16 @@ export function openDayEditorModal(isoDate) {
   const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
   
   let workoutDetailsHTML = plannedWorkoutList.map(exercise => {
-      return `<div class="meal-details" data-instance-id="${exercise.instanceId}"><span class="meal-details__name">${exercise.name}</span><div class="meal-actions"><button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+      const exerciseDetails = formatExerciseDetails(exercise);
+      return `<div class="meal-details" data-instance-id="${exercise.instanceId}">
+                  <div class="exercise-info">
+                    <span class="meal-details__name">${exercise.name}</span>
+                    <span class="exercise-details-summary">${exerciseDetails}</span>
+                  </div>
+                  <div class="meal-actions">
+                    <button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                  </div>
+              </div>`;
   }).join('');
 
   const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
