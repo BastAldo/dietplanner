@@ -36,5 +36,5 @@ export function renderIcon(name, { width = 24, height = 24, classes = '' } = {})
   const iconPath = ICONS[name];
   if (!iconPath) return '';
   const viewBox = viewBoxes[name] || '0 0 512 512';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}" : ''}>${iconPath}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
 }

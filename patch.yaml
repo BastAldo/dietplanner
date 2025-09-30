@@ -1,10 +1,10 @@
-commit_message: "fix(ui): Aggiunge l'icona di modifica mancante e completa l'UI"
+commit_message: "fix(js): Corregge un errore di sintassi nel file icons.js"
 rationale: |
-  Questo commit corregge una svista nel precedente aggiornamento, in cui l'icona "Modifica" (EDIT) non era stata definita nel file `src/ui/icons.js`.
+  Questo commit risolve un `Uncaught SyntaxError` nel file `src/ui/icons.js`.
 
-  Senza questa definizione, il pulsante per modificare un esercizio nel nuovo "Workout Editor" non avrebbe visualizzato correttamente l'icona.
+  L'errore era dovuto all'utilizzo di un punto e virgola (`;`) invece di una virgola (`,`) per separare le proprietà all'interno dell'oggetto `ICONS` dopo l'aggiunta della nuova icona `EDIT`.
 
-  La modifica consiste nell'aggiungere la path SVG per l'icona `EDIT` e il suo relativo `viewBox` all'interno del modulo `icons.js`, rendendo l'interfaccia di modifica degli esercizi visivamente completa e funzionale come da progetto.
+  La correzione ripristina la sintassi JavaScript valida, permettendo al modulo di essere analizzato correttamente dal browser e risolvendo il blocco nell'esecuzione dello script.
 patches:
   - file: src/ui/icons.js
     content: |
@@ -46,7 +46,7 @@ patches:
         const iconPath = ICONS[name];
         if (!iconPath) return '';
         const viewBox = viewBoxes[name] || '0 0 512 512';
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}" : ''}>${iconPath}</svg>`;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
       }
 commands:
-  - echo "Icona di modifica aggiunta. L'interfaccia per la gestione degli allenamenti è ora completa."
+  - echo "Errore di sintassi in icons.js corretto."
