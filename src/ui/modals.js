@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../core/state.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout } from '../core/state.js';
 import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
@@ -124,7 +124,7 @@ export function openWorkoutSelectionModal(slotId) {
   
   const closeAndReturn = () => {
     workoutSelectionModal.classList.add('modal-hidden');
-    if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+    if (currentEditingDayISO) openWorkoutEditorModal(currentEditingDayISO);
   };
 
   list.onclick = e => {
@@ -135,6 +135,114 @@ export function openWorkoutSelectionModal(slotId) {
     }
   };
   workoutSelectionModal.classList.remove('modal-hidden');
+}
+
+export function openExerciseEditorModal(slotId, instanceId) {
+  const state = getState();
+  const modal = document.getElementById('exercise-editor-modal');
+  const form = modal.querySelector('form');
+  const workoutList = state.weeklyWorkouts[slotId] || [];
+  const exercise = workoutList.find(ex => ex.instanceId === instanceId);
+
+  if (!exercise) return;
+
+  modal.querySelector('#exercise-editor-title').textContent = `Modifica: ${exercise.name}`;
+  form.elements.sets.value = exercise.defaultSets;
+  form.elements.rest.value = exercise.defaultRest;
+
+  const repsContainer = form.querySelector('.reps-group');
+  const durationContainer = form.querySelector('.duration-group');
+
+  if (exercise.type === 'reps') {
+      repsContainer.style.display = 'block';
+      durationContainer.style.display = 'none';
+      form.elements.reps.value = exercise.defaultReps;
+  } else {
+      repsContainer.style.display = 'none';
+      durationContainer.style.display = 'block';
+      form.elements.duration.value = exercise.defaultDuration;
+  }
+
+  const tempoContainer = form.querySelector('.tempo-group');
+  if (exercise.defaultTempo) {
+      tempoContainer.style.display = 'grid';
+      form.elements.tempo_up.value = exercise.defaultTempo.up;
+      form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+      form.elements.tempo_down.value = exercise.defaultTempo.down;
+  } else {
+      tempoContainer.style.display = 'none';
+  }
+
+  form.onsubmit = e => {
+      e.preventDefault();
+      const newValues = {
+          defaultSets: parseInt(form.elements.sets.value),
+          defaultRest: parseInt(form.elements.rest.value)
+      };
+      if (exercise.type === 'reps') {
+          newValues.defaultReps = parseInt(form.elements.reps.value);
+      } else {
+          newValues.defaultDuration = parseInt(form.elements.duration.value);
+      }
+      if (exercise.defaultTempo) {
+          newValues.defaultTempo = {
+              up: parseInt(form.elements.tempo_up.value),
+              hold: parseInt(form.elements.tempo_hold.value),
+              down: parseInt(form.elements.tempo_down.value)
+          };
+      }
+      updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
+      modal.classList.add('modal-hidden');
+      openWorkoutEditorModal(currentEditingDayISO);
+  };
+  
+  modal.classList.remove('modal-hidden');
+}
+
+export function openWorkoutEditorModal(isoDate) {
+  currentEditingDayISO = isoDate;
+  const state = getState();
+  const modal = document.getElementById('workout-editor-modal');
+  modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+  const body = modal.querySelector('#workout-editor-body');
+  const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+  const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+
+  let exercisesHTML = plannedWorkoutList.map(exercise => {
+      const exerciseDetails = formatExerciseDetails(exercise);
+      return `<div class="meal-details" data-instance-id="${exercise.instanceId}">
+                  <div class="exercise-info">
+                      <span class="meal-details__name">${exercise.name}</span>
+                      <span class="exercise-details-summary">${exerciseDetails}</span>
+                  </div>
+                  <div class="meal-actions">
+                      <button class="btn-edit-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                      <button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                  </div>
+              </div>`;
+  }).join('');
+
+  const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+  body.innerHTML = `<div class="day-editor-list">${exercisesHTML}${addExerciseButton}</div>`;
+
+  body.onclick = e => {
+      const btnAddExercise = e.target.closest('.btn-add-exercise');
+      const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+      const btnEditExercise = e.target.closest('.btn-edit-exercise');
+
+      if (btnAddExercise) {
+          modal.classList.add('modal-hidden');
+          openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
+      } else if (btnRemoveExercise) {
+          updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+          openWorkoutEditorModal(isoDate); // Refresh this modal
+      } else if (btnEditExercise) {
+          modal.classList.add('modal-hidden');
+          openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId));
+      }
+  };
+
+  modal.classList.remove('modal-hidden');
 }
 
 export function openDayEditorModal(isoDate) {
@@ -159,22 +267,15 @@ export function openDayEditorModal(isoDate) {
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
   const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
   
-  let workoutDetailsHTML = plannedWorkoutList.map(exercise => {
-      const exerciseDetails = formatExerciseDetails(exercise);
-      return `<div class="meal-details" data-instance-id="${exercise.instanceId}">
-                  <div class="exercise-info">
-                    <span class="meal-details__name">${exercise.name}</span>
-                    <span class="exercise-details-summary">${exerciseDetails}</span>
-                  </div>
-                  <div class="meal-actions">
-                    <button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                  </div>
-              </div>`;
-  }).join('');
-
-  const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-
-  const workoutSlotHTML = `<div class="day-editor-slot workout-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}${addExerciseButton}</div></div>`;
+  let workoutDetailsHTML;
+  if (plannedWorkoutList.length > 0) {
+      const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
+      workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div>`;
+  } else {
+      workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+  }
+  
+  const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
 
   body.innerHTML = mealSlotsHTML + workoutSlotHTML;
 
@@ -183,7 +284,7 @@ export function openDayEditorModal(isoDate) {
     const btnRemoveMeal = e.target.closest('.btn-remove-meal');
     const btnRecipe = e.target.closest('.btn-view-recipe');
     const btnAddExercise = e.target.closest('.btn-add-exercise');
-    const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+    const btnManageWorkout = e.target.closest('.btn-manage-workout');
 
     if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
     else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
@@ -193,11 +294,11 @@ export function openDayEditorModal(isoDate) {
     }
     else if (btnAddExercise) {
       dayEditorModal.classList.add('modal-hidden');
-      openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
+      openWorkoutEditorModal(isoDate);
     }
-    else if (btnRemoveExercise) {
-      updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
-      openDayEditorModal(isoDate);
+    else if (btnManageWorkout) {
+      dayEditorModal.classList.add('modal-hidden');
+      openWorkoutEditorModal(isoDate);
     }
   };
   dayEditorModal.classList.remove('modal-hidden');

@@ -128,7 +128,7 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
         state.weeklyWorkouts[slotId] = [];
     }
 
-    if (exerciseId) { // Add or update an exercise
+    if (exerciseId) { // Add an exercise
         const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
         if (exercise) {
             const newExerciseInstance = {
@@ -145,6 +145,24 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
     }
     saveStateToLocalStorage();
     notify();
+}
+
+export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+    if (!state.weeklyWorkouts[slotId]) return;
+
+    const workoutList = state.weeklyWorkouts[slotId];
+    const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+    if (exerciseIndex > -1) {
+        const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+        // Ensure tempo is handled as an object
+        if (newValues.defaultTempo) {
+            updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+        }
+        workoutList[exerciseIndex] = updatedExercise;
+        saveStateToLocalStorage();
+        notify();
+    }
 }
 
 export function resetCurrentWeek() {

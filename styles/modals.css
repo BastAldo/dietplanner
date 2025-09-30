@@ -15,26 +15,23 @@
 .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
 .day-editor-list { display: flex; flex-direction: column; }
 .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; margin-bottom: 0.75rem; }
-.day-editor-slot.workout-slot { flex-direction: column; align-items: stretch; }
 .day-editor-slot:last-child { margin-bottom: 0; }
 .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-.day-editor-slot.workout-slot .meal-type-label { margin-bottom: 0.75rem; width: auto; }
 .meal-details-container { flex-grow: 1; min-width: 0; }
+.workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; }
 .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
 .meal-details:last-of-type { border-bottom: none; }
-.meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.meal-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
+.meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
+.meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
+.meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+.meal-actions .btn-remove-exercise { color: var(--danger-color); }
 .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
 .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
 .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; margin-top: 0.5rem; }
 .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-.btn-remove-meal, .btn-remove-exercise { background: transparent; border: none; color: var(--danger-color); font-size: 1.2rem; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; }
-.btn-view-recipe { background: transparent; border: none; color: var(--secondary-color); cursor: pointer; display: flex; align-items: center; padding: 0.25rem; }
-.btn-view-recipe:hover { color: var(--text-color); }
-.recipe-body { line-height: 1.6; }
-.recipe-body h1, .recipe-body h2, .recipe-body h3 { margin-top: 1.5rem; margin-bottom: 0.75rem; color: var(--primary-color); }
-.recipe-body ul { list-style-position: inside; padding-left: 1rem; }
-.recipe-body li { margin-bottom: 0.5rem; }
-.recipe-body table { width: 100%; border-collapse: collapse; margin-block: 1rem; }
-.recipe-body th, .recipe-body td { border: 1px solid var(--border-color); padding: 0.5rem 0.75rem; text-align: left; }
-.recipe-body th { background-color: var(--bg-color); }
+#exercise-editor-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+#exercise-editor-form .form-group { display: flex; flex-direction: column; }
+#exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+#exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+#exercise-editor-form .tempo-group { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
