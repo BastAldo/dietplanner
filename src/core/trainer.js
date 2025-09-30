@@ -4,16 +4,17 @@ let workoutState = {
   exerciseQueue: [],
   currentExerciseIndex: -1,
   status: 'idle', // idle, running, paused, resting, finished
+  prePauseStatus: '',
   currentSet: 0,
   currentRep: 0,
   executionQueue: [],
   currentPhaseIndex: -1,
   phaseTimeElapsed: 0,
-  totalTimeElapsed: 0,
+  restTimeRemaining: 0,
 };
 
 let timerInterval = null;
-const TICK_RATE_MS = 50; // Aggiorna 20 volte al secondo per un'animazione fluida
+const TICK_RATE_MS = 50;
 
 function buildExecutionQueueForCurrentSet() {
   const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
@@ -36,32 +37,57 @@ function buildExecutionQueueForCurrentSet() {
   return queue;
 }
 
-function tick() {
-  if (workoutState.status !== 'running') return;
-
-  workoutState.phaseTimeElapsed += TICK_RATE_MS;
-  workoutState.totalTimeElapsed += TICK_RATE_MS;
-
-  const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-  if (!currentPhase) {
-    // Fine della serie o errore
-    pauseWorkout(); // Metti in pausa per sicurezza
-    return;
-  }
-
-  if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
-    // Passa alla fase successiva
-    workoutState.currentPhaseIndex++;
+function advanceToNextSet() {
+  workoutState.currentSet++;
+  const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
+  if (workoutState.currentSet > currentExercise.defaultSets) {
+    advanceToNextExercise();
+  } else {
+    workoutState.status = 'running';
+    workoutState.executionQueue = buildExecutionQueueForCurrentSet();
+    workoutState.currentPhaseIndex = 0;
     workoutState.phaseTimeElapsed = 0;
+    workoutState.currentRep = 1;
+  }
+}
 
-    const nextPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-    if (nextPhase) {
-      workoutState.currentRep = nextPhase.rep;
-    } else {
-      // Serie completata
-      // Qui andrà la logica per il riposo e la serie successiva
-      workoutState.status = 'resting';
-      console.log("Serie completata, inizio riposo...");
+function advanceToNextExercise() {
+  workoutState.currentExerciseIndex++;
+  if (workoutState.currentExerciseIndex >= workoutState.exerciseQueue.length) {
+    endWorkout();
+  } else {
+    workoutState.status = 'idle'; // Pronto per il prossimo esercizio
+    workoutState.currentSet = 1;
+    workoutState.currentRep = 1;
+    workoutState.executionQueue = [];
+    workoutState.currentPhaseIndex = -1;
+  }
+}
+
+function tick() {
+  if (workoutState.status === 'running') {
+    workoutState.phaseTimeElapsed += TICK_RATE_MS;
+    const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+    if (!currentPhase) {
+      pauseWorkout();
+      return;
+    }
+    if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
+      workoutState.currentPhaseIndex++;
+      workoutState.phaseTimeElapsed = 0;
+      const nextPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+      if (nextPhase) {
+        workoutState.currentRep = nextPhase.rep;
+      } else {
+        const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
+        workoutState.status = 'resting';
+        workoutState.restTimeRemaining = currentExercise.defaultRest * 1000;
+      }
+    }
+  } else if (workoutState.status === 'resting') {
+    workoutState.restTimeRemaining -= TICK_RATE_MS;
+    if (workoutState.restTimeRemaining <= 0) {
+      advanceToNextSet();
     }
   }
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
@@ -83,12 +109,13 @@ export function initializeWorkout(plannedExercises) {
     exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
     currentExerciseIndex: 0,
     status: 'idle',
+    prePauseStatus: '',
     currentSet: 1,
     currentRep: 1,
     executionQueue: [],
     currentPhaseIndex: -1,
     phaseTimeElapsed: 0,
-    totalTimeElapsed: 0,
+    restTimeRemaining: 0,
   };
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
@@ -100,16 +127,17 @@ export function startWorkout() {
     workoutState.currentPhaseIndex = 0;
     workoutState.phaseTimeElapsed = 0;
     workoutState.currentRep = 1;
-    timerInterval = setInterval(tick, TICK_RATE_MS);
-    document.dispatchEvent(new CustomEvent('workoutStateChange'));
+    if (!timerInterval) {
+      timerInterval = setInterval(tick, TICK_RATE_MS);
+    }
   }
+  document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
 export function pauseWorkout() {
   if (workoutState.status === 'running' || workoutState.status === 'resting') {
-    const oldStatus = workoutState.status;
+    workoutState.prePauseStatus = workoutState.status;
     workoutState.status = 'paused';
-    workoutState.prePauseStatus = oldStatus; // Salva lo stato precedente
     clearInterval(timerInterval);
     timerInterval = null;
     document.dispatchEvent(new CustomEvent('workoutStateChange'));
@@ -118,7 +146,8 @@ export function pauseWorkout() {
 
 export function resumeWorkout() {
   if (workoutState.status === 'paused') {
-    workoutState.status = workoutState.prePauseStatus || 'running';
+    workoutState.status = workoutState.prePauseStatus;
+    workoutState.prePauseStatus = '';
     if (!timerInterval) {
       timerInterval = setInterval(tick, TICK_RATE_MS);
     }
@@ -130,6 +159,6 @@ export function endWorkout() {
   workoutState.status = 'finished';
   clearInterval(timerInterval);
   timerInterval = null;
-  setView('planner'); // Torna al planner
+  setView('planner');
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }

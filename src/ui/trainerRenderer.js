@@ -6,7 +6,11 @@ const RING_RADIUS = 80;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 function createTimerRing(container) {
-    if (container.querySelector('svg')) return; // Già creato
+    if (container.querySelector('svg')) {
+        ringProgress = container.querySelector('.timer-ring-progress');
+        return;
+    }
+    container.innerHTML = '';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', '200');
     svg.setAttribute('height', '200');
@@ -63,20 +67,28 @@ function renderPhase(state) {
   ringText.textContent = phaseNameDisplay;
   ringText.classList.toggle('flashing', isPrePhase);
 
-  const progressPercent = (phaseTimeElapsed / phase.duration) * 100;
+  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
   updateTimerRing(progressPercent);
+}
+
+function renderRest(state) {
+  const { restTimeRemaining } = state;
+  const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
+  ringText.textContent = secondsRemaining;
+  ringText.classList.remove('flashing');
+  updateTimerRing(0);
 }
 
 export function renderTrainerView() {
   const state = getWorkoutState();
   const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
 
-  if (status === 'idle' && currentExerciseIndex < 0) return;
+  if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
 
   const currentExercise = exerciseQueue[currentExerciseIndex];
   document.getElementById('current-exercise-name').textContent = currentExercise.name;
   document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
-  document.getElementById('current-rep-display').textContent = `Rip. ${currentRep}`;
+  document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
 
 
   const upcomingList = document.getElementById('upcoming-exercises-list');
@@ -90,18 +102,23 @@ export function renderTrainerView() {
   const controlsContainer = document.getElementById('trainer-main-controls');
   if (status === 'idle') {
     controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
+    ringText.textContent = '';
+    updateTimerRing(0);
   } else if (status === 'running' || status === 'resting') {
     controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
   } else if (status === 'paused') {
     controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
+  } else {
+    controlsContainer.innerHTML = '';
   }
 
   const modeTempoContainer = document.getElementById('mode-tempo-guided');
-  // Aggiungere logica per altre modalità qui
   modeTempoContainer.classList.remove('hidden');
 
   if (status === 'running') {
       renderPhase(state);
+  } else if (status === 'resting') {
+      renderRest(state);
   }
 }
 
@@ -113,7 +130,12 @@ export function initializeTrainerUI() {
     createTimerRing(ringContainer);
     ringText = document.getElementById('tempo-phase-name');
 
-    document.getElementById('trainer-page').addEventListener('click', (e) => {
+    const page = document.getElementById('trainer-page');
+    // Rimuovi vecchi listener se esistono per evitare duplicati
+    const newPage = page.cloneNode(true);
+    page.parentNode.replaceChild(newPage, page);
+
+    newPage.addEventListener('click', (e) => {
         if (e.target.id === 'trainer-start-btn') startWorkout();
         if (e.target.id === 'trainer-pause-btn') pauseWorkout();
         if (e.target.id === 'trainer-resume-btn') resumeWorkout();

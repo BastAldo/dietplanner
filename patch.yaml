@@ -1,25 +1,25 @@
-commit_message: "feat(trainer): Implementa il ciclo del timer e il rendering dinamico"
+commit_message: "fix(trainer): Corregge i bug di animazione, stato e progressione"
 rationale: |
-  Questo commit introduce il "motore" dinamico della Vista Trainer, rendendola interattiva e funzionale per la modalità `tempo_guided`.
+  Questo commit risolve una serie di bug critici nella Vista Trainer che impedivano il corretto funzionamento dell'allenamento guidato. La logica della macchina a stati è stata completata e l'interfaccia utente è stata resa robusta e precisa.
 
-  Le modifiche principali sono:
+  Le correzioni principali sono:
 
-  1.  **Logica del Timer e Macchina a Stati (`src/core/trainer.js`):**
-      * È stato introdotto un `setInterval` che agisce come ciclo principale ("battito cardiaco") per l'allenamento, garantendo aggiornamenti costanti dello stato.
-      * È stata implementata la funzione `buildExecutionQueueForCurrentSet` che, come da specifiche in `docs/02_ARCHITECTURE.md`, "pre-compila" la sequenza delle 6 fasi per ogni ripetizione della serie corrente.
-      * La macchina a stati ora gestisce attivamente le transizioni tra `idle`, `running`, `paused`, e il passaggio da una fase all'altra, consumando la `executionQueue`.
-      * Ogni cambiamento di stato ora emette un evento `workoutStateChange` per notificare all'interfaccia utente la necessità di un aggiornamento.
+  1.  **Logica di Progressione (`src/core/trainer.js`):**
+      * È stata implementata la logica mancante per la gestione del riposo tra le serie. Al termine di una serie, l'applicazione entra correttamente nello stato 'resting' e avvia un countdown.
+      * Al termine del riposo, l'applicazione ora avanza correttamente alla serie successiva dello stesso esercizio o passa all'esercizio successivo se tutte le serie sono state completate.
+      * È stata aggiunta la logica per terminare l'allenamento (`finished`) una volta completati tutti gli esercizi in coda.
+      * La gestione della pausa (`pause`/`resume`) è stata migliorata per funzionare in modo affidabile sia durante le fasi di lavoro che durante il riposo.
 
-  2.  **Rendering Dinamico e Anello SVG (`src/ui/trainerRenderer.js`):**
-      * Il renderer ora crea dinamicamente un anello SVG all'interno del `timer-ring-container`, completo di sfondo e arco di progresso.
-      * È stata implementata la funzione `updateTimerRing` che anima l'arco di progresso manipolando `stroke-dashoffset` per rappresentare visivamente il tempo che passa.
-      * Il modulo si mette in ascolto dell'evento `workoutStateChange` e, quando lo riceve, la funzione `renderTrainerView` aggiorna in tempo reale tutti gli elementi della UI: il testo della fase, l'animazione dell'anello e i contatori di serie/ripetizioni.
+  2.  **Correzione Animazione Anello (`src/ui/trainerRenderer.js`, `styles/trainer.css`):**
+      * È stato corretto il bug per cui l'animazione dell'anello non partiva da zero. Ora il progresso visivo corrisponde esattamente all'avanzamento temporale di ogni fase.
+      * È stata rimossa la transizione CSS `stroke-dashoffset` che causava conflitti con gli aggiornamenti Javascript, affidando l'intera animazione al `TICK_RATE_MS` per un controllo preciso.
 
-  3.  **Controlli Utente (`templates/trainer.html`, `src/ui/trainerRenderer.js`):**
-      * È stato aggiunto un pulsante "Avvia" alla vista.
-      * Sono stati implementati i gestori di eventi per i pulsanti "Avvia", "Pausa", "Indietro" e "Termina", che ora sono collegati alle funzioni corrispondenti nel modulo `trainer.js` (`startWorkout`, `pauseWorkout`, etc.), rendendo l'interfaccia completamente interattiva.
+  3.  **Layout e Interattività UI (`styles/trainer.css`, `src/ui/trainerRenderer.js`):**
+      * Il testo dello stato (es. "UP", "HOLD") è ora posizionato correttamente al centro dell'anello SVG utilizzando il posizionamento assoluto.
+      * Il bug del pulsante di pausa è stato risolto centralizzando la gestione degli eventi su un unico listener delegato sulla `trainer-page`, rendendo i controlli stabili e reattivi.
+      * Il renderer ora mostra un timer di countdown durante la fase di riposo.
 
-  Con questo aggiornamento, la modalità `tempo_guided` della Vista Trainer è ora pienamente operativa: l'utente può avviare un allenamento ed essere guidato visivamente e testualmente attraverso ogni fase di ogni ripetizione.
+  Con queste modifiche, la funzionalità `tempo_guided` della Vista Trainer è ora stabile, funzionale e completa, fornendo all'utente un'esperienza di allenamento guidato come da specifiche.
 patches:
   - file: src/core/trainer.js
     content: |
@@ -29,16 +29,17 @@ patches:
         exerciseQueue: [],
         currentExerciseIndex: -1,
         status: 'idle', // idle, running, paused, resting, finished
+        prePauseStatus: '',
         currentSet: 0,
         currentRep: 0,
         executionQueue: [],
         currentPhaseIndex: -1,
         phaseTimeElapsed: 0,
-        totalTimeElapsed: 0,
+        restTimeRemaining: 0,
       };
 
       let timerInterval = null;
-      const TICK_RATE_MS = 50; // Aggiorna 20 volte al secondo per un'animazione fluida
+      const TICK_RATE_MS = 50;
 
       function buildExecutionQueueForCurrentSet() {
         const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
@@ -61,32 +62,57 @@ patches:
         return queue;
       }
 
-      function tick() {
-        if (workoutState.status !== 'running') return;
-
-        workoutState.phaseTimeElapsed += TICK_RATE_MS;
-        workoutState.totalTimeElapsed += TICK_RATE_MS;
-
-        const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-        if (!currentPhase) {
-          // Fine della serie o errore
-          pauseWorkout(); // Metti in pausa per sicurezza
-          return;
-        }
-
-        if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
-          // Passa alla fase successiva
-          workoutState.currentPhaseIndex++;
+      function advanceToNextSet() {
+        workoutState.currentSet++;
+        const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
+        if (workoutState.currentSet > currentExercise.defaultSets) {
+          advanceToNextExercise();
+        } else {
+          workoutState.status = 'running';
+          workoutState.executionQueue = buildExecutionQueueForCurrentSet();
+          workoutState.currentPhaseIndex = 0;
           workoutState.phaseTimeElapsed = 0;
+          workoutState.currentRep = 1;
+        }
+      }
 
-          const nextPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-          if (nextPhase) {
-            workoutState.currentRep = nextPhase.rep;
-          } else {
-            // Serie completata
-            // Qui andrà la logica per il riposo e la serie successiva
-            workoutState.status = 'resting';
-            console.log("Serie completata, inizio riposo...");
+      function advanceToNextExercise() {
+        workoutState.currentExerciseIndex++;
+        if (workoutState.currentExerciseIndex >= workoutState.exerciseQueue.length) {
+          endWorkout();
+        } else {
+          workoutState.status = 'idle'; // Pronto per il prossimo esercizio
+          workoutState.currentSet = 1;
+          workoutState.currentRep = 1;
+          workoutState.executionQueue = [];
+          workoutState.currentPhaseIndex = -1;
+        }
+      }
+
+      function tick() {
+        if (workoutState.status === 'running') {
+          workoutState.phaseTimeElapsed += TICK_RATE_MS;
+          const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+          if (!currentPhase) {
+            pauseWorkout();
+            return;
+          }
+          if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
+            workoutState.currentPhaseIndex++;
+            workoutState.phaseTimeElapsed = 0;
+            const nextPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+            if (nextPhase) {
+              workoutState.currentRep = nextPhase.rep;
+            } else {
+              const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
+              workoutState.status = 'resting';
+              workoutState.restTimeRemaining = currentExercise.defaultRest * 1000;
+            }
+          }
+        } else if (workoutState.status === 'resting') {
+          workoutState.restTimeRemaining -= TICK_RATE_MS;
+          if (workoutState.restTimeRemaining <= 0) {
+            advanceToNextSet();
           }
         }
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
@@ -108,12 +134,13 @@ patches:
           exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
           currentExerciseIndex: 0,
           status: 'idle',
+          prePauseStatus: '',
           currentSet: 1,
           currentRep: 1,
           executionQueue: [],
           currentPhaseIndex: -1,
           phaseTimeElapsed: 0,
-          totalTimeElapsed: 0,
+          restTimeRemaining: 0,
         };
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
@@ -125,16 +152,17 @@ patches:
           workoutState.currentPhaseIndex = 0;
           workoutState.phaseTimeElapsed = 0;
           workoutState.currentRep = 1;
-          timerInterval = setInterval(tick, TICK_RATE_MS);
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          if (!timerInterval) {
+            timerInterval = setInterval(tick, TICK_RATE_MS);
+          }
         }
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
 
       export function pauseWorkout() {
         if (workoutState.status === 'running' || workoutState.status === 'resting') {
-          const oldStatus = workoutState.status;
+          workoutState.prePauseStatus = workoutState.status;
           workoutState.status = 'paused';
-          workoutState.prePauseStatus = oldStatus; // Salva lo stato precedente
           clearInterval(timerInterval);
           timerInterval = null;
           document.dispatchEvent(new CustomEvent('workoutStateChange'));
@@ -143,7 +171,8 @@ patches:
 
       export function resumeWorkout() {
         if (workoutState.status === 'paused') {
-          workoutState.status = workoutState.prePauseStatus || 'running';
+          workoutState.status = workoutState.prePauseStatus;
+          workoutState.prePauseStatus = '';
           if (!timerInterval) {
             timerInterval = setInterval(tick, TICK_RATE_MS);
           }
@@ -155,109 +184,8 @@ patches:
         workoutState.status = 'finished';
         clearInterval(timerInterval);
         timerInterval = null;
-        setView('planner'); // Torna al planner
+        setView('planner');
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState } from '../core/state.js';
-      import { renderPlannerPage } from './plannerRenderer.js';
-      import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
-      import { renderRecipesPage } from './recipesRenderer.js';
-      import { renderTrainerView, initializeTrainerUI } from './trainerRenderer.js';
-      import { UI_TEXT } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-
-      function populateIcons() {
-          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
-          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
-          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
-          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
-          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
-          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
-          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
-          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
-          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
-          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
-          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
-          
-          document.querySelectorAll('.modal-close-btn').forEach(btn => {
-              btn.innerHTML = renderIcon('CLOSE');
-          });
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
-        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
-        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
-        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
-        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
-        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
-        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
-        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
-        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
-        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
-        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
-        populateIcons();
-      }
-
-      export function renderApp() {
-        const state = getState();
-        const plannerPage = document.getElementById('planner-page');
-        const progressPage = document.getElementById('progress-page');
-        const chartsPage = document.getElementById('charts-page');
-        const recipesPage = document.getElementById('recipes-page');
-        const profilePage = document.getElementById('profile-page');
-        const trainerPage = document.getElementById('trainer-page');
-
-        const navPlannerBtn = document.getElementById('nav-planner');
-        const navProgressBtn = document.getElementById('nav-progress');
-        const navChartsBtn = document.getElementById('nav-charts');
-        const navRecipesBtn = document.getElementById('nav-recipes');
-        const navProfileBtn = document.getElementById('nav-profile');
-
-        [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
-        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
-
-        if (state.currentView === 'planner' || state.currentView === 'log') {
-          plannerPage.classList.remove('hidden');
-          navPlannerBtn.classList.add('active');
-          renderPlannerPage(state);
-        } else if (state.currentView === 'progress') {
-          progressPage.classList.remove('hidden');
-          navProgressBtn.classList.add('active');
-          renderBiometricsPage(state);
-        } else if (state.currentView === 'charts') {
-          chartsPage.classList.remove('hidden');
-          navChartsBtn.classList.add('active');
-          renderChartsPage(state);
-        } else if (state.currentView === 'recipes') {
-          recipesPage.classList.remove('hidden');
-          navRecipesBtn.classList.add('active');
-          renderRecipesPage(state);
-        } else if (state.currentView === 'profile') {
-          profilePage.classList.remove('hidden');
-          navProfileBtn.classList.add('active');
-          renderProfilePage(state);
-        } else if (state.currentView === 'trainer') {
-          trainerPage.classList.remove('hidden');
-          initializeTrainerUI(); // Assicura che l'UI sia pronta
-          renderTrainerView(); // Disegna lo stato attuale
-        }
-
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
   - file: src/ui/trainerRenderer.js
     content: |
@@ -269,7 +197,11 @@ patches:
       const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
       function createTimerRing(container) {
-          if (container.querySelector('svg')) return; // Già creato
+          if (container.querySelector('svg')) {
+              ringProgress = container.querySelector('.timer-ring-progress');
+              return;
+          }
+          container.innerHTML = '';
           const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           svg.setAttribute('width', '200');
           svg.setAttribute('height', '200');
@@ -326,20 +258,28 @@ patches:
         ringText.textContent = phaseNameDisplay;
         ringText.classList.toggle('flashing', isPrePhase);
 
-        const progressPercent = (phaseTimeElapsed / phase.duration) * 100;
+        const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
         updateTimerRing(progressPercent);
+      }
+
+      function renderRest(state) {
+        const { restTimeRemaining } = state;
+        const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
+        ringText.textContent = secondsRemaining;
+        ringText.classList.remove('flashing');
+        updateTimerRing(0);
       }
 
       export function renderTrainerView() {
         const state = getWorkoutState();
         const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
 
-        if (status === 'idle' && currentExerciseIndex < 0) return;
+        if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
 
         const currentExercise = exerciseQueue[currentExerciseIndex];
         document.getElementById('current-exercise-name').textContent = currentExercise.name;
         document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
-        document.getElementById('current-rep-display').textContent = `Rip. ${currentRep}`;
+        document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
 
 
         const upcomingList = document.getElementById('upcoming-exercises-list');
@@ -353,18 +293,23 @@ patches:
         const controlsContainer = document.getElementById('trainer-main-controls');
         if (status === 'idle') {
           controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
+          ringText.textContent = '';
+          updateTimerRing(0);
         } else if (status === 'running' || status === 'resting') {
           controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
         } else if (status === 'paused') {
           controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
+        } else {
+          controlsContainer.innerHTML = '';
         }
 
         const modeTempoContainer = document.getElementById('mode-tempo-guided');
-        // Aggiungere logica per altre modalità qui
         modeTempoContainer.classList.remove('hidden');
 
         if (status === 'running') {
             renderPhase(state);
+        } else if (status === 'resting') {
+            renderRest(state);
         }
       }
 
@@ -376,7 +321,12 @@ patches:
           createTimerRing(ringContainer);
           ringText = document.getElementById('tempo-phase-name');
 
-          document.getElementById('trainer-page').addEventListener('click', (e) => {
+          const page = document.getElementById('trainer-page');
+          // Rimuovi vecchi listener se esistono per evitare duplicati
+          const newPage = page.cloneNode(true);
+          page.parentNode.replaceChild(newPage, page);
+
+          newPage.addEventListener('click', (e) => {
               if (e.target.id === 'trainer-start-btn') startWorkout();
               if (e.target.id === 'trainer-pause-btn') pauseWorkout();
               if (e.target.id === 'trainer-resume-btn') resumeWorkout();
@@ -457,6 +407,10 @@ patches:
           font-weight: bold;
           color: var(--text-color);
           text-transform: uppercase;
+          position: absolute; /* Changed to absolute */
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%); /* Center the text */
       }
 
       .timer-ring-bg {
@@ -472,7 +426,7 @@ patches:
           stroke-linecap: round;
           transform: rotate(-90deg);
           transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear;
+          /* Rimosso transition per affidarsi a JS */
       }
 
       @keyframes flash {
@@ -491,6 +445,7 @@ patches:
           justify-content: center;
           align-items: center;
           margin-top: 1rem;
+          height: 80px; /* Altezza fissa per evitare salti di layout */
       }
 
       .btn-large {
@@ -517,38 +472,3 @@ patches:
       .upcoming-exercises-list li {
           padding: 0.25rem 0;
       }
-  - file: templates/trainer.html
-    content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
-              <h2 id="trainer-title">Allenamento</h2>
-              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-                  <p id="current-rep-display"></p>
-              </div>
-
-              <div id="trainer-display-modes">
-                  <div id="mode-tempo-guided">
-                      <div id="timer-ring-container" class="timer-ring-container">
-                          <div id="tempo-phase-name" class="timer-ring-display"></div>
-                      </div>
-                  </div>
-              </div>
-
-              <div id="trainer-main-controls" class="trainer-controls">
-              </div>
-
-              <div class="upcoming-exercises-container">
-                  <h4>A seguire:</h4>
-                  <ul id="upcoming-exercises-list" class="upcoming-exercises-list">
-                  </ul>
-              </div>
-          </div>
-      </div>
-commands:
-  - echo "Ciclo del timer, rendering dinamico dell'anello SVG e controlli utente implementati per la Vista Trainer."
