@@ -4,6 +4,7 @@ import { setView } from '../core/state.js';
 let ringProgress, ringText;
 const RING_RADIUS = 80;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+let lastRenderedStatus = '';
 
 function createTimerRing(container) {
     if (container.querySelector('svg')) {
@@ -91,31 +92,35 @@ export function renderTrainerView() {
   document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
   document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
 
+  // Solo se lo stato cambia, aggiorniamo i controlli e la lista esercizi
+  if (status !== lastRenderedStatus) {
+      const upcomingList = document.getElementById('upcoming-exercises-list');
+      upcomingList.innerHTML = '';
+      exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
+        const li = document.createElement('li');
+        li.textContent = ex.name;
+        upcomingList.appendChild(li);
+      });
 
-  const upcomingList = document.getElementById('upcoming-exercises-list');
-  upcomingList.innerHTML = '';
-  exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-    const li = document.createElement('li');
-    li.textContent = ex.name;
-    upcomingList.appendChild(li);
-  });
-
-  const controlsContainer = document.getElementById('trainer-main-controls');
-  if (status === 'idle') {
-    controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
-    if(ringText) ringText.textContent = '';
-    updateTimerRing(0);
-  } else if (status === 'running' || status === 'resting') {
-    controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
-  } else if (status === 'paused') {
-    controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
-  } else {
-    controlsContainer.innerHTML = '';
+      const controlsContainer = document.getElementById('trainer-main-controls');
+      if (status === 'idle') {
+        controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
+        if(ringText) ringText.textContent = '';
+        updateTimerRing(0);
+      } else if (status === 'running' || status === 'resting') {
+        controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
+      } else if (status === 'paused') {
+        controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
+      } else {
+        controlsContainer.innerHTML = '';
+      }
+      lastRenderedStatus = status;
   }
 
   const modeTempoContainer = document.getElementById('mode-tempo-guided');
   modeTempoContainer.classList.remove('hidden');
 
+  // Questi aggiornamenti avvengono ad ogni tick, indipendentemente dal cambio di stato
   if (status === 'running') {
       renderPhase(state);
   } else if (status === 'resting') {
@@ -124,6 +129,7 @@ export function renderTrainerView() {
 }
 
 export function initializeTrainerUI() {
+    lastRenderedStatus = ''; // Reset on initialization
     document.removeEventListener('workoutStateChange', renderTrainerView);
     document.addEventListener('workoutStateChange', renderTrainerView);
 
@@ -132,7 +138,6 @@ export function initializeTrainerUI() {
     ringText = document.getElementById('tempo-phase-name');
 
     const page = document.getElementById('trainer-page');
-    // Rimuovi vecchi listener se esistono per evitare duplicati
     const newPage = page.cloneNode(true);
     page.parentNode.replaceChild(newPage, page);
 
