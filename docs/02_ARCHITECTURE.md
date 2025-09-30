@@ -17,19 +17,26 @@ L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html`
 ### 4.1. Workout Builder Composizionale
 A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
 
-### 4.2. Calcolo del BMR (`src/core/calculations.js`)
+### 4.2. Ciclo di Esecuzione della Ripetizione (Vista Trainer)
+Per garantire un'esperienza utente guidata e prevenire movimenti affrettati, il modulo Trainer implementa un ciclo di esecuzione dettagliato per ogni singola ripetizione di un esercizio basato sul `tempo`. Questo ciclo è "pre-compilato" in una coda di esecuzione prima dell'inizio di ogni serie.
+
+Ogni ripetizione è suddivisa in 6 fasi:
+1.  **`pre-up`**: Una fase di preparazione di durata fissa (es. 0.7s). L'UI (es. "time ring") lampeggia e mostra il nome della fase successiva ("UP").
+2.  **`up`**: La fase concentrica (salita). La sua durata è letta da `tempo.up`. L'UI mostra un'animazione fluida.
+3.  **`pre-hold`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "HOLD".
+4.  **`hold`**: La fase isometrica (pausa). La sua durata è letta da `tempo.hold`.
+5.  **`pre-down`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "DOWN".
+6.  **`down`**: La fase eccentrica (discesa). La sua durata è letta da `tempo.down`.
+
+### 4.3. Calcolo del BMR (`src/core/calculations.js`)
 Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
 
-### 4.3. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
-Questo modulo è un pilastro della nuova architettura e ha la sola responsabilità di calcolare le calorie dei pasti. Riceve la lista dei pasti e la lista degli ingredienti e arricchisce ogni pasto con le proprietà `calories_min` e `calories_max`.
+### 4.4. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
+Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti, ricevendo la lista dei pasti e degli ingredienti e arricchendo ogni pasto con `calories_min` e `calories_max`.
 
 ## 5. Gestione dei Dati
 ### 5.1. Caricamento Dati (`src/api/configService.js`)
-Il caricamento non è più un singolo fetch. Il servizio ora orchestra un caricamento multi-fase:
-1.  Recupera il file `pasti.json` dall'URL fornito dall'utente.
-2.  Deriva e recupera il file `ingredienti.json` dalla stessa directory.
-3.  Deriva e recupera il file `esercizi.json` (opzionale) dalla stessa directory.
-4.  Restituisce un oggetto di configurazione unificato all'applicazione.
+Il servizio orchestra un caricamento multi-fase per `pasti.json`, `ingredienti.json` e `esercizi.json`.
 
 ### 5.2. Strutture Dati Chiave
 * **Configurazione Remota**:
@@ -44,5 +51,6 @@ Il caricamento non è più un singolo fetch. Il servizio ora orchestra un carica
     * **`biometricData`**: Array con lo storico delle misurazioni biometriche.
 
 ## 6. Dipendenze di Terze Parti
-* **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette da Markdown.
+* **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette.
 * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
+* **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
