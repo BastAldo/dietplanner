@@ -59,7 +59,7 @@ function formatExerciseDetails(exercise, set) {
 function renderPhase(state) {
   const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
   const phase = executionQueue[currentPhaseIndex];
-  if (!phase) return;
+  if (!phase || !ringText) return;
 
   const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
   const isPrePhase = phase.name.startsWith('pre-');
@@ -74,6 +74,7 @@ function renderPhase(state) {
 function renderRest(state) {
   const { restTimeRemaining } = state;
   const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
+  if (!ringText) return;
   ringText.textContent = secondsRemaining;
   ringText.classList.remove('flashing');
   updateTimerRing(0);
@@ -102,7 +103,7 @@ export function renderTrainerView() {
   const controlsContainer = document.getElementById('trainer-main-controls');
   if (status === 'idle') {
     controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
-    ringText.textContent = '';
+    if(ringText) ringText.textContent = '';
     updateTimerRing(0);
   } else if (status === 'running' || status === 'resting') {
     controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
