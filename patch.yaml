@@ -1,15 +1,23 @@
-commit_message: "docs(arch): Definisce il ciclo di esecuzione della ripetizione"
+commit_message: "feat(trainer): Imposta la struttura per la Vista Trainer e aggiorna l'architettura"
 rationale: |
-  Questo commit aggiorna la documentazione di architettura (`docs/02_ARCHITECTURE.md`) per formalizzare una specifica essenziale per la futura Vista Trainer.
+  Questo commit dà il via allo sviluppo della Fase 5: la Vista Trainer Interattivo, come da piano approvato. Le modifiche implementano le fondamenta strutturali e documentali necessarie prima di scrivere la logica di business.
 
-  Su richiesta, è stato introdotto il concetto del "Ciclo di Esecuzione della Ripetizione", che migliora significativamente l'esperienza utente durante un esercizio guidato.
+  Le modifiche principali sono:
 
-  Le modifiche principali alla documentazione sono:
-  1.  **Introduzione delle Fasi di Preparazione**: Vengono definite sei fasi per ogni ripetizione (`pre-up`, `up`, `pre-hold`, `hold`, `pre-down`, `down`), includendo delle micro-pause di 0.7 secondi per preparare l'utente al movimento successivo.
-  2.  **Definizione del Comportamento UI**: Viene specificato il comportamento visuale atteso per ogni fase (es. anello lampeggiante per le fasi `pre-`), fornendo una guida chiara per lo sviluppo dell'interfaccia.
-  3.  **Principio di Pre-compilazione**: Viene rafforzato il principio architetturale secondo cui il modulo trainer dovrà "pre-compilare" questa sequenza di fasi in una coda di esecuzione prima dell'inizio di ogni serie, semplificando la logica in tempo reale.
+  1.  **Aggiornamento Architettura (`docs/02_ARCHITECTURE.md`):**
+      * Viene formalizzato il concetto di `execution_mode` per gli esercizi, introducendo le tre modalità operative discusse: `tempo_guided`, `manual_reps`, e `static_hold`.
+      * Viene specificato che la modalità `static_hold` può anche funzionare a sfinimento, come richiesto.
+      * Questo aggiornamento garantisce che la documentazione rimanga la nostra fonte di verità unica e allineata alle specifiche più recenti.
 
-  Questa documentazione ora serve come fonte di verità unica e dettagliata per l'implementazione della Vista Trainer.
+  2.  **Creazione Nuovi File di Vista:**
+      * È stato creato il file `templates/trainer.html` che servirà come contenitore per la nuova interfaccia utente della Vista Trainer.
+      * È stato creato il file `styles/trainer.css` per ospitare gli stili specifici di questa nuova vista, garantendo la separazione delle responsabilità CSS.
+
+  3.  **Integrazione nel Progetto:**
+      * Il nuovo foglio di stile `styles/trainer.css` è stato aggiunto a `index.html` per assicurare che venga caricato dall'applicazione.
+      * Il service worker in `sw.js` è stato aggiornato per includere sia `templates/trainer.html` che `styles/trainer.css` nell'app shell, garantendone la disponibilità offline.
+
+  Questa implementazione prepara il terreno per lo sviluppo della logica della macchina a stati e del rendering della Vista Trainer.
 patches:
   - file: docs/02_ARCHITECTURE.md
     content: |
@@ -32,7 +40,10 @@ patches:
       ### 4.1. Workout Builder Composizionale
       A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
 
-      ### 4.2. Ciclo di Esecuzione della Ripetizione (Vista Trainer)
+      ### 4.2. Modalità di Esecuzione e Ciclo di Ripetizione (Vista Trainer)
+      La Vista Trainer opera in diverse modalità a seconda delle proprietà dell'esercizio caricato. Questo garantisce un'esperienza utente flessibile e adatta a diversi tipi di allenamento. La modalità viene scelta in base a un campo `execution_mode` nell'oggetto dell'esercizio.
+
+      #### Modalità 1: `tempo_guided` (Default)
       Per garantire un'esperienza utente guidata e prevenire movimenti affrettati, il modulo Trainer implementa un ciclo di esecuzione dettagliato per ogni singola ripetizione di un esercizio basato sul `tempo`. Questo ciclo è "pre-compilato" in una coda di esecuzione prima dell'inizio di ogni serie.
 
       Ogni ripetizione è suddivisa in 6 fasi:
@@ -42,6 +53,12 @@ patches:
       4.  **`hold`**: La fase isometrica (pausa). La sua durata è letta da `tempo.hold`.
       5.  **`pre-down`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "DOWN".
       6.  **`down`**: La fase eccentrica (discesa). La sua durata è letta da `tempo.down`.
+
+      #### Modalità 2: `static_hold`
+      Utilizzata per esercizi isometrici come il Plank. L'interfaccia mostra un unico timer centrale che esegue un countdown per la durata totale della serie. Se l'esercizio è configurato per essere eseguito "a sfinimento", il timer diventa un cronometro che conta in avanti.
+
+      #### Modalità 3: `manual_reps`
+      Utilizzata per serie "a sfinimento" o con un range di ripetizioni (min/max). L'interfaccia non mostra un timer, ma un contatore e un pulsante principale per permettere all'utente di registrare manualmente ogni ripetizione completata.
 
       ### 4.3. Calcolo del BMR (`src/core/calculations.js`)
       Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
@@ -57,7 +74,7 @@ patches:
       * **Configurazione Remota**:
           * **`pasti.json`**: Array di oggetti `meals`.
           * **`ingredienti.json`**: Array di `ingredienti`.
-          * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione, modalità) e i valori di default per serie, ripetizioni, durata, riposo e `tempo` (un oggetto con `up`, `hold`, `down`).
+          * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione) e i valori di default per serie, ripetizioni, durata, riposo, `tempo` (un oggetto con `up`, `hold`, `down`) e il nuovo campo opzionale `execution_mode`.
 
       * **Dati Utente Locali (`localStorage`)**:
           * **`userProfile`**: Dati anagrafici dell'utente.
@@ -69,5 +86,153 @@ patches:
       * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette.
       * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
       * **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
+  - file: index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="styles/base.css">
+          <link rel="stylesheet" href="styles/planner.css">
+          <link rel="stylesheet" href="styles/progress.css">
+          <link rel="stylesheet" href="styles/modals.css">
+          <link rel="stylesheet" href="styles/charts.css">
+          <link rel="stylesheet" href="styles/recipes.css">
+          <link rel="stylesheet" href="styles/trainer.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-progress" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-charts" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-recipes" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-profile" class="btn-nav">
+                          <span></span>
+                      </button>
+                  </nav>
+              </div>
+          </header>
+
+          <main id="app-container">
+              </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="modal-container">
+              </div>
+      </body>
+      </html>
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v8';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: styles/trainer.css
+    content: |
+      /* --- TRAINER VIEW STYLES --- */
+  - file: templates/trainer.html
+    content: |
+      <div id="trainer-page" class="page-view hidden">
+          </div>
 commands:
-  - echo "Documentazione di architettura aggiornata con il ciclo di esecuzione della ripetizione."
+  - echo "Struttura di base per la Vista Trainer creata e documentazione di architettura aggiornata."

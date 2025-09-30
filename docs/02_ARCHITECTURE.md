@@ -17,7 +17,10 @@ L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html`
 ### 4.1. Workout Builder Composizionale
 A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
 
-### 4.2. Ciclo di Esecuzione della Ripetizione (Vista Trainer)
+### 4.2. Modalità di Esecuzione e Ciclo di Ripetizione (Vista Trainer)
+La Vista Trainer opera in diverse modalità a seconda delle proprietà dell'esercizio caricato. Questo garantisce un'esperienza utente flessibile e adatta a diversi tipi di allenamento. La modalità viene scelta in base a un campo `execution_mode` nell'oggetto dell'esercizio.
+
+#### Modalità 1: `tempo_guided` (Default)
 Per garantire un'esperienza utente guidata e prevenire movimenti affrettati, il modulo Trainer implementa un ciclo di esecuzione dettagliato per ogni singola ripetizione di un esercizio basato sul `tempo`. Questo ciclo è "pre-compilato" in una coda di esecuzione prima dell'inizio di ogni serie.
 
 Ogni ripetizione è suddivisa in 6 fasi:
@@ -27,6 +30,12 @@ Ogni ripetizione è suddivisa in 6 fasi:
 4.  **`hold`**: La fase isometrica (pausa). La sua durata è letta da `tempo.hold`.
 5.  **`pre-down`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "DOWN".
 6.  **`down`**: La fase eccentrica (discesa). La sua durata è letta da `tempo.down`.
+
+#### Modalità 2: `static_hold`
+Utilizzata per esercizi isometrici come il Plank. L'interfaccia mostra un unico timer centrale che esegue un countdown per la durata totale della serie. Se l'esercizio è configurato per essere eseguito "a sfinimento", il timer diventa un cronometro che conta in avanti.
+
+#### Modalità 3: `manual_reps`
+Utilizzata per serie "a sfinimento" o con un range di ripetizioni (min/max). L'interfaccia non mostra un timer, ma un contatore e un pulsante principale per permettere all'utente di registrare manualmente ogni ripetizione completata.
 
 ### 4.3. Calcolo del BMR (`src/core/calculations.js`)
 Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
@@ -42,7 +51,7 @@ Il servizio orchestra un caricamento multi-fase per `pasti.json`, `ingredienti.j
 * **Configurazione Remota**:
     * **`pasti.json`**: Array di oggetti `meals`.
     * **`ingredienti.json`**: Array di `ingredienti`.
-    * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione, modalità) e i valori di default per serie, ripetizioni, durata, riposo e `tempo` (un oggetto con `up`, `hold`, `down`).
+    * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione) e i valori di default per serie, ripetizioni, durata, riposo, `tempo` (un oggetto con `up`, `hold`, `down`) e il nuovo campo opzionale `execution_mode`.
 
 * **Dati Utente Locali (`localStorage`)**:
     * **`userProfile`**: Dati anagrafici dell'utente.
