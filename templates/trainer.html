@@ -1,2 +1,46 @@
 <div id="trainer-page" class="page-view hidden">
+    <header class="trainer-header">
+        <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
+        <h2 id="trainer-title">Allenamento</h2>
+        <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
+    </header>
+    <div class="trainer-body">
+        <div class="exercise-info-container">
+            <h3 id="current-exercise-name">Nome Esercizio</h3>
+            <p id="current-exercise-details">Serie 1 di 3 | Rip. 1 di 10</p>
+        </div>
+
+        <div id="trainer-display-modes">
+
+            <div id="mode-tempo-guided" class="hidden">
+                <div class="timer-ring-container">
+                    <div id="tempo-phase-name" class="timer-ring-display">UP</div>
+                </div>
+            </div>
+
+            <div id="mode-static-hold" class="hidden">
+                <div class="timer-ring-container">
+                    <div id="static-hold-timer" class="timer-ring-display">00:00</div>
+                </div>
+            </div>
+
+            <div id="mode-manual-reps" class="hidden">
+                <div class="manual-rep-counter-container">
+                    <p>Ripetizioni Eseguite:</p>
+                    <div id="manual-rep-count" class="manual-rep-counter">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="trainer-main-controls" class="trainer-controls">
+            </div>
+
+        <div class="upcoming-exercises-container">
+            <h4>A seguire:</h4>
+            <ul id="upcoming-exercises-list" class="upcoming-exercises-list">
+                <li>Esercizio 2...</li>
+                <li>Esercizio 3...</li>
+            </ul>
+        </div>
     </div>
+</div>

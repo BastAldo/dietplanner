@@ -56,13 +56,15 @@ export function renderApp() {
   const chartsPage = document.getElementById('charts-page');
   const recipesPage = document.getElementById('recipes-page');
   const profilePage = document.getElementById('profile-page');
+  const trainerPage = document.getElementById('trainer-page');
+
   const navPlannerBtn = document.getElementById('nav-planner');
   const navProgressBtn = document.getElementById('nav-progress');
   const navChartsBtn = document.getElementById('nav-charts');
   const navRecipesBtn = document.getElementById('nav-recipes');
   const navProfileBtn = document.getElementById('nav-profile');
 
-  [plannerPage, progressPage, chartsPage, recipesPage, profilePage].forEach(p => p.classList.add('hidden'));
+  [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
   [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
 
   if (state.currentView === 'planner' || state.currentView === 'log') {
@@ -85,6 +87,8 @@ export function renderApp() {
     profilePage.classList.remove('hidden');
     navProfileBtn.classList.add('active');
     renderProfilePage(state);
+  } else if (state.currentView === 'trainer') {
+    trainerPage.classList.remove('hidden');
   }
 
   const urlInput = document.getElementById('config-url-input');

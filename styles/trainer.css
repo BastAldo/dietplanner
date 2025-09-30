@@ -1,1 +1,97 @@
 /* --- TRAINER VIEW STYLES --- */
+#trainer-page {
+    height: calc(100vh - 60px); /* Full viewport height minus header */
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+.trainer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: var(--card-color);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.trainer-header h2 {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+}
+
+.trainer-body {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+}
+
+.exercise-info-container {
+    margin-bottom: 2rem;
+}
+
+.current-exercise-name {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.current-exercise-details {
+    font-size: 1.25rem;
+    color: var(--text-color-muted);
+}
+
+.timer-ring-container {
+    width: 250px;
+    height: 250px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.timer-ring-display {
+    font-size: 3rem;
+    font-weight: bold;
+    color: var(--text-color);
+}
+
+.manual-rep-counter {
+    font-size: 6rem;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.trainer-controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+}
+
+.upcoming-exercises-container {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 400px;
+}
+
+.upcoming-exercises-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    color: var(--text-color-muted);
+}
+
+.upcoming-exercises-list li {
+    padding: 0.25rem 0;
+}

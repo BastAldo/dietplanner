@@ -86,6 +86,7 @@ const UI_TEXT_CONFIG = [
   { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
   { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
   { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
+  { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
   { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
   { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
   { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
