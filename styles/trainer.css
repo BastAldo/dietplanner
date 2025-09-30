@@ -1,6 +1,6 @@
 /* --- TRAINER VIEW STYLES --- */
 #trainer-page {
-    height: calc(100vh - 60px); /* Full viewport height minus header */
+    height: calc(100vh - 60px);
     display: flex;
     flex-direction: column;
     background-color: var(--bg-color);
@@ -28,13 +28,13 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 2rem;
+    padding: 1rem;
     text-align: center;
     position: relative;
 }
 
 .exercise-info-container {
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
 }
 
 .current-exercise-name {
@@ -45,6 +45,13 @@
 .current-exercise-details {
     font-size: 1.25rem;
     color: var(--text-color-muted);
+    margin-bottom: 0.5rem;
+}
+
+#current-rep-display {
+  font-size: 1rem;
+  color: var(--secondary-color);
+  font-weight: bold;
 }
 
 .timer-ring-container {
@@ -54,19 +61,40 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    margin-bottom: 2rem;
+    margin: 1rem 0;
 }
 
 .timer-ring-display {
     font-size: 3rem;
     font-weight: bold;
     color: var(--text-color);
+    text-transform: uppercase;
 }
 
-.manual-rep-counter {
-    font-size: 6rem;
-    font-weight: bold;
-    color: var(--primary-color);
+.timer-ring-bg {
+    fill: none;
+    stroke: var(--card-color);
+    stroke-width: 10;
+}
+
+.timer-ring-progress {
+    fill: none;
+    stroke: var(--primary-color);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dashoffset 0.1s linear;
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.flashing {
+  animation: flash 1.4s infinite;
+  color: var(--secondary-color);
 }
 
 .trainer-controls {
@@ -74,11 +102,17 @@
     gap: 1rem;
     justify-content: center;
     align-items: center;
+    margin-top: 1rem;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.25rem;
 }
 
 .upcoming-exercises-container {
     position: absolute;
-    bottom: 2rem;
+    bottom: 1rem;
     left: 50%;
     transform: translateX(-50%);
     width: 90%;

@@ -1,106 +1,30 @@
-commit_message: "feat(trainer): Aggiunge i moduli core/trainer e ui/trainerRenderer"
+commit_message: "feat(trainer): Implementa il ciclo del timer e il rendering dinamico"
 rationale: |
-  Questo commit introduce le fondamenta logiche per la Vista Trainer, creando i moduli per la gestione dello stato e per il rendering, in linea con il principio di Separazione delle Responsabilità.
+  Questo commit introduce il "motore" dinamico della Vista Trainer, rendendola interattiva e funzionale per la modalità `tempo_guided`.
 
   Le modifiche principali sono:
 
-  1.  **Creazione Macchina a Stati (`src/core/trainer.js`):**
-      * È stato creato un nuovo modulo che ospiterà la logica della sessione di allenamento.
-      * Contiene una struttura per lo stato (`workoutState`) che traccerà l'esercizio corrente, la coda degli esercizi, lo stato di esecuzione (es. 'idle', 'running') e i contatori.
-      * È stata implementata la funzione `initializeWorkout` che prende gli esercizi pianificati dal Global State e costruisce lo stato iniziale per la sessione di allenamento.
+  1.  **Logica del Timer e Macchina a Stati (`src/core/trainer.js`):**
+      * È stato introdotto un `setInterval` che agisce come ciclo principale ("battito cardiaco") per l'allenamento, garantendo aggiornamenti costanti dello stato.
+      * È stata implementata la funzione `buildExecutionQueueForCurrentSet` che, come da specifiche in `docs/02_ARCHITECTURE.md`, "pre-compila" la sequenza delle 6 fasi per ogni ripetizione della serie corrente.
+      * La macchina a stati ora gestisce attivamente le transizioni tra `idle`, `running`, `paused`, e il passaggio da una fase all'altra, consumando la `executionQueue`.
+      * Ogni cambiamento di stato ora emette un evento `workoutStateChange` per notificare all'interfaccia utente la necessità di un aggiornamento.
 
-  2.  **Creazione Renderer (`src/ui/trainerRenderer.js`):**
-      * È stato creato un nuovo modulo di rendering, `renderTrainerView`.
-      * Questa funzione è responsabile di leggere lo stato da `trainer.js` e di aggiornare la UI in `templates/trainer.html`.
-      * In questa fase iniziale, il renderer popola la vista con i dati statici dell'allenamento all'avvio: il nome del primo esercizio, i dettagli di serie/ripetizioni e la lista degli esercizi "A seguire".
+  2.  **Rendering Dinamico e Anello SVG (`src/ui/trainerRenderer.js`):**
+      * Il renderer ora crea dinamicamente un anello SVG all'interno del `timer-ring-container`, completo di sfondo e arco di progresso.
+      * È stata implementata la funzione `updateTimerRing` che anima l'arco di progresso manipolando `stroke-dashoffset` per rappresentare visivamente il tempo che passa.
+      * Il modulo si mette in ascolto dell'evento `workoutStateChange` e, quando lo riceve, la funzione `renderTrainerView` aggiorna in tempo reale tutti gli elementi della UI: il testo della fase, l'animazione dell'anello e i contatori di serie/ripetizioni.
 
-  3.  **Integrazione nel Flusso Applicativo:**
-      * Il `renderer.js` principale è stato aggiornato per importare e chiamare `renderTrainerView` quando l'utente naviga alla vista 'trainer'.
-      * Il gestore di eventi in `modals.js` è stato modificato per chiamare `initializeWorkout` prima di cambiare la vista, assicurando che lo stato del trainer sia pronto prima del rendering.
-      * I nuovi file sono stati aggiunti al Service Worker (`sw.js`) per il caching e l'uso offline.
+  3.  **Controlli Utente (`templates/trainer.html`, `src/ui/trainerRenderer.js`):**
+      * È stato aggiunto un pulsante "Avvia" alla vista.
+      * Sono stati implementati i gestori di eventi per i pulsanti "Avvia", "Pausa", "Indietro" e "Termina", che ora sono collegati alle funzioni corrispondenti nel modulo `trainer.js` (`startWorkout`, `pauseWorkout`, etc.), rendendo l'interfaccia completamente interattiva.
 
-  Con questo aggiornamento, l'applicazione è ora in grado di caricare i dati di un allenamento pianificato in uno stato dedicato e di visualizzare le informazioni iniziali nella Vista Trainer.
+  Con questo aggiornamento, la modalità `tempo_guided` della Vista Trainer è ora pienamente operativa: l'utente può avviare un allenamento ed essere guidato visivamente e testualmente attraverso ogni fase di ogni ripetizione.
 patches:
-  - file: sw.js
-    content: |
-      const CACHE_NAME = 'healtypro-v8';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'styles/recipes.css',
-        'styles/trainer.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/recipes.html',
-        'templates/modals.html',
-        'templates/trainer.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/core/trainer.js',
-        'src/ui/interactions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/recipesRenderer.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/ui/trainerRenderer.js',
-        'src/utils/constants.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
-
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
-
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
-
-      self.addEventListener('fetch', (event) => {
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
-        } else {
-          event.respondWith(fetch(event.request));
-        }
-      });
   - file: src/core/trainer.js
     content: |
+      import { setView } from './state.js';
+
       let workoutState = {
         exerciseQueue: [],
         currentExerciseIndex: -1,
@@ -108,11 +32,68 @@ patches:
         currentSet: 0,
         currentRep: 0,
         executionQueue: [],
-        currentPhaseIndex: -1
+        currentPhaseIndex: -1,
+        phaseTimeElapsed: 0,
+        totalTimeElapsed: 0,
       };
 
+      let timerInterval = null;
+      const TICK_RATE_MS = 50; // Aggiorna 20 volte al secondo per un'animazione fluida
+
+      function buildExecutionQueueForCurrentSet() {
+        const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
+        if (!currentExercise) return [];
+
+        const queue = [];
+        const reps = currentExercise.defaultReps;
+        const tempo = currentExercise.defaultTempo;
+
+        for (let i = 0; i < reps; i++) {
+          if (tempo) {
+            queue.push({ name: 'pre-up', rep: i + 1, duration: 700 });
+            queue.push({ name: 'up', rep: i + 1, duration: tempo.up * 1000 });
+            queue.push({ name: 'pre-hold', rep: i + 1, duration: 700 });
+            queue.push({ name: 'hold', rep: i + 1, duration: tempo.hold * 1000 });
+            queue.push({ name: 'pre-down', rep: i + 1, duration: 700 });
+            queue.push({ name: 'down', rep: i + 1, duration: tempo.down * 1000 });
+          }
+        }
+        return queue;
+      }
+
+      function tick() {
+        if (workoutState.status !== 'running') return;
+
+        workoutState.phaseTimeElapsed += TICK_RATE_MS;
+        workoutState.totalTimeElapsed += TICK_RATE_MS;
+
+        const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+        if (!currentPhase) {
+          // Fine della serie o errore
+          pauseWorkout(); // Metti in pausa per sicurezza
+          return;
+        }
+
+        if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
+          // Passa alla fase successiva
+          workoutState.currentPhaseIndex++;
+          workoutState.phaseTimeElapsed = 0;
+
+          const nextPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+          if (nextPhase) {
+            workoutState.currentRep = nextPhase.rep;
+          } else {
+            // Serie completata
+            // Qui andrà la logica per il riposo e la serie successiva
+            workoutState.status = 'resting';
+            console.log("Serie completata, inizio riposo...");
+          }
+        }
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
       export function getWorkoutState() {
-        return { ...workoutState };
+        return workoutState;
       }
 
       export function initializeWorkout(plannedExercises) {
@@ -120,383 +101,62 @@ patches:
           console.error("Tentativo di inizializzare un allenamento senza esercizi.");
           return;
         }
+        clearInterval(timerInterval);
+        timerInterval = null;
 
         workoutState = {
-          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)), // Deep copy
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
           currentExerciseIndex: 0,
           status: 'idle',
           currentSet: 1,
           currentRep: 1,
           executionQueue: [],
-          currentPhaseIndex: -1
+          currentPhaseIndex: -1,
+          phaseTimeElapsed: 0,
+          totalTimeElapsed: 0,
         };
-
-        // Potremmo pre-compilare la prima coda di esecuzione qui o farlo al momento dell'avvio.
-        // Per ora, lo stato è semplicemente inizializzato.
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
 
       export function startWorkout() {
         if (workoutState.status === 'idle') {
           workoutState.status = 'running';
-          // Qui andrà la logica per compilare la `executionQueue` e avviare il timer.
+          workoutState.executionQueue = buildExecutionQueueForCurrentSet();
+          workoutState.currentPhaseIndex = 0;
+          workoutState.phaseTimeElapsed = 0;
+          workoutState.currentRep = 1;
+          timerInterval = setInterval(tick, TICK_RATE_MS);
           document.dispatchEvent(new CustomEvent('workoutStateChange'));
         }
       }
 
       export function pauseWorkout() {
         if (workoutState.status === 'running' || workoutState.status === 'resting') {
+          const oldStatus = workoutState.status;
           workoutState.status = 'paused';
+          workoutState.prePauseStatus = oldStatus; // Salva lo stato precedente
+          clearInterval(timerInterval);
+          timerInterval = null;
           document.dispatchEvent(new CustomEvent('workoutStateChange'));
         }
       }
 
       export function resumeWorkout() {
         if (workoutState.status === 'paused') {
-          // La logica dovrà determinare se riprendere una fase di esercizio o un riposo.
-          workoutState.status = 'running'; // o 'resting'
+          workoutState.status = workoutState.prePauseStatus || 'running';
+          if (!timerInterval) {
+            timerInterval = setInterval(tick, TICK_RATE_MS);
+          }
           document.dispatchEvent(new CustomEvent('workoutStateChange'));
         }
       }
 
       export function endWorkout() {
         workoutState.status = 'finished';
+        clearInterval(timerInterval);
+        timerInterval = null;
+        setView('planner'); // Torna al planner
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-  - file: src/ui/modals.js
-    content: |
-      import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises, setView } from '../core/state.js';
-      import { initializeWorkout } from '../core/trainer.js';
-      import { showNotification } from './notifications.js';
-      import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-
-      let currentEditingDayISO = null;
-      let sortableInstance = null;
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      function formatIngredients(meal) {
-          if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
-          
-          const ingredientsList = meal.ingredienti.map(item => {
-              let quantity = '';
-              if (item.quantita_g) quantity = `${item.quantita_g}g`;
-              else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
-              else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
-              else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
-              
-              return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
-          }).join(', ');
-          
-          return `<p>${ingredientsList}</p>`;
-      }
-
-      function formatExerciseDetails(exercise) {
-        const sets = exercise.defaultSets;
-        const rest = exercise.defaultRest;
-        let details;
-
-        if (exercise.type === 'reps') {
-            const reps = exercise.defaultReps;
-            details = `${sets} x ${reps} | Riposo: ${rest}s`;
-        } else if (exercise.type === 'time') {
-            const duration = exercise.defaultDuration;
-            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
-        }
-
-        if (exercise.defaultTempo) {
-            const { up, hold, down } = exercise.defaultTempo;
-            details += ` | Tempo: ${up}-${hold}-${down}`;
-        }
-        return details;
-      }
-
-      export async function showRecipeModal(meal) {
-        if (!meal) return;
-        const state = getState();
-        const recipeModal = document.getElementById('recipe-modal');
-        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
-        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
-        const body = recipeModal.querySelector('#recipe-modal-body');
-        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
-        recipeModal.classList.remove('modal-hidden');
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
-          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
-        } catch (error) {
-          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
-          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
-        }
-      }
-
-      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
-        const confirmModal = document.getElementById('confirm-modal');
-        confirmModal.querySelector('#confirm-modal-title').textContent = title;
-        confirmModal.querySelector('#confirm-modal-message').textContent = message;
-        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
-        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
-        confirmBtn.className = `btn btn-${type}`;
-        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
-        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
-        const cleanup = () => {
-          confirmModal.classList.add('modal-hidden');
-          cancelBtn.removeEventListener('click', cancelHandler);
-          confirmBtn.removeEventListener('click', confirmHandler);
-        };
-        const cancelHandler = () => cleanup();
-        const confirmHandler = () => { onConfirm(); cleanup(); };
-        cancelBtn.addEventListener('click', cancelHandler, { once: true });
-        confirmBtn.addEventListener('click', confirmHandler, { once: true });
-        confirmModal.classList.remove('modal-hidden');
-      }
-
-      export function openSelectionModal(slotId) {
-        const state = getState();
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const list = selectionModal.querySelector('#selection-modal-list');
-        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
-        };
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openWorkoutSelectionModal(slotId) {
-        const state = getState();
-        const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
-        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
-        const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          workoutSelectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openWorkoutEditorModal(currentEditingDayISO);
-        };
-
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
-            closeAndReturn();
-          }
-        };
-        workoutSelectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openExerciseEditorModal(slotId, instanceId) {
-        const state = getState();
-        const modal = document.getElementById('exercise-editor-modal');
-        const form = modal.querySelector('form');
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        const exercise = workoutList.find(ex => ex.instanceId === instanceId);
-
-        if (!exercise) return;
-
-        modal.querySelector('#exercise-editor-title').textContent = `Modifica: ${exercise.name}`;
-        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
-        form.elements.sets.value = exercise.defaultSets;
-        form.elements.rest.value = exercise.defaultRest;
-
-        const repsContainer = form.querySelector('.reps-group');
-        const durationContainer = form.querySelector('.duration-group');
-
-        if (exercise.type === 'reps') {
-            repsContainer.style.display = 'block';
-            durationContainer.style.display = 'none';
-            form.elements.reps.value = exercise.defaultReps;
-        } else {
-            repsContainer.style.display = 'none';
-            durationContainer.style.display = 'block';
-            form.elements.duration.value = exercise.defaultDuration;
-        }
-
-        const tempoContainer = form.querySelector('.tempo-group');
-        if (exercise.defaultTempo) {
-            tempoContainer.style.display = 'grid';
-            form.elements.tempo_up.value = exercise.defaultTempo.up;
-            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
-            form.elements.tempo_down.value = exercise.defaultTempo.down;
-        } else {
-            tempoContainer.style.display = 'none';
-        }
-
-        form.onsubmit = e => {
-            e.preventDefault();
-            const newValues = {
-                defaultSets: parseInt(form.elements.sets.value),
-                defaultRest: parseInt(form.elements.rest.value)
-            };
-            if (exercise.type === 'reps') {
-                newValues.defaultReps = parseInt(form.elements.reps.value);
-            } else {
-                newValues.defaultDuration = parseInt(form.elements.duration.value);
-            }
-            if (exercise.defaultTempo) {
-                newValues.defaultTempo = {
-                    up: parseInt(form.elements.tempo_up.value),
-                    hold: parseInt(form.elements.tempo_hold.value),
-                    down: parseInt(form.elements.tempo_down.value)
-                };
-            }
-            updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
-            modal.classList.add('modal-hidden');
-            openWorkoutEditorModal(currentEditingDayISO);
-        };
-        
-        modal.classList.remove('modal-hidden');
-      }
-
-      export function openWorkoutEditorModal(isoDate) {
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const modal = document.getElementById('workout-editor-modal');
-        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
-        const body = modal.querySelector('#workout-editor-body');
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-
-        let exercisesHTML = plannedWorkoutList.map(exercise => {
-            const exerciseDetails = formatExerciseDetails(exercise);
-            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
-                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
-                        <div class="exercise-info">
-                            <span class="meal-details__name">${exercise.name}</span>
-                            <span class="exercise-details-summary">${exerciseDetails}</span>
-                        </div>
-                        <div class="meal-actions">
-                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
-                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                        </div>
-                    </div>`;
-        }).join('');
-
-        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
-
-        const listContainer = body.querySelector('.workout-editor-list');
-
-        if (sortableInstance) {
-            sortableInstance.destroy();
-        }
-        sortableInstance = new Sortable(listContainer, {
-            animation: 150,
-            handle: '.drag-handle',
-            ghostClass: 'sortable-ghost',
-            onEnd: function(evt) {
-                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
-            }
-        });
-
-        body.onclick = e => {
-            const btnAddExercise = e.target.closest('.btn-add-exercise');
-            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
-            const btnEditExercise = e.target.closest('.btn-edit-exercise');
-
-            if (btnAddExercise) {
-                modal.classList.add('modal-hidden');
-                openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
-            } else if (btnRemoveExercise) {
-                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
-                openWorkoutEditorModal(isoDate); // Refresh this modal
-            } else if (btnEditExercise) {
-                modal.classList.add('modal-hidden');
-                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId));
-            }
-        };
-
-        modal.classList.remove('modal-hidden');
-      }
-
-      export function openDayEditorModal(isoDate) {
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const dayEditorModal = document.getElementById('day-editor-modal');
-        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        const body = dayEditorModal.querySelector('#day-editor-body');
-        
-        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const plannedMeal = state.weeklyPlan[slotId];
-          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
-          }
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-        
-        let workoutDetailsHTML;
-        if (plannedWorkoutList.length > 0) {
-            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-            const startWorkoutBtn = `<button class="btn-start-workout btn btn-primary">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button>${startWorkoutBtn}</div></div>`;
-        } else {
-            workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-        }
-        
-        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
-
-        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
-
-        body.onclick = e => {
-          const btnAddMeal = e.target.closest('.btn-add-meal');
-          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-          const btnAddExercise = e.target.closest('.btn-add-exercise');
-          const btnManageWorkout = e.target.closest('.btn-manage-workout');
-          const btnStartWorkout = e.target.closest('.btn-start-workout');
-
-          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
-          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
-          else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-          else if (btnAddExercise) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnManageWorkout) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnStartWorkout) {
-            dayEditorModal.classList.add('modal-hidden');
-            const globalState = getState();
-            const workoutSlotId = `${currentEditingDayISO}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout);
-            setView('trainer');
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
       }
   - file: src/ui/renderer.js
     content: |
@@ -504,7 +164,7 @@ patches:
       import { renderPlannerPage } from './plannerRenderer.js';
       import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
       import { renderRecipesPage } from './recipesRenderer.js';
-      import { renderTrainerView } from './trainerRenderer.js';
+      import { renderTrainerView, initializeTrainerUI } from './trainerRenderer.js';
       import { UI_TEXT } from '../utils/constants.js';
       import { renderIcon } from './icons.js';
 
@@ -592,7 +252,8 @@ patches:
           renderProfilePage(state);
         } else if (state.currentView === 'trainer') {
           trainerPage.classList.remove('hidden');
-          renderTrainerView();
+          initializeTrainerUI(); // Assicura che l'UI sia pronta
+          renderTrainerView(); // Disegna lo stato attuale
         }
 
         const urlInput = document.getElementById('config-url-input');
@@ -600,13 +261,50 @@ patches:
       }
   - file: src/ui/trainerRenderer.js
     content: |
-      import { getWorkoutState } from '../core/trainer.js';
+      import { getWorkoutState, startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../core/trainer.js';
+      import { setView } from '../core/state.js';
+
+      let ringProgress, ringText;
+      const RING_RADIUS = 80;
+      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+      function createTimerRing(container) {
+          if (container.querySelector('svg')) return; // Già creato
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('width', '200');
+          svg.setAttribute('height', '200');
+          svg.setAttribute('viewBox', '0 0 200 200');
+
+          const backgroundCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          backgroundCircle.setAttribute('cx', '100');
+          backgroundCircle.setAttribute('cy', '100');
+          backgroundCircle.setAttribute('r', RING_RADIUS);
+          backgroundCircle.setAttribute('class', 'timer-ring-bg');
+
+          const progressCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          progressCircle.setAttribute('cx', '100');
+          progressCircle.setAttribute('cy', '100');
+          progressCircle.setAttribute('r', RING_RADIUS);
+          progressCircle.setAttribute('class', 'timer-ring-progress');
+          progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
+          progressCircle.style.strokeDashoffset = RING_CIRCUMFERENCE;
+
+          svg.appendChild(backgroundCircle);
+          svg.appendChild(progressCircle);
+          container.prepend(svg);
+          ringProgress = progressCircle;
+      }
+
+      function updateTimerRing(percent) {
+        if (!ringProgress) return;
+        const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
+        ringProgress.style.strokeDashoffset = offset;
+      }
 
       function formatExerciseDetails(exercise, set) {
         if (!exercise) return '';
         const sets = exercise.defaultSets;
         let details = `Serie ${set} di ${sets}`;
-
         if (exercise.type === 'reps') {
           const reps = exercise.defaultReps;
           details += ` | ${reps} Ripetizioni`;
@@ -617,32 +315,240 @@ patches:
         return details;
       }
 
+      function renderPhase(state) {
+        const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
+        const phase = executionQueue[currentPhaseIndex];
+        if (!phase) return;
+
+        const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
+        const isPrePhase = phase.name.startsWith('pre-');
+
+        ringText.textContent = phaseNameDisplay;
+        ringText.classList.toggle('flashing', isPrePhase);
+
+        const progressPercent = (phaseTimeElapsed / phase.duration) * 100;
+        updateTimerRing(progressPercent);
+      }
+
       export function renderTrainerView() {
         const state = getWorkoutState();
-        const { exerciseQueue, currentExerciseIndex, status, currentSet } = state;
+        const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
 
-        if (status === 'idle' && currentExerciseIndex < 0) {
-          // Stato iniziale prima che l'allenamento venga caricato, non fare nulla.
-          return;
-        }
+        if (status === 'idle' && currentExerciseIndex < 0) return;
 
         const currentExercise = exerciseQueue[currentExerciseIndex];
-
-        // Popola i dati statici dell'allenamento
         document.getElementById('current-exercise-name').textContent = currentExercise.name;
         document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
+        document.getElementById('current-rep-display').textContent = `Rip. ${currentRep}`;
+
 
         const upcomingList = document.getElementById('upcoming-exercises-list');
-        upcomingList.innerHTML = ''; // Pulisci la lista
+        upcomingList.innerHTML = '';
         exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
           const li = document.createElement('li');
           li.textContent = ex.name;
           upcomingList.appendChild(li);
         });
 
-        // Qui, in futuro, andrà la logica per mostrare la modalità corretta
-        // e aggiornare dinamicamente i timer, i contatori, etc.
-        // Per ora, mostriamo solo lo stato iniziale.
+        const controlsContainer = document.getElementById('trainer-main-controls');
+        if (status === 'idle') {
+          controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
+        } else if (status === 'running' || status === 'resting') {
+          controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
+        } else if (status === 'paused') {
+          controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
+        }
+
+        const modeTempoContainer = document.getElementById('mode-tempo-guided');
+        // Aggiungere logica per altre modalità qui
+        modeTempoContainer.classList.remove('hidden');
+
+        if (status === 'running') {
+            renderPhase(state);
+        }
       }
+
+      export function initializeTrainerUI() {
+          document.removeEventListener('workoutStateChange', renderTrainerView);
+          document.addEventListener('workoutStateChange', renderTrainerView);
+
+          const ringContainer = document.getElementById('timer-ring-container');
+          createTimerRing(ringContainer);
+          ringText = document.getElementById('tempo-phase-name');
+
+          document.getElementById('trainer-page').addEventListener('click', (e) => {
+              if (e.target.id === 'trainer-start-btn') startWorkout();
+              if (e.target.id === 'trainer-pause-btn') pauseWorkout();
+              if (e.target.id === 'trainer-resume-btn') resumeWorkout();
+              if (e.target.id === 'trainer-end-btn') endWorkout();
+              if (e.target.id === 'trainer-back-btn') setView('planner');
+          });
+      }
+  - file: styles/trainer.css
+    content: |
+      /* --- TRAINER VIEW STYLES --- */
+      #trainer-page {
+          height: calc(100vh - 60px);
+          display: flex;
+          flex-direction: column;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+
+      .trainer-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1rem;
+          background-color: var(--card-color);
+          border-bottom: 1px solid var(--border-color);
+          flex-shrink: 0;
+      }
+
+      .trainer-header h2 {
+          font-size: 1.25rem;
+          color: var(--primary-color);
+      }
+
+      .trainer-body {
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          padding: 1rem;
+          text-align: center;
+          position: relative;
+      }
+
+      .exercise-info-container {
+          margin-bottom: 1rem;
+      }
+
+      .current-exercise-name {
+          font-size: 2rem;
+          font-weight: bold;
+      }
+
+      .current-exercise-details {
+          font-size: 1.25rem;
+          color: var(--text-color-muted);
+          margin-bottom: 0.5rem;
+      }
+      
+      #current-rep-display {
+        font-size: 1rem;
+        color: var(--secondary-color);
+        font-weight: bold;
+      }
+
+      .timer-ring-container {
+          width: 250px;
+          height: 250px;
+          position: relative;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin: 1rem 0;
+      }
+
+      .timer-ring-display {
+          font-size: 3rem;
+          font-weight: bold;
+          color: var(--text-color);
+          text-transform: uppercase;
+      }
+
+      .timer-ring-bg {
+          fill: none;
+          stroke: var(--card-color);
+          stroke-width: 10;
+      }
+
+      .timer-ring-progress {
+          fill: none;
+          stroke: var(--primary-color);
+          stroke-width: 10;
+          stroke-linecap: round;
+          transform: rotate(-90deg);
+          transform-origin: 50% 50%;
+          transition: stroke-dashoffset 0.1s linear;
+      }
+
+      @keyframes flash {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .flashing {
+        animation: flash 1.4s infinite;
+        color: var(--secondary-color);
+      }
+
+      .trainer-controls {
+          display: flex;
+          gap: 1rem;
+          justify-content: center;
+          align-items: center;
+          margin-top: 1rem;
+      }
+
+      .btn-large {
+          padding: 1rem 2rem;
+          font-size: 1.25rem;
+      }
+
+      .upcoming-exercises-container {
+          position: absolute;
+          bottom: 1rem;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 90%;
+          max-width: 400px;
+      }
+
+      .upcoming-exercises-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          color: var(--text-color-muted);
+      }
+
+      .upcoming-exercises-list li {
+          padding: 0.25rem 0;
+      }
+  - file: templates/trainer.html
+    content: |
+      <div id="trainer-page" class="page-view hidden">
+          <header class="trainer-header">
+              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
+              <h2 id="trainer-title">Allenamento</h2>
+              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
+          </header>
+          <div class="trainer-body">
+              <div class="exercise-info-container">
+                  <h3 id="current-exercise-name"></h3>
+                  <p id="current-exercise-details"></p>
+                  <p id="current-rep-display"></p>
+              </div>
+
+              <div id="trainer-display-modes">
+                  <div id="mode-tempo-guided">
+                      <div id="timer-ring-container" class="timer-ring-container">
+                          <div id="tempo-phase-name" class="timer-ring-display"></div>
+                      </div>
+                  </div>
+              </div>
+
+              <div id="trainer-main-controls" class="trainer-controls">
+              </div>
+
+              <div class="upcoming-exercises-container">
+                  <h4>A seguire:</h4>
+                  <ul id="upcoming-exercises-list" class="upcoming-exercises-list">
+                  </ul>
+              </div>
+          </div>
+      </div>
 commands:
-  - echo "Moduli di logica e rendering per la Vista Trainer creati e integrati."
+  - echo "Ciclo del timer, rendering dinamico dell'anello SVG e controlli utente implementati per la Vista Trainer."

@@ -2,7 +2,7 @@ import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
 import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
 import { renderRecipesPage } from './recipesRenderer.js';
-import { renderTrainerView } from './trainerRenderer.js';
+import { renderTrainerView, initializeTrainerUI } from './trainerRenderer.js';
 import { UI_TEXT } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
 
@@ -90,7 +90,8 @@ export function renderApp() {
     renderProfilePage(state);
   } else if (state.currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
-    renderTrainerView();
+    initializeTrainerUI(); // Assicura che l'UI sia pronta
+    renderTrainerView(); // Disegna lo stato attuale
   }
 
   const urlInput = document.getElementById('config-url-input');
