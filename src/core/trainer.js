@@ -34,6 +34,7 @@ function buildExecutionQueueForCurrentSet() {
       queue.push({ name: 'down', rep: i + 1, duration: tempo.down * 1000 });
     }
   }
+  console.log('[STATE] Coda di esecuzione (stati pre-compilati) creata:', queue);
   return queue;
 }
 
@@ -56,7 +57,7 @@ function advanceToNextExercise() {
   if (workoutState.currentExerciseIndex >= workoutState.exerciseQueue.length) {
     endWorkout();
   } else {
-    workoutState.status = 'idle'; // Pronto per il prossimo esercizio
+    workoutState.status = 'idle';
     workoutState.currentSet = 1;
     workoutState.currentRep = 1;
     workoutState.executionQueue = [];
@@ -68,6 +69,9 @@ function tick() {
   if (workoutState.status === 'running') {
     workoutState.phaseTimeElapsed += TICK_RATE_MS;
     const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
+
+    console.log(`[STATE] Tick: status=${workoutState.status}, phase=${currentPhase ? currentPhase.name : 'N/A'}, phaseTime=${workoutState.phaseTimeElapsed}`);
+
     if (!currentPhase) {
       pauseWorkout();
       return;
@@ -86,6 +90,7 @@ function tick() {
     }
   } else if (workoutState.status === 'resting') {
     workoutState.restTimeRemaining -= TICK_RATE_MS;
+    console.log(`[STATE] Tick: status=${workoutState.status}, restTimeRemaining=${workoutState.restTimeRemaining}`);
     if (workoutState.restTimeRemaining <= 0) {
       advanceToNextSet();
     }
@@ -99,7 +104,6 @@ export function getWorkoutState() {
 
 export function initializeWorkout(plannedExercises) {
   if (!plannedExercises || plannedExercises.length === 0) {
-    console.error("Tentativo di inizializzare un allenamento senza esercizi.");
     return;
   }
   clearInterval(timerInterval);

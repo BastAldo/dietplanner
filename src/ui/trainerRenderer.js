@@ -54,47 +54,43 @@ function formatExerciseDetails(exercise, set) {
 function renderPhase(state) {
   const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
   const phase = executionQueue[currentPhaseIndex];
-  if (!phase || !ringProgress || !ringText) return;
+  
+  console.log('[RENDER] Chiamata renderPhase.');
+
+  if (!phase || !ringProgress || !ringText) {
+    console.error('[RENDER] Errore: `renderPhase` chiamata senza fase, ring o testo disponibili.');
+    return;
+  }
 
   const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-  const isPrePhase = phase.name.startsWith('pre-');
-
   ringText.textContent = phaseNameDisplay;
-  ringText.classList.toggle('flashing', isPrePhase);
 
   const progress = phaseTimeElapsed / phase.duration;
   const offset = RING_CIRCUMFERENCE * (1 - Math.min(progress, 1));
+  
+  console.log(`[RENDER] Dati per SVG: progress=${progress.toFixed(2)}, offsetCalcolato=${offset.toFixed(2)}`);
+  
   ringProgress.style.strokeDashoffset = offset;
 }
 
 function renderRest(state) {
+  console.log('[RENDER] Chiamata renderRest.');
   const { restTimeRemaining } = state;
   const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
   if (!ringText || !ringProgress) return;
   ringText.textContent = secondsRemaining;
-  ringText.classList.remove('flashing');
   ringProgress.style.strokeDashoffset = RING_CIRCUMFERENCE;
 }
 
 export function renderTrainerView() {
   const state = getWorkoutState();
-  const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
+  const { exerciseQueue, currentExerciseIndex, status } = state;
 
   if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
 
-  const currentExercise = exerciseQueue[currentExerciseIndex];
-  document.getElementById('current-exercise-name').textContent = currentExercise.name;
-  document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
-  document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
-
   if (status !== lastRenderedStatus) {
-      const upcomingList = document.getElementById('upcoming-exercises-list');
-      upcomingList.innerHTML = '';
-      exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-        const li = document.createElement('li');
-        li.textContent = ex.name;
-        upcomingList.appendChild(li);
-      });
+      console.log(`[RENDER] Cambio di stato rilevato: da '${lastRenderedStatus}' a '${status}'. Aggiorno i controlli.`);
+      lastRenderedStatus = status;
 
       const controlsContainer = document.getElementById('trainer-main-controls');
       if (status === 'idle') {
@@ -108,7 +104,6 @@ export function renderTrainerView() {
       } else {
         controlsContainer.innerHTML = '';
       }
-      lastRenderedStatus = status;
   }
 
   if (status === 'running') {
@@ -119,6 +114,7 @@ export function renderTrainerView() {
 }
 
 export function initializeTrainerUI() {
+    console.log('[RENDER] Inizializzazione UI Trainer.');
     lastRenderedStatus = '';
     document.removeEventListener('workoutStateChange', renderTrainerView);
     document.addEventListener('workoutStateChange', renderTrainerView);
