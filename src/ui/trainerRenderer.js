@@ -9,6 +9,7 @@ let lastRenderedStatus = '';
 function createTimerRing(container) {
     if (container.querySelector('svg')) {
         ringProgress = container.querySelector('.timer-ring-progress');
+        ringProgress.style.strokeDasharray = RING_CIRCUMFERENCE;
         return;
     }
     container.innerHTML = '';
@@ -29,18 +30,11 @@ function createTimerRing(container) {
     progressCircle.setAttribute('r', RING_RADIUS);
     progressCircle.setAttribute('class', 'timer-ring-progress');
     progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-    progressCircle.style.strokeDashoffset = RING_CIRCUMFERENCE;
 
     svg.appendChild(backgroundCircle);
     svg.appendChild(progressCircle);
     container.prepend(svg);
     ringProgress = progressCircle;
-}
-
-function updateTimerRing(percent) {
-  if (!ringProgress) return;
-  const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-  ringProgress.style.strokeDashoffset = offset;
 }
 
 function formatExerciseDetails(exercise, set) {
@@ -60,7 +54,7 @@ function formatExerciseDetails(exercise, set) {
 function renderPhase(state) {
   const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
   const phase = executionQueue[currentPhaseIndex];
-  if (!phase || !ringText) return;
+  if (!phase || !ringProgress || !ringText) return;
 
   const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
   const isPrePhase = phase.name.startsWith('pre-');
@@ -68,17 +62,18 @@ function renderPhase(state) {
   ringText.textContent = phaseNameDisplay;
   ringText.classList.toggle('flashing', isPrePhase);
 
-  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-  updateTimerRing(progressPercent);
+  const progress = phaseTimeElapsed / phase.duration;
+  const offset = RING_CIRCUMFERENCE * (1 - Math.min(progress, 1));
+  ringProgress.style.strokeDashoffset = offset;
 }
 
 function renderRest(state) {
   const { restTimeRemaining } = state;
   const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
-  if (!ringText) return;
+  if (!ringText || !ringProgress) return;
   ringText.textContent = secondsRemaining;
   ringText.classList.remove('flashing');
-  updateTimerRing(0);
+  ringProgress.style.strokeDashoffset = RING_CIRCUMFERENCE;
 }
 
 export function renderTrainerView() {
@@ -92,7 +87,6 @@ export function renderTrainerView() {
   document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
   document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
 
-  // Solo se lo stato cambia, aggiorniamo i controlli e la lista esercizi
   if (status !== lastRenderedStatus) {
       const upcomingList = document.getElementById('upcoming-exercises-list');
       upcomingList.innerHTML = '';
@@ -106,7 +100,7 @@ export function renderTrainerView() {
       if (status === 'idle') {
         controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
         if(ringText) ringText.textContent = '';
-        updateTimerRing(0);
+        if(ringProgress) ringProgress.style.strokeDashoffset = RING_CIRCUMFERENCE;
       } else if (status === 'running' || status === 'resting') {
         controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
       } else if (status === 'paused') {
@@ -117,10 +111,6 @@ export function renderTrainerView() {
       lastRenderedStatus = status;
   }
 
-  const modeTempoContainer = document.getElementById('mode-tempo-guided');
-  modeTempoContainer.classList.remove('hidden');
-
-  // Questi aggiornamenti avvengono ad ogni tick, indipendentemente dal cambio di stato
   if (status === 'running') {
       renderPhase(state);
   } else if (status === 'resting') {
@@ -129,7 +119,7 @@ export function renderTrainerView() {
 }
 
 export function initializeTrainerUI() {
-    lastRenderedStatus = ''; // Reset on initialization
+    lastRenderedStatus = '';
     document.removeEventListener('workoutStateChange', renderTrainerView);
     document.addEventListener('workoutStateChange', renderTrainerView);
 
