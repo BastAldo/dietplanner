@@ -1,59 +1,648 @@
-commit_message: "fix(trainer): Rimuove il contenuto placeholder dalla UI statica"
+commit_message: "feat(trainer): Aggiunge i moduli core/trainer e ui/trainerRenderer"
 rationale: |
-  Questo commit corregge un errore nella precedente implementazione, rimuovendo tutto il contenuto hardcodato e i placeholder dal file `templates/trainer.html`.
+  Questo commit introduce le fondamenta logiche per la Vista Trainer, creando i moduli per la gestione dello stato e per il rendering, in linea con il principio di Separazione delle Responsabilità.
 
-  L'analisi ha rivelato che, oltre agli elementi `<li>` nella lista degli esercizi futuri, anche altri elementi come il nome dell'esercizio, i dettagli della serie e i valori iniziali dei timer erano stati inseriti come testo statico. Questo violava la regola fondamentale di non inventare contenuti.
+  Le modifiche principali sono:
 
-  La modifica principale è la seguente:
-  1.  **Pulizia di `templates/trainer.html`**: Tutti gli elementi destinati a contenere dati dinamici (nomi, contatori, dettagli) sono stati svuotati. Ora il file rappresenta una struttura HTML pura, senza alcun dato fittizio, pronta per essere gestita correttamente dal modulo di rendering.
+  1.  **Creazione Macchina a Stati (`src/core/trainer.js`):**
+      * È stato creato un nuovo modulo che ospiterà la logica della sessione di allenamento.
+      * Contiene una struttura per lo stato (`workoutState`) che traccerà l'esercizio corrente, la coda degli esercizi, lo stato di esecuzione (es. 'idle', 'running') e i contatori.
+      * È stata implementata la funzione `initializeWorkout` che prende gli esercizi pianificati dal Global State e costruisce lo stato iniziale per la sessione di allenamento.
 
-  Questa correzione assicura che il template della Vista Trainer sia unicamente strutturale e allineato al 100% con i principi di sviluppo del progetto. Tutti gli altri file modificati nella patch precedente sono stati riesaminati e sono risultati corretti e privi di placeholder.
+  2.  **Creazione Renderer (`src/ui/trainerRenderer.js`):**
+      * È stato creato un nuovo modulo di rendering, `renderTrainerView`.
+      * Questa funzione è responsabile di leggere lo stato da `trainer.js` e di aggiornare la UI in `templates/trainer.html`.
+      * In questa fase iniziale, il renderer popola la vista con i dati statici dell'allenamento all'avvio: il nome del primo esercizio, i dettagli di serie/ripetizioni e la lista degli esercizi "A seguire".
+
+  3.  **Integrazione nel Flusso Applicativo:**
+      * Il `renderer.js` principale è stato aggiornato per importare e chiamare `renderTrainerView` quando l'utente naviga alla vista 'trainer'.
+      * Il gestore di eventi in `modals.js` è stato modificato per chiamare `initializeWorkout` prima di cambiare la vista, assicurando che lo stato del trainer sia pronto prima del rendering.
+      * I nuovi file sono stati aggiunti al Service Worker (`sw.js`) per il caching e l'uso offline.
+
+  Con questo aggiornamento, l'applicazione è ora in grado di caricare i dati di un allenamento pianificato in uno stato dedicato e di visualizzare le informazioni iniziali nella Vista Trainer.
 patches:
-  - file: templates/trainer.html
+  - file: sw.js
     content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
-              <h2 id="trainer-title">Allenamento</h2>
-              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-              </div>
+      const CACHE_NAME = 'healtypro-v8';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
 
-              <div id="trainer-display-modes">
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
 
-                  <div id="mode-tempo-guided" class="hidden">
-                      <div class="timer-ring-container">
-                          <div id="tempo-phase-name" class="timer-ring-display"></div>
-                      </div>
-                  </div>
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
 
-                  <div id="mode-static-hold" class="hidden">
-                      <div class="timer-ring-container">
-                          <div id="static-hold-timer" class="timer-ring-display"></div>
-                      </div>
-                  </div>
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: src/core/trainer.js
+    content: |
+      let workoutState = {
+        exerciseQueue: [],
+        currentExerciseIndex: -1,
+        status: 'idle', // idle, running, paused, resting, finished
+        currentSet: 0,
+        currentRep: 0,
+        executionQueue: [],
+        currentPhaseIndex: -1
+      };
 
-                  <div id="mode-manual-reps" class="hidden">
-                      <div class="manual-rep-counter-container">
-                          <p>Ripetizioni Eseguite:</p>
-                          <div id="manual-rep-count" class="manual-rep-counter"></div>
-                      </div>
-                  </div>
-              </div>
+      export function getWorkoutState() {
+        return { ...workoutState };
+      }
 
-              <div id="trainer-main-controls" class="trainer-controls">
-                  </div>
+      export function initializeWorkout(plannedExercises) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+          console.error("Tentativo di inizializzare un allenamento senza esercizi.");
+          return;
+        }
 
-              <div class="upcoming-exercises-container">
-                  <h4>A seguire:</h4>
-                  <ul id="upcoming-exercises-list" class="upcoming-exercises-list">
-                  </ul>
-              </div>
-          </div>
-      </div>
+        workoutState = {
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)), // Deep copy
+          currentExerciseIndex: 0,
+          status: 'idle',
+          currentSet: 1,
+          currentRep: 1,
+          executionQueue: [],
+          currentPhaseIndex: -1
+        };
+
+        // Potremmo pre-compilare la prima coda di esecuzione qui o farlo al momento dell'avvio.
+        // Per ora, lo stato è semplicemente inizializzato.
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function startWorkout() {
+        if (workoutState.status === 'idle') {
+          workoutState.status = 'running';
+          // Qui andrà la logica per compilare la `executionQueue` e avviare il timer.
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function pauseWorkout() {
+        if (workoutState.status === 'running' || workoutState.status === 'resting') {
+          workoutState.status = 'paused';
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function resumeWorkout() {
+        if (workoutState.status === 'paused') {
+          // La logica dovrà determinare se riprendere una fase di esercizio o un riposo.
+          workoutState.status = 'running'; // o 'resting'
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function endWorkout() {
+        workoutState.status = 'finished';
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+  - file: src/ui/modals.js
+    content: |
+      import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises, setView } from '../core/state.js';
+      import { initializeWorkout } from '../core/trainer.js';
+      import { showNotification } from './notifications.js';
+      import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      let currentEditingDayISO = null;
+      let sortableInstance = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      function formatIngredients(meal) {
+          if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
+          
+          const ingredientsList = meal.ingredienti.map(item => {
+              let quantity = '';
+              if (item.quantita_g) quantity = `${item.quantita_g}g`;
+              else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
+              else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
+              else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
+              
+              return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
+          }).join(', ');
+          
+          return `<p>${ingredientsList}</p>`;
+      }
+
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets;
+        const rest = exercise.defaultRest;
+        let details;
+
+        if (exercise.type === 'reps') {
+            const reps = exercise.defaultReps;
+            details = `${sets} x ${reps} | Riposo: ${rest}s`;
+        } else if (exercise.type === 'time') {
+            const duration = exercise.defaultDuration;
+            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+        }
+
+        if (exercise.defaultTempo) {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
+      }
+
+      export async function showRecipeModal(meal) {
+        if (!meal) return;
+        const state = getState();
+        const recipeModal = document.getElementById('recipe-modal');
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
+        const body = recipeModal.querySelector('#recipe-modal-body');
+        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
+        } catch (error) {
+          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
+        }
+      }
+
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        const confirmModal = document.getElementById('confirm-modal');
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
+        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
+        confirmBtn.className = `btn btn-${type}`;
+        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          cancelBtn.removeEventListener('click', cancelHandler);
+          confirmBtn.removeEventListener('click', confirmHandler);
+        };
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        cancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModal.classList.remove('modal-hidden');
+      }
+
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const mealType = slotId.substring(11);
+        const selectionModal = document.getElementById('selection-modal');
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+        };
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
+        };
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutSelectionModal(slotId) {
+        const state = getState();
+        const workoutSelectionModal = document.getElementById('workout-selection-modal');
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
+        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+        const relevantWorkouts = state.masterWorkoutList;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          workoutSelectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openWorkoutEditorModal(currentEditingDayISO);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if (item) {
+            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
+            closeAndReturn();
+          }
+        };
+        workoutSelectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openExerciseEditorModal(slotId, instanceId) {
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === instanceId);
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `Modifica: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'block';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'block';
+            form.elements.duration.value = exercise.defaultDuration;
+        }
+
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
+
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(currentEditingDayISO);
+        };
+        
+        modal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const modal = document.getElementById('workout-editor-modal');
+        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+        const body = modal.querySelector('#workout-editor-body');
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+
+        let exercisesHTML = plannedWorkoutList.map(exercise => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+
+        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+
+        const listContainer = body.querySelector('.workout-editor-list');
+
+        if (sortableInstance) {
+            sortableInstance.destroy();
+        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
+            }
+        });
+
+        body.onclick = e => {
+            const btnAddExercise = e.target.closest('.btn-add-exercise');
+            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+            const btnEditExercise = e.target.closest('.btn-edit-exercise');
+
+            if (btnAddExercise) {
+                modal.classList.add('modal-hidden');
+                openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
+            } else if (btnRemoveExercise) {
+                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+                openWorkoutEditorModal(isoDate); // Refresh this modal
+            } else if (btnEditExercise) {
+                modal.classList.add('modal-hidden');
+                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId));
+            }
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const dayEditorModal = document.getElementById('day-editor-modal');
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
+        
+        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const plannedMeal = state.weeklyPlan[slotId];
+          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          }
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+        
+        let workoutDetailsHTML;
+        if (plannedWorkoutList.length > 0) {
+            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
+            const startWorkoutBtn = `<button class="btn-start-workout btn btn-primary">${UI_TEXT.START_WORKOUT_BTN}</button>`;
+            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button>${startWorkoutBtn}</div></div>`;
+        } else {
+            workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        }
+        
+        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+
+        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+
+        body.onclick = e => {
+          const btnAddMeal = e.target.closest('.btn-add-meal');
+          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnManageWorkout = e.target.closest('.btn-manage-workout');
+          const btnStartWorkout = e.target.closest('.btn-start-workout');
+
+          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
+          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+          else if (btnAddExercise) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnManageWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnStartWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            const globalState = getState();
+            const workoutSlotId = `${currentEditingDayISO}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout);
+            setView('trainer');
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
+      import { renderRecipesPage } from './recipesRenderer.js';
+      import { renderTrainerView } from './trainerRenderer.js';
+      import { UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (state.currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        } else if (state.currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          renderTrainerView();
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: src/ui/trainerRenderer.js
+    content: |
+      import { getWorkoutState } from '../core/trainer.js';
+
+      function formatExerciseDetails(exercise, set) {
+        if (!exercise) return '';
+        const sets = exercise.defaultSets;
+        let details = `Serie ${set} di ${sets}`;
+
+        if (exercise.type === 'reps') {
+          const reps = exercise.defaultReps;
+          details += ` | ${reps} Ripetizioni`;
+        } else if (exercise.type === 'time') {
+          const duration = exercise.defaultDuration;
+          details += ` | ${duration}s`;
+        }
+        return details;
+      }
+
+      export function renderTrainerView() {
+        const state = getWorkoutState();
+        const { exerciseQueue, currentExerciseIndex, status, currentSet } = state;
+
+        if (status === 'idle' && currentExerciseIndex < 0) {
+          // Stato iniziale prima che l'allenamento venga caricato, non fare nulla.
+          return;
+        }
+
+        const currentExercise = exerciseQueue[currentExerciseIndex];
+
+        // Popola i dati statici dell'allenamento
+        document.getElementById('current-exercise-name').textContent = currentExercise.name;
+        document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
+
+        const upcomingList = document.getElementById('upcoming-exercises-list');
+        upcomingList.innerHTML = ''; // Pulisci la lista
+        exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
+          const li = document.createElement('li');
+          li.textContent = ex.name;
+          upcomingList.appendChild(li);
+        });
+
+        // Qui, in futuro, andrà la logica per mostrare la modalità corretta
+        // e aggiornare dinamicamente i timer, i contatori, etc.
+        // Per ora, mostriamo solo lo stato iniziale.
+      }
 commands:
-  - echo "File templates/trainer.html corretto. Tutti i placeholder sono stati rimossi."
+  - echo "Moduli di logica e rendering per la Vista Trainer creati e integrati."

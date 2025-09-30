@@ -1,4 +1,5 @@
 import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises, setView } from '../core/state.js';
+import { initializeWorkout } from '../core/trainer.js';
 import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
@@ -321,6 +322,10 @@ export function openDayEditorModal(isoDate) {
     }
     else if (btnStartWorkout) {
       dayEditorModal.classList.add('modal-hidden');
+      const globalState = getState();
+      const workoutSlotId = `${currentEditingDayISO}-${WORKOUT_SLOT_ID}`;
+      const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+      initializeWorkout(exercisesForWorkout);
       setView('trainer');
     }
   };
