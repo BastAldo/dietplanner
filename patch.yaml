@@ -1,52 +1,692 @@
-commit_message: "fix(js): Corregge un errore di sintassi nel file icons.js"
+commit_message: "feat(dnd): Implementa il riordinamento degli esercizi con drag-and-drop"
 rationale: |
-  Questo commit risolve un `Uncaught SyntaxError` nel file `src/ui/icons.js`.
+  Questo commit introduce la funzionalità di riordinamento (drag-and-drop) degli esercizi all'interno del "Workout Editor", completando così tutte le funzionalità di editing richieste.
 
-  L'errore era dovuto all'utilizzo di un punto e virgola (`;`) invece di una virgola (`,`) per separare le proprietà all'interno dell'oggetto `ICONS` dopo l'aggiunta della nuova icona `EDIT`.
+  Le modifiche principali sono:
+  1.  **Integrazione di SortableJS**: La libreria `SortableJS` è stata aggiunta a `index.html` tramite CDN. Questa libreria gestisce in modo robusto tutta la complessità degli eventi di trascinamento, sia su desktop che su mobile.
+  2.  **Logica di Riordinamento nello Stato**: È stata creata una nuova funzione `reorderWorkoutExercises` in `src/core/state.js`. Questa funzione riceve lo `slotId` e gli indici di partenza e arrivo dell'elemento trascinato, riordina l'array degli esercizi nello stato e salva le modifiche.
+  3.  **Attivazione nell'UI**: La funzione `openWorkoutEditorModal` in `src/ui/modals.js` è stata aggiornata per inizializzare `SortableJS` sulla lista degli esercizi. All'evento `onEnd` (rilascio dell'elemento), viene chiamata la nuova funzione di stato per persistere il nuovo ordine. È stata aggiunta anche un'icona "drag handle" per indicare visivamente che gli elementi sono trascinabili.
+  4.  **Icona e Stili**: È stata aggiunta la nuova icona `DRAG_HANDLE` in `src/ui/icons.js` e sono state definite nuove classi CSS in `styles/modals.css` per fornire un feedback visivo chiaro durante l'operazione di trascinamento, migliorando l'esperienza utente.
 
-  La correzione ripristina la sintassi JavaScript valida, permettendo al modulo di essere analizzato correttamente dal browser e risolvendo il blocco nell'esecuzione dello script.
+  Con questa implementazione, l'editor degli allenamenti è ora uno strumento completo e usabile, che permette all'utente di comporre, modificare e riordinare le proprie sessioni di allenamento in modo intuitivo.
 patches:
-  - file: src/ui/icons.js
+  - file: index.html
     content: |
-      const ICONS = {
-        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
-        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
-        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
-        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
-        BAR_CHART: '<path d="M120 288V480H48c-17.7 0-32-14.3-32-32V320c0-17.7 14.3-32 32-32h72zm128 0V480H192V288h56zm128 0V480H320V288h56zm128 0V480H448V288h56zM544 64H32C14.3 64 0 78.3 0 96V416c0 53 43 96 96 96H544c53 0 96-43 96-96V96c0-17.7-14.3-32-32-32z"/>',
-        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
-        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
-        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
-        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
-        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
-        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
-        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>',
-        BOOK: '<path d="M568 32H128C92.7 32 64 60.7 64 96V512c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zM128 512V96h320v352c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32zm352-32c0 17.7-14.3 32-32 32H416V96h32c17.7 0 32 14.3 32 32V480z"/>',
-        EDIT: '<path d="M490.3 40.4C512.2 62.2 512.2 97.8 490.3 119.6L460.3 149.7L318.9 7.59998L349 37.6999C370.8 15.8999 406.4 15.8999 428.2 37.6999L490.3 40.4zM167 313L7.59998 472.4L167 472.4C167 472.4 167 313 167 313zM203 277L285.4 359.4L133.2 511.6L50.8001 429.2L203 277z"/>'
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="styles/base.css">
+          <link rel="stylesheet" href="styles/planner.css">
+          <link rel="stylesheet" href="styles/progress.css">
+          <link rel="stylesheet" href="styles/modals.css">
+          <link rel="stylesheet" href="styles/charts.css">
+          <link rel="stylesheet" href="styles/recipes.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-progress" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-charts" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-recipes" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-profile" class="btn-nav">
+                          <span></span>
+                      </button>
+                  </nav>
+              </div>
+          </header>
+
+          <main id="app-container">
+              </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="modal-container">
+              </div>
+      </body>
+      </html>
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', or 'profile'
       };
 
-      const viewBoxes = {
-        APP_LOGO: '0 0 512 512',
-        PLANNER: '0 0 544 544',
-        PROFILE: '0 0 528 576',
-        WEIGHT_SCALE: '0 0 640 512',
-        BAR_CHART: '0 0 640 512',
-        SHARE: '0 0 544 576',
-        INFO: '0 0 576 576',
-        LOG_VIEW: '0 0 544 576',
-        RECIPE: '0 0 640 576',
-        TRASH: '0 0 448 512',
-        CLOSE: '0 0 640 512',
-        KEBAB_MENU: '0 0 376 544',
-        BOOK: '0 0 576 576',
-        EDIT: '0 0 512 512'
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
       };
 
-      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
-        const iconPath = ICONS[name];
-        if (!iconPath) return '';
-        const viewBox = viewBoxes[name] || '0 0 512 512';
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config, url) {
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
       }
-commands:
-  - echo "Errore di sintassi in icons.js corretto."
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() // Unique ID for this specific instance
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              // Ensure tempo is handled as an object
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: src/ui/modals.js
+    content: |
+      import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises } from '../core/state.js';
+      import { showNotification } from './notifications.js';
+      import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      let currentEditingDayISO = null;
+      let sortableInstance = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      function formatIngredients(meal) {
+          if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
+          
+          const ingredientsList = meal.ingredienti.map(item => {
+              let quantity = '';
+              if (item.quantita_g) quantity = `${item.quantita_g}g`;
+              else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
+              else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
+              else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
+              
+              return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
+          }).join(', ');
+          
+          return `<p>${ingredientsList}</p>`;
+      }
+
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets;
+        const rest = exercise.defaultRest;
+        let details;
+
+        if (exercise.type === 'reps') {
+            const reps = exercise.defaultReps;
+            details = `${sets} x ${reps} | Riposo: ${rest}s`;
+        } else if (exercise.type === 'time') {
+            const duration = exercise.defaultDuration;
+            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+        }
+
+        if (exercise.defaultTempo) {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
+      }
+
+      export async function showRecipeModal(meal) {
+        if (!meal) return;
+        const state = getState();
+        const recipeModal = document.getElementById('recipe-modal');
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
+        const body = recipeModal.querySelector('#recipe-modal-body');
+        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
+        } catch (error) {
+          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
+        }
+      }
+
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        const confirmModal = document.getElementById('confirm-modal');
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
+        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
+        confirmBtn.className = `btn btn-${type}`;
+        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          cancelBtn.removeEventListener('click', cancelHandler);
+          confirmBtn.removeEventListener('click', confirmHandler);
+        };
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        cancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModal.classList.remove('modal-hidden');
+      }
+
+      export function openSelectionModal(slotId) {
+        const state = getState();
+        const mealType = slotId.substring(11);
+        const selectionModal = document.getElementById('selection-modal');
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
+        };
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
+        };
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutSelectionModal(slotId) {
+        const state = getState();
+        const workoutSelectionModal = document.getElementById('workout-selection-modal');
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
+        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+        const relevantWorkouts = state.masterWorkoutList;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          workoutSelectionModal.classList.add('modal-hidden');
+          if (currentEditingDayISO) openWorkoutEditorModal(currentEditingDayISO);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if (item) {
+            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
+            closeAndReturn();
+          }
+        };
+        workoutSelectionModal.classList.remove('modal-hidden');
+      }
+      
+      export function openExerciseEditorModal(slotId, instanceId) {
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === instanceId);
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `Modifica: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'block';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'block';
+            form.elements.duration.value = exercise.defaultDuration;
+        }
+
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
+
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(currentEditingDayISO);
+        };
+        
+        modal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const modal = document.getElementById('workout-editor-modal');
+        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+        const body = modal.querySelector('#workout-editor-body');
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+
+        let exercisesHTML = plannedWorkoutList.map(exercise => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+
+        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+
+        const listContainer = body.querySelector('.workout-editor-list');
+
+        if (sortableInstance) {
+            sortableInstance.destroy();
+        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
+            }
+        });
+
+        body.onclick = e => {
+            const btnAddExercise = e.target.closest('.btn-add-exercise');
+            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+            const btnEditExercise = e.target.closest('.btn-edit-exercise');
+
+            if (btnAddExercise) {
+                modal.classList.add('modal-hidden');
+                openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
+            } else if (btnRemoveExercise) {
+                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+                openWorkoutEditorModal(isoDate); // Refresh this modal
+            } else if (btnEditExercise) {
+                modal.classList.add('modal-hidden');
+                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId));
+            }
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+
+      export function openDayEditorModal(isoDate) {
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const dayEditorModal = document.getElementById('day-editor-modal');
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
+        
+        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const plannedMeal = state.weeklyPlan[slotId];
+          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          }
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+        
+        let workoutDetailsHTML;
+        if (plannedWorkoutList.length > 0) {
+            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
+            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div>`;
+        } else {
+            workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        }
+        
+        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+
+        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+
+        body.onclick = e => {
+          const btnAddMeal = e.target.closest('.btn-add-meal');
+          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnManageWorkout = e.target.closest('.btn-manage-workout');
+
+          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
+          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+          else if (btnAddExercise) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnManageWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: styles/modals.css
+    content: |
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+      .meal-details { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-color); }
+      .meal-details:last-of-type { border-bottom: none; }
+      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
+      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; margin-top: 0.5rem; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      #exercise-editor-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .tempo-group { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }

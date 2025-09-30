@@ -1,9 +1,10 @@
-import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout } from '../core/state.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises } from '../core/state.js';
 import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
 
 let currentEditingDayISO = null;
+let sortableInstance = null;
 
 function formatFullDate(isoDate) {
   const date = new Date(isoDate);
@@ -147,6 +148,7 @@ export function openExerciseEditorModal(slotId, instanceId) {
   if (!exercise) return;
 
   modal.querySelector('#exercise-editor-title').textContent = `Modifica: ${exercise.name}`;
+  modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
   form.elements.sets.value = exercise.defaultSets;
   form.elements.rest.value = exercise.defaultRest;
 
@@ -210,20 +212,35 @@ export function openWorkoutEditorModal(isoDate) {
 
   let exercisesHTML = plannedWorkoutList.map(exercise => {
       const exerciseDetails = formatExerciseDetails(exercise);
-      return `<div class="meal-details" data-instance-id="${exercise.instanceId}">
+      return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
+                  <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
                   <div class="exercise-info">
                       <span class="meal-details__name">${exercise.name}</span>
                       <span class="exercise-details-summary">${exerciseDetails}</span>
                   </div>
                   <div class="meal-actions">
-                      <button class="btn-edit-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
-                      <button class="btn-remove-exercise" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                      <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                      <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
                   </div>
               </div>`;
   }).join('');
 
   const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-  body.innerHTML = `<div class="day-editor-list">${exercisesHTML}${addExerciseButton}</div>`;
+  body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+
+  const listContainer = body.querySelector('.workout-editor-list');
+
+  if (sortableInstance) {
+      sortableInstance.destroy();
+  }
+  sortableInstance = new Sortable(listContainer, {
+      animation: 150,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      onEnd: function(evt) {
+          reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
+      }
+  });
 
   body.onclick = e => {
       const btnAddExercise = e.target.closest('.btn-add-exercise');

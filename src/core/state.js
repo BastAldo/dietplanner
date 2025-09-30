@@ -165,6 +165,15 @@ export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
     }
 }
 
+export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+    if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+    const workoutList = state.weeklyWorkouts[slotId];
+    const [movedItem] = workoutList.splice(oldIndex, 1);
+    workoutList.splice(newIndex, 0, movedItem);
+    saveStateToLocalStorage();
+    notify();
+}
+
 export function resetCurrentWeek() {
   const weekStart = getWeekStartDate(state.focusedDate);
   for (let i = 0; i < 7; i++) {
