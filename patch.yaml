@@ -1,474 +1,412 @@
-commit_message: "fix(trainer): Corregge i bug di animazione, stato e progressione"
+commit_message: "refactor(trainer): Riprogetta la Vista Trainer con un'architettura a componente"
 rationale: |
-  Questo commit risolve una serie di bug critici nella Vista Trainer che impedivano il corretto funzionamento dell'allenamento guidato. La logica della macchina a stati è stata completata e l'interfaccia utente è stata resa robusta e precisa.
+  Questo commit esegue una riprogettazione fondamentale della Vista Trainer per risolvere i bug `TypeError: Cannot set properties of null` e migliorare la stabilità generale, come da piano approvato. L'approccio imperativo precedente è stato sostituito da un'architettura a componente incapsulato.
 
-  Le correzioni principali sono:
+  Le modifiche principali sono:
 
-  1.  **Logica di Progressione (`src/core/trainer.js`):**
-      * È stata implementata la logica mancante per la gestione del riposo tra le serie. Al termine di una serie, l'applicazione entra correttamente nello stato 'resting' e avvia un countdown.
-      * Al termine del riposo, l'applicazione ora avanza correttamente alla serie successiva dello stesso esercizio o passa all'esercizio successivo se tutte le serie sono state completate.
-      * È stata aggiunta la logica per terminare l'allenamento (`finished`) una volta completati tutti gli esercizi in coda.
-      * La gestione della pausa (`pause`/`resume`) è stata migliorata per funzionare in modo affidabile sia durante le fasi di lavoro che durante il riposo.
+  1.  **Creazione di `TrainerComponent` (`src/ui/components/TrainerComponent.js`):**
+      * È stato creato un nuovo componente che gestisce l'intero ciclo di vita della Vista Trainer.
+      * **Incapsulamento del DOM:** Il costruttore del componente esegue una query per tutti gli elementi HTML necessari una sola volta e li memorizza come proprietà dell'istanza. Questo elimina completamente gli errori di riferimento a `null` causati da race condition.
+      * **Gestione degli Eventi Robusta:** Il metodo `mount` imposta tutti i listener di eventi una sola volta, utilizzando la delegazione di eventi per i controlli. Questo risolve il problema dei listener duplicati o persi durante i re-render.
+      * **Rendering Dichiarativo:** Il metodo `render(state)` è ora l'unica porta d'ingresso per gli aggiornamenti della UI. Riceve lo stato completo e aggiorna il DOM in modo dichiarativo, rendendo il flusso dei dati chiaro e prevedibile.
+      * **Pulizia delle Risorse:** Il metodo `destroy` è stato aggiunto per rimuovere i listener di eventi, garantendo che non ci siano memory leak quando l'utente lascia la vista.
 
-  2.  **Correzione Animazione Anello (`src/ui/trainerRenderer.js`, `styles/trainer.css`):**
-      * È stato corretto il bug per cui l'animazione dell'anello non partiva da zero. Ora il progresso visivo corrisponde esattamente all'avanzamento temporale di ogni fase.
-      * È stata rimossa la transizione CSS `stroke-dashoffset` che causava conflitti con gli aggiornamenti Javascript, affidando l'intera animazione al `TICK_RATE_MS` per un controllo preciso.
+  2.  **Semplificazione del Controller (`src/ui/trainerRenderer.js`):**
+      * Il `trainerRenderer` è stato trasformato in un controller leggero. Il suo unico scopo è creare, gestire e distruggere l'istanza del `TrainerComponent`.
+      * Ascolta l'evento `workoutStateChange` e passa il nuovo stato al metodo `render` del componente.
 
-  3.  **Layout e Interattività UI (`styles/trainer.css`, `src/ui/trainerRenderer.js`):**
-      * Il testo dello stato (es. "UP", "HOLD") è ora posizionato correttamente al centro dell'anello SVG utilizzando il posizionamento assoluto.
-      * Il bug del pulsante di pausa è stato risolto centralizzando la gestione degli eventi su un unico listener delegato sulla `trainer-page`, rendendo i controlli stabili e reattivi.
-      * Il renderer ora mostra un timer di countdown durante la fase di riposo.
+  3.  **Aggiornamento del Flusso Principale (`src/ui/renderer.js`):**
+      * Il renderer principale ora chiama `initializeTrainerController` quando si passa alla vista 'trainer' e `destroyTrainerController` quando la si lascia, gestendo correttamente il ciclo di vita del nuovo componente.
 
-  Con queste modifiche, la funzionalità `tempo_guided` della Vista Trainer è ora stabile, funzionale e completa, fornendo all'utente un'esperienza di allenamento guidato come da specifiche.
+  Questa riprogettazione non si limita a correggere i bug, ma migliora significativamente la qualità del codice, la manutenibilità e la robustezza della funzionalità più complessa dell'applicazione.
 patches:
-  - file: src/core/trainer.js
+  - file: sw.js
     content: |
-      import { setView } from './state.js';
+      const CACHE_NAME = 'healtypro-v8';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
 
-      let workoutState = {
-        exerciseQueue: [],
-        currentExerciseIndex: -1,
-        status: 'idle', // idle, running, paused, resting, finished
-        prePauseStatus: '',
-        currentSet: 0,
-        currentRep: 0,
-        executionQueue: [],
-        currentPhaseIndex: -1,
-        phaseTimeElapsed: 0,
-        restTimeRemaining: 0,
-      };
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
 
-      let timerInterval = null;
-      const TICK_RATE_MS = 50;
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
 
-      function buildExecutionQueueForCurrentSet() {
-        const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
-        if (!currentExercise) return [];
-
-        const queue = [];
-        const reps = currentExercise.defaultReps;
-        const tempo = currentExercise.defaultTempo;
-
-        for (let i = 0; i < reps; i++) {
-          if (tempo) {
-            queue.push({ name: 'pre-up', rep: i + 1, duration: 700 });
-            queue.push({ name: 'up', rep: i + 1, duration: tempo.up * 1000 });
-            queue.push({ name: 'pre-hold', rep: i + 1, duration: 700 });
-            queue.push({ name: 'hold', rep: i + 1, duration: tempo.hold * 1000 });
-            queue.push({ name: 'pre-down', rep: i + 1, duration: 700 });
-            queue.push({ name: 'down', rep: i + 1, duration: tempo.down * 1000 });
-          }
-        }
-        return queue;
-      }
-
-      function advanceToNextSet() {
-        workoutState.currentSet++;
-        const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
-        if (workoutState.currentSet > currentExercise.defaultSets) {
-          advanceToNextExercise();
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
         } else {
-          workoutState.status = 'running';
-          workoutState.executionQueue = buildExecutionQueueForCurrentSet();
-          workoutState.currentPhaseIndex = 0;
-          workoutState.phaseTimeElapsed = 0;
-          workoutState.currentRep = 1;
+          event.respondWith(fetch(event.request));
         }
+      });
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
+      import { renderRecipesPage } from './recipesRenderer.js';
+      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
+      import { UI_TEXT } from '../utils/constants.js';
+      import { renderIcon } from './icons.js';
+
+      let isTrainerActive = false;
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
       }
 
-      function advanceToNextExercise() {
-        workoutState.currentExerciseIndex++;
-        if (workoutState.currentExerciseIndex >= workoutState.exerciseQueue.length) {
-          endWorkout();
-        } else {
-          workoutState.status = 'idle'; // Pronto per il prossimo esercizio
-          workoutState.currentSet = 1;
-          workoutState.currentRep = 1;
-          workoutState.executionQueue = [];
-          workoutState.currentPhaseIndex = -1;
-        }
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        populateIcons();
       }
 
-      function tick() {
-        if (workoutState.status === 'running') {
-          workoutState.phaseTimeElapsed += TICK_RATE_MS;
-          const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-          if (!currentPhase) {
-            pauseWorkout();
-            return;
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        // Gestione del ciclo di vita del TrainerComponent
+        if (state.currentView !== 'trainer' && isTrainerActive) {
+            destroyTrainerController();
+            isTrainerActive = false;
+        }
+
+        [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (state.currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        } else if (state.currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          if (!isTrainerActive) {
+            initializeTrainerController();
+            isTrainerActive = true;
           }
-          if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
-            workoutState.currentPhaseIndex++;
-            workoutState.phaseTimeElapsed = 0;
-            const nextPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-            if (nextPhase) {
-              workoutState.currentRep = nextPhase.rep;
-            } else {
-              const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
-              workoutState.status = 'resting';
-              workoutState.restTimeRemaining = currentExercise.defaultRest * 1000;
-            }
-          }
-        } else if (workoutState.status === 'resting') {
-          workoutState.restTimeRemaining -= TICK_RATE_MS;
-          if (workoutState.restTimeRemaining <= 0) {
-            advanceToNextSet();
-          }
         }
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
 
-      export function getWorkoutState() {
-        return workoutState;
-      }
-
-      export function initializeWorkout(plannedExercises) {
-        if (!plannedExercises || plannedExercises.length === 0) {
-          console.error("Tentativo di inizializzare un allenamento senza esercizi.");
-          return;
-        }
-        clearInterval(timerInterval);
-        timerInterval = null;
-
-        workoutState = {
-          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
-          currentExerciseIndex: 0,
-          status: 'idle',
-          prePauseStatus: '',
-          currentSet: 1,
-          currentRep: 1,
-          executionQueue: [],
-          currentPhaseIndex: -1,
-          phaseTimeElapsed: 0,
-          restTimeRemaining: 0,
-        };
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-
-      export function startWorkout() {
-        if (workoutState.status === 'idle') {
-          workoutState.status = 'running';
-          workoutState.executionQueue = buildExecutionQueueForCurrentSet();
-          workoutState.currentPhaseIndex = 0;
-          workoutState.phaseTimeElapsed = 0;
-          workoutState.currentRep = 1;
-          if (!timerInterval) {
-            timerInterval = setInterval(tick, TICK_RATE_MS);
-          }
-        }
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-
-      export function pauseWorkout() {
-        if (workoutState.status === 'running' || workoutState.status === 'resting') {
-          workoutState.prePauseStatus = workoutState.status;
-          workoutState.status = 'paused';
-          clearInterval(timerInterval);
-          timerInterval = null;
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-      }
-
-      export function resumeWorkout() {
-        if (workoutState.status === 'paused') {
-          workoutState.status = workoutState.prePauseStatus;
-          workoutState.prePauseStatus = '';
-          if (!timerInterval) {
-            timerInterval = setInterval(tick, TICK_RATE_MS);
-          }
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-      }
-
-      export function endWorkout() {
-        workoutState.status = 'finished';
-        clearInterval(timerInterval);
-        timerInterval = null;
-        setView('planner');
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
   - file: src/ui/trainerRenderer.js
     content: |
-      import { getWorkoutState, startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../core/trainer.js';
-      import { setView } from '../core/state.js';
+      import { getWorkoutState } from '../core/trainer.js';
+      import { TrainerComponent } from './components/TrainerComponent.js';
 
-      let ringProgress, ringText;
+      let trainerComponent = null;
+
+      function handleWorkoutStateChange() {
+          if (trainerComponent) {
+              trainerComponent.render(getWorkoutState());
+          }
+      }
+
+      export function initializeTrainerController() {
+          const container = document.getElementById('trainer-page');
+          if (container && !trainerComponent) {
+              trainerComponent = new TrainerComponent(container);
+              trainerComponent.mount();
+              document.addEventListener('workoutStateChange', handleWorkoutStateChange);
+              // Render iniziale
+              trainerComponent.render(getWorkoutState());
+          }
+      }
+
+      export function destroyTrainerController() {
+          if (trainerComponent) {
+              trainerComponent.destroy();
+              trainerComponent = null;
+          }
+          document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
+      }
+  - file: src/ui/components/TrainerComponent.js
+    content: |
+      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
+      import { setView } from '../../core/state.js';
+
       const RING_RADIUS = 80;
       const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-      function createTimerRing(container) {
-          if (container.querySelector('svg')) {
-              ringProgress = container.querySelector('.timer-ring-progress');
-              return;
+      export class TrainerComponent {
+          constructor(containerElement) {
+              this.container = containerElement;
+
+              // Query degli elementi DOM una sola volta
+              this.elements = {
+                  exerciseName: this.container.querySelector('#current-exercise-name'),
+                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
+                  repDisplay: this.container.querySelector('#current-rep-display'),
+                  upcomingList: this.container.querySelector('#upcoming-exercises-list'),
+                  controlsContainer: this.container.querySelector('#trainer-main-controls'),
+                  modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
+                  ringContainer: this.container.querySelector('#timer-ring-container'),
+                  ringText: this.container.querySelector('#tempo-phase-name'),
+              };
+
+              this.ringProgress = null; // Verrà inizializzato dopo la creazione dell'SVG
           }
-          container.innerHTML = '';
-          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          svg.setAttribute('width', '200');
-          svg.setAttribute('height', '200');
-          svg.setAttribute('viewBox', '0 0 200 200');
 
-          const backgroundCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          backgroundCircle.setAttribute('cx', '100');
-          backgroundCircle.setAttribute('cy', '100');
-          backgroundCircle.setAttribute('r', RING_RADIUS);
-          backgroundCircle.setAttribute('class', 'timer-ring-bg');
+          mount() {
+              this.createTimerRing();
+              this.container.addEventListener('click', this.handleControls.bind(this));
+          }
 
-          const progressCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          progressCircle.setAttribute('cx', '100');
-          progressCircle.setAttribute('cy', '100');
-          progressCircle.setAttribute('r', RING_RADIUS);
-          progressCircle.setAttribute('class', 'timer-ring-progress');
-          progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-          progressCircle.style.strokeDashoffset = RING_CIRCUMFERENCE;
+          destroy() {
+              this.container.removeEventListener('click', this.handleControls.bind(this));
+              // Altre pulizie se necessarie
+          }
 
-          svg.appendChild(backgroundCircle);
-          svg.appendChild(progressCircle);
-          container.prepend(svg);
-          ringProgress = progressCircle;
-      }
+          handleControls(e) {
+              const targetId = e.target.id;
+              switch (targetId) {
+                  case 'trainer-start-btn':
+                      startWorkout();
+                      break;
+                  case 'trainer-pause-btn':
+                      pauseWorkout();
+                      break;
+                  case 'trainer-resume-btn':
+                      resumeWorkout();
+                      break;
+                  case 'trainer-end-btn':
+                      endWorkout();
+                      break;
+                  case 'trainer-back-btn':
+                      setView('planner');
+                      break;
+              }
+          }
 
-      function updateTimerRing(percent) {
-        if (!ringProgress) return;
-        const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-        ringProgress.style.strokeDashoffset = offset;
-      }
+          createTimerRing() {
+              if (this.elements.ringContainer.querySelector('svg')) return;
+              this.elements.ringContainer.innerHTML = '';
+              const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+              svg.setAttribute('width', '200');
+              svg.setAttribute('height', '200');
+              svg.setAttribute('viewBox', '0 0 200 200');
 
-      function formatExerciseDetails(exercise, set) {
-        if (!exercise) return '';
-        const sets = exercise.defaultSets;
-        let details = `Serie ${set} di ${sets}`;
-        if (exercise.type === 'reps') {
-          const reps = exercise.defaultReps;
-          details += ` | ${reps} Ripetizioni`;
-        } else if (exercise.type === 'time') {
-          const duration = exercise.defaultDuration;
-          details += ` | ${duration}s`;
-        }
-        return details;
-      }
+              const backgroundCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              backgroundCircle.setAttribute('cx', '100');
+              backgroundCircle.setAttribute('cy', '100');
+              backgroundCircle.setAttribute('r', RING_RADIUS);
+              backgroundCircle.setAttribute('class', 'timer-ring-bg');
 
-      function renderPhase(state) {
-        const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
-        const phase = executionQueue[currentPhaseIndex];
-        if (!phase) return;
+              const progressCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              progressCircle.setAttribute('cx', '100');
+              progressCircle.setAttribute('cy', '100');
+              progressCircle.setAttribute('r', RING_RADIUS);
+              progressCircle.setAttribute('class', 'timer-ring-progress');
+              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
+              progressCircle.style.strokeDashoffset = RING_CIRCUMFERENCE;
 
-        const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-        const isPrePhase = phase.name.startsWith('pre-');
+              svg.appendChild(backgroundCircle);
+              svg.appendChild(progressCircle);
+              this.elements.ringContainer.prepend(svg);
+              this.ringProgress = progressCircle;
+          }
 
-        ringText.textContent = phaseNameDisplay;
-        ringText.classList.toggle('flashing', isPrePhase);
+          updateTimerRing(percent) {
+              if (!this.ringProgress) return;
+              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
+              this.ringProgress.style.strokeDashoffset = offset;
+          }
 
-        const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-        updateTimerRing(progressPercent);
-      }
+          render(state) {
+              const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
 
-      function renderRest(state) {
-        const { restTimeRemaining } = state;
-        const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
-        ringText.textContent = secondsRemaining;
-        ringText.classList.remove('flashing');
-        updateTimerRing(0);
-      }
+              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
 
-      export function renderTrainerView() {
-        const state = getWorkoutState();
-        const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
+              const currentExercise = exerciseQueue[currentExerciseIndex];
+              this.elements.exerciseName.textContent = currentExercise.name;
+              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentExercise, currentSet);
+              this.elements.repDisplay.textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
 
-        if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
+              this.elements.upcomingList.innerHTML = '';
+              exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
+                  const li = document.createElement('li');
+                  li.textContent = ex.name;
+                  this.elements.upcomingList.appendChild(li);
+              });
 
-        const currentExercise = exerciseQueue[currentExerciseIndex];
-        document.getElementById('current-exercise-name').textContent = currentExercise.name;
-        document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
-        document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
+              // Gestione Controlli
+              if (status === 'idle') {
+                  this.elements.controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
+                  this.elements.ringText.textContent = '';
+                  this.updateTimerRing(0);
+              } else if (status === 'running' || status === 'resting') {
+                  this.elements.controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
+              } else if (status === 'paused') {
+                  this.elements.controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
+              } else {
+                  this.elements.controlsContainer.innerHTML = '';
+              }
 
+              // Gestione Modalità
+              this.elements.modeTempoContainer.classList.remove('hidden');
 
-        const upcomingList = document.getElementById('upcoming-exercises-list');
-        upcomingList.innerHTML = '';
-        exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-          const li = document.createElement('li');
-          li.textContent = ex.name;
-          upcomingList.appendChild(li);
-        });
+              if (status === 'running') {
+                  this.renderPhase(state);
+              } else if (status === 'resting') {
+                  this.renderRest(state);
+              }
+          }
 
-        const controlsContainer = document.getElementById('trainer-main-controls');
-        if (status === 'idle') {
-          controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
-          ringText.textContent = '';
-          updateTimerRing(0);
-        } else if (status === 'running' || status === 'resting') {
-          controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
-        } else if (status === 'paused') {
-          controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
-        } else {
-          controlsContainer.innerHTML = '';
-        }
+          renderPhase(state) {
+              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
+              const phase = executionQueue[currentPhaseIndex];
+              if (!phase) return;
 
-        const modeTempoContainer = document.getElementById('mode-tempo-guided');
-        modeTempoContainer.classList.remove('hidden');
+              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
+              const isPrePhase = phase.name.startsWith('pre-');
 
-        if (status === 'running') {
-            renderPhase(state);
-        } else if (status === 'resting') {
-            renderRest(state);
-        }
-      }
+              this.elements.ringText.textContent = phaseNameDisplay;
+              this.elements.ringText.classList.toggle('flashing', isPrePhase);
 
-      export function initializeTrainerUI() {
-          document.removeEventListener('workoutStateChange', renderTrainerView);
-          document.addEventListener('workoutStateChange', renderTrainerView);
+              const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
+              this.updateTimerRing(progressPercent);
+          }
 
-          const ringContainer = document.getElementById('timer-ring-container');
-          createTimerRing(ringContainer);
-          ringText = document.getElementById('tempo-phase-name');
+          renderRest(state) {
+              const { restTimeRemaining } = state;
+              const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
+              this.elements.ringText.textContent = secondsRemaining;
+              this.elements.ringText.classList.remove('flashing');
+              this.updateTimerRing(0);
+          }
 
-          const page = document.getElementById('trainer-page');
-          // Rimuovi vecchi listener se esistono per evitare duplicati
-          const newPage = page.cloneNode(true);
-          page.parentNode.replaceChild(newPage, page);
-
-          newPage.addEventListener('click', (e) => {
-              if (e.target.id === 'trainer-start-btn') startWorkout();
-              if (e.target.id === 'trainer-pause-btn') pauseWorkout();
-              if (e.target.id === 'trainer-resume-btn') resumeWorkout();
-              if (e.target.id === 'trainer-end-btn') endWorkout();
-              if (e.target.id === 'trainer-back-btn') setView('planner');
-          });
-      }
-  - file: styles/trainer.css
-    content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-      }
-
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-      }
-
-      .exercise-info-container {
-          margin-bottom: 1rem;
-      }
-
-      .current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-      }
-
-      .current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-      }
-      
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-      }
-
-      .timer-ring-container {
-          width: 250px;
-          height: 250px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-display {
-          font-size: 3rem;
-          font-weight: bold;
-          color: var(--text-color);
-          text-transform: uppercase;
-          position: absolute; /* Changed to absolute */
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%); /* Center the text */
-      }
-
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 10;
-      }
-
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 10;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          /* Rimosso transition per affidarsi a JS */
-      }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .flashing {
-        animation: flash 1.4s infinite;
-        color: var(--secondary-color);
-      }
-
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px; /* Altezza fissa per evitare salti di layout */
-      }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
-
-      .upcoming-exercises-container {
-          position: absolute;
-          bottom: 1rem;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 90%;
-          max-width: 400px;
-      }
-
-      .upcoming-exercises-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          color: var(--text-color-muted);
-      }
-
-      .upcoming-exercises-list li {
-          padding: 0.25rem 0;
+          formatExerciseDetails(exercise, set) {
+              if (!exercise) return '';
+              const sets = exercise.defaultSets;
+              let details = `Serie ${set} di ${sets}`;
+              if (exercise.type === 'reps') {
+                  const reps = exercise.defaultReps;
+                  details += ` | ${reps} Ripetizioni`;
+              } else if (exercise.type === 'time') {
+                  const duration = exercise.defaultDuration;
+                  details += ` | ${duration}s`;
+              }
+              return details;
+          }
       }

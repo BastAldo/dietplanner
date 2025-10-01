@@ -2,9 +2,11 @@ import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
 import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
 import { renderRecipesPage } from './recipesRenderer.js';
-import { renderTrainerView, initializeTrainerUI } from './trainerRenderer.js';
+import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
+
+let isTrainerActive = false;
 
 function populateIcons() {
     document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
@@ -65,6 +67,12 @@ export function renderApp() {
   const navRecipesBtn = document.getElementById('nav-recipes');
   const navProfileBtn = document.getElementById('nav-profile');
 
+  // Gestione del ciclo di vita del TrainerComponent
+  if (state.currentView !== 'trainer' && isTrainerActive) {
+      destroyTrainerController();
+      isTrainerActive = false;
+  }
+
   [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
   [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
 
@@ -90,8 +98,10 @@ export function renderApp() {
     renderProfilePage(state);
   } else if (state.currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
-    initializeTrainerUI(); // Assicura che l'UI sia pronta
-    renderTrainerView(); // Disegna lo stato attuale
+    if (!isTrainerActive) {
+      initializeTrainerController();
+      isTrainerActive = true;
+    }
   }
 
   const urlInput = document.getElementById('config-url-input');

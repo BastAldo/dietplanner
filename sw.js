@@ -33,6 +33,7 @@ const APP_SHELL_FILES = [
   'src/ui/viewLoader.js',
   'src/ui/icons.js',
   'src/ui/trainerRenderer.js',
+  'src/ui/components/TrainerComponent.js',
   'src/utils/constants.js',
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
