@@ -1,6 +1,6 @@
 import { setView } from './state.js';
 
-let workoutState = {
+const initialWorkoutState = {
   exerciseQueue: [],
   currentExerciseIndex: -1,
   status: 'idle', // idle, running, paused, resting, finished
@@ -12,6 +12,8 @@ let workoutState = {
   phaseTimeElapsed: 0,
   restTimeRemaining: 0,
 };
+
+let workoutState = { ...initialWorkoutState };
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
@@ -105,25 +107,25 @@ export function getWorkoutState() {
   return workoutState;
 }
 
+export function resetWorkoutState() {
+  cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
+  workoutState = { ...initialWorkoutState };
+}
+
 export function initializeWorkout(plannedExercises) {
   if (!plannedExercises || plannedExercises.length === 0) {
     console.error("Tentativo di inizializzare un allenamento senza esercizi.");
     return;
   }
-  cancelAnimationFrame(animationFrameId);
-  animationFrameId = null;
+  resetWorkoutState();
 
   workoutState = {
+    ...initialWorkoutState,
     exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
     currentExerciseIndex: 0,
-    status: 'idle',
-    prePauseStatus: '',
     currentSet: 1,
     currentRep: 1,
-    executionQueue: [],
-    currentPhaseIndex: -1,
-    phaseTimeElapsed: 0,
-    restTimeRemaining: 0,
   };
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }

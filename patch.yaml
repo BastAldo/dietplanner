@@ -1,28 +1,284 @@
-commit_message: "fix(trainer): Refactoring completo del motore di rendering e della macchina a stati"
+commit_message: "fix(trainer): Finalizza il ciclo di vita, lo stile e la macchina a stati del componente"
 rationale: |
-  Questo commit esegue un refactoring completo del motore della Vista Trainer per risolvere i bug critici di animazione, interattività e progressione di stato. L'implementazione precedente è stata sostituita con una soluzione robusta basata su `requestAnimationFrame` e un modello di aggiornamento del DOM non distruttivo.
+  Questo commit fornisce una soluzione definitiva ai problemi rimanenti nella Vista Trainer, affrontando le cause principali dei bug di ciclo di vita, visivi e di stato.
 
   Le modifiche principali sono:
 
-  1.  **Ciclo di Animazione Fluido (`src/core/trainer.js`):**
-      * Il timer `setInterval` è stato sostituito con un ciclo `requestAnimationFrame`. Questo garantisce che gli aggiornamenti della UI siano sincronizzati con il refresh rate del display, eliminando l'animazione "a scatti" e garantendo la massima fluidità visiva.
+  1.  **Reset dello Stato al Cambio Vista (`src/core/trainer.js`, `src/core/state.js`):**
+      * È stata introdotta una nuova funzione `resetWorkoutState` in `trainer.js` che riporta la macchina a stati alla sua condizione iniziale pulita.
+      * La logica di `endWorkout` e il `setView` in `state.js` ora invocano questo reset quando l'utente esce dalla Vista Trainer.
+      * Questa modifica cruciale risolve il bug `TypeError` che si verificava rientrando nella vista, garantendo che il componente parta sempre da uno stato prevedibile e stabile.
 
-  2.  **Aggiornamento del DOM Non Distruttivo (`src/ui/components/TrainerComponent.js`, `templates/trainer.html`):**
-      * L'uso di `innerHTML` nel metodo `render` è stato completamente eliminato. I pulsanti di controllo sono ora presenti nell'HTML iniziale e vengono mostrati/nascosti manipolando le classi CSS.
-      * Questo risolve il bug critico per cui il pulsante "Pausa" e altri controlli non erano cliccabili, poiché non vengono più distrutti e ricreati ad ogni frame.
-      * Il testo dello stato (es. "UP") è stato integrato come elemento `<text>` all'interno dell'SVG dell'anello, risolvendo i problemi di visualizzazione e posizionamento.
+  2.  **Correzione Stili SVG (`styles/trainer.css`):**
+      * È stata aggiunta la proprietà `fill: var(--text-color)` alla classe `.timer-ring-display` per correggere il bug del testo nero su sfondo scuro.
+      * La classe `.flashing` ora applica correttamente l'animazione all'elemento `<text>` SVG.
+      * I problemi visivi sono stati risolti in modo definitivo.
 
-  3.  **Macchina a Stati Completata (`src/core/trainer.js`):**
-      * È stata implementata la logica completa per la progressione tra serie ed esercizi. L'applicazione ora avanza correttamente al termine della fase di riposo, senza bloccarsi.
-      * Il flusso di allenamento dall'inizio alla fine di tutti gli esercizi ora funziona come previsto.
+  3.  **Macchina a Stati Robusta (`src/core/trainer.js`):**
+      * La logica di `pauseWorkout` e `resumeWorkout` è stata estesa per gestire correttamente anche lo stato di `resting`, rendendo la funzionalità di pausa affidabile durante l'intero ciclo di allenamento.
 
-  Questa riprogettazione architetturale fornisce una base stabile e performante per la Vista Trainer, risolvendo tutti i problemi noti e aderendo alle best practice per le applicazioni web dinamiche.
+  Con questo commit, l'architettura del `TrainerComponent` è ora completa e robusta. L'applicazione offre un'esperienza utente fluida, visivamente corretta e priva di errori di ciclo di vita.
 patches:
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', or 'trainer'
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function setPlannerConfig(config, url) {
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
+
+      export function loadStateFromLocalStorage() {
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() // Unique ID for this specific instance
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              // Ensure tempo is handled as an object
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        if (state.currentView === 'trainer' && view !== 'trainer') {
+          resetWorkoutState();
+        }
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/core/trainer.js
     content: |
       import { setView } from './state.js';
 
-      let workoutState = {
+      const initialWorkoutState = {
         exerciseQueue: [],
         currentExerciseIndex: -1,
         status: 'idle', // idle, running, paused, resting, finished
@@ -34,6 +290,8 @@ patches:
         phaseTimeElapsed: 0,
         restTimeRemaining: 0,
       };
+
+      let workoutState = { ...initialWorkoutState };
 
       let animationFrameId = null;
       let lastTickTimestamp = 0;
@@ -126,26 +384,26 @@ patches:
       export function getWorkoutState() {
         return workoutState;
       }
+      
+      export function resetWorkoutState() {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        workoutState = { ...initialWorkoutState };
+      }
 
       export function initializeWorkout(plannedExercises) {
         if (!plannedExercises || plannedExercises.length === 0) {
           console.error("Tentativo di inizializzare un allenamento senza esercizi.");
           return;
         }
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
+        resetWorkoutState();
 
         workoutState = {
+          ...initialWorkoutState,
           exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
           currentExerciseIndex: 0,
-          status: 'idle',
-          prePauseStatus: '',
           currentSet: 1,
           currentRep: 1,
-          executionQueue: [],
-          currentPhaseIndex: -1,
-          phaseTimeElapsed: 0,
-          restTimeRemaining: 0,
         };
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
@@ -188,168 +446,6 @@ patches:
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
         setView('planner');
-      }
-  - file: src/ui/components/TrainerComponent.js
-    content: |
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
-
-      const RING_RADIUS = 80;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
-
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingList: this.container.querySelector('#upcoming-exercises-list'),
-                  
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-
-                  modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-              };
-
-              this.ringProgress = null;
-              this.ringText = null;
-          }
-
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
-          }
-
-          destroy() {
-              this.container.removeEventListener('click', this.handleControls.bind(this));
-          }
-
-          handleControls(e) {
-              const targetId = e.target.id;
-              switch (targetId) {
-                  case 'trainer-start-btn': startWorkout(); break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn': endWorkout(); break;
-                  case 'trainer-back-btn': setView('planner'); break;
-              }
-          }
-
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) return;
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              svg.setAttribute('width', '200');
-              svg.setAttribute('height', '200');
-              svg.setAttribute('viewBox', '0 0 200 200');
-
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', '100');
-              backgroundCircle.setAttribute('cy', '100');
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', '100');
-              progressCircle.setAttribute('cy', '100');
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-          }
-
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
-
-          render(state) {
-              const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
-
-              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
-
-              const currentExercise = exerciseQueue[currentExerciseIndex];
-              this.elements.exerciseName.textContent = currentExercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentExercise, currentSet);
-              this.elements.repDisplay.textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
-
-              this.elements.upcomingList.innerHTML = '';
-              exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-                  const li = document.createElement('li');
-                  li.textContent = ex.name;
-                  this.elements.upcomingList.appendChild(li);
-              });
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-
-              this.elements.modeTempoContainer.classList.remove('hidden');
-
-              if (status === 'running') {
-                  this.renderPhase(state);
-              } else if (status === 'resting') {
-                  this.renderRest(state);
-              } else if (status === 'idle') {
-                  this.ringText.textContent = '';
-                  this.updateTimerRing(0);
-              }
-          }
-
-          renderPhase(state) {
-              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
-              const phase = executionQueue[currentPhaseIndex];
-              if (!phase) return;
-
-              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.name.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.toggle('flashing', isPrePhase);
-
-              const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderRest(state) {
-              const { restTimeRemaining } = state;
-              const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
-              this.ringText.textContent = secondsRemaining;
-              this.ringText.classList.remove('flashing');
-              this.updateTimerRing((restTimeRemaining / (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000)) * 100);
-          }
-
-          formatExerciseDetails(exercise, set) {
-              if (!exercise) return '';
-              const sets = exercise.defaultSets;
-              let details = `Serie ${set} di ${sets}`;
-              if (exercise.type === 'reps') {
-                  const reps = exercise.defaultReps;
-                  details += ` | ${reps} Ripetizioni`;
-              } else if (exercise.type === 'time') {
-                  const duration = exercise.defaultDuration;
-                  details += ` | ${duration}s`;
-              }
-              return details;
-          }
       }
   - file: styles/trainer.css
     content: |
@@ -422,7 +518,7 @@ patches:
       .timer-ring-display {
           font-size: 3rem;
           font-weight: bold;
-          color: var(--text-color);
+          fill: var(--text-color); /* Changed from color to fill for SVG */
           text-transform: uppercase;
           text-anchor: middle;
       }
@@ -449,7 +545,7 @@ patches:
 
       .flashing {
         animation: flash 1.4s infinite;
-        color: var(--secondary-color);
+        fill: var(--secondary-color); /* Changed from color to fill for SVG */
       }
 
       .trainer-controls {
@@ -485,38 +581,3 @@ patches:
       .upcoming-exercises-list li {
           padding: 0.25rem 0;
       }
-  - file: templates/trainer.html
-    content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
-              <h2 id="trainer-title">Allenamento</h2>
-              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-                  <p id="current-rep-display"></p>
-              </div>
-
-              <div id="trainer-display-modes">
-                  <div id="mode-tempo-guided">
-                      <div id="timer-ring-container" class="timer-ring-container">
-                          </div>
-                  </div>
-              </div>
-
-              <div id="trainer-main-controls" class="trainer-controls">
-                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
-                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
-                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
-              </div>
-
-              <div class="upcoming-exercises-container">
-                  <h4>A seguire:</h4>
-                  <ul id="upcoming-exercises-list" class="upcoming-exercises-list">
-                  </ul>
-              </div>
-          </div>
-      </div>

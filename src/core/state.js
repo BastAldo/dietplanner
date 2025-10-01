@@ -1,5 +1,6 @@
 import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
+import { resetWorkoutState } from './trainer.js';
 
 let state = {
   rules: [],
@@ -203,6 +204,9 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
+  if (state.currentView === 'trainer' && view !== 'trainer') {
+    resetWorkoutState();
+  }
   if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
     state.currentView = view;
     notify();
