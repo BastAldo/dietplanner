@@ -13,12 +13,12 @@ let workoutState = {
   restTimeRemaining: 0,
 };
 
-let timerInterval = null;
-const TICK_RATE_MS = 50;
+let animationFrameId = null;
+let lastTickTimestamp = 0;
 
 function buildExecutionQueueForCurrentSet() {
   const currentExercise = workoutState.exerciseQueue[workoutState.currentExerciseIndex];
-  if (!currentExercise) return [];
+  if (!currentExercise || currentExercise.type !== 'reps') return [];
 
   const queue = [];
   const reps = currentExercise.defaultReps;
@@ -56,7 +56,7 @@ function advanceToNextExercise() {
   if (workoutState.currentExerciseIndex >= workoutState.exerciseQueue.length) {
     endWorkout();
   } else {
-    workoutState.status = 'idle'; // Pronto per il prossimo esercizio
+    workoutState.status = 'idle';
     workoutState.currentSet = 1;
     workoutState.currentRep = 1;
     workoutState.executionQueue = [];
@@ -64,14 +64,17 @@ function advanceToNextExercise() {
   }
 }
 
-function tick() {
+function tick(timestamp) {
+  if (lastTickTimestamp === 0) {
+    lastTickTimestamp = timestamp;
+  }
+  const deltaTime = timestamp - lastTickTimestamp;
+  lastTickTimestamp = timestamp;
+
   if (workoutState.status === 'running') {
-    workoutState.phaseTimeElapsed += TICK_RATE_MS;
+    workoutState.phaseTimeElapsed += deltaTime;
     const currentPhase = workoutState.executionQueue[workoutState.currentPhaseIndex];
-    if (!currentPhase) {
-      pauseWorkout();
-      return;
-    }
+
     if (workoutState.phaseTimeElapsed >= currentPhase.duration) {
       workoutState.currentPhaseIndex++;
       workoutState.phaseTimeElapsed = 0;
@@ -85,12 +88,17 @@ function tick() {
       }
     }
   } else if (workoutState.status === 'resting') {
-    workoutState.restTimeRemaining -= TICK_RATE_MS;
+    workoutState.restTimeRemaining -= deltaTime;
     if (workoutState.restTimeRemaining <= 0) {
       advanceToNextSet();
     }
   }
+  
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
+
+  if (workoutState.status !== 'paused' && workoutState.status !== 'idle' && workoutState.status !== 'finished') {
+    animationFrameId = requestAnimationFrame(tick);
+  }
 }
 
 export function getWorkoutState() {
@@ -102,8 +110,8 @@ export function initializeWorkout(plannedExercises) {
     console.error("Tentativo di inizializzare un allenamento senza esercizi.");
     return;
   }
-  clearInterval(timerInterval);
-  timerInterval = null;
+  cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
 
   workoutState = {
     exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
@@ -127,9 +135,8 @@ export function startWorkout() {
     workoutState.currentPhaseIndex = 0;
     workoutState.phaseTimeElapsed = 0;
     workoutState.currentRep = 1;
-    if (!timerInterval) {
-      timerInterval = setInterval(tick, TICK_RATE_MS);
-    }
+    lastTickTimestamp = 0;
+    animationFrameId = requestAnimationFrame(tick);
   }
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
@@ -138,8 +145,8 @@ export function pauseWorkout() {
   if (workoutState.status === 'running' || workoutState.status === 'resting') {
     workoutState.prePauseStatus = workoutState.status;
     workoutState.status = 'paused';
-    clearInterval(timerInterval);
-    timerInterval = null;
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
     document.dispatchEvent(new CustomEvent('workoutStateChange'));
   }
 }
@@ -148,17 +155,15 @@ export function resumeWorkout() {
   if (workoutState.status === 'paused') {
     workoutState.status = workoutState.prePauseStatus;
     workoutState.prePauseStatus = '';
-    if (!timerInterval) {
-      timerInterval = setInterval(tick, TICK_RATE_MS);
-    }
+    lastTickTimestamp = 0;
+    animationFrameId = requestAnimationFrame(tick);
     document.dispatchEvent(new CustomEvent('workoutStateChange'));
   }
 }
 
 export function endWorkout() {
   workoutState.status = 'finished';
-  clearInterval(timerInterval);
-  timerInterval = null;
+  cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
   setView('planner');
-  document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }

@@ -8,19 +8,22 @@ export class TrainerComponent {
     constructor(containerElement) {
         this.container = containerElement;
 
-        // Query degli elementi DOM una sola volta
         this.elements = {
             exerciseName: this.container.querySelector('#current-exercise-name'),
             exerciseDetails: this.container.querySelector('#current-exercise-details'),
             repDisplay: this.container.querySelector('#current-rep-display'),
             upcomingList: this.container.querySelector('#upcoming-exercises-list'),
-            controlsContainer: this.container.querySelector('#trainer-main-controls'),
+            
+            btnStart: this.container.querySelector('#trainer-start-btn'),
+            btnPause: this.container.querySelector('#trainer-pause-btn'),
+            btnResume: this.container.querySelector('#trainer-resume-btn'),
+
             modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
             ringContainer: this.container.querySelector('#timer-ring-container'),
-            ringText: this.container.querySelector('#tempo-phase-name'),
         };
 
-        this.ringProgress = null; // Verrà inizializzato dopo la creazione dell'SVG
+        this.ringProgress = null;
+        this.ringText = null;
     }
 
     mount() {
@@ -30,56 +33,53 @@ export class TrainerComponent {
 
     destroy() {
         this.container.removeEventListener('click', this.handleControls.bind(this));
-        // Altre pulizie se necessarie
     }
 
     handleControls(e) {
         const targetId = e.target.id;
         switch (targetId) {
-            case 'trainer-start-btn':
-                startWorkout();
-                break;
-            case 'trainer-pause-btn':
-                pauseWorkout();
-                break;
-            case 'trainer-resume-btn':
-                resumeWorkout();
-                break;
-            case 'trainer-end-btn':
-                endWorkout();
-                break;
-            case 'trainer-back-btn':
-                setView('planner');
-                break;
+            case 'trainer-start-btn': startWorkout(); break;
+            case 'trainer-pause-btn': pauseWorkout(); break;
+            case 'trainer-resume-btn': resumeWorkout(); break;
+            case 'trainer-end-btn': endWorkout(); break;
+            case 'trainer-back-btn': setView('planner'); break;
         }
     }
 
     createTimerRing() {
         if (this.elements.ringContainer.querySelector('svg')) return;
         this.elements.ringContainer.innerHTML = '';
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
         svg.setAttribute('width', '200');
         svg.setAttribute('height', '200');
         svg.setAttribute('viewBox', '0 0 200 200');
 
-        const backgroundCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        const backgroundCircle = document.createElementNS(svgNS, 'circle');
         backgroundCircle.setAttribute('cx', '100');
         backgroundCircle.setAttribute('cy', '100');
         backgroundCircle.setAttribute('r', RING_RADIUS);
         backgroundCircle.setAttribute('class', 'timer-ring-bg');
 
-        const progressCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        const progressCircle = document.createElementNS(svgNS, 'circle');
         progressCircle.setAttribute('cx', '100');
         progressCircle.setAttribute('cy', '100');
         progressCircle.setAttribute('r', RING_RADIUS);
         progressCircle.setAttribute('class', 'timer-ring-progress');
         progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-        progressCircle.style.strokeDashoffset = RING_CIRCUMFERENCE;
+
+        const text = document.createElementNS(svgNS, 'text');
+        text.setAttribute('x', '50%');
+        text.setAttribute('y', '50%');
+        text.setAttribute('dy', '.3em');
+        text.setAttribute('class', 'timer-ring-display');
 
         svg.appendChild(backgroundCircle);
         svg.appendChild(progressCircle);
+        svg.appendChild(text);
         this.elements.ringContainer.prepend(svg);
         this.ringProgress = progressCircle;
+        this.ringText = text;
     }
 
     updateTimerRing(percent) {
@@ -105,26 +105,19 @@ export class TrainerComponent {
             this.elements.upcomingList.appendChild(li);
         });
 
-        // Gestione Controlli
-        if (status === 'idle') {
-            this.elements.controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
-            this.elements.ringText.textContent = '';
-            this.updateTimerRing(0);
-        } else if (status === 'running' || status === 'resting') {
-            this.elements.controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
-        } else if (status === 'paused') {
-            this.elements.controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
-        } else {
-            this.elements.controlsContainer.innerHTML = '';
-        }
+        this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
+        this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
+        this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
 
-        // Gestione Modalità
         this.elements.modeTempoContainer.classList.remove('hidden');
 
         if (status === 'running') {
             this.renderPhase(state);
         } else if (status === 'resting') {
             this.renderRest(state);
+        } else if (status === 'idle') {
+            this.ringText.textContent = '';
+            this.updateTimerRing(0);
         }
     }
 
@@ -136,8 +129,8 @@ export class TrainerComponent {
         const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
         const isPrePhase = phase.name.startsWith('pre-');
 
-        this.elements.ringText.textContent = phaseNameDisplay;
-        this.elements.ringText.classList.toggle('flashing', isPrePhase);
+        this.ringText.textContent = phaseNameDisplay;
+        this.ringText.classList.toggle('flashing', isPrePhase);
 
         const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
         this.updateTimerRing(progressPercent);
@@ -146,9 +139,9 @@ export class TrainerComponent {
     renderRest(state) {
         const { restTimeRemaining } = state;
         const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
-        this.elements.ringText.textContent = secondsRemaining;
-        this.elements.ringText.classList.remove('flashing');
-        this.updateTimerRing(0);
+        this.ringText.textContent = secondsRemaining;
+        this.ringText.classList.remove('flashing');
+        this.updateTimerRing((restTimeRemaining / (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000)) * 100);
     }
 
     formatExerciseDetails(exercise, set) {

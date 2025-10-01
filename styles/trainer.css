@@ -69,10 +69,7 @@
     font-weight: bold;
     color: var(--text-color);
     text-transform: uppercase;
-    position: absolute; /* Changed to absolute */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%); /* Center the text */
+    text-anchor: middle;
 }
 
 .timer-ring-bg {
@@ -88,7 +85,6 @@
     stroke-linecap: round;
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
-    /* Rimosso transition per affidarsi a JS */
 }
 
 @keyframes flash {
@@ -107,7 +103,7 @@
     justify-content: center;
     align-items: center;
     margin-top: 1rem;
-    height: 80px; /* Altezza fissa per evitare salti di layout */
+    height: 80px;
 }
 
 .btn-large {
