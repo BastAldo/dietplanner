@@ -115,7 +115,6 @@ export function resetWorkoutState() {
 
 export function initializeWorkout(plannedExercises) {
   if (!plannedExercises || plannedExercises.length === 0) {
-    console.error("Tentativo di inizializzare un allenamento senza esercizi.");
     return;
   }
   resetWorkoutState();

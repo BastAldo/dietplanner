@@ -67,7 +67,7 @@
 .timer-ring-display {
     font-size: 3rem;
     font-weight: bold;
-    fill: var(--text-color); /* Changed from color to fill for SVG */
+    fill: var(--text-color);
     text-transform: uppercase;
     text-anchor: middle;
 }
@@ -94,7 +94,7 @@
 
 .flashing {
   animation: flash 1.4s infinite;
-  fill: var(--secondary-color); /* Changed from color to fill for SVG */
+  fill: var(--secondary-color);
 }
 
 .trainer-controls {

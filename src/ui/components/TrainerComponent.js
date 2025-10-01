@@ -89,14 +89,23 @@ export class TrainerComponent {
     }
 
     render(state) {
-        const { exerciseQueue, currentExerciseIndex, status, currentSet, currentRep } = state;
+        const { exerciseQueue, currentExerciseIndex, status } = state;
 
-        if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) return;
+        if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
+            this.elements.exerciseName.textContent = '';
+            this.elements.exerciseDetails.textContent = '';
+            this.elements.repDisplay.textContent = '';
+            this.elements.upcomingList.innerHTML = '';
+            this.elements.btnStart.classList.add('hidden');
+            this.elements.btnPause.classList.add('hidden');
+            this.elements.btnResume.classList.add('hidden');
+            return;
+        };
 
         const currentExercise = exerciseQueue[currentExerciseIndex];
         this.elements.exerciseName.textContent = currentExercise.name;
-        this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentExercise, currentSet);
-        this.elements.repDisplay.textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
+        this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
+        this.elements.repDisplay.textContent = (status === 'running') ? `Rip. ${state.currentRep}` : '';
 
         this.elements.upcomingList.innerHTML = '';
         exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
@@ -111,12 +120,12 @@ export class TrainerComponent {
 
         this.elements.modeTempoContainer.classList.remove('hidden');
 
-        if (status === 'running') {
-            this.renderPhase(state);
-        } else if (status === 'resting') {
-            this.renderRest(state);
-        } else if (status === 'idle') {
+        if (status === 'running') this.renderPhase(state);
+        else if (status === 'resting') this.renderRest(state);
+        else if (status === 'paused') this.renderPaused(state);
+        else if (status === 'idle') {
             this.ringText.textContent = '';
+            this.ringText.classList.remove('flashing');
             this.updateTimerRing(0);
         }
     }
@@ -143,11 +152,18 @@ export class TrainerComponent {
         this.ringText.classList.remove('flashing');
         this.updateTimerRing((restTimeRemaining / (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000)) * 100);
     }
+    
+    renderPaused(state) {
+      this.ringText.textContent = 'PAUSA';
+      this.ringText.classList.remove('flashing');
+    }
 
-    formatExerciseDetails(exercise, set) {
+    formatExerciseDetails(state) {
+        const { exerciseQueue, currentExerciseIndex, currentSet } = state;
+        const exercise = exerciseQueue[currentExerciseIndex];
         if (!exercise) return '';
         const sets = exercise.defaultSets;
-        let details = `Serie ${set} di ${sets}`;
+        let details = `Serie ${currentSet} di ${sets}`;
         if (exercise.type === 'reps') {
             const reps = exercise.defaultReps;
             details += ` | ${reps} Ripetizioni`;
