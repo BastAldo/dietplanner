@@ -4,12 +4,10 @@ import { setView } from '../core/state.js';
 let ringProgress, ringText;
 const RING_RADIUS = 80;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-let lastRenderedStatus = '';
 
 function createTimerRing(container) {
     if (container.querySelector('svg')) {
         ringProgress = container.querySelector('.timer-ring-progress');
-        ringProgress.style.strokeDasharray = RING_CIRCUMFERENCE;
         return;
     }
     container.innerHTML = '';
@@ -30,11 +28,18 @@ function createTimerRing(container) {
     progressCircle.setAttribute('r', RING_RADIUS);
     progressCircle.setAttribute('class', 'timer-ring-progress');
     progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
+    progressCircle.style.strokeDashoffset = RING_CIRCUMFERENCE;
 
     svg.appendChild(backgroundCircle);
     svg.appendChild(progressCircle);
     container.prepend(svg);
     ringProgress = progressCircle;
+}
+
+function updateTimerRing(percent) {
+  if (!ringProgress) return;
+  const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
+  ringProgress.style.strokeDashoffset = offset;
 }
 
 function formatExerciseDetails(exercise, set) {
@@ -54,7 +59,7 @@ function formatExerciseDetails(exercise, set) {
 function renderPhase(state) {
   const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
   const phase = executionQueue[currentPhaseIndex];
-  if (!phase || !ringProgress || !ringText) return;
+  if (!phase) return;
 
   const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
   const isPrePhase = phase.name.startsWith('pre-');
@@ -62,18 +67,16 @@ function renderPhase(state) {
   ringText.textContent = phaseNameDisplay;
   ringText.classList.toggle('flashing', isPrePhase);
 
-  const progress = phaseTimeElapsed / phase.duration;
-  const offset = RING_CIRCUMFERENCE * (1 - Math.min(progress, 1));
-  ringProgress.style.strokeDashoffset = offset;
+  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
+  updateTimerRing(progressPercent);
 }
 
 function renderRest(state) {
   const { restTimeRemaining } = state;
   const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
-  if (!ringText || !ringProgress) return;
   ringText.textContent = secondsRemaining;
   ringText.classList.remove('flashing');
-  ringProgress.style.strokeDashoffset = RING_CIRCUMFERENCE;
+  updateTimerRing(0);
 }
 
 export function renderTrainerView() {
@@ -87,29 +90,30 @@ export function renderTrainerView() {
   document.getElementById('current-exercise-details').textContent = formatExerciseDetails(currentExercise, currentSet);
   document.getElementById('current-rep-display').textContent = (status === 'running') ? `Rip. ${currentRep}` : '';
 
-  if (status !== lastRenderedStatus) {
-      const upcomingList = document.getElementById('upcoming-exercises-list');
-      upcomingList.innerHTML = '';
-      exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-        const li = document.createElement('li');
-        li.textContent = ex.name;
-        upcomingList.appendChild(li);
-      });
 
-      const controlsContainer = document.getElementById('trainer-main-controls');
-      if (status === 'idle') {
-        controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
-        if(ringText) ringText.textContent = '';
-        if(ringProgress) ringProgress.style.strokeDashoffset = RING_CIRCUMFERENCE;
-      } else if (status === 'running' || status === 'resting') {
-        controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
-      } else if (status === 'paused') {
-        controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
-      } else {
-        controlsContainer.innerHTML = '';
-      }
-      lastRenderedStatus = status;
+  const upcomingList = document.getElementById('upcoming-exercises-list');
+  upcomingList.innerHTML = '';
+  exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
+    const li = document.createElement('li');
+    li.textContent = ex.name;
+    upcomingList.appendChild(li);
+  });
+
+  const controlsContainer = document.getElementById('trainer-main-controls');
+  if (status === 'idle') {
+    controlsContainer.innerHTML = `<button id="trainer-start-btn" class="btn btn-primary btn-large">AVVIA</button>`;
+    ringText.textContent = '';
+    updateTimerRing(0);
+  } else if (status === 'running' || status === 'resting') {
+    controlsContainer.innerHTML = `<button id="trainer-pause-btn" class="btn btn-secondary btn-large">PAUSA</button>`;
+  } else if (status === 'paused') {
+    controlsContainer.innerHTML = `<button id="trainer-resume-btn" class="btn btn-primary btn-large">RIPRENDI</button>`;
+  } else {
+    controlsContainer.innerHTML = '';
   }
+
+  const modeTempoContainer = document.getElementById('mode-tempo-guided');
+  modeTempoContainer.classList.remove('hidden');
 
   if (status === 'running') {
       renderPhase(state);
@@ -119,17 +123,17 @@ export function renderTrainerView() {
 }
 
 export function initializeTrainerUI() {
-    lastRenderedStatus = '';
     document.removeEventListener('workoutStateChange', renderTrainerView);
     document.addEventListener('workoutStateChange', renderTrainerView);
 
-    const page = document.getElementById('trainer-page');
-    const newPage = page.cloneNode(true);
-    page.parentNode.replaceChild(newPage, page);
-    
     const ringContainer = document.getElementById('timer-ring-container');
     createTimerRing(ringContainer);
     ringText = document.getElementById('tempo-phase-name');
+
+    const page = document.getElementById('trainer-page');
+    // Rimuovi vecchi listener se esistono per evitare duplicati
+    const newPage = page.cloneNode(true);
+    page.parentNode.replaceChild(newPage, page);
 
     newPage.addEventListener('click', (e) => {
         if (e.target.id === 'trainer-start-btn') startWorkout();

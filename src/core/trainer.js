@@ -56,7 +56,7 @@ function advanceToNextExercise() {
   if (workoutState.currentExerciseIndex >= workoutState.exerciseQueue.length) {
     endWorkout();
   } else {
-    workoutState.status = 'idle';
+    workoutState.status = 'idle'; // Pronto per il prossimo esercizio
     workoutState.currentSet = 1;
     workoutState.currentRep = 1;
     workoutState.executionQueue = [];
