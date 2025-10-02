@@ -1,4 +1,4 @@
-import { getWorkoutState, getAnimationFrameId, resetWorkoutState } from '../core/trainer.js';
+import { getWorkoutState, resetWorkoutState } from '../core/trainer.js';
 import { TrainerComponent } from './components/TrainerComponent.js';
 
 let trainerComponent = null;
@@ -21,11 +21,6 @@ export function initializeTrainerController() {
 }
 
 export function destroyTrainerController() {
-    const animationFrameId = getAnimationFrameId();
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-    }
-    
     if (trainerComponent) {
         trainerComponent.destroy();
         trainerComponent = null;

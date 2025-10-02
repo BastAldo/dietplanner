@@ -102,15 +102,15 @@ function tick(timestamp) {
   }
 }
 
-export function getAnimationFrameId() {
-  return animationFrameId;
-}
-
 export function getWorkoutState() {
   return workoutState;
 }
 
 export function resetWorkoutState() {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
   workoutState = { ...initialWorkoutState };
 }
 
