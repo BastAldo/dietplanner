@@ -205,7 +205,7 @@ export function navigateWeek(direction) {
 
 export function setView(view) {
   if (state.currentView === 'trainer' && view !== 'trainer') {
-    resetWorkoutState();
+    // La logica di reset è ora gestita dal destroyTrainerController
   }
   if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
     state.currentView = view;

@@ -14,7 +14,6 @@ const initialWorkoutState = {
 };
 
 let workoutState = { ...initialWorkoutState };
-
 let animationFrameId = null;
 let lastTickTimestamp = 0;
 
@@ -103,13 +102,15 @@ function tick(timestamp) {
   }
 }
 
+export function getAnimationFrameId() {
+  return animationFrameId;
+}
+
 export function getWorkoutState() {
   return workoutState;
 }
 
 export function resetWorkoutState() {
-  cancelAnimationFrame(animationFrameId);
-  animationFrameId = null;
   workoutState = { ...initialWorkoutState };
 }
 

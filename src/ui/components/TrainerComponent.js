@@ -33,6 +33,8 @@ export class TrainerComponent {
 
     destroy() {
         this.container.removeEventListener('click', this.handleControls.bind(this));
+        this.ringProgress = null;
+        this.ringText = null;
     }
 
     handleControls(e) {
@@ -89,6 +91,10 @@ export class TrainerComponent {
     }
 
     render(state) {
+        if (!this.ringText || !this.elements.exerciseName) {
+            return; 
+        }
+
         const { exerciseQueue, currentExerciseIndex, status } = state;
 
         if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {

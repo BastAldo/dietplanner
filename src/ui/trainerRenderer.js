@@ -1,4 +1,4 @@
-import { getWorkoutState } from '../core/trainer.js';
+import { getWorkoutState, getAnimationFrameId, resetWorkoutState } from '../core/trainer.js';
 import { TrainerComponent } from './components/TrainerComponent.js';
 
 let trainerComponent = null;
@@ -16,14 +16,20 @@ export function initializeTrainerController() {
         trainerComponent.mount();
         document.addEventListener('workoutStateChange', handleWorkoutStateChange);
         // Render iniziale
-        trainerComponent.render(getWorkoutState());
+        handleWorkoutStateChange();
     }
 }
 
 export function destroyTrainerController() {
+    const animationFrameId = getAnimationFrameId();
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    
     if (trainerComponent) {
         trainerComponent.destroy();
         trainerComponent = null;
     }
     document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
+    resetWorkoutState();
 }
