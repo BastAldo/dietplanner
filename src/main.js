@@ -1,7 +1,10 @@
 import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
 import { renderApp, populateInitialText } from './ui/renderer.js';
 import { showConfirmModal } from './ui/modals.js';
-import { initializeEventListeners } from './ui/interactions.js';
+import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
+import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
+import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
+import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
 import { loadViews } from './ui/viewLoader.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { fetchAndParseConfig } from './api/configService.js';
@@ -42,7 +45,13 @@ async function init() {
   document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
 
   populateInitialText();
-  initializeEventListeners();
+  
+  // Initialize all event listeners from modular files
+  initializeGlobalListeners();
+  initializePlannerListeners();
+  initializeProgressListeners();
+  initializeProfileListeners();
+
   renderApp(); // Initial render with local data
 
   // Expose debug mode toggle to the window
