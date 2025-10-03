@@ -19,6 +19,7 @@ function formatReadableDate(isoDate) {
 }
 
 function formatDuration(ms) {
+    if (typeof ms !== 'number' || ms < 0) return '00:00';
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
@@ -96,13 +97,14 @@ export function renderChartsPage(state) {
 }
 
 function getSetDetails(setData) {
+    let details = [];
     if (setData.reps) {
-        return `${setData.reps} reps`;
+        details.push(`${setData.reps} reps`);
     }
     if (setData.duration) {
-        return `${setData.duration}s`;
+        details.push(`${formatDuration(setData.duration)}`);
     }
-    return '';
+    return details.join(' / ');
 }
 
 export function renderDebriefingPage(state) {
@@ -122,8 +124,12 @@ export function renderDebriefingPage(state) {
           <span class="stat-value">${formatDuration(summary.totalTime)}</span>
       </div>
       <div class="stat-item">
-          <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_SETS}</span>
-          <span class="stat-value">${summary.totalSets}</span>
+          <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
+          <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
+      </div>
+      <div class="stat-item">
+          <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
+          <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
       </div>
   `;
   statsContainer.innerHTML = statsHTML;
@@ -145,9 +151,14 @@ export function renderDebriefingPage(state) {
                       ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
                   </div>
               </div>
-              <p class="sets-summary">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
-              <div class="sets-details-container">
-                  ${setsDetailsHTML}
+              <div class="debriefing-card-body">
+                <div class="exercise-stats">
+                  <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
+                  <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
+                </div>
+                <div class="sets-details-container">
+                    ${setsDetailsHTML}
+                </div>
               </div>
           </div>
       `;

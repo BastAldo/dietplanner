@@ -40,6 +40,8 @@ export function initializeWorkout(plannedExercises) {
     currentRep: 1,
     executionMode: firstExercise.execution_mode || 'tempo_guided',
     startTime: Date.now(),
+    phaseStartTime: 0,
+    restStartTime: 0,
     setsData: []
   };
   updateState(initialState);
@@ -52,7 +54,7 @@ export function startWorkout() {
   log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
   if (state.status !== 'idle') return;
 
-  let startState = { status: 'running' };
+  let startState = { status: 'running', phaseStartTime: Date.now() };
 
   if (state.executionMode === 'tempo_guided') {
       startState.executionQueue = buildExecutionQueueForCurrentSet();
@@ -87,10 +89,12 @@ export function pauseWorkout() {
 export function resumeWorkout() {
   const state = getState();
   if (state.status === 'paused') {
-    updateState({
-      status: state.prePauseStatus,
-      prePauseStatus: '',
-    });
+    const status = state.prePauseStatus;
+    const newState = { status, prePauseStatus: '' };
+    if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
+    if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
+
+    updateState(newState);
     startAnimation();
     document.dispatchEvent(new CustomEvent('workoutStateChange'));
   }
@@ -108,9 +112,10 @@ export function incrementManualRep() {
         if (targetReps && newRepCount >= targetReps) {
             updateState({
               status: 'resting',
+              restStartTime: Date.now(),
               restTimeRemaining: currentExercise.defaultRest * 1000,
             });
-            startAnimation(); // Avvia l'animazione per il countdown del riposo
+            startAnimation();
         }
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
     }
@@ -121,27 +126,32 @@ function createWorkoutSummary(finalState, isNaturalCompletion = false) {
     
     const exercisesWithDetails = finalState.exerciseQueue.map((exercise, index) => {
         const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
-        
         let setsCompleted = setsForThisExercise.length;
 
-        // Correzione per l'ultimo esercizio completato naturalmente
         if (isNaturalCompletion && index === finalState.currentExerciseIndex) {
             setsCompleted = exercise.defaultSets;
         }
+        
+        const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
 
         return { 
             ...exercise, 
             setsCompleted: setsCompleted,
-            setsData: setsForThisExercise
+            setsData: setsForThisExercise,
+            totalTime: totalExerciseTime
         };
     });
 
     const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+    const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+    const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.restDuration || 0), 0);
 
     return {
         date: toISODateString(new Date(finalState.startTime)),
         totalTime,
         totalSets,
+        totalExerciseTime,
+        totalRestTime,
         exercises: exercisesWithDetails
     };
 }

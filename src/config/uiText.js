@@ -106,6 +106,8 @@ const UI_TEXT_CONFIG = [
   { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
   { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
   { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' },
+  { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo Esercizio' },
+  { id: 'DEBRIEFING_REST_TIME', text: 'Tempo Riposo' },
   { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' }
 ];
 

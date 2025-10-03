@@ -13,6 +13,8 @@ const initialWorkoutState = {
   restTimeRemaining: 0,
   setTimeRemaining: 0,
   startTime: 0,
+  phaseStartTime: 0, // Timestamp for start of exercise/set phase
+  restStartTime: 0, // Timestamp for start of rest phase
   setsData: [] // Array to store data for each completed set
 };
 

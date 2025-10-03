@@ -64,7 +64,17 @@
 .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
 
 .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
-.log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 0.5rem; font-size: 1rem; }
+.log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 1rem; font-size: 1rem; }
+.log-workout-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-color-muted);
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
 .log-workout-exercise { margin-bottom: 1rem; }
 .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
 .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }

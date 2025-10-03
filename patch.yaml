@@ -1,18 +1,16 @@
-commit_message: "feat(history): Arricchisce lo storico allenamenti con statistiche per serie"
+commit_message: "feat(history): Aggiunge tempi parziali e di riposo allo storico allenamenti"
 rationale: |
-  Questo commit rappresenta un'evoluzione significativa della funzionalità di tracciamento degli allenamenti, rispondendo alla necessità di statistiche più dettagliate e correggendo un bug critico nel conteggio finale.
+  Questo commit migliora drasticamente la qualità e il dettaglio dello storico degli allenamenti, rispondendo alla necessità di tracciare non solo il lavoro svolto, ma anche i tempi di esecuzione e di recupero. Sono state inoltre corrette alcune incongruenze nell'interfaccia utente.
 
-  Le modifiche chiave sono:
+  Le modifiche principali includono:
 
-  1.  **Tracciamento Granulare per Serie**: È stato introdotto un nuovo meccanismo di tracciamento in `src/core/trainer/state.js` e `machine.js`. L'applicazione ora registra i dettagli di ogni singola serie completata (ripetizioni o durata) in un nuovo array `setsData`.
-  
-  2.  **Correzione Bug Esercizio Finale**: La logica di calcolo in `createWorkoutSummary` (`src/core/trainer.js`) è stata riscritta. Ora determina correttamente lo stato di completamento anche per l'ultimo esercizio di un allenamento terminato naturalmente, risolvendo il bug che lo segnalava come incompleto.
+  1.  **Tracciamento Avanzato dei Tempi**: Il core del modulo trainer (`state.js`, `machine.js`) è stato potenziato per registrare timestamp precisi all'inizio di ogni fase di esercizio e di riposo. Questo permette di calcolare la durata effettiva di ogni serie e di ogni pausa.
 
-  3.  **Riepiloghi Dettagliati**: Il riepilogo salvato nello storico (`workoutHistory`) ora include l'array `setsData` con tutte le performance registrate.
+  2.  **Riepiloghi Dati Arricchiti**: La funzione `createWorkoutSummary` ora calcola e salva nel riepilogo `totalExerciseTime` e `totalRestTime`. Ogni esercizio nello storico contiene ora anche il suo `totalTime` e l'elenco dettagliato delle durate di ogni singola serie.
 
-  4.  **UI Potenziata**:
-      * La **Vista Debriefing** (`src/ui/pageRenderers.js`) è stata completamente riprogettata per mostrare non solo le serie completate, ma anche i dettagli di ripetizioni/durata per ciascuna di esse.
-      * La **Vista Log** (`src/ui/plannerRenderer.js`) è stata allineata per visualizzare lo stesso livello di dettaglio, trasformandola in un vero e proprio diario storico degli allenamenti.
+  3.  **UI Debriefing e Log Dettagliate**:
+      * Le viste di **Debriefing** e **Log** (`pageRenderers.js`, `plannerRenderer.js`) sono state completamente riprogettate per visualizzare queste nuove, ricche informazioni. Ora mostrano il tempo totale per esercizio e la durata di ogni serie.
+      * Nella vista **Log**, è stata aggiunta la data di riferimento all'allenamento del giorno, eliminando l'ambiguità precedente e allineando il design a quello dei pasti.
 patches:
   - file: src/config/uiText.js
     content: |
@@ -124,6 +122,8 @@ patches:
         { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
         { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
         { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' },
+        { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo Esercizio' },
+        { id: 'DEBRIEFING_REST_TIME', text: 'Tempo Riposo' },
         { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' }
       ];
 
@@ -175,6 +175,8 @@ patches:
           currentRep: 1,
           executionMode: firstExercise.execution_mode || 'tempo_guided',
           startTime: Date.now(),
+          phaseStartTime: 0,
+          restStartTime: 0,
           setsData: []
         };
         updateState(initialState);
@@ -187,7 +189,7 @@ patches:
         log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
         if (state.status !== 'idle') return;
 
-        let startState = { status: 'running' };
+        let startState = { status: 'running', phaseStartTime: Date.now() };
 
         if (state.executionMode === 'tempo_guided') {
             startState.executionQueue = buildExecutionQueueForCurrentSet();
@@ -222,10 +224,12 @@ patches:
       export function resumeWorkout() {
         const state = getState();
         if (state.status === 'paused') {
-          updateState({
-            status: state.prePauseStatus,
-            prePauseStatus: '',
-          });
+          const status = state.prePauseStatus;
+          const newState = { status, prePauseStatus: '' };
+          if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
+          if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
+
+          updateState(newState);
           startAnimation();
           document.dispatchEvent(new CustomEvent('workoutStateChange'));
         }
@@ -243,9 +247,10 @@ patches:
               if (targetReps && newRepCount >= targetReps) {
                   updateState({
                     status: 'resting',
+                    restStartTime: Date.now(),
                     restTimeRemaining: currentExercise.defaultRest * 1000,
                   });
-                  startAnimation(); // Avvia l'animazione per il countdown del riposo
+                  startAnimation();
               }
               document.dispatchEvent(new CustomEvent('workoutStateChange'));
           }
@@ -256,27 +261,32 @@ patches:
           
           const exercisesWithDetails = finalState.exerciseQueue.map((exercise, index) => {
               const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
-              
               let setsCompleted = setsForThisExercise.length;
 
-              // Correzione per l'ultimo esercizio completato naturalmente
               if (isNaturalCompletion && index === finalState.currentExerciseIndex) {
                   setsCompleted = exercise.defaultSets;
               }
+              
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
 
               return { 
                   ...exercise, 
                   setsCompleted: setsCompleted,
-                  setsData: setsForThisExercise
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime
               };
           });
 
           const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.restDuration || 0), 0);
 
           return {
               date: toISODateString(new Date(finalState.startTime)),
               totalTime,
               totalSets,
+              totalExerciseTime,
+              totalRestTime,
               exercises: exercisesWithDetails
           };
       }
@@ -296,27 +306,41 @@ patches:
       import { getWorkoutState, updateState, resetState } from './state.js';
       import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
 
-      function logSetData() {
+      function logSetData(isNaturalCompletion = false) {
           const state = getWorkoutState();
           const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+          
           const setData = {
               exerciseId: currentExercise.instanceId,
               set: state.currentSet
           };
+          
+          if (state.status === 'running') {
+              setData.duration = Date.now() - state.phaseStartTime;
+          }
+
+          if (isNaturalCompletion) {
+             const restDuration = Date.now() - state.restStartTime;
+             const lastSetIndex = state.setsData.length -1;
+             if(lastSetIndex >= 0) {
+                state.setsData[lastSetIndex].restDuration = restDuration;
+             }
+          }
 
           if (state.executionMode === 'manual_reps') {
               setData.reps = state.manualRepCount;
           } else if (state.executionMode === 'tempo_guided') {
               setData.reps = currentExercise.defaultReps;
           } else if (state.executionMode === 'static_hold') {
-              setData.duration = currentExercise.defaultDuration;
+              setData.duration = currentExercise.defaultDuration * 1000;
           }
           
-          const newSetsData = [...state.setsData, setData];
+          const newSetsData = state.status === 'running' ? [...state.setsData, setData] : [...state.setsData];
           updateState({ setsData: newSetsData });
       }
 
       function startNextExercise() {
+          logSetData(true);
           const state = getWorkoutState();
           const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
           const executionMode = nextExercise.execution_mode || 'tempo_guided';
@@ -326,7 +350,8 @@ patches:
               currentSet: 1,
               currentRep: 1,
               manualRepCount: 0,
-              executionMode: executionMode
+              executionMode: executionMode,
+              phaseStartTime: Date.now(),
           };
 
           if (executionMode === 'tempo_guided') {
@@ -355,6 +380,7 @@ patches:
             phaseTimeElapsed: 0,
             currentRep: 1,
             manualRepCount: 0,
+            phaseStartTime: Date.now()
           };
           if (state.executionMode === 'tempo_guided') {
             nextState.executionQueue = buildExecutionQueueForCurrentSet();
@@ -396,6 +422,8 @@ patches:
         restTimeRemaining: 0,
         setTimeRemaining: 0,
         startTime: 0,
+        phaseStartTime: 0, // Timestamp for start of exercise/set phase
+        restStartTime: 0, // Timestamp for start of rest phase
         setsData: [] // Array to store data for each completed set
       };
 
@@ -435,6 +463,7 @@ patches:
       }
 
       function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
           const totalSeconds = Math.floor(ms / 1000);
           const minutes = Math.floor(totalSeconds / 60);
           const seconds = totalSeconds % 60;
@@ -512,13 +541,14 @@ patches:
       }
 
       function getSetDetails(setData) {
+          let details = [];
           if (setData.reps) {
-              return `${setData.reps} reps`;
+              details.push(`${setData.reps} reps`);
           }
           if (setData.duration) {
-              return `${setData.duration}s`;
+              details.push(`${formatDuration(setData.duration)}`);
           }
-          return '';
+          return details.join(' / ');
       }
 
       export function renderDebriefingPage(state) {
@@ -538,8 +568,12 @@ patches:
                 <span class="stat-value">${formatDuration(summary.totalTime)}</span>
             </div>
             <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_SETS}</span>
-                <span class="stat-value">${summary.totalSets}</span>
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
             </div>
         `;
         statsContainer.innerHTML = statsHTML;
@@ -561,9 +595,14 @@ patches:
                             ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
                         </div>
                     </div>
-                    <p class="sets-summary">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
-                    <div class="sets-details-container">
-                        ${setsDetailsHTML}
+                    <div class="debriefing-card-body">
+                      <div class="exercise-stats">
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
+                      </div>
+                      <div class="sets-details-container">
+                          ${setsDetailsHTML}
+                      </div>
                     </div>
                 </div>
             `;
@@ -633,13 +672,22 @@ patches:
       }
 
       function getSetDetails(setData) {
+          let details = [];
           if (setData.reps) {
-              return `${setData.reps} reps`;
+              details.push(`${setData.reps} reps`);
           }
           if (setData.duration) {
-              return `${setData.duration}s`;
+              details.push(`${formatDuration(setData.duration)}`);
           }
-          return '';
+          return details.join(' / ');
+      }
+      
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       }
 
       function renderCalendarView(state, weekStart) {
@@ -702,6 +750,13 @@ patches:
             if (completedWorkout) {
               dayLogHTML += `<div class="log-workout-summary">
                 <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                <div class="log-workout-stats">
+                  <span>Durata: ${formatDuration(completedWorkout.totalTime)}</span>
+                  <span>/</span>
+                  <span>Lavoro: ${formatDuration(completedWorkout.totalExerciseTime)}</span>
+                  <span>/</span>
+                  <span>Riposo: ${formatDuration(completedWorkout.totalRestTime)}</span>
+                </div>
                 ${completedWorkout.exercises.map(ex => `
                   <div class="log-workout-exercise">
                     <div class="log-item">
@@ -789,9 +844,10 @@ patches:
 
       #debriefing-stats {
         display: flex;
+        flex-wrap: wrap;
         justify-content: center;
-        gap: 2rem;
-        padding: 1rem;
+        gap: 1.5rem 2rem;
+        padding: 1.5rem;
         background: var(--card-color);
         border: 1px solid var(--border-color);
         border-radius: 8px;
@@ -805,16 +861,17 @@ patches:
       }
 
       .stat-label {
-        font-size: 0.9rem;
+        font-size: 0.8rem;
         color: var(--text-color-muted);
         text-transform: uppercase;
         margin-bottom: 0.5rem;
       }
 
       .stat-value {
-        font-size: 2rem;
+        font-size: 1.75rem;
         font-weight: bold;
         color: var(--primary-color);
+        font-family: 'Courier New', Courier, monospace;
       }
 
       #debriefing-summary {
@@ -846,11 +903,18 @@ patches:
           margin: 0;
       }
       
-      .sets-summary {
+      .debriefing-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .exercise-stats {
+        display: flex;
+        gap: 1rem;
         font-size: 0.9rem;
-        font-weight: bold;
         color: var(--text-color-muted);
-        margin-bottom: 1rem;
+        font-weight: bold;
       }
 
       .sets-details-container {
@@ -964,7 +1028,17 @@ patches:
       .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
       
       .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
-      .log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 0.5rem; font-size: 1rem; }
+      .log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 1rem; font-size: 1rem; }
+      .log-workout-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        font-size: 0.85rem;
+        color: var(--text-color-muted);
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
       .log-workout-exercise { margin-bottom: 1rem; }
       .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
       .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
@@ -976,4 +1050,4 @@ patches:
           .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
 commands:
-  - "echo 'Storico allenamenti e statistiche implementati. Il bug dell-ultimo esercizio è risolto.'"
+  - "echo 'Storico allenamenti potenziato con statistiche dettagliate e bugfix applicati.'"

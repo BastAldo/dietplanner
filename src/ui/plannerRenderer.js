@@ -58,13 +58,22 @@ function getRecipeButtonHTML(meal, state) {
 }
 
 function getSetDetails(setData) {
+    let details = [];
     if (setData.reps) {
-        return `${setData.reps} reps`;
+        details.push(`${setData.reps} reps`);
     }
     if (setData.duration) {
-        return `${setData.duration}s`;
+        details.push(`${formatDuration(setData.duration)}`);
     }
-    return '';
+    return details.join(' / ');
+}
+
+function formatDuration(ms) {
+    if (typeof ms !== 'number' || ms < 0) return '00:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function renderCalendarView(state, weekStart) {
@@ -127,6 +136,13 @@ function renderLogView(state, weekStart) {
       if (completedWorkout) {
         dayLogHTML += `<div class="log-workout-summary">
           <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+          <div class="log-workout-stats">
+            <span>Durata: ${formatDuration(completedWorkout.totalTime)}</span>
+            <span>/</span>
+            <span>Lavoro: ${formatDuration(completedWorkout.totalExerciseTime)}</span>
+            <span>/</span>
+            <span>Riposo: ${formatDuration(completedWorkout.totalRestTime)}</span>
+          </div>
           ${completedWorkout.exercises.map(ex => `
             <div class="log-workout-exercise">
               <div class="log-item">
