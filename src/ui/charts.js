@@ -1,4 +1,6 @@
-import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY, BIOMETRIC_FIELDS } from '../utils/constants.js';
+import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
+import { BIOMETRIC_FIELDS } from '../config/forms.js';
+import { UI_TEXT } from '../config/uiText.js';
 
 let plannerChartInstance = null;
 let biometricsChartInstance = null;
@@ -58,13 +60,13 @@ function renderPlannerChart(state) {
   
   const datasets = isLineChart ?
   [{
-      label: 'Kcal Min',
+      label: UI_TEXT.CHART_KCAL_MIN_LABEL,
       data: weeklyData.calories.map(c => c[0]),
       borderColor: colors.secondary,
       fill: false,
       tension: 0.1
   },{
-      label: 'Kcal Max',
+      label: UI_TEXT.CHART_KCAL_MAX_LABEL,
       data: weeklyData.calories.map(c => c[1]),
       borderColor: colors.primary,
       fill: '-1',
@@ -73,7 +75,7 @@ function renderPlannerChart(state) {
   }]
   :
   [{
-      label: 'Kcal (Min-Max)',
+      label: UI_TEXT.CHART_KCAL_RANGE_LABEL,
       data: weeklyData.calories,
       backgroundColor: colors.primary,
       borderColor: colors.secondary
@@ -113,9 +115,9 @@ function renderPlannerChart(state) {
               }
               const value = context.raw;
               if (value[0] === value[1]) {
-                return `Kcal: ${value[0]}`;
+                return `${UI_TEXT.KCAL_LABEL}: ${value[0]}`;
               }
-              return `Kcal: ${value[0]} - ${value[1]}`;
+              return `${UI_TEXT.KCAL_LABEL}: ${value[0]} - ${value[1]}`;
             }
           }
         }
@@ -125,7 +127,6 @@ function renderPlannerChart(state) {
 }
 
 function getBiometricsData(state) {
-  // Ordina esplicitamente i dati in ordine cronologico per il grafico
   const data = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
   const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
   
@@ -135,7 +136,7 @@ function getBiometricsData(state) {
   numericFields.forEach(field => {
       datasets[field.id] = {
           label: field.label,
-          data: data.map(entry => entry[field.id] || null) // Usa null per dati mancanti
+          data: data.map(entry => entry[field.id] || null)
       };
   });
 
@@ -157,7 +158,7 @@ function renderBiometricsChart(state) {
           pointBackgroundColor: colorCycle[index % colorCycle.length],
           pointRadius: 4
       }))
-      .filter(d => d.data.some(val => val !== null)); // Mostra solo se ci sono dati
+      .filter(d => d.data.some(val => val !== null));
 
   const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
 
@@ -182,7 +183,7 @@ function renderBiometricsChart(state) {
       },
       plugins: {
         legend: {
-          display: true, // Mostra sempre la legenda
+          display: true,
           labels: { color: colors.textColor }
         }
       }

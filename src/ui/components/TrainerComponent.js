@@ -1,7 +1,7 @@
 import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
-import { UI_TEXT } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 
 const RING_RADIUS = 128;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -195,10 +195,10 @@ export class TrainerComponent {
         const exercise = exerciseQueue[currentExerciseIndex];
         if (!exercise) return '';
         const sets = exercise.defaultSets;
-        let details = `Serie ${currentSet} di ${sets}`;
+        let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
         if (exercise.type === 'reps') {
             const reps = exercise.defaultReps;
-            details += ` | ${reps} Ripetizioni`;
+            details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
         } else if (exercise.type === 'time') {
             const duration = exercise.defaultDuration;
             details += ` | ${duration}s`;

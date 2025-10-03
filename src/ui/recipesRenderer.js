@@ -1,4 +1,4 @@
-import { UI_TEXT } from '../utils/constants.js';
+import { UI_TEXT } from '../config/uiText.js';
 import { formatIngredients } from '../utils/formatters.js';
 
 export function renderRecipesPage(state) {

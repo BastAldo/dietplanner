@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healtypro-v12';
+const CACHE_NAME = 'healtypro-v13';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
@@ -18,6 +18,8 @@ const APP_SHELL_FILES = [
   'templates/trainer.html',
   'src/main.js',
   'src/api/configService.js',
+  'src/config/forms.js',
+  'src/config/uiText.js',
   'src/core/state.js',
   'src/core/calculations.js',
   'src/core/validation.js',

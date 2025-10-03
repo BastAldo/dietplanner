@@ -1,5 +1,6 @@
 import { calculateBMR } from '../core/calculations.js';
-import { BIOMETRIC_FIELDS, PROFILE_FIELDS, UI_TEXT } from '../utils/constants.js';
+import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
+import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { renderCharts } from './charts.js';
 
@@ -21,10 +22,8 @@ export function renderBiometricsPage(state) {
   const form = document.getElementById('biometrics-form');
   const listContainer = document.getElementById('biometrics-list');
 
-  // Render Form
   form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
 
-  // Render Biometrics List as Cards
   if (state.biometricData.length > 0) {
       listContainer.innerHTML = state.biometricData.map(entry => {
           const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
@@ -40,12 +39,12 @@ export function renderBiometricsPage(state) {
                   <div class="biometric-card__header">
                       <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
                       <div class="biometrics-actions">
-                          <button class="btn-actions-menu" data-date="${entry.date}" title="Azioni">
+                          <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
                               ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
                           </button>
                           <div class="actions-dropdown">
-                              <button class="btn-edit-biometrics" data-date="${entry.date}">Modifica</button>
-                              <button class="btn-delete-biometrics delete" data-date="${entry.date}">Elimina</button>
+                              <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
+                              <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
                           </div>
                       </div>
                   </div>

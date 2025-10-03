@@ -3,7 +3,7 @@ import { renderPlannerPage } from './plannerRenderer.js';
 import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
 import { renderRecipesPage } from './recipesRenderer.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
-import { UI_TEXT } from '../utils/constants.js';
+import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { log } from '../utils/logger.js';
 
@@ -50,6 +50,8 @@ export function populateInitialText() {
   document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
   document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
   document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+  document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
+  document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
   populateIcons();
 }
 
@@ -70,7 +72,6 @@ export function renderApp() {
 
   log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
 
-  // Gestione del ciclo di vita del TrainerComponent
   if (state.currentView !== 'trainer' && isTrainerActive) {
       log('Renderer', 'View is not trainer, destroying trainer controller...');
       destroyTrainerController();

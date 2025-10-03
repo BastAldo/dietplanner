@@ -1,29 +1,29 @@
+import { UI_TEXT } from '../config/uiText.js';
+
 async function fetchJson(url) {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`Errore di rete caricando ${url}: ${response.status}`);
+    if (!response.ok) throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
     return response.json();
 }
 
 export async function fetchAndParseConfig(mealsUrl) {
-    if (!mealsUrl) throw new Error("Per favore, inserisci un URL valido per i pasti.");
+    if (!mealsUrl) throw new Error(UI_TEXT.CONFIG_URL_EMPTY_ERROR);
 
     try {
         const mealsConfig = await fetchJson(mealsUrl);
         if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
-            throw new Error("Il file dei pasti non è valido. Manca la chiave 'meals' o non è un array.");
+            throw new Error(UI_TEXT.API_INVALID_MEALS_FILE);
         }
 
         const baseUrl = new URL(mealsUrl);
         const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/'));
 
-        // Deriva l'URL degli ingredienti
         const ingredientsUrl = `${baseUrl.origin}${basePath}/ingredienti.json`;
         const ingredientsConfig = await fetchJson(ingredientsUrl);
         if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
-            throw new Error("Il file degli ingredienti non è valido. Manca la chiave 'ingredienti' o non è un array.");
+            throw new Error(UI_TEXT.API_INVALID_INGREDIENTS_FILE);
         }
 
-        // Deriva l'URL degli esercizi (opzionale)
         let exercises = [];
         try {
             const exercisesUrl = `${baseUrl.origin}${basePath}/esercizi.json`;
@@ -32,10 +32,9 @@ export async function fetchAndParseConfig(mealsUrl) {
                 exercises = exercisesConfig.esercizi;
             }
         } catch (e) {
-            console.warn("File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.");
+            console.warn(UI_TEXT.API_EXERCISES_FILE_WARN);
         }
 
-        // Combina le configurazioni
         return {
             rules: mealsConfig.rules || [],
             meals: mealsConfig.meals,
@@ -45,6 +44,6 @@ export async function fetchAndParseConfig(mealsUrl) {
 
     } catch (error) {
         console.error("Fallimento nel caricamento della configurazione:", error);
-        throw new Error(`Impossibile caricare la configurazione completa. Controlla la console.`);
+        throw new Error(UI_TEXT.API_CONFIG_LOAD_FAIL);
     }
 }

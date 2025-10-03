@@ -1,4 +1,5 @@
-import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 
 function toISODateString(date) {
@@ -47,7 +48,6 @@ function calculateDailyCalories(isoDate, weeklyPlan) {
 }
 
 function getRecipeButtonHTML(meal, state) {
-  // Ensure we check the full meal object from master list for recipeId
   const fullMeal = state.masterMealList.find(m => m.id === meal.id);
   if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
     return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
@@ -74,7 +74,7 @@ function renderCalendarView(state, weekStart) {
 
     if (workoutList && workoutList.length > 0) {
         const exerciseCount = workoutList.length;
-        const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
+        const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
         summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
         workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
     }
