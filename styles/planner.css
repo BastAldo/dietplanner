@@ -29,9 +29,10 @@
 .day-cell {
     background-color: var(--card-color); border: 1px solid var(--border-color);
     border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-    flex-direction: column; cursor: pointer; transition: all 0.2s;
+    flex-direction: column; transition: all 0.2s;
 }
-.day-cell:hover { border-color: var(--primary-color); transform: translateY(-3px); }
+.day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
+.day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
 .day-cell.is-today {
   border-color: var(--primary-color);
   box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
@@ -39,6 +40,14 @@
 .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
 .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
 .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+.daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.btn-start-workout-day {
+  pointer-events: all;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
 .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
 .log-day { margin-bottom: 2rem; }
 .log-day:last-child { margin-bottom: 0; }

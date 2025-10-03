@@ -3,11 +3,12 @@ import {
   copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
   deleteBiometricEntry, saveUserProfile
 } from '../core/state.js';
+import { initializeWorkout } from '../core/trainer.js';
 import { calculateBMR } from '../core/calculations.js';
 import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
-import { UI_TEXT } from '../utils/constants.js';
+import { UI_TEXT, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { log } from '../utils/logger.js';
 
 async function handleLoadConfig() {
@@ -23,6 +24,18 @@ async function handleLoadConfig() {
 }
 
 function handleCalendarClick(e) {
+  const startBtn = e.target.closest('.btn-start-workout-day');
+  if (startBtn) {
+      const isoDate = startBtn.dataset.date;
+      log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
+      const globalState = getState();
+      const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+      const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+      initializeWorkout(exercisesForWorkout);
+      setView('trainer');
+      return;
+  }
+
   const dayCell = e.target.closest('.day-cell');
   if (dayCell) {
     log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
@@ -272,4 +285,3 @@ export function initializeEventListeners() {
   });
   document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
 }
-console.log("debug grafici1")

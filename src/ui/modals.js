@@ -1,5 +1,4 @@
-import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises, setView } from '../core/state.js';
-import { initializeWorkout } from '../core/trainer.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises } from '../core/state.js';
 import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
@@ -283,8 +282,7 @@ export function openDayEditorModal(isoDate) {
   let workoutDetailsHTML;
   if (plannedWorkoutList.length > 0) {
       const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-      const startWorkoutBtn = `<button class="btn-start-workout btn btn-primary">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-      workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button>${startWorkoutBtn}</div></div>`;
+      workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
   } else {
       workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
   }
@@ -299,7 +297,6 @@ export function openDayEditorModal(isoDate) {
     const btnRecipe = e.target.closest('.btn-view-recipe');
     const btnAddExercise = e.target.closest('.btn-add-exercise');
     const btnManageWorkout = e.target.closest('.btn-manage-workout');
-    const btnStartWorkout = e.target.closest('.btn-start-workout');
 
     if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
     else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
@@ -314,14 +311,6 @@ export function openDayEditorModal(isoDate) {
     else if (btnManageWorkout) {
       dayEditorModal.classList.add('modal-hidden');
       openWorkoutEditorModal(isoDate);
-    }
-    else if (btnStartWorkout) {
-      dayEditorModal.classList.add('modal-hidden');
-      const globalState = getState();
-      const workoutSlotId = `${currentEditingDayISO}-${WORKOUT_SLOT_ID}`;
-      const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-      initializeWorkout(exercisesForWorkout);
-      setView('trainer');
     }
   };
   dayEditorModal.classList.remove('modal-hidden');

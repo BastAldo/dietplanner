@@ -3,7 +3,7 @@ import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../utils/constants.js';
 
-const RING_RADIUS = 100;
+const RING_RADIUS = 128;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export class TrainerComponent {
@@ -110,7 +110,7 @@ export class TrainerComponent {
         if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
             this.elements.exerciseName.textContent = '';
             this.elements.exerciseDetails.textContent = '';
-            this.elements.repDisplay.textContent = '';
+            this.elements.repDisplay.classList.add('hidden-rep');
             this.elements.upcomingDisplay.innerHTML = '';
             this.elements.btnStart.classList.add('hidden');
             this.elements.btnPause.classList.add('hidden');
@@ -121,7 +121,13 @@ export class TrainerComponent {
         const currentExercise = exerciseQueue[currentExerciseIndex];
         this.elements.exerciseName.textContent = currentExercise.name;
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-        this.elements.repDisplay.textContent = (status === 'running') ? `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}` : '';
+        
+        if (status === 'running') {
+          this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
+          this.elements.repDisplay.classList.remove('hidden-rep');
+        } else {
+          this.elements.repDisplay.classList.add('hidden-rep');
+        }
 
         const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
         if (upcomingExercises) {

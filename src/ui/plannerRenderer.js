@@ -46,14 +46,6 @@ function calculateDailyCalories(isoDate, weeklyPlan) {
   return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
 }
 
-function calculateDailyWorkoutSummary(isoDate, weeklyWorkouts) {
-  const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-  if (!workoutList || workoutList.length === 0) return '';
-  const exerciseCount = workoutList.length;
-  const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
-  return `<div class="daily-workout">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-}
-
 function getRecipeButtonHTML(meal, state) {
   // Ensure we check the full meal object from master list for recipeId
   const fullMeal = state.masterMealList.find(m => m.id === meal.id);
@@ -75,14 +67,27 @@ function renderCalendarView(state, weekStart) {
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
     const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-    const dailyWorkout = calculateDailyWorkoutSummary(isoDate, state.weeklyWorkouts);
+    const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+    
+    let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
+    let workoutButtonHTML = '';
+
+    if (workoutList && workoutList.length > 0) {
+        const exerciseCount = workoutList.length;
+        const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
+        summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
+        workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
+    }
+
     const dayCell = document.createElement('div');
     dayCell.className = 'day-cell';
     if (isoDate === todayISO) {
       dayCell.classList.add('is-today');
     }
     dayCell.dataset.date = isoDate;
-    dayCell.innerHTML = `<div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div><div class="day-cell__body"><div class="daily-calories">${dailyCalories}</div>${dailyWorkout}</div>`;
+    dayCell.innerHTML = `
+      <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
+      <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
     calendarGrid.appendChild(dayCell);
   }
 }
