@@ -98,8 +98,11 @@ export function renderDebriefingPage(state) {
   }
 
   const summaryHTML = summary.exerciseQueue.map((exercise, index) => {
-      const isCompleted = index < summary.currentExerciseIndex || (index === summary.currentExerciseIndex && summary.status === 'finished');
-      const setsCompleted = isCompleted ? exercise.defaultSets : Math.max(0, summary.currentSet - 1);
+      const setsCompleted = index < summary.currentExerciseIndex
+          ? exercise.defaultSets
+          : (index === summary.currentExerciseIndex ? Math.max(0, summary.currentSet - 1) : 0);
+
+      const isCompleted = setsCompleted === exercise.defaultSets;
 
       return `
           <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">

@@ -9,6 +9,7 @@ export { getState as getWorkoutState };
 
 export function resetWorkoutState() {
   log('Trainer', 'Resetting workout state.');
+  document.removeEventListener('workoutFinished', endWorkout);
   stopAnimation();
   resetState();
 }
@@ -27,6 +28,7 @@ export function initializeWorkout(plannedExercises) {
     executionMode: firstExercise.execution_mode || 'tempo_guided',
   };
   updateState(initialState);
+  document.addEventListener('workoutFinished', endWorkout);
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 

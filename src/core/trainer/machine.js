@@ -56,6 +56,7 @@ export function advanceToNextExercise() {
 
   if (newIndex >= state.exerciseQueue.length) {
     updateState({ status: 'finished' });
+    document.dispatchEvent(new CustomEvent('workoutFinished'));
   } else {
     updateState({
       currentExerciseIndex: newIndex

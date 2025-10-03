@@ -16,7 +16,6 @@ function tick(timestamp) {
 
   if (state.status === 'finished') {
     stopAnimation();
-    setView('planner');
     return;
   }
 
