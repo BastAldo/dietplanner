@@ -87,3 +87,30 @@ export function renderChartsPage(state) {
     }
     renderCharts(state);
 }
+
+export function renderDebriefingPage(state) {
+  const summaryContainer = document.getElementById('debriefing-summary');
+  const summary = state.lastWorkoutSummary;
+
+  if (!summary || !summary.exerciseQueue) {
+      summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+      return;
+  }
+
+  const summaryHTML = summary.exerciseQueue.map((exercise, index) => {
+      const isCompleted = index < summary.currentExerciseIndex || (index === summary.currentExerciseIndex && summary.status === 'finished');
+      const setsCompleted = isCompleted ? exercise.defaultSets : Math.max(0, summary.currentSet - 1);
+
+      return `
+          <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
+              <h4>${exercise.name}</h4>
+              <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${setsCompleted} / ${exercise.defaultSets}</p>
+              <div class="debriefing-status">
+                  ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+              </div>
+          </div>
+      `;
+  }).join('');
+
+  summaryContainer.innerHTML = summaryHTML;
+}

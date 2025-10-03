@@ -1,6 +1,6 @@
 import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
-import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
+import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage } from './pageRenderers.js';
 import { renderRecipesPage } from './recipesRenderer.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../config/uiText.js';
@@ -52,6 +52,8 @@ export function populateInitialText() {
   document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
   document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
   document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
+  document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
+  document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
   populateIcons();
 }
 
@@ -63,6 +65,7 @@ export function renderApp() {
   const recipesPage = document.getElementById('recipes-page');
   const profilePage = document.getElementById('profile-page');
   const trainerPage = document.getElementById('trainer-page');
+  const debriefingPage = document.getElementById('debriefing-page');
 
   const navPlannerBtn = document.getElementById('nav-planner');
   const navProgressBtn = document.getElementById('nav-progress');
@@ -78,7 +81,7 @@ export function renderApp() {
       isTrainerActive = false;
   }
 
-  [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
+  [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
   [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
 
   if (state.currentView === 'planner' || state.currentView === 'log') {
@@ -109,6 +112,9 @@ export function renderApp() {
       initializeTrainerController();
       isTrainerActive = true;
     }
+  } else if (state.currentView === 'debriefing') {
+    debriefingPage.classList.remove('hidden');
+    renderDebriefingPage(state);
   }
 
   const urlInput = document.getElementById('config-url-input');

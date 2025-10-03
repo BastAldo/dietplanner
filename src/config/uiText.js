@@ -95,7 +95,13 @@ const UI_TEXT_CONFIG = [
   { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
   { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
   { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
-  { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' }
+  { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
+  { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
+  { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
+  { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
+  { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
+  { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
+  { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

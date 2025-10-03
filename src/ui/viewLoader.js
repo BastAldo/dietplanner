@@ -26,6 +26,7 @@ export async function loadViews() {
     await fetchAndInject('templates/recipes.html', 'app-container');
     await fetchAndInject('templates/profile.html', 'app-container');
     await fetchAndInject('templates/trainer.html', 'app-container');
+    await fetchAndInject('templates/debriefing.html', 'app-container');
     
     // Carica i modali
     await fetchAndInject('templates/modals.html', 'modal-container');

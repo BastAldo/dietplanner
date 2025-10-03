@@ -14,8 +14,9 @@ let state = {
   configUrl: '',
   recipeBaseUrl: '',
   focusedDate: new Date(),
-  currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', or 'trainer'
+  currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing'
   debugMode: false,
+  lastWorkoutSummary: null,
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
@@ -226,10 +227,16 @@ export function navigateWeek(direction) {
 
 export function setView(view) {
   log('State', 'Setting new view', { newView: view, oldView: state.currentView });
-  if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
+  if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing'].includes(view)) {
     state.currentView = view;
     notify();
   }
+}
+
+export function setLastWorkoutSummary(summary) {
+  log('State', 'Setting last workout summary');
+  state.lastWorkoutSummary = summary;
+  notify();
 }
 
 export function copyPreviousWeek() {

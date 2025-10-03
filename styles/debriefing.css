@@ -1,0 +1,66 @@
+/* --- DEBRIEFING VIEW STYLES --- */
+#debriefing-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1rem;
+    text-align: center;
+}
+
+#debriefing-page h3 {
+    color: var(--primary-color);
+    margin-bottom: 2rem;
+    font-size: 1.75rem;
+}
+
+#debriefing-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.debriefing-card {
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+}
+
+.debriefing-card h4 {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.debriefing-card p {
+    color: var(--text-color-muted);
+}
+
+.debriefing-status {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.debriefing-card.completed .debriefing-status {
+    color: var(--success-color);
+    background-color: rgba(102, 187, 106, 0.1);
+}
+
+.debriefing-card.incomplete .debriefing-status {
+    color: var(--warning-color);
+    background-color: rgba(253, 216, 53, 0.1);
+}
+
+@media (min-width: 768px) {
+    #debriefing-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

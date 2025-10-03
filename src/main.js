@@ -5,6 +5,7 @@ import { initializeGlobalListeners } from './ui/interactions/globalInteractions.
 import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
 import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
 import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
+import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
 import { loadViews } from './ui/viewLoader.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { UI_TEXT } from './config/uiText.js';
@@ -50,6 +51,7 @@ async function init() {
   initializePlannerListeners();
   initializeProgressListeners();
   initializeProfileListeners();
+  initializeDebriefingListeners();
 
   renderApp();
 

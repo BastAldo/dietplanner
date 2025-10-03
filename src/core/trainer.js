@@ -1,4 +1,4 @@
-import { setView } from './state.js';
+import { setView, setLastWorkoutSummary } from './state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -100,7 +100,9 @@ export function incrementManualRep() {
 }
 
 export function endWorkout() {
+  const finalState = getState();
+  setLastWorkoutSummary(finalState);
   updateState({ status: 'finished' });
   stopAnimation();
-  setView('planner');
+  setView('debriefing');
 }
