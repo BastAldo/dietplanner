@@ -1,5 +1,5 @@
 import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
-import { UI_TEXT } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { formatIngredients } from '../../utils/formatters.js';
 import { openDayEditorModal } from './dayEditorModal.js';

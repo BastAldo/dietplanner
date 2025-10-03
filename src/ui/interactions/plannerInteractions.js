@@ -6,7 +6,8 @@ import { initializeWorkout } from '../../core/trainer.js';
 import { fetchAndParseConfig } from '../../api/configService.js';
 import { showNotification } from '../notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from '../modals.js';
-import { UI_TEXT, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 
 async function handleLoadConfig() {

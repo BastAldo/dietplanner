@@ -2,7 +2,7 @@ import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry } from '../..
 import { calculateBMR } from '../../core/calculations.js';
 import { showNotification } from '../notifications.js';
 import { showConfirmModal } from '../modals.js';
-import { UI_TEXT } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 
 function handleBiometricsForm(e) {

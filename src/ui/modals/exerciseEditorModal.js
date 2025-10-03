@@ -1,5 +1,5 @@
 import { getState, updateExerciseInstanceInWorkout } from '../../core/state.js';
-import { UI_TEXT } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { openWorkoutEditorModal } from './workoutEditorModal.js';
 

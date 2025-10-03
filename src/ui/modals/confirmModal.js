@@ -1,4 +1,4 @@
-import { UI_TEXT } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 
 export function showConfirmModal(title, message, onConfirm, type = 'secondary') {

@@ -1,1199 +1,697 @@
-commit_message: "refactor(config): Separa le costanti e centralizza tutti i testi hardcoded"
+commit_message: "fix(imports): Corregge i percorsi di importazione per UI_TEXT dopo il refactoring"
 rationale: |
-  Questo commit completa un importante ciclo di refactoring architetturale, mettendo ordine nei dati statici dell'applicazione. L'intervento si è concentrato su due obiettivi principali:
+  Questo commit è una correzione critica che risolve un errore di runtime (`SyntaxError: The requested module does not provide an export named 'UI_TEXT'`) introdotto nel precedente refactoring.
 
-  1.  **Refactoring del file `constants.js`**: Il file monolitico `src/utils/constants.js` è stato scomposto in moduli con responsabilità specifiche per migliorare la chiarezza e la manutenibilità.
-      * `src/utils/constants.js` ora contiene solo costanti applicative pure (es. chiavi di localStorage).
-      * Una nuova directory `src/config/` è stata creata.
-      * `src/config/forms.js` ora ospita le definizioni delle strutture dei form (`PROFILE_FIELDS`, `BIOMETRIC_FIELDS`).
-      * `src/config/uiText.js` è diventato l'unica fonte di verità per tutte le stringhe di testo dell'interfaccia utente.
+  La causa dell'errore era il mancato aggiornamento dei percorsi di importazione in tutti i file che utilizzavano la costante `UI_TEXT`, la quale era stata spostata da `src/utils/constants.js` a `src/config/uiText.js`.
 
-  2.  **Centralizzazione dei Testi Hardcoded**: È stata eseguita una scansione completa della codebase per identificare e rimuovere le stringhe di testo "hardcoded".
-      * Messaggi di errore, etichette di grafici e pulsanti precedentemente hardcoded in vari file `.js` e `.html` sono stati astratti e aggiunti a `uiText.js`.
-      * Il codice è stato aggiornato per utilizzare le nuove chiavi dall'oggetto `UI_TEXT`, rendendo l'applicazione più facile da manutenere e pronta per una futura internazionalizzazione.
+  Sono stati meticolosamente analizzati e corretti tutti i file interessati, aggiornando le loro istruzioni `import` per puntare alla nuova e corretta posizione del modulo `uiText.js`.
 
-  Infine, il `sw.js` è stato aggiornato per includere i nuovi file nella cache. Questo commit lascia la codebase in uno stato significativamente più organizzato e robusto.
+  Questo intervento risolve l'errore, ripristina la funzionalità dell'applicazione e completa correttamente il refactoring della gestione delle costanti e dei testi.
 patches:
-  - file: src/utils/constants.js
+  - file: src/ui/modals/confirmModal.js
     content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
-      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
-      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
-      export const WORKOUT_SLOT_ID = 'Allenamento';
-  - file: src/config/forms.js
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        log('Modals', 'Showing confirm modal', { title });
+        const confirmModal = document.getElementById('confirm-modal');
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
+        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
+        confirmBtn.className = `btn btn-${type}`;
+        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          cancelBtn.removeEventListener('click', cancelHandler);
+          confirmBtn.removeEventListener('click', confirmHandler);
+        };
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        cancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/dayEditorModal.js
     content: |
-      export const PROFILE_FIELDS = [
-        { id: 'firstName', label: 'Nome', type: 'text' },
-        { id: 'lastName', label: 'Cognome', type: 'text' },
-        { id: 'nickname', label: 'Nickname', type: 'text' },
-        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
-        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
-      ];
+      import { getState, updateWeeklyPlan } from '../../core/state.js';
+      import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { showRecipeModal } from './recipeModal.js';
+      import { openSelectionModal } from './selectionModal.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
 
-      export const BIOMETRIC_FIELDS = [
-        { id: 'date', label: 'Data', type: 'date', props: 'required' },
-        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
-        { id: 'muscleMass', label: 'M. M. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
-        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
-        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
-        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
-        { id: 'notes', label: 'Note', type: 'textarea' }
-      ];
-  - file: src/config/uiText.js
-    content: |
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_PROGRESS', text: 'Progressi' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
-        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
-        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
-        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
-        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
-        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
-        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
-        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
-        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
-        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
-        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
-        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
-        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
-        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
-        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
-        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
-        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
-        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
-        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
-        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
-        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
-        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
-        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
-        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
-        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
-        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
-        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
-        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
-        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
-        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
-        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
-        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' }
-      ];
-
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
-  - file: src/api/configService.js
-    content: |
-      import { UI_TEXT } from '../config/uiText.js';
-
-      async function fetchJson(url) {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
-          return response.json();
-      }
-
-      export async function fetchAndParseConfig(mealsUrl) {
-          if (!mealsUrl) throw new Error(UI_TEXT.CONFIG_URL_EMPTY_ERROR);
-
-          try {
-              const mealsConfig = await fetchJson(mealsUrl);
-              if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
-                  throw new Error(UI_TEXT.API_INVALID_MEALS_FILE);
-              }
-
-              const baseUrl = new URL(mealsUrl);
-              const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/'));
-
-              const ingredientsUrl = `${baseUrl.origin}${basePath}/ingredienti.json`;
-              const ingredientsConfig = await fetchJson(ingredientsUrl);
-              if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
-                  throw new Error(UI_TEXT.API_INVALID_INGREDIENTS_FILE);
-              }
-
-              let exercises = [];
-              try {
-                  const exercisesUrl = `${baseUrl.origin}${basePath}/esercizi.json`;
-                  const exercisesConfig = await fetchJson(exercisesUrl);
-                  if (exercisesConfig.esercizi && Array.isArray(exercisesConfig.esercizi)) {
-                      exercises = exercisesConfig.esercizi;
-                  }
-              } catch (e) {
-                  console.warn(UI_TEXT.API_EXERCISES_FILE_WARN);
-              }
-
-              return {
-                  rules: mealsConfig.rules || [],
-                  meals: mealsConfig.meals,
-                  ingredienti: ingredientsConfig.ingredienti,
-                  esercizi: exercises
-              };
-
-          } catch (error) {
-              console.error("Fallimento nel caricamento della configurazione:", error);
-              throw new Error(UI_TEXT.API_CONFIG_LOAD_FAIL);
-          }
-      }
-  - file: src/ui/charts.js
-    content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-      import { BIOMETRIC_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-
-      let plannerChartInstance = null;
-      let biometricsChartInstance = null;
-      let currentPlannerChartType = 'bar';
-
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function getChartColors() {
-          const style = getComputedStyle(document.documentElement);
-          return {
-              primary: style.getPropertyValue('--primary-color').trim(),
-              secondary: style.getPropertyValue('--secondary-color').trim(),
-              textColor: style.getPropertyValue('--text-color').trim(),
-              borderColor: style.getPropertyValue('--border-color').trim(),
-              danger: style.getPropertyValue('--danger-color').trim(),
-              success: style.getPropertyValue('--success-color').trim(),
-              warning: style.getPropertyValue('--warning-color').trim()
-          };
-      }
-
-      function calculateWeeklyCalorieData(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], calories: [] };
-
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          weeklyData.labels.push(DAYS[i]);
-
-          let dailyMin = 0, dailyMax = 0;
-          MEAL_TYPES.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            if (meal && typeof meal.calories_min === 'number') {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              dailyMin += minCals;
-              dailyMax += maxCals;
-            }
-          });
-          weeklyData.calories.push([dailyMin, dailyMax]);
-        }
-        return weeklyData;
-      }
-
-      function renderPlannerChart(state) {
-        const weeklyData = calculateWeeklyCalorieData(state);
-        const colors = getChartColors();
-        const isLineChart = currentPlannerChartType === 'line';
-        
-        const datasets = isLineChart ?
-        [{
-            label: UI_TEXT.CHART_KCAL_MIN_LABEL,
-            data: weeklyData.calories.map(c => c[0]),
-            borderColor: colors.secondary,
-            fill: false,
-            tension: 0.1
-        },{
-            label: UI_TEXT.CHART_KCAL_MAX_LABEL,
-            data: weeklyData.calories.map(c => c[1]),
-            borderColor: colors.primary,
-            fill: '-1',
-            backgroundColor: colors.primary + '33',
-            tension: 0.1
-        }]
-        :
-        [{
-            label: UI_TEXT.CHART_KCAL_RANGE_LABEL,
-            data: weeklyData.calories,
-            backgroundColor: colors.primary,
-            borderColor: colors.secondary
-        }];
-        
-        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-        plannerChartInstance = new Chart(ctx, {
-          type: currentPlannerChartType,
-          data: {
-            labels: weeklyData.labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: isLineChart,
-                labels: { color: colors.textColor }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    if (isLineChart) {
-                      return `${context.dataset.label}: ${context.parsed.y}`;
-                    }
-                    const value = context.raw;
-                    if (value[0] === value[1]) {
-                      return `${UI_TEXT.KCAL_LABEL}: ${value[0]}`;
-                    }
-                    return `${UI_TEXT.KCAL_LABEL}: ${value[0]} - ${value[1]}`;
-                  }
-                }
-              }
-            }
-          }
-        });
-      }
-
-      function getBiometricsData(state) {
-        const data = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        
-        const datasets = {};
-        const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
-
-        numericFields.forEach(field => {
-            datasets[field.id] = {
-                label: field.label,
-                data: data.map(entry => entry[field.id] || null)
-            };
-        });
-
-        return { labels, datasets };
-      }
-
-      function renderBiometricsChart(state) {
-        const { labels, datasets } = getBiometricsData(state);
-        const colors = getChartColors();
-        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
-        
-        const chartDatasets = Object.values(datasets)
-            .map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                fill: false,
-                borderColor: colorCycle[index % colorCycle.length],
-                tension: 0.1,
-                pointBackgroundColor: colorCycle[index % colorCycle.length],
-                pointRadius: 4
-            }))
-            .filter(d => d.data.some(val => val !== null));
-
-        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-
-        biometricsChartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: chartDatasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: true,
-                labels: { color: colors.textColor }
-              }
-            }
-          }
-        });
-      }
-
-      function handleChartTypeChange(event, state) {
-          const type = event.target.dataset.type;
-          if (type && type !== currentPlannerChartType) {
-              currentPlannerChartType = type;
-              document.querySelectorAll('.btn-chart-type').forEach(btn => {
-                  btn.classList.toggle('active', btn.dataset.type === type);
-              });
-              if (plannerChartInstance) {
-                plannerChartInstance.destroy();
-              }
-              renderPlannerChart(state);
-          }
-      }
-
-      export function renderCharts(state) {
-          if (plannerChartInstance) {
-              plannerChartInstance.destroy();
-          }
-          if (biometricsChartInstance) {
-              biometricsChartInstance.destroy();
-          }
-
-          renderPlannerChart(state);
-          renderBiometricsChart(state);
-
-          const switcher = document.querySelector('.chart-type-switcher');
-          const boundHandler = (e) => handleChartTypeChange(e, state);
-          switcher.replaceWith(switcher.cloneNode(true));
-          document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
-      }
-  - file: src/ui/pageRenderers.js
-    content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState } from '../core/state.js';
-      import { renderPlannerPage } from './plannerRenderer.js';
-      import { renderBiometricsPage, renderProfilePage, renderChartsPage } from './pageRenderers.js';
-      import { renderRecipesPage } from './recipesRenderer.js';
-      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { log } from '../utils/logger.js';
-
-      let isTrainerActive = false;
-
-      function populateIcons() {
-          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
-          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
-          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
-          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
-          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
-          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
-          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
-          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
-          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
-          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
-          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
-          
-          document.querySelectorAll('.modal-close-btn').forEach(btn => {
-              btn.innerHTML = renderIcon('CLOSE');
-          });
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
-        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
-        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
-        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
-        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
-        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
-        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
-        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
-        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
-        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
-        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
-        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
-        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
-        populateIcons();
-      }
-
-      export function renderApp() {
-        const state = getState();
-        const plannerPage = document.getElementById('planner-page');
-        const progressPage = document.getElementById('progress-page');
-        const chartsPage = document.getElementById('charts-page');
-        const recipesPage = document.getElementById('recipes-page');
-        const profilePage = document.getElementById('profile-page');
-        const trainerPage = document.getElementById('trainer-page');
-
-        const navPlannerBtn = document.getElementById('nav-planner');
-        const navProgressBtn = document.getElementById('nav-progress');
-        const navChartsBtn = document.getElementById('nav-charts');
-        const navRecipesBtn = document.getElementById('nav-recipes');
-        const navProfileBtn = document.getElementById('nav-profile');
-
-        log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
-
-        if (state.currentView !== 'trainer' && isTrainerActive) {
-            log('Renderer', 'View is not trainer, destroying trainer controller...');
-            destroyTrainerController();
-            isTrainerActive = false;
-        }
-
-        [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage].forEach(p => p.classList.add('hidden'));
-        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
-
-        if (state.currentView === 'planner' || state.currentView === 'log') {
-          plannerPage.classList.remove('hidden');
-          navPlannerBtn.classList.add('active');
-          renderPlannerPage(state);
-        } else if (state.currentView === 'progress') {
-          progressPage.classList.remove('hidden');
-          navProgressBtn.classList.add('active');
-          renderBiometricsPage(state);
-        } else if (state.currentView === 'charts') {
-          chartsPage.classList.remove('hidden');
-          navChartsBtn.classList.add('active');
-          renderChartsPage(state);
-        } else if (state.currentView === 'recipes') {
-          recipesPage.classList.remove('hidden');
-          navRecipesBtn.classList.add('active');
-          renderRecipesPage(state);
-        } else if (state.currentView === 'profile') {
-          profilePage.classList.remove('hidden');
-          navProfileBtn.classList.add('active');
-          renderProfilePage(state);
-        } else if (state.currentView === 'trainer') {
-          trainerPage.classList.remove('hidden');
-          log('Renderer', 'View is trainer, checking if trainer is active...');
-          if (!isTrainerActive) {
-            log('Renderer', 'Trainer is not active, initializing trainer controller...');
-            initializeTrainerController();
-            isTrainerActive = true;
-          }
-        }
-
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
-      }
-  - file: src/ui/plannerRenderer.js
-    content: |
-      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
+      let currentEditingDayISO = null;
 
       function formatFullDate(isoDate) {
         const date = new Date(isoDate);
         return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
       }
 
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
       function getRecipeButtonHTML(meal, state) {
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
                     ${renderIcon('RECIPE', { width: 20, height: 20 })}
                   </button>`;
         }
         return '';
       }
 
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-          
-          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
-          let workoutButtonHTML = '';
-
-          if (workoutList && workoutList.length > 0) {
-              const exerciseCount = workoutList.length;
-              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
-              summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-          }
-
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `
-            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
-            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          if (dayMeals.length > 0) {
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-             if (isoDate === todayISO) {
-              dayLog.classList.add('is-today');
-            }
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
-              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-            logView.appendChild(dayLog);
-          }
-        }
-        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-      }
-
-      export function renderPlannerPage(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+      export function openDayEditorModal(isoDate) {
+        log('Modals', 'Opening day editor modal', { isoDate });
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const dayEditorModal = document.getElementById('day-editor-modal');
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
         
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
+        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const plannedMeal = state.weeklyPlan[slotId];
+          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          }
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
 
-        if (state.currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (state.currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+        
+        let workoutDetailsHTML;
+        if (plannedWorkoutList.length > 0) {
+            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
+            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
+        } else {
+            workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        }
+        
+        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+
+        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+
+        body.onclick = e => {
+          const btnAddMeal = e.target.closest('.btn-add-meal');
+          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnManageWorkout = e.target.closest('.btn-manage-workout');
+
+          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId, isoDate); }
+          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+          else if (btnAddExercise) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnManageWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { getState, updateExerciseInstanceInWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
+        log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === instanceId);
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
+        
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'block';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'block';
+            form.elements.duration.value = exercise.defaultDuration;
         }
 
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
-      }
-  - file: src/ui/recipesRenderer.js
-    content: |
-      import { UI_TEXT } from '../config/uiText.js';
-      import { formatIngredients } from '../utils/formatters.js';
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
 
-      export function renderRecipesPage(state) {
-          const listContainer = document.getElementById('recipes-list');
-          const mealsWithRecipes = state.masterMealList.filter(meal => meal.recipeId);
-
-          if (mealsWithRecipes.length > 0) {
-              listContainer.innerHTML = mealsWithRecipes.map(meal => `
-                  <div class="recipe-list-item" data-meal-id="${meal.id}">
-                      <h4>${meal.nomePasto}</h4>
-                      ${formatIngredients(meal)}
-                  </div>
-              `).join('');
-          } else {
-              listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-          }
-      }
-  - file: src/main.js
-    content: |
-      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
-      import { renderApp, populateInitialText } from './ui/renderer.js';
-      import { showConfirmModal } from './ui/modals.js';
-      import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
-      import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
-      import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
-      import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
-      import { loadViews } from './ui/viewLoader.js';
-      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
-      import { UI_TEXT } from './config/uiText.js';
-      import { fetchAndParseConfig } from './api/configService.js';
-      import { showNotification } from './ui/notifications.js';
-
-      async function loadConfig(url) {
-        if (!url) {
-          setPlannerConfig({}, url);
-          return;
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(returnIsoDate);
         };
+        
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/recipeModal.js
+    content: |
+      import { getState } from '../../core/state.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      export async function showRecipeModal(meal) {
+        if (!meal) return;
+        log('Modals', 'Showing recipe modal', { mealId: meal.id });
+        const state = getState();
+        const recipeModal = document.getElementById('recipe-modal');
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
+        const body = recipeModal.querySelector('#recipe-modal-body');
+        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
+        } catch (error) {
+          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
+        }
+      }
+  - file: src/ui/modals/selectionModal.js
+    content: |
+      import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { formatIngredients } from '../../utils/formatters.js';
+      import { openDayEditorModal } from './dayEditorModal.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openSelectionModal(slotId, returnIsoDate) {
+        log('Modals', 'Opening meal selection modal', { slotId });
+        const state = getState();
+        const mealType = slotId.substring(11);
+        const selectionModal = document.getElementById('selection-modal');
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (returnIsoDate) openDayEditorModal(returnIsoDate);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { 
+            updateWeeklyPlan(slotId, item.dataset.mealId); 
+            closeAndReturn(); 
+          }
+        };
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutSelectionModal(slotId, returnIsoDate) {
+        log('Modals', 'Opening workout selection modal', { slotId });
+        const state = getState();
+        const workoutSelectionModal = document.getElementById('workout-selection-modal');
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
+        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+        const relevantWorkouts = state.masterWorkoutList;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          workoutSelectionModal.classList.add('modal-hidden');
+          if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if (item) {
+            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
+            closeAndReturn();
+          }
+        };
+        workoutSelectionModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/workoutEditorModal.js
+    content: |
+      import { getState, updateWeeklyWorkout, reorderWorkoutExercises } from '../../core/state.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutSelectionModal } from './selectionModal.js';
+      import { openExerciseEditorModal } from './exerciseEditorModal.js';
+
+      let sortableInstance = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets;
+        const rest = exercise.defaultRest;
+        let details;
+
+        if (exercise.type === 'reps') {
+            const reps = exercise.defaultReps;
+            details = `${sets} x ${reps} | Riposo: ${rest}s`;
+        } else if (exercise.type === 'time') {
+            const duration = exercise.defaultDuration;
+            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+        }
+
+        if (exercise.defaultTempo) {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
+      }
+
+      export function openWorkoutEditorModal(isoDate) {
+        log('Modals', 'Opening workout editor modal', { isoDate });
+        const state = getState();
+        const modal = document.getElementById('workout-editor-modal');
+        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+        const body = modal.querySelector('#workout-editor-body');
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+
+        let exercisesHTML = plannedWorkoutList.map(exercise => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+
+        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+
+        const listContainer = body.querySelector('.workout-editor-list');
+
+        if (sortableInstance) {
+            sortableInstance.destroy();
+        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
+            }
+        });
+
+        body.onclick = e => {
+            const btnAddExercise = e.target.closest('.btn-add-exercise');
+            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+            const btnEditExercise = e.target.closest('.btn-edit-exercise');
+
+            if (btnAddExercise) {
+                modal.classList.add('modal-hidden');
+                openWorkoutSelectionModal(btnAddExercise.dataset.slotId, isoDate);
+            } else if (btnRemoveExercise) {
+                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+                openWorkoutEditorModal(isoDate); // Refresh this modal
+            } else if (btnEditExercise) {
+                modal.classList.add('modal-hidden');
+                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId), isoDate);
+            }
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/interactions/globalInteractions.js
+    content: |
+      import { setView, getState, setAppState } from '../../core/state.js';
+      import { showConfirmModal } from '../modals.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      function handleShareConfig() {
+        log('Interactions', 'Share config button clicked');
+        const state = getState();
+        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
+        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+      }
+
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      async function handleSaveBackup() {
+        log('Interactions', 'Save backup button clicked');
+        const state = getState();
+        const backupData = {
+          configUrl: state.configUrl,
+          weeklyPlan: state.weeklyPlan,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
+          }
+        } else { triggerDownload(blob, fileName); }
+      }
+
+      function handleRestoreBackup() {
+          log('Interactions', 'Restore backup button clicked');
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              'danger'
+                          );
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
+
+      export function initializeGlobalListeners() {
+        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+        
+        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
+        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
+        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
+
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const modalId = e.currentTarget.dataset.target;
+            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+          });
+        });
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
+        });
+        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+      }
+  - file: src/ui/interactions/plannerInteractions.js
+    content: |
+      import {
+        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+        copyPreviousWeek, getState
+      } from '../../core/state.js';
+      import { initializeWorkout } from '../../core/trainer.js';
+      import { fetchAndParseConfig } from '../../api/configService.js';
+      import { showNotification } from '../notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal } from '../modals.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      async function handleLoadConfig() {
+        log('Interactions', 'Handling config load button click');
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
+        setConfigUrl(url);
         try {
           const config = await fetchAndParseConfig(url);
           setPlannerConfig(config, url);
           showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) {
-          showNotification(error.message, 'error');
-          setPlannerConfig({}, url);
+        } catch (error) { showNotification(error.message, 'error'); }
+      }
+
+      function handleCalendarClick(e) {
+        const startBtn = e.target.closest('.btn-start-workout-day');
+        if (startBtn) {
+            const isoDate = startBtn.dataset.date;
+            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
+            const globalState = getState();
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout);
+            setView('trainer');
+            return;
+        }
+
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+          openDayEditorModal(dayCell.dataset.date);
         }
       }
 
-      function registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/dietplanner/sw.js')
-              .then(registration => console.log('ServiceWorker registration successful'))
-              .catch(err => console.log('ServiceWorker registration failed: ', err));
-          });
-        }
-      }
-
-      async function init() {
-        await loadViews();
-        document.addEventListener('stateChange', renderApp);
-        
-        loadStateFromLocalStorage();
-        let initialState = getState();
-        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
-
-        populateInitialText();
-        
-        initializeGlobalListeners();
-        initializePlannerListeners();
-        initializeProgressListeners();
-        initializeProfileListeners();
-
-        renderApp();
-
-        window.toggleDebugMode = toggleDebugMode;
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const configUrlFromParam = urlParams.get('configUrl');
-
-        if (configUrlFromParam) {
-          const decodedUrl = decodeURIComponent(configUrlFromParam);
-          initialState = getState();
-          if (decodedUrl !== initialState.configUrl) {
-            showConfirmModal(
-              UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
-              UI_TEXT.LOAD_SHARED_CONFIG_MSG,
-              () => {
-                setConfigUrl(decodedUrl);
-                document.getElementById('config-url-input').value = decodedUrl;
-                loadConfig(decodedUrl);
-              },
-              'primary'
-            );
-          } else {
-            await loadConfig(initialState.configUrl);
+      function handleRecipeClick(e) {
+        const recipeItem = e.target.closest('.recipe-list-item');
+        if (recipeItem) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+            showRecipeModal(meal);
           }
-        } else {
-          await loadConfig(initialState.configUrl);
         }
-        
-        registerServiceWorker();
       }
 
-      document.addEventListener('DOMContentLoaded', init);
-  - file: src/ui/components/TrainerComponent.js
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleCopyWeek() {
+        log('Interactions', 'Copy week button clicked');
+        showConfirmModal(
+          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        log('Interactions', 'Reset week button clicked');
+        showConfirmModal(
+          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
+        );
+      }
+
+      export function initializePlannerListeners() {
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+      }
+  - file: src/ui/interactions/profileInteractions.js
     content: |
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
-      import { log } from '../../utils/logger.js';
+      import { saveUserProfile } from '../../core/state.js';
+      import { showNotification } from '../notifications.js';
       import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
 
-      const RING_RADIUS = 128;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
-
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
-                  
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-
-                  modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-              };
-
-              this.ringProgress = null;
-              this.ringText = null;
-          }
-
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
-          }
-
-          destroy() {
-              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.handleControls.bind(this));
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
-              }
-              log('TrainerComponent', 'Component destroyed.');
-          }
-
-          handleControls(e) {
-              const targetId = e.target.id;
-              log('TrainerComponent', `Control button clicked: ${targetId}`);
-              switch (targetId) {
-                  case 'trainer-start-btn': startWorkout(); break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn': endWorkout(); break;
-                  case 'trainer-back-btn': setView('planner'); break;
-              }
-          }
-
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) {
-                log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
-                return;
-              }
-              log('TrainerComponent', 'Creating timer ring SVG...');
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              const svgSize = (RING_RADIUS + 12) * 2;
-              svg.setAttribute('width', svgSize);
-              svg.setAttribute('height', svgSize);
-              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
-
-              const center = svgSize / 2;
-
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', center);
-              backgroundCircle.setAttribute('cy', center);
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', center);
-              progressCircle.setAttribute('cy', center);
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-              log('TrainerComponent', 'Timer ring SVG created and references set.');
-          }
-
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
-
-          render(state) {
-              const { exerciseQueue, currentExerciseIndex, status } = state;
-
-              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
-                  this.elements.exerciseName.textContent = '';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.elements.btnStart.classList.add('hidden');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  return;
-              };
-
-              const currentExercise = exerciseQueue[currentExerciseIndex];
-              this.elements.exerciseName.textContent = currentExercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-              
-              if (status === 'running') {
-                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
-                this.elements.repDisplay.classList.remove('hidden-rep');
-              } else {
-                this.elements.repDisplay.classList.add('hidden-rep');
-              }
-
-              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
-              if (upcomingExercises) {
-                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
-              } else {
-                this.elements.upcomingDisplay.innerHTML = '';
-              }
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-
-              this.elements.modeTempoContainer.classList.remove('hidden');
-              
-              if (!this.ringText) {
-                log('TrainerComponent', 'Render called but ringText is null. Aborting render of ring.');
-                return;
-              }
-
-              if (status === 'running') this.renderPhase(state);
-              else if (status === 'resting') this.renderRest(state);
-              else if (status === 'paused') this.renderPaused(state);
-              else if (status === 'idle') {
-                  this.ringText.textContent = '';
-                  this.ringText.classList.remove('flashing');
-                  this.updateTimerRing(0);
-              }
-          }
-
-          renderPhase(state) {
-              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
-              const phase = executionQueue[currentPhaseIndex];
-              if (!phase) return;
-
-              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.name.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.toggle('flashing', isPrePhase);
-
-              if (isPrePhase) {
-                  this.updateTimerRing(100);
-              } else {
-                  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-                  this.updateTimerRing(progressPercent);
-              }
-          }
-
-          renderRest(state) {
-              const { restTimeRemaining } = state;
-              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-              this.ringText.classList.remove('flashing');
-              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-              this.updateTimerRing(progressPercent);
-          }
-          
-          renderPaused() {
-            this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-            this.ringText.classList.remove('flashing');
-          }
-
-          formatExerciseDetails(state) {
-              const { exerciseQueue, currentExerciseIndex, currentSet } = state;
-              const exercise = exerciseQueue[currentExerciseIndex];
-              if (!exercise) return '';
-              const sets = exercise.defaultSets;
-              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
-              if (exercise.type === 'reps') {
-                  const reps = exercise.defaultReps;
-                  details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-              } else if (exercise.type === 'time') {
-                  const duration = exercise.defaultDuration;
-                  details += ` | ${duration}s`;
-              }
-              return details;
-          }
+      function handleProfileForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Profile form submitted');
+        const formData = new FormData(e.target);
+        const profile = {};
+        for (let [key, value] of formData.entries()) { profile[key] = value; }
+        saveUserProfile(profile);
+        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
       }
-  - file: sw.js
+
+      export function initializeProfileListeners() {
+        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
+      }
+  - file: src/ui/interactions/progressInteractions.js
     content: |
-      const CACHE_NAME = 'healtypro-v13';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'styles/recipes.css',
-        'styles/trainer.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/recipes.html',
-        'templates/modals.html',
-        'templates/trainer.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/config/forms.js',
-        'src/config/uiText.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/core/trainer.js',
-        'src/core/trainer/state.js',
-        'src/core/trainer/queueBuilder.js',
-        'src/core/trainer/machine.js',
-        'src/core/trainer/animation.js',
-        'src/ui/interactions/globalInteractions.js',
-        'src/ui/interactions/plannerInteractions.js',
-        'src/ui/interactions/profileInteractions.js',
-        'src/ui/interactions/progressInteractions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/modals/confirmModal.js',
-        'src/ui/modals/dayEditorModal.js',
-        'src/ui/modals/exerciseEditorModal.js',
-        'src/ui/modals/recipeModal.js',
-        'src/ui/modals/selectionModal.js',
-        'src/ui/modals/workoutEditorModal.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/recipesRenderer.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/ui/trainerRenderer.js',
-        'src/ui/components/TrainerComponent.js',
-        'src/utils/constants.js',
-        'src/utils/formatters.js',
-        'src/utils/logger.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
+      import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry } from '../../core/state.js';
+      import { calculateBMR } from '../../core/calculations.js';
+      import { showNotification } from '../notifications.js';
+      import { showConfirmModal } from '../modals.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
 
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
+      function handleBiometricsForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Biometrics form submitted');
+        const formData = new FormData(e.target);
+        const entry = {};
+        for (let [key, value] of formData.entries()) { entry[key] = value; }
+        addOrUpdateBiometricEntry(entry);
+        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+        e.target.reset();
+        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
+      }
 
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
-
-      self.addEventListener('fetch', (event) => {
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
-        } else {
-          event.respondWith(fetch(event.request));
+      function handleBiometricsListClick(e) {
+        const btnMenu = e.target.closest('.btn-actions-menu');
+        if (btnMenu) {
+            log('Interactions', 'Biometrics actions menu toggled');
+            const dropdown = btnMenu.nextElementSibling;
+            const allDropdowns = document.querySelectorAll('.actions-dropdown');
+            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+            dropdown.classList.toggle('show');
+            return;
         }
-      });
+
+        const btnEdit = e.target.closest('.btn-edit-biometrics');
+        if (btnEdit) {
+            const date = btnEdit.dataset.date;
+            log('Interactions', 'Edit biometrics button clicked', { date });
+            const entry = getState().biometricData.find(e => e.date === date);
+            if (entry) {
+                const form = document.getElementById('biometrics-form');
+                for (const key in entry) {
+                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
+                }
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+            const dropdown = btnEdit.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        const btnDelete = e.target.closest('.btn-delete-biometrics');
+        if (btnDelete) {
+            const date = btnDelete.dataset.date;
+            log('Interactions', 'Delete biometrics button clicked', { date });
+            showConfirmModal(
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
+            );
+            const dropdown = btnDelete.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        if (!e.target.closest('.biometrics-actions')) {
+            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+        }
+      }
+
+      function handleWeightInputChange(e) {
+        const weight = e.target.value;
+        const { userProfile } = getState();
+        const bmrField = document.getElementById('bio-basalMetabolism');
+        const bmr = calculateBMR(userProfile, weight);
+        if (bmr !== null) {
+          bmrField.value = bmr;
+        } else {
+          bmrField.value = '';
+          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function initializeProgressListeners() {
+        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
+        const progressPage = document.getElementById('progress-page');
+        progressPage.addEventListener('click', handleBiometricsListClick);
+        progressPage.addEventListener('input', e => {
+          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
+        });
+
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.biometrics-actions')) {
+                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+            }
+        });
+      }
 commands:
-  - "echo 'Refactoring della configurazione e dei testi completato. La codebase è ora più pulita e centralizzata.'"
+  - "echo 'Percorsi di importazione corretti. L''errore di runtime dovrebbe essere risolto.'"

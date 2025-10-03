@@ -1,7 +1,7 @@
 import { setView, getState, setAppState } from '../../core/state.js';
 import { showConfirmModal } from '../modals.js';
 import { showNotification } from '../notifications.js';
-import { UI_TEXT } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 
 function handleShareConfig() {

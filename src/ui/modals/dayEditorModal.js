@@ -1,5 +1,6 @@
 import { getState, updateWeeklyPlan } from '../../core/state.js';
-import { MEAL_TYPES, WORKOUT_SLOT_ID, UI_TEXT } from '../../utils/constants.js';
+import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
 import { log } from '../../utils/logger.js';
 import { showRecipeModal } from './recipeModal.js';
