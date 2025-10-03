@@ -1,20 +1,15 @@
-commit_message: "fix(trainer): Garantisce un flusso di allenamento continuo e corregge il timer di recupero"
+commit_message: "fix(core): Corregge il percorso di importazione per il modulo di stato nel trainer"
 rationale: |
-  Questo commit risolve due bug critici nel flusso logico del trainer che impedivano un'esperienza utente fluida e corretta.
+  Questo commit risolve un errore critico 404 (Not Found) che si verificava durante il caricamento dell'applicazione.
+  L'errore era causato da un percorso di importazione errato nel file `src/core/trainer.js`. Il file tentava di importare la funzione `setView` da `../state.js`, che veniva risolto in `src/state.js`, un percorso inesistente.
 
-  **1. Correzione del Blocco dell'Allenamento tra Esercizi:**
-  - **Problema**: L'allenamento si interrompeva tra esercizi con modalità di esecuzione diverse perché lo stato veniva erroneamente impostato su `'idle'`, richiedendo un intervento manuale (pausa/riprendi) per proseguire.
-  - **Soluzione**: È stata refattorizzata la macchina a stati in `src/core/trainer/machine.js`. La funzione `advanceToNextSet` ora gestisce la transizione tra esercizi in modo proattivo. Al completamento dell'ultima serie, invece di fermarsi, la funzione prepara e avvia direttamente il primo set dell'esercizio successivo. Questo elimina lo stato intermedio `'idle'` e garantisce che l'allenamento proceda senza interruzioni, come previsto.
+  Come definito nella documentazione di architettura (`docs/02_ARCHITECTURE.md`), il gestore di stato corretto si trova in `src/core/state.js`.
 
-  **2. Correzione del Timer di Recupero in Modalità `manual_reps`:**
-  - **Problema**: In modalità `manual_reps`, dopo aver registrato l'ultima ripetizione, il timer di recupero non si avviava perché il ciclo di animazione non veniva attivato.
-  - **Soluzione**: È stata modificata la funzione `incrementManualRep` in `src/core/trainer.js`. Ora, quando l'ultima ripetizione viene registrata e lo stato passa a `'resting'`, viene aggiunta una chiamata esplicita a `startAnimation()`. Questo assicura che il ciclo di animazione parta immediatamente per gestire il conto alla rovescia del tempo di riposo, ripristinando la funzionalità corretta.
-
-  Queste modifiche rendono il trainer significativamente più robusto e affidabile, offrendo un'esperienza di allenamento continua e senza interruzioni impreviste.
+  La modifica corregge il percorso relativo da `../state.js` a `./state.js`, assicurando che il modulo `trainer` importi correttamente il modulo di stato dalla stessa directory (`src/core/`). Questa correzione ripristina la funzionalità del modulo trainer e risolve l'errore 404.
 patches:
   - file: src/core/trainer.js
     content: |
-      import { setView } from '../state.js';
+      import { setView } from './state.js';
       import { log } from '../utils/logger.js';
       import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
       import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -120,72 +115,5 @@ patches:
         stopAnimation();
         setView('planner');
       }
-  - file: src/core/trainer/machine.js
-    content: |
-      import { getWorkoutState, updateState, resetState } from './state.js';
-      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
-
-      function startNextExercise() {
-          const state = getWorkoutState();
-          const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
-          const executionMode = nextExercise.execution_mode || 'tempo_guided';
-          
-          let nextState = {
-              status: 'running',
-              currentSet: 1,
-              currentRep: 1,
-              manualRepCount: 0,
-              executionMode: executionMode
-          };
-
-          if (executionMode === 'tempo_guided') {
-              nextState.executionQueue = buildExecutionQueueForCurrentSet();
-              nextState.currentPhaseIndex = 0;
-              nextState.phaseTimeElapsed = 0;
-          } else if (executionMode === 'static_hold') {
-              nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
-          }
-          
-          updateState(nextState);
-      }
-
-      export function advanceToNextSet() {
-        const state = getWorkoutState();
-        const newSet = state.currentSet + 1;
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-
-        if (newSet > currentExercise.defaultSets) {
-          advanceToNextExercise();
-        } else {
-          let nextState = {
-            status: 'running',
-            currentSet: newSet,
-            phaseTimeElapsed: 0,
-            currentRep: 1,
-            manualRepCount: 0,
-          };
-          if (state.executionMode === 'tempo_guided') {
-            nextState.executionQueue = buildExecutionQueueForCurrentSet();
-            nextState.currentPhaseIndex = 0;
-          } else if (state.executionMode === 'static_hold') {
-            nextState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-          }
-          updateState(nextState);
-        }
-      }
-
-      export function advanceToNextExercise() {
-        const state = getWorkoutState();
-        const newIndex = state.currentExerciseIndex + 1;
-
-        if (newIndex >= state.exerciseQueue.length) {
-          updateState({ status: 'finished' });
-        } else {
-          updateState({
-            currentExerciseIndex: newIndex
-          });
-          startNextExercise();
-        }
-      }
 commands:
-  - "echo 'Bug di flusso del trainer risolti. L''allenamento ora procede automaticamente tra esercizi e il timer di recupero funziona correttamente.'"
+  - "echo 'Correzione applicata. L''errore 404 per src/state.js è stato risolto.'"
