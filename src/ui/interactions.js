@@ -18,7 +18,7 @@ async function handleLoadConfig() {
   setConfigUrl(url);
   try {
     const config = await fetchAndParseConfig(url);
-    setPlannerConfig(config);
+    setPlannerConfig(config, url);
     showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
   } catch (error) { showNotification(error.message, 'error'); }
 }

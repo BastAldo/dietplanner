@@ -1,91 +1,776 @@
-commit_message: "fix(trainer): Corregge il percorso di importazione errato nel facade del trainer"
+commit_message: "refactor(ui): Decompone il file monolitico modals.js in moduli specifici"
 rationale: |
-  Questo commit risolve un errore `404 Not Found` introdotto durante il precedente refactoring del modulo `trainer`.
+  In linea con la strategia di miglioramento architetturale, questo commit applica il principio di singola responsabilità (SRP) al file `src/ui/modals.js`.
 
-  La causa era un percorso di importazione relativo errato nel file facade `src/core/trainer.js`. L'istruzione `import { setView } from '../state.js';` causava un tentativo di caricamento da `src/state.js`, un percorso inesistente.
+  Precedentemente, questo file conteneva la logica per tutti i modali dell'applicazione, creando un accoppiamento stretto tra feature non correlate e rendendo la manutenzione complessa e rischiosa.
 
-  La correzione consiste nel modificare il percorso in `import { setView } from './state.js';`, che risolve correttamente la posizione del modulo di stato in `src/core/state.js`.
+  L'intervento consiste in:
+  1.  **Creazione della directory `src/ui/modals/`**: Ora ospita un file JavaScript per ogni modale complesso (Day Editor, Workout Editor, Esercizi, Selezioni, etc.).
+  2.  **Isolamento della Logica**: Ogni nuovo file contiene esclusivamente la logica e le dipendenze necessarie per il proprio modale, rendendo il codice più pulito, leggibile e facile da testare.
+  3.  **Creazione di una Facade**: Il file `src/ui/modals.js` è stato trasformato in una "facade". Il suo unico scopo è ora importare le funzioni pubbliche dai nuovi moduli specifici e riesportarle. Questo garantisce la totale retrocompatibilità con il resto dell'applicazione, che può continuare a importare da `src/ui/modals.js` senza bisogno di modifiche.
+  4.  **Aggiornamento del Service Worker**: Il file `sw.js` è stato aggiornato per includere i nuovi file nella cache, assicurando il corretto funzionamento offline dell'applicazione.
 
-  Sono stati verificati anche gli altri percorsi di importazione nei nuovi moduli del trainer, e risultano corretti.
+  Questo refactoring migliora significativamente la modularità e la robustezza dell'interfaccia utente.
 patches:
-  - file: src/core/trainer.js
+  - file: src/ui/modals.js
     content: |
-      import { setView } from './state.js';
-      import { log } from '../utils/logger.js';
-      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
-      import { startAnimation, stopAnimation } from './trainer/animation.js';
-      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
 
-      // Re-export to maintain the public API
-      export { getState as getWorkoutState };
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutEditorModal
+      };
+  - file: src/ui/modals/confirmModal.js
+    content: |
+      import { UI_TEXT } from '../../utils/constants.js';
+      import { log } from '../../utils/logger.js';
 
-      export function resetWorkoutState() {
-        log('Trainer', 'Resetting workout state.');
-        stopAnimation();
-        resetState();
-      }
-
-      export function initializeWorkout(plannedExercises) {
-        if (!plannedExercises || plannedExercises.length === 0) {
-          return;
-        }
-        resetWorkoutState();
-        const initialState = {
-          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
-          currentExerciseIndex: 0,
-          currentSet: 1,
-          currentRep: 1,
+      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+        log('Modals', 'Showing confirm modal', { title });
+        const confirmModal = document.getElementById('confirm-modal');
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
+        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
+        confirmBtn.className = `btn btn-${type}`;
+        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
+        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+          cancelBtn.removeEventListener('click', cancelHandler);
+          confirmBtn.removeEventListener('click', confirmHandler);
         };
-        updateState(initialState);
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        const cancelHandler = () => cleanup();
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        cancelBtn.addEventListener('click', cancelHandler, { once: true });
+        confirmBtn.addEventListener('click', confirmHandler, { once: true });
+        confirmModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/dayEditorModal.js
+    content: |
+      import { getState, updateWeeklyPlan } from '../../core/state.js';
+      import { MEAL_TYPES, WORKOUT_SLOT_ID, UI_TEXT } from '../../utils/constants.js';
+      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { showRecipeModal } from './recipeModal.js';
+      import { openSelectionModal } from './selectionModal.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      let currentEditingDayISO = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
       }
 
-      export function startWorkout() {
-        const state = getState();
-        log('Trainer', 'Attempting to start workout. Current status:', state.status);
-        if (state.status === 'idle') {
-          const executionQueue = buildExecutionQueueForCurrentSet();
-          updateState({
-            status: 'running',
-            executionQueue: executionQueue,
-            currentPhaseIndex: 0,
-            phaseTimeElapsed: 0,
-            currentRep: 1,
-          });
-          startAnimation();
-          log('Trainer', 'Workout started. New status:', getState().status);
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
         }
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        return '';
       }
 
-      export function pauseWorkout() {
+      export function openDayEditorModal(isoDate) {
+        log('Modals', 'Opening day editor modal', { isoDate });
+        currentEditingDayISO = isoDate;
         const state = getState();
-        if (state.status === 'running' || state.status === 'resting') {
-          updateState({
-            prePauseStatus: state.status,
-            status: 'paused',
-          });
-          stopAnimation();
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        const dayEditorModal = document.getElementById('day-editor-modal');
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
+        
+        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const plannedMeal = state.weeklyPlan[slotId];
+          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          }
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+        
+        let workoutDetailsHTML;
+        if (plannedWorkoutList.length > 0) {
+            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
+            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
+        } else {
+            workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        }
+        
+        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+
+        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+
+        body.onclick = e => {
+          const btnAddMeal = e.target.closest('.btn-add-meal');
+          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnManageWorkout = e.target.closest('.btn-manage-workout');
+
+          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId, isoDate); }
+          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+          else if (btnAddExercise) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnManageWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { getState, updateExerciseInstanceInWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../utils/constants.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
+        log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === instanceId);
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
+        
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'block';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'block';
+            form.elements.duration.value = exercise.defaultDuration;
+        }
+
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
+
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(returnIsoDate);
+        };
+        
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/recipeModal.js
+    content: |
+      import { getState } from '../../core/state.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../utils/constants.js';
+      import { log } from '../../utils/logger.js';
+
+      export async function showRecipeModal(meal) {
+        if (!meal) return;
+        log('Modals', 'Showing recipe modal', { mealId: meal.id });
+        const state = getState();
+        const recipeModal = document.getElementById('recipe-modal');
+        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
+        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
+        const body = recipeModal.querySelector('#recipe-modal-body');
+        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
+        recipeModal.classList.remove('modal-hidden');
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
+          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
+        } catch (error) {
+          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
+          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
+        }
+      }
+  - file: src/ui/modals/selectionModal.js
+    content: |
+      import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../utils/constants.js';
+      import { log } from '../../utils/logger.js';
+      import { formatIngredients } from '../../utils/formatters.js';
+      import { openDayEditorModal } from './dayEditorModal.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openSelectionModal(slotId, returnIsoDate) {
+        log('Modals', 'Opening meal selection modal', { slotId });
+        const state = getState();
+        const mealType = slotId.substring(11);
+        const selectionModal = document.getElementById('selection-modal');
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
+        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (returnIsoDate) openDayEditorModal(returnIsoDate);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { 
+            updateWeeklyPlan(slotId, item.dataset.mealId); 
+            closeAndReturn(); 
+          }
+        };
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutSelectionModal(slotId, returnIsoDate) {
+        log('Modals', 'Opening workout selection modal', { slotId });
+        const state = getState();
+        const workoutSelectionModal = document.getElementById('workout-selection-modal');
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
+        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+        const relevantWorkouts = state.masterWorkoutList;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          workoutSelectionModal.classList.add('modal-hidden');
+          if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if (item) {
+            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
+            closeAndReturn();
+          }
+        };
+        workoutSelectionModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/workoutEditorModal.js
+    content: |
+      import { getState, updateWeeklyWorkout, reorderWorkoutExercises } from '../../core/state.js';
+      import { UI_TEXT, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutSelectionModal } from './selectionModal.js';
+      import { openExerciseEditorModal } from './exerciseEditorModal.js';
+
+      let sortableInstance = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets;
+        const rest = exercise.defaultRest;
+        let details;
+
+        if (exercise.type === 'reps') {
+            const reps = exercise.defaultReps;
+            details = `${sets} x ${reps} | Riposo: ${rest}s`;
+        } else if (exercise.type === 'time') {
+            const duration = exercise.defaultDuration;
+            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+        }
+
+        if (exercise.defaultTempo) {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
+      }
+
+      export function openWorkoutEditorModal(isoDate) {
+        log('Modals', 'Opening workout editor modal', { isoDate });
+        const state = getState();
+        const modal = document.getElementById('workout-editor-modal');
+        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+        const body = modal.querySelector('#workout-editor-body');
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+
+        let exercisesHTML = plannedWorkoutList.map(exercise => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+
+        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+
+        const listContainer = body.querySelector('.workout-editor-list');
+
+        if (sortableInstance) {
+            sortableInstance.destroy();
+        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
+            }
+        });
+
+        body.onclick = e => {
+            const btnAddExercise = e.target.closest('.btn-add-exercise');
+            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+            const btnEditExercise = e.target.closest('.btn-edit-exercise');
+
+            if (btnAddExercise) {
+                modal.classList.add('modal-hidden');
+                openWorkoutSelectionModal(btnAddExercise.dataset.slotId, isoDate);
+            } else if (btnRemoveExercise) {
+                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+                openWorkoutEditorModal(isoDate); // Refresh this modal
+            } else if (btnEditExercise) {
+                modal.classList.add('modal-hidden');
+                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId), isoDate);
+            }
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v11';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/modals/confirmModal.js',
+        'src/ui/modals/dayEditorModal.js',
+        'src/ui/modals/exerciseEditorModal.js',
+        'src/ui/modals/recipeModal.js',
+        'src/ui/modals/selectionModal.js',
+        'src/ui/modals/workoutEditorModal.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: src/ui/interactions.js
+    content: |
+      import {
+        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
+        deleteBiometricEntry, saveUserProfile
+      } from '../core/state.js';
+      import { initializeWorkout } from '../core/trainer.js';
+      import { calculateBMR } from '../core/calculations.js';
+      import { fetchAndParseConfig } from '../api/configService.js';
+      import { showNotification } from './notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
+      import { UI_TEXT, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { log } from '../utils/logger.js';
+
+      async function handleLoadConfig() {
+        log('Interactions', 'Handling config load button click');
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) { showNotification(error.message, 'error'); }
+      }
+
+      function handleCalendarClick(e) {
+        const startBtn = e.target.closest('.btn-start-workout-day');
+        if (startBtn) {
+            const isoDate = startBtn.dataset.date;
+            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
+            const globalState = getState();
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout);
+            setView('trainer');
+            return;
+        }
+
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+          openDayEditorModal(dayCell.dataset.date);
         }
       }
 
-      export function resumeWorkout() {
-        const state = getState();
-        if (state.status === 'paused') {
-          updateState({
-            status: state.prePauseStatus,
-            prePauseStatus: '',
-          });
-          startAnimation();
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      function handleRecipeClick(e) {
+        const recipeItem = e.target.closest('.recipe-list-item');
+        if (recipeItem) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
         }
       }
 
-      export function endWorkout() {
-        updateState({ status: 'finished' });
-        stopAnimation();
-        setView('planner');
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleShareConfig() {
+        log('Interactions', 'Share config button clicked');
+        const state = getState();
+        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
+        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+      }
+
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      async function handleSaveBackup() {
+        log('Interactions', 'Save backup button clicked');
+        const state = getState();
+        const backupData = {
+          configUrl: state.configUrl,
+          weeklyPlan: state.weeklyPlan,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
+          }
+        } else { triggerDownload(blob, fileName); }
+      }
+
+      function handleRestoreBackup() {
+          log('Interactions', 'Restore backup button clicked');
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              'danger'
+                          );
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
+
+      function handleCopyWeek() {
+        log('Interactions', 'Copy week button clicked');
+        showConfirmModal(
+          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        log('Interactions', 'Reset week button clicked');
+        showConfirmModal(
+          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
+        );
+      }
+
+      function handleBiometricsForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Biometrics form submitted');
+        const formData = new FormData(e.target);
+        const entry = {};
+        for (let [key, value] of formData.entries()) { entry[key] = value; }
+        addOrUpdateBiometricEntry(entry);
+        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+        e.target.reset();
+        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
+      }
+
+      function handleBiometricsListClick(e) {
+        const btnMenu = e.target.closest('.btn-actions-menu');
+        if (btnMenu) {
+            log('Interactions', 'Biometrics actions menu toggled');
+            const dropdown = btnMenu.nextElementSibling;
+            const allDropdowns = document.querySelectorAll('.actions-dropdown');
+            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+            dropdown.classList.toggle('show');
+            return;
+        }
+
+        const btnEdit = e.target.closest('.btn-edit-biometrics');
+        if (btnEdit) {
+            const date = btnEdit.dataset.date;
+            log('Interactions', 'Edit biometrics button clicked', { date });
+            const entry = getState().biometricData.find(e => e.date === date);
+            if (entry) {
+                const form = document.getElementById('biometrics-form');
+                for (const key in entry) {
+                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
+                }
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+            const dropdown = btnEdit.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        const btnDelete = e.target.closest('.btn-delete-biometrics');
+        if (btnDelete) {
+            const date = btnDelete.dataset.date;
+            log('Interactions', 'Delete biometrics button clicked', { date });
+            showConfirmModal(
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
+            );
+            const dropdown = btnDelete.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        // Close dropdown if clicking outside
+        if (!e.target.closest('.biometrics-actions')) {
+            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+        }
+      }
+
+      function handleProfileForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Profile form submitted');
+        const formData = new FormData(e.target);
+        const profile = {};
+        for (let [key, value] of formData.entries()) { profile[key] = value; }
+        saveUserProfile(profile);
+        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
+      }
+
+      function handleWeightInputChange(e) {
+        const weight = e.target.value;
+        const { userProfile } = getState();
+        const bmrField = document.getElementById('bio-basalMetabolism');
+        const bmr = calculateBMR(userProfile, weight);
+        if (bmr !== null) {
+          bmrField.value = bmr;
+        } else {
+          bmrField.value = '';
+          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function initializeEventListeners() {
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.biometrics-actions')) {
+                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+            }
+        });
+        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
+        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
+        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
+        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
+        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
+
+        document.getElementById('progress-page').addEventListener('input', e => {
+          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
+        });
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const modalId = e.currentTarget.dataset.target;
+            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+          });
+        });
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
+        });
+        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
       }
 commands:
-  - "echo 'Correzione del percorso di importazione applicata. L''errore 404 dovrebbe essere risolto.'"
+  - "echo 'Refactoring del modulo modals completato. La logica è stata separata in moduli specifici.'"
