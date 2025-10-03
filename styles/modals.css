@@ -48,6 +48,7 @@
   .workout-summary-actions {
     width: 100%;
     display: flex;
+    flex-wrap: wrap;
   }
   .workout-summary-actions .btn {
     flex-grow: 1;

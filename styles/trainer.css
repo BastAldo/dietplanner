@@ -28,7 +28,7 @@
     flex-direction: column;
     justify-content: flex-start;
     align-items: center;
-    padding: 2rem 1rem 1rem 1rem;
+    padding: 1rem;
     text-align: center;
     position: relative;
     overflow-y: auto;
@@ -53,6 +53,18 @@
   font-size: 1rem;
   color: var(--secondary-color);
   font-weight: bold;
+}
+
+#upcoming-exercise-display {
+  font-size: 0.9rem;
+  color: var(--text-color-muted);
+  margin-top: 0.75rem;
+  font-style: italic;
+}
+
+#upcoming-exercise-display strong {
+  color: var(--text-color);
+  font-style: normal;
 }
 
 .timer-ring-container {
@@ -111,22 +123,4 @@
 .btn-large {
     padding: 1rem 2rem;
     font-size: 1.25rem;
-}
-
-.upcoming-exercises-container {
-    margin-top: auto;
-    padding-top: 1rem;
-    width: 90%;
-    max-width: 400px;
-}
-
-.upcoming-exercises-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    color: var(--text-color-muted);
-}
-
-.upcoming-exercises-list li {
-    padding: 0.25rem 0;
 }

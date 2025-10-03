@@ -1,12 +1,12 @@
-commit_message: "fix(ui): Migliora layout e animazioni del Trainer e dell'editor modale"
+commit_message: "fix(ui): Migliora il layout del Trainer e corregge il wrapping dei pulsanti nel modale"
 rationale: |
-  Questo commit implementa diverse correzioni e miglioramenti all'interfaccia utente basati sul feedback diretto, con l'obiettivo di perfezionare l'usabilità e l'estetica.
+  Questo commit implementa diverse correzioni mirate all'interfaccia utente per migliorare l'usabilità e la coerenza visiva, come delineato nel piano approvato.
 
   Le modifiche principali sono:
-  1.  **Animazione del Ring Corretta**: In `TrainerComponent.js`, le fasi di preparazione (`pre-`) ora mostrano istantaneamente il ring di progressione al 100%, risolvendo l'artefatto visivo del "salto" dell'animazione su durate molto brevi.
-  2.  **Timer Ring Ingrandito**: Il timer ring, elemento centrale della vista Trainer, è stato notevolmente ingrandito per migliorare la leggibilità e l'impatto visivo. Questo risolve il problema del testo che precedentemente si sovrapponeva al bordo del ring. Le modifiche sono state coordinate tra `TrainerComponent.js` (logica SVG) e `trainer.css` (contenitore).
-  3.  **Layout Trainer Ottimizzato**: Lo spazio verticale vuoto nella parte superiore della vista Trainer è stato ridotto in `trainer.css`, assicurando che tutti gli elementi di controllo siano visibili senza necessità di scroll, specialmente su schermi con altezza limitata.
-  4.  **Fix Layout Mobile nell'Editor**: Risolto un bug di overflow in `modals.css` per cui i pulsanti "Gestisci" e "Avvia Allenamento" nel modale dell'editor del giorno "spaginavano" su schermi piccoli. Ora i pulsanti si impilano correttamente in verticale, garantendo una visualizzazione corretta su tutti i dispositivi.
+  1.  **Correzione Layout Modale Mobile**: In `styles/modals.css`, è stato aggiunto `flex-wrap: wrap` al contenitore dei pulsanti di azione del workout (`.workout-summary-actions`) nella media query per schermi piccoli. Questo risolve il problema di overflow, facendo sì che i pulsanti si impilino verticalmente in modo corretto.
+  2.  **Riorganizzazione Strutturale Trainer**: Il template `templates/trainer.html` è stato modificato per spostare l'indicatore degli esercizi imminenti direttamente sotto i dettagli dell'esercizio corrente. Il contenitore a piè di pagina è stato rimosso per un layout più compatto.
+  3.  **Ottimizzazione Spaziatura Trainer**: In `styles/trainer.css`, il padding superiore del corpo del trainer è stato ridotto e gli stili per il vecchio contenitore degli esercizi imminenti sono stati eliminati. Sono stati aggiunti nuovi stili per il nuovo elemento `#upcoming-exercise-display` per integrarlo visivamente.
+  4.  **Aggiornamento Logica Componente Trainer**: Il file `src/ui/components/TrainerComponent.js` è stato aggiornato per riflettere le modifiche al DOM. Ora gestisce il nuovo elemento `#upcoming-exercise-display`, popolandolo con un elenco conciso dei prossimi esercizi, migliorando la presentazione delle informazioni.
 patches:
   - file: styles/modals.css
     content: |
@@ -60,6 +60,7 @@ patches:
         .workout-summary-actions {
           width: 100%;
           display: flex;
+          flex-wrap: wrap;
         }
         .workout-summary-actions .btn {
           flex-grow: 1;
@@ -97,7 +98,7 @@ patches:
           flex-direction: column;
           justify-content: flex-start;
           align-items: center;
-          padding: 2rem 1rem 1rem 1rem;
+          padding: 1rem;
           text-align: center;
           position: relative;
           overflow-y: auto;
@@ -122,6 +123,18 @@ patches:
         font-size: 1rem;
         color: var(--secondary-color);
         font-weight: bold;
+      }
+      
+      #upcoming-exercise-display {
+        font-size: 0.9rem;
+        color: var(--text-color-muted);
+        margin-top: 0.75rem;
+        font-style: italic;
+      }
+
+      #upcoming-exercise-display strong {
+        color: var(--text-color);
+        font-style: normal;
       }
 
       .timer-ring-container {
@@ -181,24 +194,36 @@ patches:
           padding: 1rem 2rem;
           font-size: 1.25rem;
       }
+  - file: templates/trainer.html
+    content: |
+      <div id="trainer-page" class="page-view hidden">
+          <header class="trainer-header">
+              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
+              <h2 id="trainer-title">Allenamento</h2>
+              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
+          </header>
+          <div class="trainer-body">
+              <div class="exercise-info-container">
+                  <h3 id="current-exercise-name"></h3>
+                  <p id="current-exercise-details"></p>
+                  <p id="current-rep-display"></p>
+                  <div id="upcoming-exercise-display"></div>
+              </div>
 
-      .upcoming-exercises-container {
-          margin-top: auto;
-          padding-top: 1rem;
-          width: 90%;
-          max-width: 400px;
-      }
+              <div id="trainer-display-modes">
+                  <div id="mode-tempo-guided">
+                      <div id="timer-ring-container" class="timer-ring-container">
+                          </div>
+                  </div>
+              </div>
 
-      .upcoming-exercises-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          color: var(--text-color-muted);
-      }
-
-      .upcoming-exercises-list li {
-          padding: 0.25rem 0;
-      }
+              <div id="trainer-main-controls" class="trainer-controls">
+                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
+                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
+                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
+              </div>
+          </div>
+      </div>
   - file: src/ui/components/TrainerComponent.js
     content: |
       import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
@@ -217,8 +242,7 @@ patches:
                   exerciseName: this.container.querySelector('#current-exercise-name'),
                   exerciseDetails: this.container.querySelector('#current-exercise-details'),
                   repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingList: this.container.querySelector('#upcoming-exercises-list'),
-                  upcomingTitle: this.container.querySelector('.upcoming-exercises-container h4'),
+                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
                   
                   btnStart: this.container.querySelector('#trainer-start-btn'),
                   btnPause: this.container.querySelector('#trainer-pause-btn'),
@@ -235,7 +259,6 @@ patches:
           mount() {
               this.createTimerRing();
               this.container.addEventListener('click', this.handleControls.bind(this));
-              this.elements.upcomingTitle.textContent = UI_TEXT.TRAINER_UPCOMING_LABEL;
           }
 
           destroy() {
@@ -316,7 +339,7 @@ patches:
                   this.elements.exerciseName.textContent = '';
                   this.elements.exerciseDetails.textContent = '';
                   this.elements.repDisplay.textContent = '';
-                  this.elements.upcomingList.innerHTML = '';
+                  this.elements.upcomingDisplay.innerHTML = '';
                   this.elements.btnStart.classList.add('hidden');
                   this.elements.btnPause.classList.add('hidden');
                   this.elements.btnResume.classList.add('hidden');
@@ -328,12 +351,12 @@ patches:
               this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
               this.elements.repDisplay.textContent = (status === 'running') ? `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}` : '';
 
-              this.elements.upcomingList.innerHTML = '';
-              exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-                  const li = document.createElement('li');
-                  li.textContent = ex.name;
-                  this.elements.upcomingList.appendChild(li);
-              });
+              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
+              if (upcomingExercises) {
+                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
+              } else {
+                this.elements.upcomingDisplay.innerHTML = '';
+              }
 
               this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
               this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
@@ -406,4 +429,4 @@ patches:
           }
       }
 commands:
-  - "echo 'Correzioni UI applicate con successo. Il timer ring è stato ingrandito e corretto, e i layout sono stati ottimizzati.'"
+  - "echo 'Correzioni UI applicate: layout del Trainer ottimizzato e bug di wrapping nel modale risolto.'"

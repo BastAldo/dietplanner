@@ -14,8 +14,7 @@ export class TrainerComponent {
             exerciseName: this.container.querySelector('#current-exercise-name'),
             exerciseDetails: this.container.querySelector('#current-exercise-details'),
             repDisplay: this.container.querySelector('#current-rep-display'),
-            upcomingList: this.container.querySelector('#upcoming-exercises-list'),
-            upcomingTitle: this.container.querySelector('.upcoming-exercises-container h4'),
+            upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
             
             btnStart: this.container.querySelector('#trainer-start-btn'),
             btnPause: this.container.querySelector('#trainer-pause-btn'),
@@ -32,7 +31,6 @@ export class TrainerComponent {
     mount() {
         this.createTimerRing();
         this.container.addEventListener('click', this.handleControls.bind(this));
-        this.elements.upcomingTitle.textContent = UI_TEXT.TRAINER_UPCOMING_LABEL;
     }
 
     destroy() {
@@ -113,7 +111,7 @@ export class TrainerComponent {
             this.elements.exerciseName.textContent = '';
             this.elements.exerciseDetails.textContent = '';
             this.elements.repDisplay.textContent = '';
-            this.elements.upcomingList.innerHTML = '';
+            this.elements.upcomingDisplay.innerHTML = '';
             this.elements.btnStart.classList.add('hidden');
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
@@ -125,12 +123,12 @@ export class TrainerComponent {
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
         this.elements.repDisplay.textContent = (status === 'running') ? `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}` : '';
 
-        this.elements.upcomingList.innerHTML = '';
-        exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
-            const li = document.createElement('li');
-            li.textContent = ex.name;
-            this.elements.upcomingList.appendChild(li);
-        });
+        const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
+        if (upcomingExercises) {
+          this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
+        } else {
+          this.elements.upcomingDisplay.innerHTML = '';
+        }
 
         this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
         this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
