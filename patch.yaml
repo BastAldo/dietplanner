@@ -1,19 +1,16 @@
-commit_message: "fix(trainer): Corregge l'errore di sintassi e risolve la dipendenza circolare nel refactoring del trainer"
+commit_message: "fix(trainer): Corregge il percorso di importazione errato nel facade del trainer"
 rationale: |
-  Questo commit corregge in modo definitivo i problemi emersi nel precedente tentativo di refactoring del modulo `trainer`. L'analisi approfondita ha rivelato due problemi distinti, entrambi risolti:
+  Questo commit risolve un errore `404 Not Found` introdotto durante il precedente refactoring del modulo `trainer`.
 
-  1.  **`SyntaxError` per `Identifier 'getWorkoutState' has already been declared`**: L'errore è stato risolto nel file facade `src/core/trainer.js`. La funzione `getWorkoutState` viene ora correttamente importata dal nuovo modulo `state.js` e riesportata, eliminando la dichiarazione duplicata che causava il conflitto.
+  La causa era un percorso di importazione relativo errato nel file facade `src/core/trainer.js`. L'istruzione `import { setView } from '../state.js';` causava un tentativo di caricamento da `src/state.js`, un percorso inesistente.
 
-  2.  **Risoluzione della Dipendenza Circolare**: È stato rimosso l'anti-pattern critico per cui il modulo a basso livello (`machine.js`) dipendeva da quello ad alto livello (`trainer.js`).
-      * La logica di `machine.js` ora si limita alla sua responsabilità: quando l'ultimo esercizio termina, imposta lo stato su `finished`.
-      * La responsabilità di reagire a questo stato è stata spostata nel modulo `animation.js`. La sua funzione `tick` ora rileva lo stato `finished`, ferma l'animazione e gestisce il cambio di vista (`setView('planner')`).
-      * La funzione `endWorkout` nella facade è stata allineata a questa nuova logica per garantire un comportamento consistente.
+  La correzione consiste nel modificare il percorso in `import { setView } from './state.js';`, che risolve correttamente la posizione del modulo di stato in `src/core/state.js`.
 
-  Questa soluzione non solo rende il codice funzionante, ma migliora l'architettura, rendendo il flusso dei dati unidirezionale e più prevedibile, come richiesto da un refactoring di qualità.
+  Sono stati verificati anche gli altri percorsi di importazione nei nuovi moduli del trainer, e risultano corretti.
 patches:
   - file: src/core/trainer.js
     content: |
-      import { setView } from '../state.js';
+      import { setView } from './state.js';
       import { log } from '../utils/logger.js';
       import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
       import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -90,122 +87,5 @@ patches:
         stopAnimation();
         setView('planner');
       }
-  - file: src/core/trainer/animation.js
-    content: |
-      import { getWorkoutState, updateState } from './state.js';
-      import { advanceToNextSet } from './machine.js';
-      import { setView } from '../state.js';
-
-      let animationFrameId = null;
-      let lastTickTimestamp = 0;
-
-      function tick(timestamp) {
-        if (lastTickTimestamp === 0) {
-          lastTickTimestamp = timestamp;
-        }
-        const deltaTime = timestamp - lastTickTimestamp;
-        lastTickTimestamp = timestamp;
-
-        const state = getWorkoutState();
-
-        if (state.status === 'finished') {
-          stopAnimation();
-          setView('planner');
-          return;
-        }
-
-        if (state.status === 'running') {
-          const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-          const currentPhase = state.executionQueue[state.currentPhaseIndex];
-
-          if (newPhaseTimeElapsed >= currentPhase.duration) {
-            const newPhaseIndex = state.currentPhaseIndex + 1;
-            const nextPhase = state.executionQueue[newPhaseIndex];
-
-            if (nextPhase) {
-              updateState({
-                currentPhaseIndex: newPhaseIndex,
-                phaseTimeElapsed: 0,
-                currentRep: nextPhase.rep,
-              });
-            } else {
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              updateState({
-                status: 'resting',
-                restTimeRemaining: currentExercise.defaultRest * 1000,
-              });
-            }
-          } else {
-            updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-          }
-        } else if (state.status === 'resting') {
-          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
-          if (newRestTimeRemaining <= 0) {
-            advanceToNextSet();
-          } else {
-            updateState({ restTimeRemaining: newRestTimeRemaining });
-          }
-        }
-        
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        
-        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
-          animationFrameId = requestAnimationFrame(tick);
-        }
-      }
-
-      export function startAnimation() {
-        if (animationFrameId) return;
-        lastTickTimestamp = 0;
-        animationFrameId = requestAnimationFrame(tick);
-      }
-
-      export function stopAnimation() {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
-        }
-      }
-  - file: src/core/trainer/machine.js
-    content: |
-      import { getWorkoutState, updateState } from './state.js';
-      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
-
-      export function advanceToNextSet() {
-        const state = getWorkoutState();
-        const newSet = state.currentSet + 1;
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-
-        if (newSet > currentExercise.defaultSets) {
-          advanceToNextExercise();
-        } else {
-          updateState({
-            status: 'running',
-            currentSet: newSet,
-            executionQueue: buildExecutionQueueForCurrentSet(),
-            currentPhaseIndex: 0,
-            phaseTimeElapsed: 0,
-            currentRep: 1,
-          });
-        }
-      }
-
-      export function advanceToNextExercise() {
-        const state = getWorkoutState();
-        const newIndex = state.currentExerciseIndex + 1;
-
-        if (newIndex >= state.exerciseQueue.length) {
-          updateState({ status: 'finished' });
-        } else {
-          updateState({
-            currentExerciseIndex: newIndex,
-            status: 'idle',
-            currentSet: 1,
-            currentRep: 1,
-            executionQueue: [],
-            currentPhaseIndex: -1,
-          });
-        }
-      }
 commands:
-  - "echo 'Refactoring del modulo Trainer corretto e completato. Errore di sintassi e dipendenza circolare risolti.'"
+  - "echo 'Correzione del percorso di importazione applicata. L''errore 404 dovrebbe essere risolto.'"
