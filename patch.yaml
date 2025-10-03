@@ -1,55 +1,153 @@
-commit_message: "fix(trainer): Ripristina UI unificata con ring e corregge bug di transizione"
+commit_message: "fix(trainer): Garantisce un flusso di allenamento continuo e corregge il timer di recupero"
 rationale: |
-  Questo commit risolve due problemi critici introdotti nella precedente implementazione delle modalità di allenamento: un bug di stato che causava la visualizzazione di `NaN:NaN` e una regressione della UI che frammentava l'esperienza utente.
+  Questo commit risolve due bug critici nel flusso logico del trainer che impedivano un'esperienza utente fluida e corretta.
 
-  **Correzione del Bug di Transizione (`NaN:NaN`)**:
-  - Il problema era causato da una pulizia incompleta dello stato durante il passaggio da un esercizio all'altro.
-  - È stata modificata la funzione `advanceToNextExercise` in `src/core/trainer/machine.js` per eseguire una reinizializzazione completa e robusta dello stato. Ora, prima di passare all'esercizio successivo, vengono resettate tutte le variabili specifiche delle modalità precedenti (`setTimeRemaining`, `manualRepCount`, `executionQueue`, etc.) e viene impostata correttamente la `executionMode` del nuovo esercizio. Questo garantisce che ogni esercizio parta da uno stato pulito, eliminando il bug.
+  **1. Correzione del Blocco dell'Allenamento tra Esercizi:**
+  - **Problema**: L'allenamento si interrompeva tra esercizi con modalità di esecuzione diverse perché lo stato veniva erroneamente impostato su `'idle'`, richiedendo un intervento manuale (pausa/riprendi) per proseguire.
+  - **Soluzione**: È stata refattorizzata la macchina a stati in `src/core/trainer/machine.js`. La funzione `advanceToNextSet` ora gestisce la transizione tra esercizi in modo proattivo. Al completamento dell'ultima serie, invece di fermarsi, la funzione prepara e avvia direttamente il primo set dell'esercizio successivo. Questo elimina lo stato intermedio `'idle'` e garantisce che l'allenamento proceda senza interruzioni, come previsto.
 
-  **Ripristino della UI Unificata**:
-  - In risposta al feedback dell'utente, è stata abbandonata l'architettura a tre interfacce separate. L'approccio è stato refattorizzato per mantenere il "timer ring" come elemento visivo centrale e coerente per tutte le modalità di esecuzione.
-  - **`templates/trainer.html`**: I contenitori specifici per le modalità `static_hold` e `manual_reps` sono stati rimossi. Ora esiste un unico contenitore principale per il trainer che ospita sempre il ring.
-  - **`styles/trainer.css`**: Gli stili sono stati aggiornati per permettere al testo all'interno del ring di adattarsi dinamicamente in termini di dimensione e formato, a seconda della modalità attiva.
-  - **`src/ui/components/TrainerComponent.js`**: Il componente è stato profondamente refattorizzato. Invece di alternare la visibilità di blocchi HTML, ora modifica dinamicamente il contenuto del testo SVG del ring e l'avanzamento del suo bordo per riflettere lo stato corrente:
-    - `tempo_guided`: Mostra il nome della fase e il progresso della fase.
-    - `static_hold`: Mostra il tempo rimanente (`mm:ss`) e il progresso totale della serie.
-    - `manual_reps`: Mostra il conteggio delle ripetizioni e il progresso verso l'obiettivo.
+  **2. Correzione del Timer di Recupero in Modalità `manual_reps`:**
+  - **Problema**: In modalità `manual_reps`, dopo aver registrato l'ultima ripetizione, il timer di recupero non si avviava perché il ciclo di animazione non veniva attivato.
+  - **Soluzione**: È stata modificata la funzione `incrementManualRep` in `src/core/trainer.js`. Ora, quando l'ultima ripetizione viene registrata e lo stato passa a `'resting'`, viene aggiunta una chiamata esplicita a `startAnimation()`. Questo assicura che il ciclo di animazione parta immediatamente per gestire il conto alla rovescia del tempo di riposo, ripristinando la funzionalità corretta.
 
-  Questo intervento ripristina la coerenza visiva, migliora l'esperienza utente e rende la logica di stato del trainer più stabile e prevedibile.
+  Queste modifiche rendono il trainer significativamente più robusto e affidabile, offrendo un'esperienza di allenamento continua e senza interruzioni impreviste.
 patches:
-  - file: templates/trainer.html
+  - file: src/core/trainer.js
     content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
-              <h2 id="trainer-title">Allenamento</h2>
-              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-                  <p id="current-rep-display"></p>
-                  <div id="upcoming-exercise-display"></div>
-              </div>
-      
-              <div id="trainer-display-modes">
-                  <div id="timer-ring-container" class="timer-ring-container">
-                  </div>
-              </div>
-      
-              <div id="trainer-main-controls" class="trainer-controls">
-                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
-                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
-                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
-                  <button id="trainer-manual-rep-btn" class="btn btn-primary btn-large hidden"></button>
-              </div>
-          </div>
-      </div>
+      import { setView } from '../state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { startAnimation, stopAnimation } from './trainer/animation.js';
+      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+      import { advanceToNextSet } from './trainer/machine.js';
+
+      export { getState as getWorkoutState };
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        stopAnimation();
+        resetState();
+      }
+
+      export function initializeWorkout(plannedExercises) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+          return;
+        }
+        resetWorkoutState();
+        const firstExercise = plannedExercises[0];
+        const initialState = {
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+          currentExerciseIndex: 0,
+          currentSet: 1,
+          currentRep: 1,
+          executionMode: firstExercise.execution_mode || 'tempo_guided',
+        };
+        updateState(initialState);
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function startWorkout() {
+        const state = getState();
+        log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
+        if (state.status !== 'idle') return;
+
+        let startState = { status: 'running' };
+
+        if (state.executionMode === 'tempo_guided') {
+            startState.executionQueue = buildExecutionQueueForCurrentSet();
+            startState.currentPhaseIndex = 0;
+            startState.phaseTimeElapsed = 0;
+            startState.currentRep = 1;
+        } else if (state.executionMode === 'static_hold') {
+            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+        } else if (state.executionMode === 'manual_reps') {
+            startState.manualRepCount = 0;
+        }
+        
+        updateState(startState);
+        startAnimation();
+        log('Trainer', 'Workout started. New state:', getState());
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running' || state.status === 'resting') {
+          updateState({
+            prePauseStatus: state.status,
+            status: 'paused',
+          });
+          stopAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+          updateState({
+            status: state.prePauseStatus,
+            prePauseStatus: '',
+          });
+          startAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status === 'running' && state.executionMode === 'manual_reps') {
+              const newRepCount = state.manualRepCount + 1;
+              updateState({ manualRepCount: newRepCount });
+
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+
+              if (targetReps && newRepCount >= targetReps) {
+                  updateState({
+                    status: 'resting',
+                    restTimeRemaining: currentExercise.defaultRest * 1000,
+                  });
+                  startAnimation(); // Avvia l'animazione per il countdown del riposo
+              }
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          }
+      }
+
+      export function endWorkout() {
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('planner');
+      }
   - file: src/core/trainer/machine.js
     content: |
       import { getWorkoutState, updateState, resetState } from './state.js';
       import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
+
+      function startNextExercise() {
+          const state = getWorkoutState();
+          const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
+          const executionMode = nextExercise.execution_mode || 'tempo_guided';
+          
+          let nextState = {
+              status: 'running',
+              currentSet: 1,
+              currentRep: 1,
+              manualRepCount: 0,
+              executionMode: executionMode
+          };
+
+          if (executionMode === 'tempo_guided') {
+              nextState.executionQueue = buildExecutionQueueForCurrentSet();
+              nextState.currentPhaseIndex = 0;
+              nextState.phaseTimeElapsed = 0;
+          } else if (executionMode === 'static_hold') {
+              nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
+          }
+          
+          updateState(nextState);
+      }
 
       export function advanceToNextSet() {
         const state = getWorkoutState();
@@ -83,433 +181,11 @@ patches:
         if (newIndex >= state.exerciseQueue.length) {
           updateState({ status: 'finished' });
         } else {
-          const nextExercise = state.exerciseQueue[newIndex];
-          // Full state reset to defaults, then apply next exercise's info
-          const currentState = getWorkoutState(); // get current queue
-          resetState(); // Reset to initial state
           updateState({
-            exerciseQueue: currentState.exerciseQueue, // Restore queue
-            currentExerciseIndex: newIndex,
-            status: 'idle',
-            currentSet: 1,
-            executionMode: nextExercise.execution_mode || 'tempo_guided',
+            currentExerciseIndex: newIndex
           });
+          startNextExercise();
         }
       }
-  - file: src/ui/components/TrainerComponent.js
-    content: |
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
-      import { log } from '../../utils/logger.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-
-      const RING_RADIUS = 128;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
-
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
-                  
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-                  btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
-
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-              };
-
-              this.ringProgress = null;
-              this.ringText = null;
-          }
-
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
-              this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
-          }
-
-          destroy() {
-              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.handleControls.bind(this));
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
-              }
-              log('TrainerComponent', 'Component destroyed.');
-          }
-
-          handleControls(e) {
-              const targetId = e.target.id;
-              log('TrainerComponent', `Control button clicked: ${targetId}`);
-              switch (targetId) {
-                  case 'trainer-start-btn': startWorkout(); break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn': endWorkout(); break;
-                  case 'trainer-back-btn': setView('planner'); break;
-                  case 'trainer-manual-rep-btn': incrementManualRep(); break;
-              }
-          }
-
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) {
-                log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
-                return;
-              }
-              log('TrainerComponent', 'Creating timer ring SVG...');
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              const svgSize = (RING_RADIUS + 12) * 2;
-              svg.setAttribute('width', svgSize);
-              svg.setAttribute('height', svgSize);
-              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
-
-              const center = svgSize / 2;
-
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', center);
-              backgroundCircle.setAttribute('cy', center);
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', center);
-              progressCircle.setAttribute('cy', center);
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-              log('TrainerComponent', 'Timer ring SVG created and references set.');
-          }
-
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
-          
-          formatTime(ms) {
-              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-              return `${minutes}:${seconds}`;
-          }
-
-          render(state) {
-              if (!this.ringText) return; // Guard against rendering before mount
-              const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
-
-              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
-                  this.elements.exerciseName.textContent = '';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.elements.btnStart.classList.add('hidden');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  this.elements.btnManualRep.classList.add('hidden');
-                  this.ringText.textContent = '';
-                  this.updateTimerRing(0);
-                  return;
-              };
-
-              const currentExercise = exerciseQueue[currentExerciseIndex];
-              this.elements.exerciseName.textContent = currentExercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-              
-              if (status === 'running' && executionMode === 'tempo_guided') {
-                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
-                this.elements.repDisplay.classList.remove('hidden-rep');
-              } else {
-                this.elements.repDisplay.classList.add('hidden-rep');
-              }
-
-              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
-              if (upcomingExercises) {
-                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
-              } else {
-                this.elements.upcomingDisplay.innerHTML = '';
-              }
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-              this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
-
-              // --- Main Render Logic ---
-              if (status === 'running') {
-                  this.ringText.classList.remove('flashing');
-                  if (executionMode === 'tempo_guided') this.renderPhase(state);
-                  else if (executionMode === 'static_hold') this.renderStaticHold(state);
-                  else if (executionMode === 'manual_reps') this.renderManualReps(state);
-              } else if (status === 'resting') {
-                  this.renderRest(state);
-              } else if (status === 'paused') {
-                  this.renderPaused(state);
-              } else if (status === 'idle') {
-                  this.ringText.textContent = '';
-                  this.ringText.classList.remove('flashing');
-                  this.updateTimerRing(0);
-              }
-          }
-
-          renderPhase(state) {
-              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
-              const phase = executionQueue[currentPhaseIndex];
-              if (!phase) return;
-
-              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.name.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.toggle('flashing', isPrePhase);
-              this.ringText.classList.remove('is-timer', 'is-rep-count');
-
-              if (isPrePhase) {
-                  this.updateTimerRing(100);
-              } else {
-                  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-                  this.updateTimerRing(progressPercent);
-              }
-          }
-
-          renderStaticHold(state) {
-              const { setTimeRemaining } = state;
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              const totalDuration = currentExercise.defaultDuration * 1000;
-              const progressPercent = (totalDuration > 0) ? ((totalDuration - setTimeRemaining) / totalDuration) * 100 : 100;
-
-              this.ringText.textContent = this.formatTime(setTimeRemaining);
-              this.ringText.classList.add('is-timer');
-              this.ringText.classList.remove('is-rep-count');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderManualReps(state) {
-              const { manualRepCount } = state;
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              const targetReps = currentExercise.defaultReps;
-              let progressPercent = 0;
-              if (targetReps > 0) {
-                  progressPercent = (manualRepCount / targetReps) * 100;
-              }
-
-              this.ringText.textContent = manualRepCount;
-              this.ringText.classList.add('is-rep-count');
-              this.ringText.classList.remove('is-timer');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderRest(state) {
-              const { restTimeRemaining } = state;
-              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-              
-              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-              this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
-              this.updateTimerRing(progressPercent);
-          }
-          
-          renderPaused(state) {
-              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-              this.ringText.classList.remove('flashing');
-              // Mantieni la classe di stile precedente per coerenza
-              if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
-              if(state.executionMode === 'manual_reps') this.ringText.classList.add('is-rep-count');
-          }
-
-          formatExerciseDetails(state) {
-              const { exerciseQueue, currentExerciseIndex, currentSet, executionMode } = state;
-              const exercise = exerciseQueue[currentExerciseIndex];
-              if (!exercise) return '';
-              const sets = exercise.defaultSets;
-              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
-              if (executionMode === 'tempo_guided' || executionMode === 'manual_reps') {
-                  const reps = exercise.defaultReps;
-                  details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-              } else if (executionMode === 'static_hold') {
-                  const duration = exercise.defaultDuration;
-                  details += ` | ${duration}s`;
-              }
-              return details;
-          }
-      }
-  - file: styles/trainer.css
-    content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          gap: 1rem;
-      }
-
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-          flex-grow: 1;
-          text-align: center;
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-          overflow-y: auto;
-      }
-
-      .exercise-info-container {
-          margin-top: 1rem;
-          margin-bottom: 1rem;
-      }
-
-      #current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-      }
-
-      #current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-      }
-
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-        min-height: 1.2em;
-      }
-
-      #current-rep-display.hidden-rep {
-        visibility: hidden;
-      }
-
-      #upcoming-exercise-display {
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        margin-top: 0.75rem;
-        font-style: italic;
-      }
-
-      #upcoming-exercise-display strong {
-        color: var(--text-color);
-        font-style: normal;
-      }
-
-      #trainer-display-modes {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          flex-grow: 1;
-          min-height: 280px;
-      }
-
-      .timer-ring-container {
-          width: 280px;
-          height: 280px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-display {
-          font-size: 2.2rem;
-          font-weight: bold;
-          fill: var(--text-color);
-          text-transform: uppercase;
-          text-anchor: middle;
-          transition: font-size 0.2s ease;
-      }
-      
-      .timer-ring-display.is-timer {
-          font-size: 4rem;
-          font-family: 'Courier New', Courier, monospace;
-          text-transform: none;
-      }
-
-      .timer-ring-display.is-rep-count {
-          font-size: 6rem;
-          text-transform: none;
-      }
-
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 12;
-      }
-
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 12;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear;
-      }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .flashing {
-        animation: flash 1.4s infinite;
-        fill: var(--secondary-color);
-      }
-
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px;
-          width: 100%;
-          padding-bottom: 1rem;
-      }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
 commands:
-  - "echo 'Bug di transizione risolto e UI del trainer unificata. Ora tutte le modalità di allenamento utilizzano il ring centrale.'"
+  - "echo 'Bug di flusso del trainer risolti. L''allenamento ora procede automaticamente tra esercizi e il timer di recupero funziona correttamente.'"

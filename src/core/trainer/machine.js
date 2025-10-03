@@ -1,6 +1,30 @@
 import { getWorkoutState, updateState, resetState } from './state.js';
 import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
 
+function startNextExercise() {
+    const state = getWorkoutState();
+    const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
+    const executionMode = nextExercise.execution_mode || 'tempo_guided';
+    
+    let nextState = {
+        status: 'running',
+        currentSet: 1,
+        currentRep: 1,
+        manualRepCount: 0,
+        executionMode: executionMode
+    };
+
+    if (executionMode === 'tempo_guided') {
+        nextState.executionQueue = buildExecutionQueueForCurrentSet();
+        nextState.currentPhaseIndex = 0;
+        nextState.phaseTimeElapsed = 0;
+    } else if (executionMode === 'static_hold') {
+        nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
+    }
+    
+    updateState(nextState);
+}
+
 export function advanceToNextSet() {
   const state = getWorkoutState();
   const newSet = state.currentSet + 1;
@@ -33,16 +57,9 @@ export function advanceToNextExercise() {
   if (newIndex >= state.exerciseQueue.length) {
     updateState({ status: 'finished' });
   } else {
-    const nextExercise = state.exerciseQueue[newIndex];
-    // Full state reset to defaults, then apply next exercise's info
-    const currentState = getWorkoutState(); // get current queue
-    resetState(); // Reset to initial state
     updateState({
-      exerciseQueue: currentState.exerciseQueue, // Restore queue
-      currentExerciseIndex: newIndex,
-      status: 'idle',
-      currentSet: 1,
-      executionMode: nextExercise.execution_mode || 'tempo_guided',
+      currentExerciseIndex: newIndex
     });
+    startNextExercise();
   }
 }

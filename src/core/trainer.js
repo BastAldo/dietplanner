@@ -1,4 +1,4 @@
-import { setView } from './state.js';
+import { setView } from '../state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -89,11 +89,11 @@ export function incrementManualRep() {
         const targetReps = currentExercise.defaultReps;
 
         if (targetReps && newRepCount >= targetReps) {
-            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
             updateState({
               status: 'resting',
               restTimeRemaining: currentExercise.defaultRest * 1000,
             });
+            startAnimation(); // Avvia l'animazione per il countdown del riposo
         }
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
     }
