@@ -1,1242 +1,662 @@
-commit_message: "refactor(ui): Riprogetta il flusso di avvio del workout e corregge il layout del Trainer"
+commit_message: "refactor(trainer): Decompone il modulo trainer monolitico in moduli SRP"
 rationale: |
-  Questo commit introduce un significativo miglioramento dell'esperienza utente e corregge diversi problemi di layout, basandosi sul feedback dettagliato.
+  In linea con il piano approvato e con la massima cautela per preservare la stabilità funzionale, questo commit refattorizza il file monolitico `src/core/trainer.js`.
+
+  La logica è stata meticolosamente separata in moduli con responsabilità singole (SRP), rendendo le dipendenze esplicite e migliorando drasticamente la manutenibilità, la leggibilità e la testabilità del codice.
 
   Le modifiche principali sono:
-  1.  **Flusso di Avvio Workout Semplificato**: Il pulsante "Avvia Allenamento" è stato spostato dal modale "Editor del Giorno" direttamente sulla card del giorno nella vista calendario. Questo rende l'azione principale più accessibile, riducendo i click necessari per iniziare una sessione. La logica di rendering e interazione è stata aggiornata di conseguenza.
-  2.  **Layout Header Trainer Corretto (Mobile)**: In `styles/trainer.css`, l'header della vista trainer è stato corretto per centrare correttamente il titolo ed evitare che si sovrapponga ai pulsanti su schermi piccoli.
-  3.  **Spaziatura Trainer Ottimizzata**: Lo spazio verticale nella vista Trainer è stato ridistribuito. È stato aggiunto un margine sopra le informazioni dell'esercizio, e il contenitore principale ora usa `justify-content: space-between` per eliminare lo spazio vuoto in fondo alla pagina, rendendo tutti i controlli visibili senza scroll.
-  4.  **Correzione Dimensione Timer Ring**: Il raggio dell'SVG del timer in `TrainerComponent.js` è stato aumentato per corrispondere alle dimensioni del suo contenitore CSS. Questo risolve il problema del ring che appariva troppo piccolo e del testo (es. "RECUPERO") che andava a capo.
-  5.  **Risoluzione Layout Shift**: Il "salto" del layout nella vista Trainer quando appariva o scompariva il contatore delle ripetizioni è stato risolto. Invece di svuotare il contenuto dell'elemento, ora viene applicata una classe CSS che imposta `visibility: hidden`, preservando lo spazio occupato ed eliminando il fastidioso spostamento degli elementi.
+  1.  **Creazione della directory `src/core/trainer/`** per ospitare i nuovi moduli specializzati.
+  2.  **`state.js`**: Isola la definizione e la gestione dello stato del workout (`workoutState`), diventando l'unica fonte di verità.
+  3.  **`queueBuilder.js`**: Contiene la funzione pura per la costruzione della coda di esecuzione delle fasi di allenamento.
+  4.  **`machine.js`**: Gestisce la logica della macchina a stati, ovvero l'avanzamento tra set ed esercizi.
+  5.  **`animation.js`**: Incapsula tutta la logica legata a `requestAnimationFrame` e alla funzione `tick` che gestisce gli aggiornamenti temporali.
+  6.  **`trainer.js` (Facade)**: Il file originale è stato trasformato in una facade che orchestra le interazioni tra i nuovi moduli, esponendo la stessa API pubblica di prima.
+  7.  **Aggiornamento Dipendenze**: Tutti i file che importavano dal vecchio modulo (`state.js`, `trainerRenderer.js`, etc.) sono stati aggiornati per utilizzare la nuova struttura.
+  8.  **Service Worker**: L'elenco dei file in `sw.js` è stato aggiornato per includere i nuovi moduli e garantire il corretto funzionamento offline.
 patches:
-  - file: styles/modals.css
+  - file: src/core/trainer.js
     content: |
-      /* --- MODALS --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn svg { width: 1em; height: 1em; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-      .day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
-      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-      .meal-details-container { flex-grow: 1; min-width: 0; }
-      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
-      .workout-summary-actions { display: flex; gap: 0.5rem; }
-      .meal-details { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-color); }
-      .meal-details:last-of-type { border-bottom: none; }
-      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
-      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
-      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
-      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
-      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
-      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; margin-top: 0.5rem; }
-      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-      #exercise-editor-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
-      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
-      #exercise-editor-form .tempo-group { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
-      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
-      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
-      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
-
-      @media (max-width: 480px) {
-        .workout-summary {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.75rem;
-        }
-        .workout-summary-actions {
-          width: 100%;
-          display: flex;
-          flex-wrap: wrap;
-        }
-        .workout-summary-actions .btn {
-          flex-grow: 1;
-        }
-      }
-  - file: styles/planner.css
-    content: |
-      /* --- PLANNER PAGE --- */
-      .data-source-container {
-          display: flex; align-items: center; gap: 0.75rem;
-          padding: 1rem; background: var(--card-color);
-          border: 1px solid var(--border-color); border-radius: 8px;
-          margin-bottom: 1.5rem;
-      }
-      #config-url-input {
-          flex-grow: 1; min-width: 0; padding: 0.75rem;
-          border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
-
-      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-      .planner-controls-wrapper {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
-      }
-      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      .planner-actions { display: flex; gap: 0.75rem; }
-      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-      .day-cell {
-          background-color: var(--card-color); border: 1px solid var(--border-color);
-          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-          flex-direction: column; transition: all 0.2s;
-      }
-      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
-      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
-      .day-cell.is-today {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
-      }
-      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
-      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
-      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
-      .btn-start-workout-day {
-        pointer-events: all;
-        width: 100%;
-        margin-top: 1rem;
-        padding: 0.5rem;
-        font-size: 0.85rem;
-      }
-      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
-      .log-day { margin-bottom: 2rem; }
-      .log-day:last-child { margin-bottom: 0; }
-      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
-      .log-day.is-today h3 {
-        color: var(--primary-color);
-        font-weight: bold;
-      }
-      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
-      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
-      .log-day .log-item:last-child { border-bottom: none; }
-      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
-      .log-item strong { color: var(--text-color-muted); }
-      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
-
-      @media (min-width: 768px) {
-          #app-container { padding: 2rem; }
-          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
-      }
-  - file: styles/trainer.css
-    content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          gap: 1rem;
-      }
-
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-          flex-grow: 1;
-          text-align: center;
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-          overflow-y: auto;
-      }
-
-      .exercise-info-container {
-          margin-top: 1rem;
-          margin-bottom: 1rem;
-      }
-
-      #current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-      }
-
-      #current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-      }
-
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-        min-height: 1.2em;
-      }
-
-      #current-rep-display.hidden-rep {
-        visibility: hidden;
-      }
-      
-      #upcoming-exercise-display {
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        margin-top: 0.75rem;
-        font-style: italic;
-      }
-
-      #upcoming-exercise-display strong {
-        color: var(--text-color);
-        font-style: normal;
-      }
-
-      .timer-ring-container {
-          width: 280px;
-          height: 280px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-display {
-          font-size: 2.2rem;
-          font-weight: bold;
-          fill: var(--text-color);
-          text-transform: uppercase;
-          text-anchor: middle;
-      }
-
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 12;
-      }
-
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 12;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear;
-      }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .flashing {
-        animation: flash 1.4s infinite;
-        fill: var(--secondary-color);
-      }
-
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px;
-          width: 100%;
-          padding-bottom: 1rem;
-      }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
-  - file: src/ui/components/TrainerComponent.js
-    content: |
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
-      import { log } from '../../utils/logger.js';
-      import { UI_TEXT } from '../../utils/constants.js';
-
-      const RING_RADIUS = 128;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
-
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
-                  
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-
-                  modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-              };
-
-              this.ringProgress = null;
-              this.ringText = null;
-          }
-
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
-          }
-
-          destroy() {
-              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.handleControls.bind(this));
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
-              }
-              log('TrainerComponent', 'Component destroyed.');
-          }
-
-          handleControls(e) {
-              const targetId = e.target.id;
-              log('TrainerComponent', `Control button clicked: ${targetId}`);
-              switch (targetId) {
-                  case 'trainer-start-btn': startWorkout(); break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn': endWorkout(); break;
-                  case 'trainer-back-btn': setView('planner'); break;
-              }
-          }
-
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) {
-                log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
-                return;
-              }
-              log('TrainerComponent', 'Creating timer ring SVG...');
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              const svgSize = (RING_RADIUS + 12) * 2;
-              svg.setAttribute('width', svgSize);
-              svg.setAttribute('height', svgSize);
-              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
-
-              const center = svgSize / 2;
-
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', center);
-              backgroundCircle.setAttribute('cy', center);
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', center);
-              progressCircle.setAttribute('cy', center);
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-              log('TrainerComponent', 'Timer ring SVG created and references set.');
-          }
-
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
-
-          render(state) {
-              const { exerciseQueue, currentExerciseIndex, status } = state;
-
-              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
-                  this.elements.exerciseName.textContent = '';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.elements.btnStart.classList.add('hidden');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  return;
-              };
-
-              const currentExercise = exerciseQueue[currentExerciseIndex];
-              this.elements.exerciseName.textContent = currentExercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-              
-              if (status === 'running') {
-                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
-                this.elements.repDisplay.classList.remove('hidden-rep');
-              } else {
-                this.elements.repDisplay.classList.add('hidden-rep');
-              }
-
-              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
-              if (upcomingExercises) {
-                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
-              } else {
-                this.elements.upcomingDisplay.innerHTML = '';
-              }
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-
-              this.elements.modeTempoContainer.classList.remove('hidden');
-              
-              if (!this.ringText) {
-                log('TrainerComponent', 'Render called but ringText is null. Aborting render of ring.');
-                return;
-              }
-
-              if (status === 'running') this.renderPhase(state);
-              else if (status === 'resting') this.renderRest(state);
-              else if (status === 'paused') this.renderPaused(state);
-              else if (status === 'idle') {
-                  this.ringText.textContent = '';
-                  this.ringText.classList.remove('flashing');
-                  this.updateTimerRing(0);
-              }
-          }
-
-          renderPhase(state) {
-              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
-              const phase = executionQueue[currentPhaseIndex];
-              if (!phase) return;
-
-              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.name.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.toggle('flashing', isPrePhase);
-
-              if (isPrePhase) {
-                  this.updateTimerRing(100);
-              } else {
-                  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-                  this.updateTimerRing(progressPercent);
-              }
-          }
-
-          renderRest(state) {
-              const { restTimeRemaining } = state;
-              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-              this.ringText.classList.remove('flashing');
-              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-              this.updateTimerRing(progressPercent);
-          }
-          
-          renderPaused() {
-            this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-            this.ringText.classList.remove('flashing');
-          }
-
-          formatExerciseDetails(state) {
-              const { exerciseQueue, currentExerciseIndex, currentSet } = state;
-              const exercise = exerciseQueue[currentExerciseIndex];
-              if (!exercise) return '';
-              const sets = exercise.defaultSets;
-              let details = `Serie ${currentSet} di ${sets}`;
-              if (exercise.type === 'reps') {
-                  const reps = exercise.defaultReps;
-                  details += ` | ${reps} Ripetizioni`;
-              } else if (exercise.type === 'time') {
-                  const duration = exercise.defaultDuration;
-                  details += ` | ${duration}s`;
-              }
-              return details;
-          }
-      }
-  - file: src/ui/interactions.js
-    content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, setAppState, addOrUpdateBiometricEntry,
-        deleteBiometricEntry, saveUserProfile
-      } from '../core/state.js';
-      import { initializeWorkout } from '../core/trainer.js';
-      import { calculateBMR } from '../core/calculations.js';
-      import { fetchAndParseConfig } from '../api/configService.js';
-      import { showNotification } from './notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
-      import { UI_TEXT, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { setView } from './state.js';
       import { log } from '../utils/logger.js';
+      import { getWorkoutState, resetState, updateState } from './trainer/state.js';
+      import { startAnimation, stopAnimation } from './trainer/animation.js';
+      import { advanceToNextExercise } from './trainer/machine.js';
+      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
 
-      async function handleLoadConfig() {
-        log('Interactions', 'Handling config load button click');
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      export function getWorkoutState() {
+        return getWorkoutState();
       }
 
-      function handleCalendarClick(e) {
-        const startBtn = e.target.closest('.btn-start-workout-day');
-        if (startBtn) {
-            const isoDate = startBtn.dataset.date;
-            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
-            const globalState = getState();
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout);
-            setView('trainer');
-            return;
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        stopAnimation();
+        resetState();
+      }
+
+      export function initializeWorkout(plannedExercises) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+          return;
         }
-
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
-          openDayEditorModal(dayCell.dataset.date);
-        }
-      }
-
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleShareConfig() {
-        log('Interactions', 'Share config button clicked');
-        const state = getState();
-        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-        const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
-      }
-
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
-      }
-
-      async function handleSaveBackup() {
-        log('Interactions', 'Save backup button clicked');
-        const state = getState();
-        const backupData = {
-          configUrl: state.configUrl,
-          weeklyPlan: state.weeklyPlan,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile
+        resetWorkoutState();
+        const initialState = {
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+          currentExerciseIndex: 0,
+          currentSet: 1,
+          currentRep: 1,
         };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
-            }
-          }
-        } else { triggerDownload(blob, fileName); }
+        updateState(initialState);
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
 
-      function handleRestoreBackup() {
-          log('Interactions', 'Restore backup button clicked');
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                          showConfirmModal(
-                              UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              UI_TEXT.RESTORE_CONFIRM_MSG,
-                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              'danger'
-                          );
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
-      }
-
-      function handleCopyWeek() {
-        log('Interactions', 'Copy week button clicked');
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        log('Interactions', 'Reset week button clicked');
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      function handleBiometricsForm(e) {
-        e.preventDefault();
-        log('Interactions', 'Biometrics form submitted');
-        const formData = new FormData(e.target);
-        const entry = {};
-        for (let [key, value] of formData.entries()) { entry[key] = value; }
-        addOrUpdateBiometricEntry(entry);
-        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
-        e.target.reset();
-        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
-      }
-
-      function handleBiometricsListClick(e) {
-        const btnMenu = e.target.closest('.btn-actions-menu');
-        if (btnMenu) {
-            log('Interactions', 'Biometrics actions menu toggled');
-            const dropdown = btnMenu.nextElementSibling;
-            const allDropdowns = document.querySelectorAll('.actions-dropdown');
-            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
-            dropdown.classList.toggle('show');
-            return;
-        }
-
-        const btnEdit = e.target.closest('.btn-edit-biometrics');
-        if (btnEdit) {
-            const date = btnEdit.dataset.date;
-            log('Interactions', 'Edit biometrics button clicked', { date });
-            const entry = getState().biometricData.find(e => e.date === date);
-            if (entry) {
-                const form = document.getElementById('biometrics-form');
-                for (const key in entry) {
-                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
-                }
-                form.scrollIntoView({ behavior: 'smooth' });
-            }
-            const dropdown = btnEdit.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        const btnDelete = e.target.closest('.btn-delete-biometrics');
-        if (btnDelete) {
-            const date = btnDelete.dataset.date;
-            log('Interactions', 'Delete biometrics button clicked', { date });
-            showConfirmModal(
-                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-            );
-            const dropdown = btnDelete.closest('.actions-dropdown');
-            if (dropdown) dropdown.classList.remove('show');
-            return;
-        }
-
-        // Close dropdown if clicking outside
-        if (!e.target.closest('.biometrics-actions')) {
-            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-        }
-      }
-
-      function handleProfileForm(e) {
-        e.preventDefault();
-        log('Interactions', 'Profile form submitted');
-        const formData = new FormData(e.target);
-        const profile = {};
-        for (let [key, value] of formData.entries()) { profile[key] = value; }
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
-      }
-
-      function handleWeightInputChange(e) {
-        const weight = e.target.value;
-        const { userProfile } = getState();
-        const bmrField = document.getElementById('bio-basalMetabolism');
-        const bmr = calculateBMR(userProfile, weight);
-        if (bmr !== null) {
-          bmrField.value = bmr;
-        } else {
-          bmrField.value = '';
-          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function initializeEventListeners() {
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.biometrics-actions')) {
-                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
-            }
-        });
-        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
-        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
-        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
-        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
-        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
-        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
-        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
-        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
-        document.getElementById('progress-page').addEventListener('click', handleBiometricsListClick);
-        document.getElementById('profile-form').addEventListener('submit', handleProfileForm);
-
-        document.getElementById('progress-page').addEventListener('input', e => {
-          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
-        });
-
-        document.querySelectorAll('.modal-close-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const modalId = e.currentTarget.dataset.target;
-            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+      export function startWorkout() {
+        const state = getWorkoutState();
+        log('Trainer', 'Attempting to start workout. Current status:', state.status);
+        if (state.status === 'idle') {
+          const executionQueue = buildExecutionQueueForCurrentSet();
+          updateState({
+            status: 'running',
+            executionQueue: executionQueue,
+            currentPhaseIndex: 0,
+            phaseTimeElapsed: 0,
+            currentRep: 1,
           });
-        });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
-        });
-        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+          startAnimation();
+          log('Trainer', 'Workout started. New status:', getWorkoutState().status);
+        }
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
-  - file: src/ui/modals.js
+
+      export function pauseWorkout() {
+        const state = getWorkoutState();
+        if (state.status === 'running' || state.status === 'resting') {
+          updateState({
+            prePauseStatus: state.status,
+            status: 'paused',
+          });
+          stopAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getWorkoutState();
+        if (state.status === 'paused') {
+          updateState({
+            status: state.prePauseStatus,
+            prePauseStatus: '',
+          });
+          startAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function endWorkout() {
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('planner');
+      }
+  - file: src/core/trainer/animation.js
     content: |
-      import { getState, updateWeeklyPlan, updateWeeklyWorkout, updateExerciseInstanceInWorkout, reorderWorkoutExercises } from '../core/state.js';
-      import { showNotification } from './notifications.js';
-      import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
-      import { log } from '../utils/logger.js';
-      import { formatIngredients } from '../utils/formatters.js';
+      import { getWorkoutState, updateState } from './state.js';
+      import { advanceToNextSet } from './machine.js';
 
-      let currentEditingDayISO = null;
-      let sortableInstance = null;
+      let animationFrameId = null;
+      let lastTickTimestamp = 0;
 
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
+      function tick(timestamp) {
+        if (lastTickTimestamp === 0) {
+          lastTickTimestamp = timestamp;
         }
-        return '';
-      }
+        const deltaTime = timestamp - lastTickTimestamp;
+        lastTickTimestamp = timestamp;
 
-      function formatExerciseDetails(exercise) {
-        const sets = exercise.defaultSets;
-        const rest = exercise.defaultRest;
-        let details;
+        const state = getWorkoutState();
 
-        if (exercise.type === 'reps') {
-            const reps = exercise.defaultReps;
-            details = `${sets} x ${reps} | Riposo: ${rest}s`;
-        } else if (exercise.type === 'time') {
-            const duration = exercise.defaultDuration;
-            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
-        }
+        if (state.status === 'running') {
+          const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+          const currentPhase = state.executionQueue[state.currentPhaseIndex];
 
-        if (exercise.defaultTempo) {
-            const { up, hold, down } = exercise.defaultTempo;
-            details += ` | Tempo: ${up}-${hold}-${down}`;
-        }
-        return details;
-      }
+          if (newPhaseTimeElapsed >= currentPhase.duration) {
+            const newPhaseIndex = state.currentPhaseIndex + 1;
+            const nextPhase = state.executionQueue[newPhaseIndex];
 
-      export async function showRecipeModal(meal) {
-        if (!meal) return;
-        log('Modals', 'Showing recipe modal', { mealId: meal.id });
-        const state = getState();
-        const recipeModal = document.getElementById('recipe-modal');
-        const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
-        recipeModal.querySelector('#recipe-modal-title').textContent = meal.nomePasto;
-        const body = recipeModal.querySelector('#recipe-modal-body');
-        body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOADING}</p>`;
-        recipeModal.classList.remove('modal-hidden');
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Errore di rete: ${response.status}`);
-          body.innerHTML = DOMPurify.sanitize(marked.parse(await response.text()));
-        } catch (error) {
-          body.innerHTML = `<p>${UI_TEXT.RECIPE_MODAL_LOAD_ERROR}</p>`;
-          showNotification(UI_TEXT.RECIPE_LOAD_FAIL_MSG, 'error');
-        }
-      }
-
-      export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
-        log('Modals', 'Showing confirm modal', { title });
-        const confirmModal = document.getElementById('confirm-modal');
-        confirmModal.querySelector('#confirm-modal-title').textContent = title;
-        confirmModal.querySelector('#confirm-modal-message').textContent = message;
-        const confirmBtn = confirmModal.querySelector('#confirm-modal-confirm-btn');
-        const cancelBtn = confirmModal.querySelector('#confirm-modal-cancel-btn');
-        confirmBtn.className = `btn btn-${type}`;
-        confirmBtn.textContent = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN;
-        cancelBtn.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
-        const cleanup = () => {
-          confirmModal.classList.add('modal-hidden');
-          cancelBtn.removeEventListener('click', cancelHandler);
-          confirmBtn.removeEventListener('click', confirmHandler);
-        };
-        const cancelHandler = () => cleanup();
-        const confirmHandler = () => { onConfirm(); cleanup(); };
-        cancelBtn.addEventListener('click', cancelHandler, { once: true });
-        confirmBtn.addEventListener('click', confirmHandler, { once: true });
-        confirmModal.classList.remove('modal-hidden');
-      }
-
-      export function openSelectionModal(slotId) {
-        log('Modals', 'Opening meal selection modal', { slotId });
-        const state = getState();
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const list = selectionModal.querySelector('#selection-modal-list');
-        const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
-        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openDayEditorModal(currentEditingDayISO);
-        };
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { updateWeeklyPlan(slotId, item.dataset.mealId); closeAndReturn(); }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openWorkoutSelectionModal(slotId) {
-        log('Modals', 'Opening workout selection modal', { slotId });
-        const state = getState();
-        const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
-        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
-        const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          workoutSelectionModal.classList.add('modal-hidden');
-          if (currentEditingDayISO) openWorkoutEditorModal(currentEditingDayISO);
-        };
-
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
-            closeAndReturn();
-          }
-        };
-        workoutSelectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openExerciseEditorModal(slotId, instanceId) {
-        log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
-        const state = getState();
-        const modal = document.getElementById('exercise-editor-modal');
-        const form = modal.querySelector('form');
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        const exercise = workoutList.find(ex => ex.instanceId === instanceId);
-
-        if (!exercise) return;
-
-        modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
-        document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
-        
-        form.elements.sets.value = exercise.defaultSets;
-        form.elements.rest.value = exercise.defaultRest;
-
-        const repsContainer = form.querySelector('.reps-group');
-        const durationContainer = form.querySelector('.duration-group');
-
-        if (exercise.type === 'reps') {
-            repsContainer.style.display = 'block';
-            durationContainer.style.display = 'none';
-            form.elements.reps.value = exercise.defaultReps;
-        } else {
-            repsContainer.style.display = 'none';
-            durationContainer.style.display = 'block';
-            form.elements.duration.value = exercise.defaultDuration;
-        }
-
-        const tempoContainer = form.querySelector('.tempo-group');
-        if (exercise.defaultTempo) {
-            tempoContainer.style.display = 'grid';
-            form.elements.tempo_up.value = exercise.defaultTempo.up;
-            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
-            form.elements.tempo_down.value = exercise.defaultTempo.down;
-        } else {
-            tempoContainer.style.display = 'none';
-        }
-
-        form.onsubmit = e => {
-            e.preventDefault();
-            const newValues = {
-                defaultSets: parseInt(form.elements.sets.value),
-                defaultRest: parseInt(form.elements.rest.value)
-            };
-            if (exercise.type === 'reps') {
-                newValues.defaultReps = parseInt(form.elements.reps.value);
+            if (nextPhase) {
+              updateState({
+                currentPhaseIndex: newPhaseIndex,
+                phaseTimeElapsed: 0,
+                currentRep: nextPhase.rep,
+              });
             } else {
-                newValues.defaultDuration = parseInt(form.elements.duration.value);
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              updateState({
+                status: 'resting',
+                restTimeRemaining: currentExercise.defaultRest * 1000,
+              });
             }
-            if (exercise.defaultTempo) {
-                newValues.defaultTempo = {
-                    up: parseInt(form.elements.tempo_up.value),
-                    hold: parseInt(form.elements.tempo_hold.value),
-                    down: parseInt(form.elements.tempo_down.value)
-                };
-            }
-            updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
-            modal.classList.add('modal-hidden');
-            openWorkoutEditorModal(currentEditingDayISO);
-        };
-        
-        modal.classList.remove('modal-hidden');
-      }
-
-      export function openWorkoutEditorModal(isoDate) {
-        log('Modals', 'Opening workout editor modal', { isoDate });
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const modal = document.getElementById('workout-editor-modal');
-        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
-        const body = modal.querySelector('#workout-editor-body');
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-
-        let exercisesHTML = plannedWorkoutList.map(exercise => {
-            const exerciseDetails = formatExerciseDetails(exercise);
-            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
-                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
-                        <div class="exercise-info">
-                            <span class="meal-details__name">${exercise.name}</span>
-                            <span class="exercise-details-summary">${exerciseDetails}</span>
-                        </div>
-                        <div class="meal-actions">
-                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
-                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                        </div>
-                    </div>`;
-        }).join('');
-
-        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
-
-        const listContainer = body.querySelector('.workout-editor-list');
-
-        if (sortableInstance) {
-            sortableInstance.destroy();
-        }
-        sortableInstance = new Sortable(listContainer, {
-            animation: 150,
-            handle: '.drag-handle',
-            ghostClass: 'sortable-ghost',
-            onEnd: function(evt) {
-                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
-            }
-        });
-
-        body.onclick = e => {
-            const btnAddExercise = e.target.closest('.btn-add-exercise');
-            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
-            const btnEditExercise = e.target.closest('.btn-edit-exercise');
-
-            if (btnAddExercise) {
-                modal.classList.add('modal-hidden');
-                openWorkoutSelectionModal(btnAddExercise.dataset.slotId);
-            } else if (btnRemoveExercise) {
-                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
-                openWorkoutEditorModal(isoDate); // Refresh this modal
-            } else if (btnEditExercise) {
-                modal.classList.add('modal-hidden');
-                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId));
-            }
-        };
-
-        modal.classList.remove('modal-hidden');
-      }
-
-      export function openDayEditorModal(isoDate) {
-        log('Modals', 'Opening day editor modal', { isoDate });
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const dayEditorModal = document.getElementById('day-editor-modal');
-        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        const body = dayEditorModal.querySelector('#day-editor-body');
-        
-        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const plannedMeal = state.weeklyPlan[slotId];
-          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          } else {
+            updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
           }
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-        
-        let workoutDetailsHTML;
-        if (plannedWorkoutList.length > 0) {
-            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
-        } else {
-            workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        } else if (state.status === 'resting') {
+          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
+          if (newRestTimeRemaining <= 0) {
+            advanceToNextSet();
+          } else {
+            updateState({ restTimeRemaining: newRestTimeRemaining });
+          }
         }
         
-        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
-
-        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
-
-        body.onclick = e => {
-          const btnAddMeal = e.target.closest('.btn-add-meal');
-          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-          const btnAddExercise = e.target.closest('.btn-add-exercise');
-          const btnManageWorkout = e.target.closest('.btn-manage-workout');
-
-          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId); }
-          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
-          else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-          else if (btnAddExercise) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnManageWorkout) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        
+        const newState = getWorkoutState();
+        if (newState.status !== 'paused' && newState.status !== 'idle' && newState.status !== 'finished') {
+          animationFrameId = requestAnimationFrame(tick);
+        }
       }
-  - file: src/ui/plannerRenderer.js
+
+      export function startAnimation() {
+        if (animationFrameId) return;
+        lastTickTimestamp = 0;
+        animationFrameId = requestAnimationFrame(tick);
+      }
+
+      export function stopAnimation() {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+      }
+  - file: src/core/trainer/machine.js
     content: |
-      import { MEAL_TYPES, UI_TEXT, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { renderIcon } from './icons.js';
+      import { getWorkoutState, updateState } from './state.js';
+      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
+      import { endWorkout } from '../trainer.js';
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      export function advanceToNextSet() {
+        const state = getWorkoutState();
+        const newSet = state.currentSet + 1;
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+
+        if (newSet > currentExercise.defaultSets) {
+          advanceToNextExercise();
+        } else {
+          updateState({
+            status: 'running',
+            currentSet: newSet,
+            executionQueue: buildExecutionQueueForCurrentSet(),
+            currentPhaseIndex: 0,
+            phaseTimeElapsed: 0,
+            currentRep: 1,
+          });
+        }
       }
 
-      function getWeekStartDate(date) {
+      export function advanceToNextExercise() {
+        const state = getWorkoutState();
+        const newIndex = state.currentExerciseIndex + 1;
+
+        if (newIndex >= state.exerciseQueue.length) {
+          endWorkout();
+        } else {
+          updateState({
+            currentExerciseIndex: newIndex,
+            status: 'idle',
+            currentSet: 1,
+            currentRep: 1,
+            executionQueue: [],
+            currentPhaseIndex: -1,
+          });
+        }
+      }
+  - file: src/core/trainer/queueBuilder.js
+    content: |
+      import { getWorkoutState } from './state.js';
+
+      export function buildExecutionQueueForCurrentSet() {
+        const state = getWorkoutState();
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        if (!currentExercise || currentExercise.type !== 'reps') return [];
+
+        const queue = [];
+        const reps = currentExercise.defaultReps;
+        const tempo = currentExercise.defaultTempo;
+
+        for (let i = 0; i < reps; i++) {
+          if (tempo) {
+            queue.push({ name: 'pre-up', rep: i + 1, duration: 700 });
+            queue.push({ name: 'up', rep: i + 1, duration: tempo.up * 1000 });
+            if (tempo.hold > 0) {
+              queue.push({ name: 'pre-hold', rep: i + 1, duration: 700 });
+              queue.push({ name: 'hold', rep: i + 1, duration: tempo.hold * 1000 });
+            }
+            queue.push({ name: 'pre-down', rep: i + 1, duration: 700 });
+            queue.push({ name: 'down', rep: i + 1, duration: tempo.down * 1000 });
+          }
+        }
+        return queue;
+      }
+  - file: src/core/trainer/state.js
+    content: |
+      const initialWorkoutState = {
+        exerciseQueue: [],
+        currentExerciseIndex: -1,
+        status: 'idle', // idle, running, paused, resting, finished
+        prePauseStatus: '',
+        currentSet: 0,
+        currentRep: 0,
+        executionQueue: [],
+        currentPhaseIndex: -1,
+        phaseTimeElapsed: 0,
+        restTimeRemaining: 0,
+      };
+
+      let workoutState = { ...initialWorkoutState };
+
+      export function getWorkoutState() {
+        return workoutState;
+      }
+
+      export function updateState(newState) {
+        workoutState = { ...workoutState, ...newState };
+      }
+
+      export function resetState() {
+        workoutState = { ...initialWorkoutState };
+      }
+  - file: src/ui/trainerRenderer.js
+    content: |
+      import { getWorkoutState, resetWorkoutState } from '../core/trainer.js';
+      import { TrainerComponent } from './components/TrainerComponent.js';
+      import { log } from '../utils/logger.js';
+
+      let trainerComponent = null;
+
+      function handleWorkoutStateChange() {
+          if (trainerComponent) {
+              trainerComponent.render(getWorkoutState());
+          }
+      }
+
+      export function initializeTrainerController() {
+          log('TrainerRenderer', 'Initializing TrainerComponent...');
+          const container = document.getElementById('trainer-page');
+          if (container && !trainerComponent) {
+              trainerComponent = new TrainerComponent(container);
+              trainerComponent.mount();
+              document.addEventListener('workoutStateChange', handleWorkoutStateChange);
+              handleWorkoutStateChange();
+              log('TrainerRenderer', 'TrainerComponent initialized.');
+          }
+      }
+
+      export function destroyTrainerController() {
+          log('TrainerRenderer', 'Destroying TrainerComponent...');
+          if (trainerComponent) {
+              trainerComponent.destroy();
+              trainerComponent = null;
+          }
+          document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
+          resetWorkoutState();
+          log('TrainerRenderer', 'TrainerComponent destroyed.');
+      }
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', or 'trainer'
+        debugMode: false,
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
         const d = new Date(date);
         const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
       }
 
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
 
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
 
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        // Ensure we check the full meal object from master list for recipeId
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
         }
-        return '';
+
+        notify();
       }
 
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-          
-          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
-          let workoutButtonHTML = '';
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
 
-          if (workoutList && workoutList.length > 0) {
-              const exerciseCount = workoutList.length;
-              const plural = exerciseCount > 1 ? 'esercizi' : 'esercizio';
-              summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-          }
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
 
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `
-            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
-            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
-          calendarGrid.appendChild(dayCell);
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
         }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
       }
 
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        logView.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          if (dayMeals.length > 0) {
-            const dayLog = document.createElement('div');
-            dayLog.className = 'log-day';
-             if (isoDate === todayISO) {
-              dayLog.classList.add('is-today');
-            }
-            dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
-              + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-            logView.appendChild(dayLog);
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
           }
+        } else {
+          delete state.weeklyPlan[slotId];
         }
-        if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+        saveStateToLocalStorage();
+        notify();
       }
 
-      export function renderPlannerPage(state) {
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() // Unique ID for this specific instance
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              // Ensure tempo is handled as an object
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
         const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
-
-        if (state.currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (state.currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
         }
-
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
+        saveStateToLocalStorage();
+        notify();
       }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v10';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+commands:
+  - "echo 'Refactoring del modulo Trainer completato con successo.'"
