@@ -3,7 +3,7 @@ import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../utils/constants.js';
 
-const RING_RADIUS = 80;
+const RING_RADIUS = 100;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export class TrainerComponent {
@@ -65,19 +65,22 @@ export class TrainerComponent {
         this.elements.ringContainer.innerHTML = '';
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
-        svg.setAttribute('width', '200');
-        svg.setAttribute('height', '200');
-        svg.setAttribute('viewBox', '0 0 200 200');
+        const svgSize = (RING_RADIUS + 12) * 2;
+        svg.setAttribute('width', svgSize);
+        svg.setAttribute('height', svgSize);
+        svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
+
+        const center = svgSize / 2;
 
         const backgroundCircle = document.createElementNS(svgNS, 'circle');
-        backgroundCircle.setAttribute('cx', '100');
-        backgroundCircle.setAttribute('cy', '100');
+        backgroundCircle.setAttribute('cx', center);
+        backgroundCircle.setAttribute('cy', center);
         backgroundCircle.setAttribute('r', RING_RADIUS);
         backgroundCircle.setAttribute('class', 'timer-ring-bg');
 
         const progressCircle = document.createElementNS(svgNS, 'circle');
-        progressCircle.setAttribute('cx', '100');
-        progressCircle.setAttribute('cy', '100');
+        progressCircle.setAttribute('cx', center);
+        progressCircle.setAttribute('cy', center);
         progressCircle.setAttribute('r', RING_RADIUS);
         progressCircle.setAttribute('class', 'timer-ring-progress');
         progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
@@ -161,8 +164,12 @@ export class TrainerComponent {
         this.ringText.textContent = phaseNameDisplay;
         this.ringText.classList.toggle('flashing', isPrePhase);
 
-        const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-        this.updateTimerRing(progressPercent);
+        if (isPrePhase) {
+            this.updateTimerRing(100);
+        } else {
+            const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
+            this.updateTimerRing(progressPercent);
+        }
     }
 
     renderRest(state) {
