@@ -1,4 +1,4 @@
-import { setView, setLastWorkoutSummary } from './state.js';
+import { setView, setLastWorkoutSummary, addWorkoutToHistory } from './state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -7,11 +7,24 @@ import { advanceToNextSet } from './trainer/machine.js';
 
 export { getState as getWorkoutState };
 
+const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
 export function resetWorkoutState() {
   log('Trainer', 'Resetting workout state.');
-  document.removeEventListener('workoutFinished', endWorkout);
+  document.removeEventListener('workoutFinished', handleWorkoutFinished);
   stopAnimation();
   resetState();
+}
+
+function handleWorkoutFinished() {
+  const finalState = getState();
+  const summary = createWorkoutSummary(finalState);
+  setLastWorkoutSummary(summary);
+  addWorkoutToHistory(summary);
+
+  updateState({ status: 'finished' });
+  stopAnimation();
+  setView('debriefing');
 }
 
 export function initializeWorkout(plannedExercises) {
@@ -26,9 +39,10 @@ export function initializeWorkout(plannedExercises) {
     currentSet: 1,
     currentRep: 1,
     executionMode: firstExercise.execution_mode || 'tempo_guided',
+    startTime: Date.now()
   };
   updateState(initialState);
-  document.addEventListener('workoutFinished', endWorkout);
+  document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
@@ -101,9 +115,32 @@ export function incrementManualRep() {
     }
 }
 
+function createWorkoutSummary(finalState) {
+    const totalTime = Date.now() - finalState.startTime;
+    let totalSets = 0;
+    
+    const exercises = finalState.exerciseQueue.map((exercise, index) => {
+        const setsCompleted = index < finalState.currentExerciseIndex
+            ? exercise.defaultSets
+            : (index === finalState.currentExerciseIndex ? Math.max(0, finalState.currentSet - 1) : 0);
+        totalSets += setsCompleted;
+        return { ...exercise, setsCompleted };
+    });
+
+    return {
+        date: toISODateString(new Date(finalState.startTime)),
+        totalTime,
+        totalSets,
+        exercises
+    };
+}
+
 export function endWorkout() {
   const finalState = getState();
-  setLastWorkoutSummary(finalState);
+  const summary = createWorkoutSummary(finalState);
+  setLastWorkoutSummary(summary);
+  addWorkoutToHistory(summary);
+
   updateState({ status: 'finished' });
   stopAnimation();
   setView('debriefing');

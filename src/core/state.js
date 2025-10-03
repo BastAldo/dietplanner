@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
 import { log } from '../utils/logger.js';
@@ -9,6 +9,7 @@ let state = {
   masterWorkoutList: [],
   weeklyPlan: {},
   weeklyWorkouts: {},
+  workoutHistory: {},
   biometricData: [],
   userProfile: {},
   configUrl: '',
@@ -69,6 +70,7 @@ export function saveStateToLocalStorage() {
   log('State', 'Saving all application state to localStorage');
   localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
   localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+  localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
 }
@@ -77,12 +79,14 @@ export function loadStateFromLocalStorage() {
   log('State', 'Loading all application state from localStorage');
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+  const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
   const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
 
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
   if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+  if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
   if (url) { state.configUrl = url; }
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
@@ -92,6 +96,7 @@ export function setAppState(backupData) {
   log('State', 'Restoring application state from backup');
   state.weeklyPlan = backupData.weeklyPlan || {};
   state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+  state.workoutHistory = backupData.workoutHistory || {};
   state.configUrl = backupData.configUrl || '';
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
@@ -237,6 +242,15 @@ export function setLastWorkoutSummary(summary) {
   log('State', 'Setting last workout summary');
   state.lastWorkoutSummary = summary;
   notify();
+}
+
+export function addWorkoutToHistory(summary) {
+  log('State', 'Adding workout to history', { date: summary.date });
+  if (summary && summary.date) {
+      state.workoutHistory[summary.date] = summary;
+      saveStateToLocalStorage();
+      notify();
+  }
 }
 
 export function copyPreviousWeek() {

@@ -95,24 +95,47 @@ function renderCalendarView(state, weekStart) {
 function renderLogView(state, weekStart) {
   const logView = document.getElementById('log-view');
   const todayISO = toISODateString(new Date());
-  logView.innerHTML = '';
+  let logViewHTML = '';
+  let hasContent = false;
+
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
     dayDate.setDate(dayDate.getDate() + i);
     const isoDate = toISODateString(dayDate);
     const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-    if (dayMeals.length > 0) {
-      const dayLog = document.createElement('div');
-      dayLog.className = 'log-day';
-       if (isoDate === todayISO) {
-        dayLog.classList.add('is-today');
+    const completedWorkout = state.workoutHistory[isoDate];
+
+    if (dayMeals.length > 0 || completedWorkout) {
+      hasContent = true;
+      let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
+      dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
+
+      if (dayMeals.length > 0) {
+        dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
       }
-      dayLog.innerHTML = `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>` 
-        + dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-      logView.appendChild(dayLog);
+      
+      if (completedWorkout) {
+        dayLogHTML += `<div class="log-workout-summary">
+          <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+          ${completedWorkout.exercises.map(ex => `
+            <div class="log-item">
+              <span>${ex.name}</span>
+              <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+            </div>
+          `).join('')}
+        </div>`;
+      }
+
+      dayLogHTML += `</div>`;
+      logViewHTML += dayLogHTML;
     }
   }
-  if (logView.innerHTML === '') logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+
+  if (!hasContent) {
+    logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+  } else {
+    logView.innerHTML = logViewHTML;
+  }
 }
 
 export function renderPlannerPage(state) {

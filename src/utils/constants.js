@@ -4,6 +4,7 @@ export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
 export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
 export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
 export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
+export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
 export const WEEK_STARTS_ON_MONDAY = 1;
 export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];

@@ -1,14 +1,440 @@
-commit_message: "fix(trainer): Corregge il flusso di fine allenamento e la logica di debriefing"
+commit_message: "feat(history): Implementa lo storico allenamenti con statistiche dettagliate"
 rationale: |
-  Questo commit risolve due bug critici nel flusso di completamento dell'allenamento che causavano un'esperienza utente incoerente.
+  Questo commit introduce una delle funzionalità più richieste: la persistenza e la visualizzazione dello storico degli allenamenti completati, arricchendo l'applicazione con dati statistici dettagliati.
 
-  1.  **Completamento Naturale**: In precedenza, al termine naturale dell'ultimo esercizio, l'applicazione reindirizzava l'utente direttamente al planner, saltando la vista di debriefing. Questo era causato da una logica di navigazione errata nel ciclo di animazione (`src/core/trainer/animation.js`). La correzione disaccoppia la logica di animazione da quella di navigazione. Ora, la macchina a stati (`machine.js`) emette un evento `workoutFinished` al termine dell'allenamento, che viene catturato dal modulo `trainer.js` per orchestrare correttamente la transizione alla vista di debriefing.
+  Seguendo il piano d'azione, sono state apportate le seguenti modifiche strutturali:
 
-  2.  **Logica di Debriefing**: La logica per determinare se un esercizio fosse "completato" o "incompleto" nella vista di debriefing era imprecisa. Non gestiva correttamente la differenza tra un allenamento terminato manualmente e uno completato naturalmente. La funzione `renderDebriefingPage` in `src/ui/pageRenderers.js` è stata aggiornata con una logica più robusta che calcola accuratamente le serie completate per ogni esercizio in base allo stato finale salvato, garantendo che il riepilogo sia sempre corretto.
+  1.  **Persistenza dello Storico**:
+      * È stata aggiunta una nuova proprietà `workoutHistory` allo stato globale in `src/core/state.js` per memorizzare tutti gli allenamenti completati.
+      * Le funzioni `saveStateToLocalStorage` e `loadStateFromLocalStorage` sono state aggiornate per salvare e caricare questo storico dal `localStorage` dell'utente, garantendo la persistenza dei dati tra le sessioni.
+
+  2.  **Salvataggio Automatico e Statistiche**:
+      * Il modulo `trainer` è stato potenziato. Ora traccia l'ora di inizio dell'allenamento.
+      * La funzione `endWorkout` in `src/core/trainer.js` ora calcola un riepilogo statistico completo (durata totale, serie totali, esercizi completati) e lo salva nello storico persistente.
+
+  3.  **Debriefing Dettagliato**:
+      * La vista di debriefing è stata completamente rinnovata. `templates/debriefing.html` ora include sezioni per le statistiche chiave.
+      * La funzione `renderDebriefingPage` in `src/ui/pageRenderers.js` è stata riscritta per popolare questa nuova vista con i dati dettagliati, offrendo un feedback immediato e di valore all'utente.
+
+  4.  **Integrazione nella Vista Log**:
+      * La vista "Log" (`src/ui/plannerRenderer.js`) è stata estesa. Ora, per ogni giorno, controlla la presenza di un allenamento nello storico.
+      * Se presente, viene visualizzata una card riassuntiva dell'allenamento completato, integrando perfettamente lo storico delle attività fisiche con quello alimentare e fornendo una visione a 360 gradi della giornata.
 patches:
+  - file: src/config/uiText.js
+    content: |
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_PROGRESS', text: 'Progressi' },
+        { id: 'NAV_CHARTS', text: 'Grafici' },
+        { id: 'NAV_RECIPES', text: 'Ricette' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'LOAD_BUTTON', text: 'Carica' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
+        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
+        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
+        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
+        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
+        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
+        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
+        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
+        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
+        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
+        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
+        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
+        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
+        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
+        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
+        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
+        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
+        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
+        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
+        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
+        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
+        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
+        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
+        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
+        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
+        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
+        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
+        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
+        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
+        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
+        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
+        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
+        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
+        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
+        { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
+        { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
+        { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
+        { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
+        { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
+        { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
+        { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
+        { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' }
+      ];
+
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing'
+        debugMode: false,
+        lastWorkoutSummary: null,
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+      }
+
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() // Unique ID for this specific instance
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              // Ensure tempo is handled as an object
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            state.workoutHistory[summary.date] = summary;
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/core/trainer.js
     content: |
-      import { setView, setLastWorkoutSummary } from './state.js';
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory } from './state.js';
       import { log } from '../utils/logger.js';
       import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
       import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -17,11 +443,24 @@ patches:
 
       export { getState as getWorkoutState };
 
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
       export function resetWorkoutState() {
         log('Trainer', 'Resetting workout state.');
-        document.removeEventListener('workoutFinished', endWorkout);
+        document.removeEventListener('workoutFinished', handleWorkoutFinished);
         stopAnimation();
         resetState();
+      }
+
+      function handleWorkoutFinished() {
+        const finalState = getState();
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
       }
 
       export function initializeWorkout(plannedExercises) {
@@ -36,9 +475,10 @@ patches:
           currentSet: 1,
           currentRep: 1,
           executionMode: firstExercise.execution_mode || 'tempo_guided',
+          startTime: Date.now()
         };
         updateState(initialState);
-        document.addEventListener('workoutFinished', endWorkout);
+        document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
 
@@ -111,168 +551,67 @@ patches:
           }
       }
 
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalSets = 0;
+          
+          const exercises = finalState.exerciseQueue.map((exercise, index) => {
+              const setsCompleted = index < finalState.currentExerciseIndex
+                  ? exercise.defaultSets
+                  : (index === finalState.currentExerciseIndex ? Math.max(0, finalState.currentSet - 1) : 0);
+              totalSets += setsCompleted;
+              return { ...exercise, setsCompleted };
+          });
+
+          return {
+              date: toISODateString(new Date(finalState.startTime)),
+              totalTime,
+              totalSets,
+              exercises
+          };
+      }
+
       export function endWorkout() {
         const finalState = getState();
-        setLastWorkoutSummary(finalState);
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
         updateState({ status: 'finished' });
         stopAnimation();
         setView('debriefing');
       }
-  - file: src/core/trainer/animation.js
+  - file: src/core/trainer/state.js
     content: |
-      import { getWorkoutState, updateState } from './state.js';
-      import { advanceToNextSet } from './machine.js';
-      import { setView } from '../state.js';
+      const initialWorkoutState = {
+        exerciseQueue: [],
+        currentExerciseIndex: -1,
+        status: 'idle', // idle, running, paused, resting, finished
+        executionMode: 'tempo_guided', // tempo_guided, static_hold, manual_reps
+        prePauseStatus: '',
+        currentSet: 0,
+        currentRep: 0,
+        manualRepCount: 0,
+        executionQueue: [],
+        currentPhaseIndex: -1,
+        phaseTimeElapsed: 0,
+        restTimeRemaining: 0,
+        setTimeRemaining: 0,
+        startTime: 0
+      };
 
-      let animationFrameId = null;
-      let lastTickTimestamp = 0;
+      let workoutState = { ...initialWorkoutState };
 
-      function tick(timestamp) {
-        if (lastTickTimestamp === 0) {
-          lastTickTimestamp = timestamp;
-        }
-        const deltaTime = timestamp - lastTickTimestamp;
-        lastTickTimestamp = timestamp;
-
-        const state = getWorkoutState();
-
-        if (state.status === 'finished') {
-          stopAnimation();
-          return;
-        }
-
-        if (state.status === 'running') {
-            if (state.executionMode === 'tempo_guided') {
-                const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-                const currentPhase = state.executionQueue[state.currentPhaseIndex];
-
-                if (newPhaseTimeElapsed >= currentPhase.duration) {
-                  const newPhaseIndex = state.currentPhaseIndex + 1;
-                  const nextPhase = state.executionQueue[newPhaseIndex];
-
-                  if (nextPhase) {
-                    updateState({
-                      currentPhaseIndex: newPhaseIndex,
-                      phaseTimeElapsed: 0,
-                      currentRep: nextPhase.rep,
-                    });
-                  } else {
-                    const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-                    updateState({
-                      status: 'resting',
-                      restTimeRemaining: currentExercise.defaultRest * 1000,
-                    });
-                  }
-                } else {
-                  updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-                }
-            } else if (state.executionMode === 'static_hold') {
-                const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
-                if (newSetTimeRemaining <= 0) {
-                    const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-                    updateState({
-                      status: 'resting',
-                      restTimeRemaining: currentExercise.defaultRest * 1000,
-                    });
-                } else {
-                    updateState({ setTimeRemaining: newSetTimeRemaining });
-                }
-            }
-        } else if (state.status === 'resting') {
-          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
-          if (newRestTimeRemaining <= 0) {
-            advanceToNextSet();
-          } else {
-            updateState({ restTimeRemaining: newRestTimeRemaining });
-          }
-        }
-        
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        
-        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
-          animationFrameId = requestAnimationFrame(tick);
-        }
+      export function getWorkoutState() {
+        return workoutState;
       }
 
-      export function startAnimation() {
-        if (animationFrameId) return;
-        lastTickTimestamp = 0;
-        animationFrameId = requestAnimationFrame(tick);
+      export function updateState(newState) {
+        workoutState = { ...workoutState, ...newState };
       }
 
-      export function stopAnimation() {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
-        }
-      }
-  - file: src/core/trainer/machine.js
-    content: |
-      import { getWorkoutState, updateState, resetState } from './state.js';
-      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
-
-      function startNextExercise() {
-          const state = getWorkoutState();
-          const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
-          const executionMode = nextExercise.execution_mode || 'tempo_guided';
-          
-          let nextState = {
-              status: 'running',
-              currentSet: 1,
-              currentRep: 1,
-              manualRepCount: 0,
-              executionMode: executionMode
-          };
-
-          if (executionMode === 'tempo_guided') {
-              nextState.executionQueue = buildExecutionQueueForCurrentSet();
-              nextState.currentPhaseIndex = 0;
-              nextState.phaseTimeElapsed = 0;
-          } else if (executionMode === 'static_hold') {
-              nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
-          }
-          
-          updateState(nextState);
-      }
-
-      export function advanceToNextSet() {
-        const state = getWorkoutState();
-        const newSet = state.currentSet + 1;
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-
-        if (newSet > currentExercise.defaultSets) {
-          advanceToNextExercise();
-        } else {
-          let nextState = {
-            status: 'running',
-            currentSet: newSet,
-            phaseTimeElapsed: 0,
-            currentRep: 1,
-            manualRepCount: 0,
-          };
-          if (state.executionMode === 'tempo_guided') {
-            nextState.executionQueue = buildExecutionQueueForCurrentSet();
-            nextState.currentPhaseIndex = 0;
-          } else if (state.executionMode === 'static_hold') {
-            nextState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-          }
-          updateState(nextState);
-        }
-      }
-
-      export function advanceToNextExercise() {
-        const state = getWorkoutState();
-        const newIndex = state.currentExerciseIndex + 1;
-
-        if (newIndex >= state.exerciseQueue.length) {
-          updateState({ status: 'finished' });
-          document.dispatchEvent(new CustomEvent('workoutFinished'));
-        } else {
-          updateState({
-            currentExerciseIndex: newIndex
-          });
-          startNextExercise();
-        }
+      export function resetState() {
+        workoutState = { ...initialWorkoutState };
       }
   - file: src/ui/pageRenderers.js
     content: |
@@ -294,6 +633,13 @@ patches:
               month: 'long',
               day: 'numeric'
           });
+      }
+
+      function formatDuration(ms) {
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       }
 
       export function renderBiometricsPage(state) {
@@ -368,24 +714,33 @@ patches:
 
       export function renderDebriefingPage(state) {
         const summaryContainer = document.getElementById('debriefing-summary');
+        const statsContainer = document.getElementById('debriefing-stats');
         const summary = state.lastWorkoutSummary;
 
-        if (!summary || !summary.exerciseQueue) {
+        if (!summary || !summary.exercises) {
             summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+            statsContainer.innerHTML = '';
             return;
         }
 
-        const summaryHTML = summary.exerciseQueue.map((exercise, index) => {
-            const setsCompleted = index < summary.currentExerciseIndex
-                ? exercise.defaultSets
-                : (index === summary.currentExerciseIndex ? Math.max(0, summary.currentSet - 1) : 0);
+        const statsHTML = `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_SETS}</span>
+                <span class="stat-value">${summary.totalSets}</span>
+            </div>
+        `;
+        statsContainer.innerHTML = statsHTML;
 
-            const isCompleted = setsCompleted === exercise.defaultSets;
-
+        const summaryHTML = summary.exercises.map(exercise => {
+            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
             return `
                 <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
                     <h4>${exercise.name}</h4>
-                    <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${setsCompleted} / ${exercise.defaultSets}</p>
+                    <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
                     <div class="debriefing-status">
                         ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
                     </div>
@@ -395,5 +750,382 @@ patches:
 
         summaryContainer.innerHTML = summaryHTML;
       }
+  - file: src/ui/plannerRenderer.js
+    content: |
+      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || typeof meal.calories_min !== 'number') return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0 && maxCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0, max = 0;
+        MEAL_TYPES.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
+          if (meal && typeof meal.calories_min === 'number') {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
+        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      function renderCalendarView(state, weekStart) {
+        const calendarGrid = document.getElementById('calendar-grid');
+        const todayISO = toISODateString(new Date());
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+          
+          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
+          let workoutButtonHTML = '';
+
+          if (workoutList && workoutList.length > 0) {
+              const exerciseCount = workoutList.length;
+              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
+              summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
+              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
+          }
+
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          if (isoDate === todayISO) {
+            dayCell.classList.add('is-today');
+          }
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `
+            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
+            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        const logView = document.getElementById('log-view');
+        const todayISO = toISODateString(new Date());
+        let logViewHTML = '';
+        let hasContent = false;
+
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+          const completedWorkout = state.workoutHistory[isoDate];
+
+          if (dayMeals.length > 0 || completedWorkout) {
+            hasContent = true;
+            let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
+            dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
+
+            if (dayMeals.length > 0) {
+              dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+            }
+            
+            if (completedWorkout) {
+              dayLogHTML += `<div class="log-workout-summary">
+                <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                ${completedWorkout.exercises.map(ex => `
+                  <div class="log-item">
+                    <span>${ex.name}</span>
+                    <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                  </div>
+                `).join('')}
+              </div>`;
+            }
+
+            dayLogHTML += `</div>`;
+            logViewHTML += dayLogHTML;
+          }
+        }
+
+        if (!hasContent) {
+          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+        } else {
+          logView.innerHTML = logViewHTML;
+        }
+      }
+
+      export function renderPlannerPage(state) {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+        
+        const calendarGrid = document.getElementById('calendar-grid');
+        const logView = document.getElementById('log-view');
+        const viewCalendarBtn = document.getElementById('view-calendar-btn');
+        const viewLogBtn = document.getElementById('view-log-btn');
+
+        if (state.currentView === 'planner') {
+            calendarGrid.classList.remove('hidden');
+            logView.classList.add('hidden');
+            viewCalendarBtn.classList.add('active');
+            viewLogBtn.classList.remove('active');
+        } else if (state.currentView === 'log') {
+            calendarGrid.classList.add('hidden');
+            logView.classList.remove('hidden');
+            viewCalendarBtn.classList.remove('active');
+            viewLogBtn.classList.add('active');
+        }
+
+        renderCalendarView(state, weekStart);
+        renderLogView(state, weekStart);
+      }
+  - file: src/utils/constants.js
+    content: |
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
+      export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+      export const WORKOUT_SLOT_ID = 'Allenamento';
+  - file: styles/debriefing.css
+    content: |
+      /* --- DEBRIEFING VIEW STYLES --- */
+      #debriefing-page {
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 1rem;
+          text-align: center;
+      }
+
+      #debriefing-page h3 {
+          color: var(--primary-color);
+          margin-bottom: 2rem;
+          font-size: 1.75rem;
+      }
+
+      #debriefing-stats-container {
+        margin-bottom: 2rem;
+      }
+
+      #debriefing-stats-container h4 {
+        color: var(--secondary-color);
+        margin-bottom: 1rem;
+        font-size: 1.25rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      #debriefing-stats {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        padding: 1rem;
+        background: var(--card-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        margin-bottom: 2rem;
+      }
+
+      .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .stat-label {
+        font-size: 0.9rem;
+        color: var(--text-color-muted);
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+      }
+
+      .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+      }
+
+      #debriefing-summary {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+          margin-bottom: 2rem;
+      }
+
+      .debriefing-card {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          text-align: left;
+          position: relative;
+          overflow: hidden;
+      }
+
+      .debriefing-card h4 {
+          font-size: 1.2rem;
+          margin-bottom: 0.5rem;
+      }
+
+      .debriefing-card p {
+          color: var(--text-color-muted);
+      }
+
+      .debriefing-status {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          font-size: 0.8rem;
+          font-weight: bold;
+          text-transform: uppercase;
+          padding: 0.25rem 0.5rem;
+          border-radius: 4px;
+      }
+
+      .debriefing-card.completed .debriefing-status {
+          color: var(--success-color);
+          background-color: rgba(102, 187, 106, 0.1);
+      }
+
+      .debriefing-card.incomplete .debriefing-status {
+          color: var(--warning-color);
+          background-color: rgba(253, 216, 53, 0.1);
+      }
+
+      @media (min-width: 768px) {
+          #debriefing-summary {
+              grid-template-columns: repeat(2, 1fr);
+          }
+      }
+  - file: styles/planner.css
+    content: |
+      /* --- PLANNER PAGE --- */
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .planner-controls-wrapper {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+      }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .planner-actions { display: flex; gap: 0.75rem; }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; transition: all 0.2s;
+      }
+      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
+      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell.is-today {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
+      }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+      .btn-start-workout-day {
+        pointer-events: all;
+        width: 100%;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+      }
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+      .log-day.is-today h3 {
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
+      .log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 0.5rem; font-size: 1rem; }
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }
+  - file: templates/debriefing.html
+    content: |
+      <div id="debriefing-page" class="page-view hidden">
+          <h3 id="debriefing-title"></h3>
+          <div id="debriefing-stats-container">
+              <h4 id="debriefing-stats-title"></h4>
+              <div id="debriefing-stats">
+                  </div>
+          </div>
+          <div id="debriefing-summary">
+              </div>
+          <button id="back-to-planner-btn" class="btn btn-primary"></button>
+      </div>
 commands:
-  - "echo 'Bug del flusso di fine allenamento e della logica di debriefing risolti.'"
+  - "echo 'Storico allenamenti e statistiche implementati con successo.'"

@@ -11,7 +11,8 @@ const initialWorkoutState = {
   currentPhaseIndex: -1,
   phaseTimeElapsed: 0,
   restTimeRemaining: 0,
-  setTimeRemaining: 0
+  setTimeRemaining: 0,
+  startTime: 0
 };
 
 let workoutState = { ...initialWorkoutState };

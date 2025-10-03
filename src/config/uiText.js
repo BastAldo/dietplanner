@@ -28,6 +28,7 @@ const UI_TEXT_CONFIG = [
   { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
   { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
   { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+  { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
   { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
   { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
   { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
@@ -101,7 +102,10 @@ const UI_TEXT_CONFIG = [
   { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
   { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
   { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
-  { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' }
+  { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
+  { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
+  { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
+  { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

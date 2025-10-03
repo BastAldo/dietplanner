@@ -18,6 +18,13 @@ function formatReadableDate(isoDate) {
     });
 }
 
+function formatDuration(ms) {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export function renderBiometricsPage(state) {
   const form = document.getElementById('biometrics-form');
   const listContainer = document.getElementById('biometrics-list');
@@ -90,24 +97,33 @@ export function renderChartsPage(state) {
 
 export function renderDebriefingPage(state) {
   const summaryContainer = document.getElementById('debriefing-summary');
+  const statsContainer = document.getElementById('debriefing-stats');
   const summary = state.lastWorkoutSummary;
 
-  if (!summary || !summary.exerciseQueue) {
+  if (!summary || !summary.exercises) {
       summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+      statsContainer.innerHTML = '';
       return;
   }
 
-  const summaryHTML = summary.exerciseQueue.map((exercise, index) => {
-      const setsCompleted = index < summary.currentExerciseIndex
-          ? exercise.defaultSets
-          : (index === summary.currentExerciseIndex ? Math.max(0, summary.currentSet - 1) : 0);
+  const statsHTML = `
+      <div class="stat-item">
+          <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
+          <span class="stat-value">${formatDuration(summary.totalTime)}</span>
+      </div>
+      <div class="stat-item">
+          <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_SETS}</span>
+          <span class="stat-value">${summary.totalSets}</span>
+      </div>
+  `;
+  statsContainer.innerHTML = statsHTML;
 
-      const isCompleted = setsCompleted === exercise.defaultSets;
-
+  const summaryHTML = summary.exercises.map(exercise => {
+      const isCompleted = exercise.setsCompleted === exercise.defaultSets;
       return `
           <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
               <h4>${exercise.name}</h4>
-              <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${setsCompleted} / ${exercise.defaultSets}</p>
+              <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
               <div class="debriefing-status">
                   ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
               </div>
