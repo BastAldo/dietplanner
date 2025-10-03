@@ -3,6 +3,7 @@ import { initializeWorkout } from '../core/trainer.js';
 import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
+import { log } from '../utils/logger.js';
 
 let currentEditingDayISO = null;
 let sortableInstance = null;
@@ -59,6 +60,7 @@ function formatExerciseDetails(exercise) {
 
 export async function showRecipeModal(meal) {
   if (!meal) return;
+  log('Modals', 'Showing recipe modal', { mealId: meal.id });
   const state = getState();
   const recipeModal = document.getElementById('recipe-modal');
   const url = `${state.recipeBaseUrl}${meal.recipeId}.md`;
@@ -77,6 +79,7 @@ export async function showRecipeModal(meal) {
 }
 
 export function showConfirmModal(title, message, onConfirm, type = 'secondary') {
+  log('Modals', 'Showing confirm modal', { title });
   const confirmModal = document.getElementById('confirm-modal');
   confirmModal.querySelector('#confirm-modal-title').textContent = title;
   confirmModal.querySelector('#confirm-modal-message').textContent = message;
@@ -98,6 +101,7 @@ export function showConfirmModal(title, message, onConfirm, type = 'secondary') 
 }
 
 export function openSelectionModal(slotId) {
+  log('Modals', 'Opening meal selection modal', { slotId });
   const state = getState();
   const mealType = slotId.substring(11);
   const selectionModal = document.getElementById('selection-modal');
@@ -117,6 +121,7 @@ export function openSelectionModal(slotId) {
 }
 
 export function openWorkoutSelectionModal(slotId) {
+  log('Modals', 'Opening workout selection modal', { slotId });
   const state = getState();
   const workoutSelectionModal = document.getElementById('workout-selection-modal');
   workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
@@ -140,6 +145,7 @@ export function openWorkoutSelectionModal(slotId) {
 }
 
 export function openExerciseEditorModal(slotId, instanceId) {
+  log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
   const state = getState();
   const modal = document.getElementById('exercise-editor-modal');
   const form = modal.querySelector('form');
@@ -203,6 +209,7 @@ export function openExerciseEditorModal(slotId, instanceId) {
 }
 
 export function openWorkoutEditorModal(isoDate) {
+  log('Modals', 'Opening workout editor modal', { isoDate });
   currentEditingDayISO = isoDate;
   const state = getState();
   const modal = document.getElementById('workout-editor-modal');
@@ -264,6 +271,7 @@ export function openWorkoutEditorModal(isoDate) {
 }
 
 export function openDayEditorModal(isoDate) {
+  log('Modals', 'Opening day editor modal', { isoDate });
   currentEditingDayISO = isoDate;
   const state = getState();
   const dayEditorModal = document.getElementById('day-editor-modal');

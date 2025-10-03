@@ -1,6 +1,7 @@
 import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
+import { log } from '../utils/logger.js';
 
 let state = {
   rules: [],
@@ -35,6 +36,7 @@ export function toggleDebugMode() {
 }
 
 export function setPlannerConfig(config, url) {
+  log('State', 'Setting new planner config', { url });
   state.rules = config.rules || [];
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
@@ -56,12 +58,14 @@ export function setPlannerConfig(config, url) {
 }
 
 export function setConfigUrl(url) {
+  log('State', 'Setting new config URL', { url });
   state.configUrl = url;
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
   notify();
 }
 
 export function saveStateToLocalStorage() {
+  log('State', 'Saving all application state to localStorage');
   localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
   localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
@@ -69,6 +73,7 @@ export function saveStateToLocalStorage() {
 }
 
 export function loadStateFromLocalStorage() {
+  log('State', 'Loading all application state from localStorage');
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
@@ -83,6 +88,7 @@ export function loadStateFromLocalStorage() {
 }
 
 export function setAppState(backupData) {
+  log('State', 'Restoring application state from backup');
   state.weeklyPlan = backupData.weeklyPlan || {};
   state.weeklyWorkouts = backupData.weeklyWorkouts || {};
   state.configUrl = backupData.configUrl || '';
@@ -94,12 +100,14 @@ export function setAppState(backupData) {
 }
 
 export function saveUserProfile(profile) {
+  log('State', 'Saving user profile', { profile });
   state.userProfile = profile;
   saveStateToLocalStorage();
   notify();
 }
 
 export function addOrUpdateBiometricEntry(entry) {
+  log('State', 'Adding or updating biometric entry', { entry });
   const index = state.biometricData.findIndex(e => e.date === entry.date);
   if (index > -1) {
     state.biometricData[index] = entry;
@@ -112,12 +120,14 @@ export function addOrUpdateBiometricEntry(entry) {
 }
 
 export function deleteBiometricEntry(date) {
+  log('State', 'Deleting biometric entry', { date });
   state.biometricData = state.biometricData.filter(e => e.date !== date);
   saveStateToLocalStorage();
   notify();
 }
 
 export function updateWeeklyPlan(slotId, mealId) {
+  log('State', 'Updating weekly plan', { slotId, mealId });
   if (mealId) {
     const meal = state.masterMealList.find(m => m.id === mealId);
     if (meal) {
@@ -131,6 +141,7 @@ export function updateWeeklyPlan(slotId, mealId) {
 }
 
 export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+  log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
     if (!state.weeklyWorkouts[slotId]) {
         state.weeklyWorkouts[slotId] = [];
     }
@@ -155,6 +166,7 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
 }
 
 export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+  log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
     if (!state.weeklyWorkouts[slotId]) return;
 
     const workoutList = state.weeklyWorkouts[slotId];
@@ -173,6 +185,7 @@ export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
 }
 
 export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+  log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
     if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
     const workoutList = state.weeklyWorkouts[slotId];
     const [movedItem] = workoutList.splice(oldIndex, 1);
@@ -182,6 +195,7 @@ export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
 }
 
 export function resetCurrentWeek() {
+  log('State', 'Resetting current week');
   const weekStart = getWeekStartDate(state.focusedDate);
   for (let i = 0; i < 7; i++) {
       const date = new Date(weekStart);
@@ -203,6 +217,7 @@ export function resetCurrentWeek() {
 }
 
 export function navigateWeek(direction) {
+  log('State', 'Navigating week', { direction });
   const newDate = new Date(state.focusedDate);
   newDate.setDate(newDate.getDate() + (direction * 7));
   state.focusedDate = newDate;
@@ -210,6 +225,7 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
+  log('State', 'Setting new view', { newView: view, oldView: state.currentView });
   if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
     state.currentView = view;
     notify();
@@ -217,6 +233,7 @@ export function setView(view) {
 }
 
 export function copyPreviousWeek() {
+  log('State', 'Copying previous week');
   const currentWeekStart = getWeekStartDate(state.focusedDate);
   const prevWeekStart = new Date(currentWeekStart);
   prevWeekStart.setDate(prevWeekStart.getDate() - 7);

@@ -63,3 +63,23 @@ Il servizio orchestra un caricamento multi-fase per `pasti.json`, `ingredienti.j
 * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette.
 * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
 * **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
+
+## 7. Strategia di Sviluppo e Debug
+Per garantire la manutenibilità e facilitare il troubleshooting, l'applicazione integra un sistema di logging sistematico.
+
+### 7.1. Modalità Debug (`debugMode`)
+* Lo stato globale in `src/core/state.js` contiene un flag `debugMode`, impostato di default su `false`.
+* Questo flag può essere attivato o disattivato in qualsiasi momento tramite la console del browser, eseguendo la funzione globale `toggleDebugMode()`. Questo permette di attivare i log solo quando necessario, senza impattare le performance in produzione.
+
+### 7.2. Logger Centralizzato (`src/utils/logger.js`)
+* Tutta la logica di logging è centralizzata in un unico modulo. La sua funzione `log()` è l'unico punto di accesso per scrivere messaggi in console.
+* Questa funzione controlla internamente lo stato di `debugMode` e scrive in console solo se è attivo.
+
+### 7.3. Convenzioni di Logging
+Per garantire coerenza e leggibilità, tutti i messaggi di log seguono una convenzione standard:
+```javascript
+log('NomeComponente', 'Azione che sta avvenendo', { datiRilevanti });
+```
+* **`NomeComponente`**: Indica il modulo di origine (es. 'State', 'Modals', 'Trainer').
+* **`Azione`**: Descrive l'operazione in corso (es. 'Setting new view', 'Opening modal').
+* **`datiRilevanti`**: Un oggetto opzionale che mostra il contesto e i dati relativi all'azione.

@@ -8,8 +8,10 @@ import { fetchAndParseConfig } from '../api/configService.js';
 import { showNotification } from './notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal } from './modals.js';
 import { UI_TEXT } from '../utils/constants.js';
+import { log } from '../utils/logger.js';
 
 async function handleLoadConfig() {
+  log('Interactions', 'Handling config load button click');
   const url = document.getElementById('config-url-input').value.trim();
   if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
   setConfigUrl(url);
@@ -22,7 +24,10 @@ async function handleLoadConfig() {
 
 function handleCalendarClick(e) {
   const dayCell = e.target.closest('.day-cell');
-  if (dayCell) { openDayEditorModal(dayCell.dataset.date); }
+  if (dayCell) {
+    log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+    openDayEditorModal(dayCell.dataset.date);
+  }
 }
 
 function handleRecipeClick(e) {
@@ -30,7 +35,10 @@ function handleRecipeClick(e) {
   if (recipeItem) {
     const state = getState();
     const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-    if (meal) { showRecipeModal(meal); }
+    if (meal) {
+      log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+      showRecipeModal(meal);
+    }
   }
 }
 
@@ -39,11 +47,15 @@ function handleLogViewClick(e) {
   if (btnRecipe) {
     const state = getState();
     const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-    if (meal) { showRecipeModal(meal); }
+    if (meal) {
+      log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+      showRecipeModal(meal);
+    }
   }
 }
 
 function handleShareConfig() {
+  log('Interactions', 'Share config button clicked');
   const state = getState();
   if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
   const baseUrl = window.location.origin + window.location.pathname;
@@ -66,6 +78,7 @@ function triggerDownload(blob, fileName) {
 }
 
 async function handleSaveBackup() {
+  log('Interactions', 'Save backup button clicked');
   const state = getState();
   const backupData = {
     configUrl: state.configUrl,
@@ -89,6 +102,7 @@ async function handleSaveBackup() {
 }
 
 function handleRestoreBackup() {
+    log('Interactions', 'Restore backup button clicked');
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = '.json,.txt,application/json,text/plain';
@@ -116,6 +130,7 @@ function handleRestoreBackup() {
 }
 
 function handleCopyWeek() {
+  log('Interactions', 'Copy week button clicked');
   showConfirmModal(
     UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
     () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
@@ -123,6 +138,7 @@ function handleCopyWeek() {
 }
 
 function handleResetWeek() {
+  log('Interactions', 'Reset week button clicked');
   showConfirmModal(
     UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
     () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
@@ -131,6 +147,7 @@ function handleResetWeek() {
 
 function handleBiometricsForm(e) {
   e.preventDefault();
+  log('Interactions', 'Biometrics form submitted');
   const formData = new FormData(e.target);
   const entry = {};
   for (let [key, value] of formData.entries()) { entry[key] = value; }
@@ -143,6 +160,7 @@ function handleBiometricsForm(e) {
 function handleBiometricsListClick(e) {
   const btnMenu = e.target.closest('.btn-actions-menu');
   if (btnMenu) {
+      log('Interactions', 'Biometrics actions menu toggled');
       const dropdown = btnMenu.nextElementSibling;
       const allDropdowns = document.querySelectorAll('.actions-dropdown');
       allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
@@ -153,6 +171,7 @@ function handleBiometricsListClick(e) {
   const btnEdit = e.target.closest('.btn-edit-biometrics');
   if (btnEdit) {
       const date = btnEdit.dataset.date;
+      log('Interactions', 'Edit biometrics button clicked', { date });
       const entry = getState().biometricData.find(e => e.date === date);
       if (entry) {
           const form = document.getElementById('biometrics-form');
@@ -169,6 +188,7 @@ function handleBiometricsListClick(e) {
   const btnDelete = e.target.closest('.btn-delete-biometrics');
   if (btnDelete) {
       const date = btnDelete.dataset.date;
+      log('Interactions', 'Delete biometrics button clicked', { date });
       showConfirmModal(
           UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
           () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
@@ -186,6 +206,7 @@ function handleBiometricsListClick(e) {
 
 function handleProfileForm(e) {
   e.preventDefault();
+  log('Interactions', 'Profile form submitted');
   const formData = new FormData(e.target);
   const profile = {};
   for (let [key, value] of formData.entries()) { profile[key] = value; }
