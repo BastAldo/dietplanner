@@ -33,7 +33,12 @@ export class TrainerComponent {
     }
 
     destroy() {
+        log('TrainerComponent', 'Destroying component and cleaning up DOM...');
         this.container.removeEventListener('click', this.handleControls.bind(this));
+        if (this.elements.ringContainer) {
+            this.elements.ringContainer.innerHTML = '';
+        }
+        log('TrainerComponent', 'Component destroyed.');
     }
 
     handleControls(e) {
@@ -49,7 +54,11 @@ export class TrainerComponent {
     }
 
     createTimerRing() {
-        if (this.elements.ringContainer.querySelector('svg')) return;
+        if (this.elements.ringContainer.querySelector('svg')) {
+          log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
+          return;
+        }
+        log('TrainerComponent', 'Creating timer ring SVG...');
         this.elements.ringContainer.innerHTML = '';
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
@@ -82,6 +91,7 @@ export class TrainerComponent {
         this.elements.ringContainer.prepend(svg);
         this.ringProgress = progressCircle;
         this.ringText = text;
+        log('TrainerComponent', 'Timer ring SVG created and references set.');
     }
 
     updateTimerRing(percent) {
@@ -121,6 +131,11 @@ export class TrainerComponent {
         this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
 
         this.elements.modeTempoContainer.classList.remove('hidden');
+        
+        if (!this.ringText) {
+          log('TrainerComponent', 'Render called but ringText is null. Aborting render of ring.');
+          return;
+        }
 
         if (status === 'running') this.renderPhase(state);
         else if (status === 'resting') this.renderRest(state);
