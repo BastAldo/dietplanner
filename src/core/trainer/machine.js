@@ -1,41 +1,7 @@
 import { getWorkoutState, updateState, resetState } from './state.js';
 import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
 
-function logSetData(isNaturalCompletion = false) {
-    const state = getWorkoutState();
-    const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-    
-    const setData = {
-        exerciseId: currentExercise.instanceId,
-        set: state.currentSet
-    };
-    
-    if (state.status === 'running') {
-        setData.duration = Date.now() - state.phaseStartTime;
-    }
-
-    if (isNaturalCompletion) {
-       const restDuration = Date.now() - state.restStartTime;
-       const lastSetIndex = state.setsData.length -1;
-       if(lastSetIndex >= 0) {
-          state.setsData[lastSetIndex].restDuration = restDuration;
-       }
-    }
-
-    if (state.executionMode === 'manual_reps') {
-        setData.reps = state.manualRepCount;
-    } else if (state.executionMode === 'tempo_guided') {
-        setData.reps = currentExercise.defaultReps;
-    } else if (state.executionMode === 'static_hold') {
-        setData.duration = currentExercise.defaultDuration * 1000;
-    }
-    
-    const newSetsData = state.status === 'running' ? [...state.setsData, setData] : [...state.setsData];
-    updateState({ setsData: newSetsData });
-}
-
 function startNextExercise() {
-    logSetData(true);
     const state = getWorkoutState();
     const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
     const executionMode = nextExercise.execution_mode || 'tempo_guided';
@@ -61,7 +27,6 @@ function startNextExercise() {
 }
 
 export function advanceToNextSet() {
-  logSetData();
   const state = getWorkoutState();
   const newSet = state.currentSet + 1;
   const currentExercise = state.exerciseQueue[state.currentExerciseIndex];

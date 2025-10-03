@@ -1,4 +1,5 @@
 const initialWorkoutState = {
+  workoutDate: null,
   exerciseQueue: [],
   currentExerciseIndex: -1,
   status: 'idle', // idle, running, paused, resting, finished

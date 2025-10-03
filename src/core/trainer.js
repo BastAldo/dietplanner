@@ -7,8 +7,6 @@ import { advanceToNextSet } from './trainer/machine.js';
 
 export { getState as getWorkoutState };
 
-const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
 export function resetWorkoutState() {
   log('Trainer', 'Resetting workout state.');
   document.removeEventListener('workoutFinished', handleWorkoutFinished);
@@ -18,7 +16,7 @@ export function resetWorkoutState() {
 
 function handleWorkoutFinished() {
   const finalState = getState();
-  const summary = createWorkoutSummary(finalState, true);
+  const summary = createWorkoutSummary(finalState);
   setLastWorkoutSummary(summary);
   addWorkoutToHistory(summary);
 
@@ -27,13 +25,14 @@ function handleWorkoutFinished() {
   setView('debriefing');
 }
 
-export function initializeWorkout(plannedExercises) {
+export function initializeWorkout(plannedExercises, isoDate) {
   if (!plannedExercises || plannedExercises.length === 0) {
     return;
   }
   resetWorkoutState();
   const firstExercise = plannedExercises[0];
   const initialState = {
+    workoutDate: isoDate,
     exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
     currentExerciseIndex: 0,
     currentSet: 1,
@@ -47,6 +46,31 @@ export function initializeWorkout(plannedExercises) {
   updateState(initialState);
   document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
+}
+
+export function completeSet() {
+  const state = getState();
+  const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+  const setData = {
+      exerciseId: currentExercise.instanceId,
+      set: state.currentSet,
+      duration: Date.now() - state.phaseStartTime,
+      rest: currentExercise.defaultRest
+  };
+  
+  if (state.executionMode === 'manual_reps') {
+      setData.reps = state.manualRepCount;
+  } else if (state.executionMode === 'tempo_guided') {
+      setData.reps = currentExercise.defaultReps;
+  }
+
+  const newSetsData = [...state.setsData, setData];
+  updateState({ 
+      setsData: newSetsData,
+      status: 'resting',
+      restStartTime: Date.now(),
+      restTimeRemaining: currentExercise.defaultRest * 1000
+  });
 }
 
 export function startWorkout() {
@@ -110,28 +134,19 @@ export function incrementManualRep() {
         const targetReps = currentExercise.defaultReps;
 
         if (targetReps && newRepCount >= targetReps) {
-            updateState({
-              status: 'resting',
-              restStartTime: Date.now(),
-              restTimeRemaining: currentExercise.defaultRest * 1000,
-            });
+            completeSet();
             startAnimation();
         }
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
     }
 }
 
-function createWorkoutSummary(finalState, isNaturalCompletion = false) {
+function createWorkoutSummary(finalState) {
     const totalTime = Date.now() - finalState.startTime;
     
-    const exercisesWithDetails = finalState.exerciseQueue.map((exercise, index) => {
+    const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
         const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
-        let setsCompleted = setsForThisExercise.length;
-
-        if (isNaturalCompletion && index === finalState.currentExerciseIndex) {
-            setsCompleted = exercise.defaultSets;
-        }
-        
+        const setsCompleted = setsForThisExercise.length;
         const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
 
         return { 
@@ -144,10 +159,10 @@ function createWorkoutSummary(finalState, isNaturalCompletion = false) {
 
     const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
     const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
-    const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.restDuration || 0), 0);
+    const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
 
     return {
-        date: toISODateString(new Date(finalState.startTime)),
+        date: finalState.workoutDate,
         totalTime,
         totalSets,
         totalExerciseTime,
@@ -158,7 +173,7 @@ function createWorkoutSummary(finalState, isNaturalCompletion = false) {
 
 export function endWorkout() {
   const finalState = getState();
-  const summary = createWorkoutSummary(finalState, false);
+  const summary = createWorkoutSummary(finalState);
   setLastWorkoutSummary(summary);
   addWorkoutToHistory(summary);
 

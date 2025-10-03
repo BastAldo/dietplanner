@@ -30,7 +30,7 @@ function handleCalendarClick(e) {
       const globalState = getState();
       const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
       const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-      initializeWorkout(exercisesForWorkout);
+      initializeWorkout(exercisesForWorkout, isoDate);
       setView('trainer');
       return;
   }

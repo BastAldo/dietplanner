@@ -1,6 +1,7 @@
 import { getWorkoutState, updateState } from './state.js';
 import { advanceToNextSet } from './machine.js';
 import { setView } from '../state.js';
+import { completeSet } from '../trainer.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
@@ -35,11 +36,7 @@ function tick(timestamp) {
                 currentRep: nextPhase.rep,
               });
             } else {
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              updateState({
-                status: 'resting',
-                restTimeRemaining: currentExercise.defaultRest * 1000,
-              });
+              completeSet();
             }
           } else {
             updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
@@ -47,11 +44,7 @@ function tick(timestamp) {
       } else if (state.executionMode === 'static_hold') {
           const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
           if (newSetTimeRemaining <= 0) {
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              updateState({
-                status: 'resting',
-                restTimeRemaining: currentExercise.defaultRest * 1000,
-              });
+              completeSet();
           } else {
               updateState({ setTimeRemaining: newSetTimeRemaining });
           }
