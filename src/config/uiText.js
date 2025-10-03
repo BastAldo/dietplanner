@@ -93,7 +93,9 @@ const UI_TEXT_CONFIG = [
   { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
   { id: 'TRAINER_SET_LABEL', text: 'Serie' },
   { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
-  { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' }
+  { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
+  { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
+  { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

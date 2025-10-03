@@ -1,4 +1,4 @@
-import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
+import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
@@ -19,9 +19,17 @@ export class TrainerComponent {
             btnStart: this.container.querySelector('#trainer-start-btn'),
             btnPause: this.container.querySelector('#trainer-pause-btn'),
             btnResume: this.container.querySelector('#trainer-resume-btn'),
+            btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
 
             modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
             ringContainer: this.container.querySelector('#timer-ring-container'),
+            
+            modeStaticContainer: this.container.querySelector('#mode-static-hold'),
+            staticTimerTime: this.container.querySelector('#static-timer-time'),
+
+            modeManualContainer: this.container.querySelector('#mode-manual-reps'),
+            manualRepCount: this.container.querySelector('#manual-rep-count'),
+            manualRepLabel: this.container.querySelector('#manual-rep-label'),
         };
 
         this.ringProgress = null;
@@ -31,6 +39,8 @@ export class TrainerComponent {
     mount() {
         this.createTimerRing();
         this.container.addEventListener('click', this.handleControls.bind(this));
+        this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
+        this.elements.manualRepLabel.textContent = UI_TEXT.TRAINER_MANUAL_REPS_LABEL;
     }
 
     destroy() {
@@ -51,6 +61,7 @@ export class TrainerComponent {
             case 'trainer-resume-btn': resumeWorkout(); break;
             case 'trainer-end-btn': endWorkout(); break;
             case 'trainer-back-btn': setView('planner'); break;
+            case 'trainer-manual-rep-btn': incrementManualRep(); break;
         }
     }
 
@@ -105,7 +116,7 @@ export class TrainerComponent {
     }
 
     render(state) {
-        const { exerciseQueue, currentExerciseIndex, status } = state;
+        const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
 
         if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
             this.elements.exerciseName.textContent = '';
@@ -115,6 +126,7 @@ export class TrainerComponent {
             this.elements.btnStart.classList.add('hidden');
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
+            this.elements.btnManualRep.classList.add('hidden');
             return;
         };
 
@@ -122,7 +134,7 @@ export class TrainerComponent {
         this.elements.exerciseName.textContent = currentExercise.name;
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
         
-        if (status === 'running') {
+        if (status === 'running' && executionMode === 'tempo_guided') {
           this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
           this.elements.repDisplay.classList.remove('hidden-rep');
         } else {
@@ -139,14 +151,31 @@ export class TrainerComponent {
         this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
         this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
         this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
+        this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
 
-        this.elements.modeTempoContainer.classList.remove('hidden');
+        this.elements.modeTempoContainer.classList.toggle('hidden', executionMode !== 'tempo_guided');
+        this.elements.modeStaticContainer.classList.toggle('hidden', executionMode !== 'static_hold');
+        this.elements.modeManualContainer.classList.toggle('hidden', executionMode !== 'manual_reps');
         
-        if (!this.ringText) {
-          log('TrainerComponent', 'Render called but ringText is null. Aborting render of ring.');
-          return;
+        if (executionMode === 'tempo_guided') {
+            this.renderTempoGuided(state);
+        } else if (executionMode === 'static_hold') {
+            this.renderStaticHold(state);
+        } else if (executionMode === 'manual_reps') {
+            this.renderManualReps(state);
         }
+    }
+    
+    formatTime(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
 
+    renderTempoGuided(state) {
+        if (!this.ringText) { return; }
+        const { status } = state;
         if (status === 'running') this.renderPhase(state);
         else if (status === 'resting') this.renderRest(state);
         else if (status === 'paused') this.renderPaused(state);
@@ -154,6 +183,28 @@ export class TrainerComponent {
             this.ringText.textContent = '';
             this.ringText.classList.remove('flashing');
             this.updateTimerRing(0);
+        }
+    }
+    
+    renderStaticHold(state) {
+        const { status, setTimeRemaining } = state;
+        if (status === 'running') {
+            this.elements.staticTimerTime.textContent = this.formatTime(setTimeRemaining);
+        } else if (status === 'resting') {
+            this.elements.staticTimerTime.textContent = this.formatTime(state.restTimeRemaining);
+        } else if (status === 'paused') {
+            this.elements.staticTimerTime.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+        } else {
+            this.elements.staticTimerTime.textContent = this.formatTime(0);
+        }
+    }
+    
+    renderManualReps(state) {
+        const { status, manualRepCount } = state;
+        if (status === 'running') {
+            this.elements.manualRepCount.textContent = manualRepCount;
+        } else {
+            this.elements.manualRepCount.textContent = '0';
         }
     }
 
@@ -177,29 +228,37 @@ export class TrainerComponent {
     }
 
     renderRest(state) {
-        const { restTimeRemaining } = state;
-        this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-        this.ringText.classList.remove('flashing');
-        const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-        const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-        this.updateTimerRing(progressPercent);
+        const { restTimeRemaining, executionMode } = state;
+        
+        if (executionMode === 'tempo_guided') {
+            this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
+            this.ringText.classList.remove('flashing');
+            const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
+            const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
+            this.updateTimerRing(progressPercent);
+        } else if (executionMode === 'static_hold') {
+            this.elements.staticTimerTime.textContent = this.formatTime(restTimeRemaining);
+        }
     }
     
     renderPaused() {
-      this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-      this.ringText.classList.remove('flashing');
+        const state = getWorkoutState();
+        if (state.executionMode === 'tempo_guided') {
+          this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+          this.ringText.classList.remove('flashing');
+        }
     }
 
     formatExerciseDetails(state) {
-        const { exerciseQueue, currentExerciseIndex, currentSet } = state;
+        const { exerciseQueue, currentExerciseIndex, currentSet, executionMode } = state;
         const exercise = exerciseQueue[currentExerciseIndex];
         if (!exercise) return '';
         const sets = exercise.defaultSets;
         let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
-        if (exercise.type === 'reps') {
+        if (executionMode === 'tempo_guided' || executionMode === 'manual_reps') {
             const reps = exercise.defaultReps;
             details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-        } else if (exercise.type === 'time') {
+        } else if (executionMode === 'static_hold') {
             const duration = exercise.defaultDuration;
             details += ` | ${duration}s`;
         }

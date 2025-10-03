@@ -21,29 +21,42 @@ function tick(timestamp) {
   }
 
   if (state.status === 'running') {
-    const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-    const currentPhase = state.executionQueue[state.currentPhaseIndex];
+      if (state.executionMode === 'tempo_guided') {
+          const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+          const currentPhase = state.executionQueue[state.currentPhaseIndex];
 
-    if (newPhaseTimeElapsed >= currentPhase.duration) {
-      const newPhaseIndex = state.currentPhaseIndex + 1;
-      const nextPhase = state.executionQueue[newPhaseIndex];
+          if (newPhaseTimeElapsed >= currentPhase.duration) {
+            const newPhaseIndex = state.currentPhaseIndex + 1;
+            const nextPhase = state.executionQueue[newPhaseIndex];
 
-      if (nextPhase) {
-        updateState({
-          currentPhaseIndex: newPhaseIndex,
-          phaseTimeElapsed: 0,
-          currentRep: nextPhase.rep,
-        });
-      } else {
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-        updateState({
-          status: 'resting',
-          restTimeRemaining: currentExercise.defaultRest * 1000,
-        });
+            if (nextPhase) {
+              updateState({
+                currentPhaseIndex: newPhaseIndex,
+                phaseTimeElapsed: 0,
+                currentRep: nextPhase.rep,
+              });
+            } else {
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              updateState({
+                status: 'resting',
+                restTimeRemaining: currentExercise.defaultRest * 1000,
+              });
+            }
+          } else {
+            updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
+          }
+      } else if (state.executionMode === 'static_hold') {
+          const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
+          if (newSetTimeRemaining <= 0) {
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              updateState({
+                status: 'resting',
+                restTimeRemaining: currentExercise.defaultRest * 1000,
+              });
+          } else {
+              updateState({ setTimeRemaining: newSetTimeRemaining });
+          }
       }
-    } else {
-      updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-    }
   } else if (state.status === 'resting') {
     const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
     if (newRestTimeRemaining <= 0) {

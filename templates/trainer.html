@@ -13,9 +13,20 @@
         </div>
 
         <div id="trainer-display-modes">
-            <div id="mode-tempo-guided">
+            <div id="mode-tempo-guided" class="hidden">
                 <div id="timer-ring-container" class="timer-ring-container">
                     </div>
+            </div>
+            <div id="mode-static-hold" class="hidden">
+                <div class="static-timer-display">
+                    <span id="static-timer-time">00:00</span>
+                </div>
+            </div>
+            <div id="mode-manual-reps" class="hidden">
+                <div class="manual-rep-counter">
+                    <span id="manual-rep-count">0</span>
+                    <span id="manual-rep-label"></span>
+                </div>
             </div>
         </div>
 
@@ -23,6 +34,7 @@
             <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
             <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
             <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
+            <button id="trainer-manual-rep-btn" class="btn btn-primary btn-large hidden"></button>
         </div>
     </div>
 </div>

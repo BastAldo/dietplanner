@@ -76,6 +76,13 @@
   font-style: normal;
 }
 
+#trainer-display-modes {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-grow: 1;
+}
+
 .timer-ring-container {
     width: 280px;
     height: 280px;
@@ -118,6 +125,30 @@
 .flashing {
   animation: flash 1.4s infinite;
   fill: var(--secondary-color);
+}
+
+.static-timer-display {
+    font-size: 5rem;
+    font-weight: bold;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.manual-rep-counter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#manual-rep-count {
+    font-size: 6rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+#manual-rep-label {
+    font-size: 1.5rem;
+    color: var(--text-color-muted);
+    text-transform: uppercase;
 }
 
 .trainer-controls {

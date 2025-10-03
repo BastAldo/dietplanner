@@ -2,13 +2,16 @@ const initialWorkoutState = {
   exerciseQueue: [],
   currentExerciseIndex: -1,
   status: 'idle', // idle, running, paused, resting, finished
+  executionMode: 'tempo_guided', // tempo_guided, static_hold, manual_reps
   prePauseStatus: '',
   currentSet: 0,
   currentRep: 0,
+  manualRepCount: 0,
   executionQueue: [],
   currentPhaseIndex: -1,
   phaseTimeElapsed: 0,
   restTimeRemaining: 0,
+  setTimeRemaining: 0
 };
 
 let workoutState = { ...initialWorkoutState };

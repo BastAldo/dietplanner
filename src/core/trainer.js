@@ -3,8 +3,8 @@ import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
 import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+import { advanceToNextSet } from './trainer/machine.js';
 
-// Re-export to maintain the public API
 export { getState as getWorkoutState };
 
 export function resetWorkoutState() {
@@ -18,11 +18,13 @@ export function initializeWorkout(plannedExercises) {
     return;
   }
   resetWorkoutState();
+  const firstExercise = plannedExercises[0];
   const initialState = {
     exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
     currentExerciseIndex: 0,
     currentSet: 1,
     currentRep: 1,
+    executionMode: firstExercise.execution_mode || 'tempo_guided',
   };
   updateState(initialState);
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
@@ -30,19 +32,26 @@ export function initializeWorkout(plannedExercises) {
 
 export function startWorkout() {
   const state = getState();
-  log('Trainer', 'Attempting to start workout. Current status:', state.status);
-  if (state.status === 'idle') {
-    const executionQueue = buildExecutionQueueForCurrentSet();
-    updateState({
-      status: 'running',
-      executionQueue: executionQueue,
-      currentPhaseIndex: 0,
-      phaseTimeElapsed: 0,
-      currentRep: 1,
-    });
-    startAnimation();
-    log('Trainer', 'Workout started. New status:', getState().status);
+  log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
+  if (state.status !== 'idle') return;
+
+  let startState = { status: 'running' };
+
+  if (state.executionMode === 'tempo_guided') {
+      startState.executionQueue = buildExecutionQueueForCurrentSet();
+      startState.currentPhaseIndex = 0;
+      startState.phaseTimeElapsed = 0;
+      startState.currentRep = 1;
+  } else if (state.executionMode === 'static_hold') {
+      const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+      startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+  } else if (state.executionMode === 'manual_reps') {
+      startState.manualRepCount = 0;
   }
+  
+  updateState(startState);
+  startAnimation();
+  log('Trainer', 'Workout started. New state:', getState());
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
@@ -68,6 +77,26 @@ export function resumeWorkout() {
     startAnimation();
     document.dispatchEvent(new CustomEvent('workoutStateChange'));
   }
+}
+
+export function incrementManualRep() {
+    const state = getState();
+    if (state.status === 'running' && state.executionMode === 'manual_reps') {
+        const newRepCount = state.manualRepCount + 1;
+        updateState({ manualRepCount: newRepCount });
+
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const targetReps = currentExercise.defaultReps;
+
+        if (targetReps && newRepCount >= targetReps) {
+            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+            updateState({
+              status: 'resting',
+              restTimeRemaining: currentExercise.defaultRest * 1000,
+            });
+        }
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+    }
 }
 
 export function endWorkout() {
