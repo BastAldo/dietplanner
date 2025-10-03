@@ -1,5 +1,6 @@
 import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
+import { log } from '../../utils/logger.js';
 
 const RING_RADIUS = 80;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -33,12 +34,11 @@ export class TrainerComponent {
 
     destroy() {
         this.container.removeEventListener('click', this.handleControls.bind(this));
-        this.ringProgress = null;
-        this.ringText = null;
     }
 
     handleControls(e) {
         const targetId = e.target.id;
+        log('TrainerComponent', `Control button clicked: ${targetId}`);
         switch (targetId) {
             case 'trainer-start-btn': startWorkout(); break;
             case 'trainer-pause-btn': pauseWorkout(); break;
@@ -91,10 +91,6 @@ export class TrainerComponent {
     }
 
     render(state) {
-        if (!this.ringText || !this.elements.exerciseName) {
-            return; 
-        }
-
         const { exerciseQueue, currentExerciseIndex, status } = state;
 
         if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {

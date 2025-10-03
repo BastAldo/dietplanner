@@ -5,6 +5,7 @@ import { renderRecipesPage } from './recipesRenderer.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
+import { log } from '../utils/logger.js';
 
 let isTrainerActive = false;
 
@@ -67,8 +68,11 @@ export function renderApp() {
   const navRecipesBtn = document.getElementById('nav-recipes');
   const navProfileBtn = document.getElementById('nav-profile');
 
+  log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
+
   // Gestione del ciclo di vita del TrainerComponent
   if (state.currentView !== 'trainer' && isTrainerActive) {
+      log('Renderer', 'View is not trainer, destroying trainer controller...');
       destroyTrainerController();
       isTrainerActive = false;
   }
@@ -98,7 +102,9 @@ export function renderApp() {
     renderProfilePage(state);
   } else if (state.currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
+    log('Renderer', 'View is trainer, checking if trainer is active...');
     if (!isTrainerActive) {
+      log('Renderer', 'Trainer is not active, initializing trainer controller...');
       initializeTrainerController();
       isTrainerActive = true;
     }

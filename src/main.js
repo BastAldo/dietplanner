@@ -1,4 +1,4 @@
-import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl } from './core/state.js';
+import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
 import { renderApp, populateInitialText } from './ui/renderer.js';
 import { showConfirmModal } from './ui/modals.js';
 import { initializeEventListeners } from './ui/interactions.js';
@@ -44,6 +44,9 @@ async function init() {
   populateInitialText();
   initializeEventListeners();
   renderApp(); // Initial render with local data
+
+  // Expose debug mode toggle to the window
+  window.toggleDebugMode = toggleDebugMode;
 
   const urlParams = new URLSearchParams(window.location.search);
   const configUrlFromParam = urlParams.get('configUrl');

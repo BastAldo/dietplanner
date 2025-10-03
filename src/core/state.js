@@ -14,6 +14,7 @@ let state = {
   recipeBaseUrl: '',
   focusedDate: new Date(),
   currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', or 'trainer'
+  debugMode: false,
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
@@ -27,6 +28,11 @@ const getWeekStartDate = (date) => {
 };
 
 export const getState = () => ({ ...state });
+
+export function toggleDebugMode() {
+  state.debugMode = !state.debugMode;
+  console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+}
 
 export function setPlannerConfig(config, url) {
   state.rules = config.rules || [];
@@ -204,9 +210,6 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
-  if (state.currentView === 'trainer' && view !== 'trainer') {
-    // La logica di reset è ora gestita dal destroyTrainerController
-  }
   if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer'].includes(view)) {
     state.currentView = view;
     notify();

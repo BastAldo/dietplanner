@@ -1,4 +1,5 @@
 import { setView } from './state.js';
+import { log } from '../utils/logger.js';
 
 const initialWorkoutState = {
   exerciseQueue: [],
@@ -107,11 +108,13 @@ export function getWorkoutState() {
 }
 
 export function resetWorkoutState() {
+  log('Trainer', 'Resetting workout state. Current state:', JSON.parse(JSON.stringify(workoutState)));
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
   workoutState = { ...initialWorkoutState };
+  log('Trainer', 'Workout state has been reset.', JSON.parse(JSON.stringify(workoutState)));
 }
 
 export function initializeWorkout(plannedExercises) {
@@ -131,6 +134,7 @@ export function initializeWorkout(plannedExercises) {
 }
 
 export function startWorkout() {
+  log('Trainer', 'Attempting to start workout. Current status:', workoutState.status);
   if (workoutState.status === 'idle') {
     workoutState.status = 'running';
     workoutState.executionQueue = buildExecutionQueueForCurrentSet();
@@ -139,6 +143,7 @@ export function startWorkout() {
     workoutState.currentRep = 1;
     lastTickTimestamp = 0;
     animationFrameId = requestAnimationFrame(tick);
+    log('Trainer', 'Workout started. New status:', workoutState.status);
   }
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
