@@ -105,7 +105,8 @@ const UI_TEXT_CONFIG = [
   { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
   { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
   { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
-  { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' }
+  { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' },
+  { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

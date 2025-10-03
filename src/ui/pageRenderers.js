@@ -95,6 +95,16 @@ export function renderChartsPage(state) {
     renderCharts(state);
 }
 
+function getSetDetails(setData) {
+    if (setData.reps) {
+        return `${setData.reps} reps`;
+    }
+    if (setData.duration) {
+        return `${setData.duration}s`;
+    }
+    return '';
+}
+
 export function renderDebriefingPage(state) {
   const summaryContainer = document.getElementById('debriefing-summary');
   const statsContainer = document.getElementById('debriefing-stats');
@@ -120,12 +130,24 @@ export function renderDebriefingPage(state) {
 
   const summaryHTML = summary.exercises.map(exercise => {
       const isCompleted = exercise.setsCompleted === exercise.defaultSets;
+      const setsDetailsHTML = exercise.setsData.map((setData, i) => `
+          <div class="set-detail-item">
+              <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
+              <span>${getSetDetails(setData)}</span>
+          </div>
+      `).join('');
+
       return `
           <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-              <h4>${exercise.name}</h4>
-              <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
-              <div class="debriefing-status">
-                  ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+              <div class="debriefing-card-header">
+                  <h4>${exercise.name}</h4>
+                  <div class="debriefing-status">
+                      ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                  </div>
+              </div>
+              <p class="sets-summary">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
+              <div class="sets-details-container">
+                  ${setsDetailsHTML}
               </div>
           </div>
       `;

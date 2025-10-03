@@ -71,24 +71,51 @@
     overflow: hidden;
 }
 
-.debriefing-card h4 {
-    font-size: 1.2rem;
-    margin-bottom: 0.5rem;
+.debriefing-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
 }
 
-.debriefing-card p {
-    color: var(--text-color-muted);
+.debriefing-card h4 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.sets-summary {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: var(--text-color-muted);
+  margin-bottom: 1rem;
+}
+
+.sets-details-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.set-detail-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--text-color);
+}
+
+.set-detail-item span:first-child {
+  color: var(--text-color-muted);
 }
 
 .debriefing-status {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
     font-size: 0.8rem;
     font-weight: bold;
     text-transform: uppercase;
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
+    flex-shrink: 0;
 }
 
 .debriefing-card.completed .debriefing-status {

@@ -1,6 +1,26 @@
 import { getWorkoutState, updateState, resetState } from './state.js';
 import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
 
+function logSetData() {
+    const state = getWorkoutState();
+    const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+    const setData = {
+        exerciseId: currentExercise.instanceId,
+        set: state.currentSet
+    };
+
+    if (state.executionMode === 'manual_reps') {
+        setData.reps = state.manualRepCount;
+    } else if (state.executionMode === 'tempo_guided') {
+        setData.reps = currentExercise.defaultReps;
+    } else if (state.executionMode === 'static_hold') {
+        setData.duration = currentExercise.defaultDuration;
+    }
+    
+    const newSetsData = [...state.setsData, setData];
+    updateState({ setsData: newSetsData });
+}
+
 function startNextExercise() {
     const state = getWorkoutState();
     const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
@@ -26,6 +46,7 @@ function startNextExercise() {
 }
 
 export function advanceToNextSet() {
+  logSetData();
   const state = getWorkoutState();
   const newSet = state.currentSet + 1;
   const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
@@ -55,7 +76,6 @@ export function advanceToNextExercise() {
   const newIndex = state.currentExerciseIndex + 1;
 
   if (newIndex >= state.exerciseQueue.length) {
-    updateState({ status: 'finished' });
     document.dispatchEvent(new CustomEvent('workoutFinished'));
   } else {
     updateState({

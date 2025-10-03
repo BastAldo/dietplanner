@@ -1,24 +1,18 @@
-commit_message: "feat(history): Implementa lo storico allenamenti con statistiche dettagliate"
+commit_message: "feat(history): Arricchisce lo storico allenamenti con statistiche per serie"
 rationale: |
-  Questo commit introduce una delle funzionalità più richieste: la persistenza e la visualizzazione dello storico degli allenamenti completati, arricchendo l'applicazione con dati statistici dettagliati.
+  Questo commit rappresenta un'evoluzione significativa della funzionalità di tracciamento degli allenamenti, rispondendo alla necessità di statistiche più dettagliate e correggendo un bug critico nel conteggio finale.
 
-  Seguendo il piano d'azione, sono state apportate le seguenti modifiche strutturali:
+  Le modifiche chiave sono:
 
-  1.  **Persistenza dello Storico**:
-      * È stata aggiunta una nuova proprietà `workoutHistory` allo stato globale in `src/core/state.js` per memorizzare tutti gli allenamenti completati.
-      * Le funzioni `saveStateToLocalStorage` e `loadStateFromLocalStorage` sono state aggiornate per salvare e caricare questo storico dal `localStorage` dell'utente, garantendo la persistenza dei dati tra le sessioni.
+  1.  **Tracciamento Granulare per Serie**: È stato introdotto un nuovo meccanismo di tracciamento in `src/core/trainer/state.js` e `machine.js`. L'applicazione ora registra i dettagli di ogni singola serie completata (ripetizioni o durata) in un nuovo array `setsData`.
+  
+  2.  **Correzione Bug Esercizio Finale**: La logica di calcolo in `createWorkoutSummary` (`src/core/trainer.js`) è stata riscritta. Ora determina correttamente lo stato di completamento anche per l'ultimo esercizio di un allenamento terminato naturalmente, risolvendo il bug che lo segnalava come incompleto.
 
-  2.  **Salvataggio Automatico e Statistiche**:
-      * Il modulo `trainer` è stato potenziato. Ora traccia l'ora di inizio dell'allenamento.
-      * La funzione `endWorkout` in `src/core/trainer.js` ora calcola un riepilogo statistico completo (durata totale, serie totali, esercizi completati) e lo salva nello storico persistente.
+  3.  **Riepiloghi Dettagliati**: Il riepilogo salvato nello storico (`workoutHistory`) ora include l'array `setsData` con tutte le performance registrate.
 
-  3.  **Debriefing Dettagliato**:
-      * La vista di debriefing è stata completamente rinnovata. `templates/debriefing.html` ora include sezioni per le statistiche chiave.
-      * La funzione `renderDebriefingPage` in `src/ui/pageRenderers.js` è stata riscritta per popolare questa nuova vista con i dati dettagliati, offrendo un feedback immediato e di valore all'utente.
-
-  4.  **Integrazione nella Vista Log**:
-      * La vista "Log" (`src/ui/plannerRenderer.js`) è stata estesa. Ora, per ogni giorno, controlla la presenza di un allenamento nello storico.
-      * Se presente, viene visualizzata una card riassuntiva dell'allenamento completato, integrando perfettamente lo storico delle attività fisiche con quello alimentare e fornendo una visione a 360 gradi della giornata.
+  4.  **UI Potenziata**:
+      * La **Vista Debriefing** (`src/ui/pageRenderers.js`) è stata completamente riprogettata per mostrare non solo le serie completate, ma anche i dettagli di ripetizioni/durata per ciascuna di esse.
+      * La **Vista Log** (`src/ui/plannerRenderer.js`) è stata allineata per visualizzare lo stesso livello di dettaglio, trasformandola in un vero e proprio diario storico degli allenamenti.
 patches:
   - file: src/config/uiText.js
     content: |
@@ -129,309 +123,14 @@ patches:
         { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
         { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
         { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
-        { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' }
+        { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' },
+        { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' }
       ];
 
       export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
         acc[id] = text;
         return acc;
       }, {});
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-      import { resetWorkoutState } from './trainer.js';
-      import { log } from '../utils/logger.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        workoutHistory: {},
-        biometricData: [],
-        userProfile: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing'
-        debugMode: false,
-        lastWorkoutSummary: null,
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-
-      export function toggleDebugMode() {
-        state.debugMode = !state.debugMode;
-        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
-      }
-
-      export function setPlannerConfig(config, url) {
-        log('State', 'Setting new planner config', { url });
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        // Calcola calorie e popola la master list
-        state.masterMealList = processMealsWithCalories(meals, ingredients);
-
-        // Deriva e imposta la recipeBaseUrl
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else {
-            state.recipeBaseUrl = '';
-        }
-
-        notify();
-      }
-
-      export function setConfigUrl(url) {
-        log('State', 'Setting new config URL', { url });
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        log('State', 'Saving all application state to localStorage');
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-      }
-
-      export function loadStateFromLocalStorage() {
-        log('State', 'Loading all application state from localStorage');
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.configUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-      }
-
-      export function setAppState(backupData) {
-        log('State', 'Restoring application state from backup');
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.workoutHistory = backupData.workoutHistory || {};
-        state.configUrl = backupData.configUrl || '';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        log('State', 'Saving user profile', { profile });
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        log('State', 'Adding or updating biometric entry', { entry });
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        log('State', 'Deleting biometric entry', { date });
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        log('State', 'Updating weekly plan', { slotId, mealId });
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) { // Add an exercise
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = {
-                      ...exercise,
-                      instanceId: Date.now() // Unique ID for this specific instance
-                  };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) { // Remove an exercise
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
-          if (!state.weeklyWorkouts[slotId]) return;
-
-          const workoutList = state.weeklyWorkouts[slotId];
-          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
-
-          if (exerciseIndex > -1) {
-              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-              // Ensure tempo is handled as an object
-              if (newValues.defaultTempo) {
-                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
-              }
-              workoutList[exerciseIndex] = updatedExercise;
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
-        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
-          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
-          const workoutList = state.weeklyWorkouts[slotId];
-          const [movedItem] = workoutList.splice(oldIndex, 1);
-          workoutList.splice(newIndex, 0, movedItem);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        log('State', 'Resetting current week');
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[workoutSlotId];
-            }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        log('State', 'Navigating week', { direction });
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
-        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing'].includes(view)) {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function setLastWorkoutSummary(summary) {
-        log('State', 'Setting last workout summary');
-        state.lastWorkoutSummary = summary;
-        notify();
-      }
-
-      export function addWorkoutToHistory(summary) {
-        log('State', 'Adding workout to history', { date: summary.date });
-        if (summary && summary.date) {
-            state.workoutHistory[summary.date] = summary;
-            saveStateToLocalStorage();
-            notify();
-        }
-      }
-
-      export function copyPreviousWeek() {
-        log('State', 'Copying previous week');
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
   - file: src/core/trainer.js
     content: |
       import { setView, setLastWorkoutSummary, addWorkoutToHistory } from './state.js';
@@ -454,7 +153,7 @@ patches:
 
       function handleWorkoutFinished() {
         const finalState = getState();
-        const summary = createWorkoutSummary(finalState);
+        const summary = createWorkoutSummary(finalState, true);
         setLastWorkoutSummary(summary);
         addWorkoutToHistory(summary);
 
@@ -475,7 +174,8 @@ patches:
           currentSet: 1,
           currentRep: 1,
           executionMode: firstExercise.execution_mode || 'tempo_guided',
-          startTime: Date.now()
+          startTime: Date.now(),
+          setsData: []
         };
         updateState(initialState);
         document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
@@ -551,35 +251,133 @@ patches:
           }
       }
 
-      function createWorkoutSummary(finalState) {
+      function createWorkoutSummary(finalState, isNaturalCompletion = false) {
           const totalTime = Date.now() - finalState.startTime;
-          let totalSets = 0;
           
-          const exercises = finalState.exerciseQueue.map((exercise, index) => {
-              const setsCompleted = index < finalState.currentExerciseIndex
-                  ? exercise.defaultSets
-                  : (index === finalState.currentExerciseIndex ? Math.max(0, finalState.currentSet - 1) : 0);
-              totalSets += setsCompleted;
-              return { ...exercise, setsCompleted };
+          const exercisesWithDetails = finalState.exerciseQueue.map((exercise, index) => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              
+              let setsCompleted = setsForThisExercise.length;
+
+              // Correzione per l'ultimo esercizio completato naturalmente
+              if (isNaturalCompletion && index === finalState.currentExerciseIndex) {
+                  setsCompleted = exercise.defaultSets;
+              }
+
+              return { 
+                  ...exercise, 
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise
+              };
           });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
 
           return {
               date: toISODateString(new Date(finalState.startTime)),
               totalTime,
               totalSets,
-              exercises
+              exercises: exercisesWithDetails
           };
       }
 
       export function endWorkout() {
         const finalState = getState();
-        const summary = createWorkoutSummary(finalState);
+        const summary = createWorkoutSummary(finalState, false);
         setLastWorkoutSummary(summary);
         addWorkoutToHistory(summary);
 
         updateState({ status: 'finished' });
         stopAnimation();
         setView('debriefing');
+      }
+  - file: src/core/trainer/machine.js
+    content: |
+      import { getWorkoutState, updateState, resetState } from './state.js';
+      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
+
+      function logSetData() {
+          const state = getWorkoutState();
+          const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+          const setData = {
+              exerciseId: currentExercise.instanceId,
+              set: state.currentSet
+          };
+
+          if (state.executionMode === 'manual_reps') {
+              setData.reps = state.manualRepCount;
+          } else if (state.executionMode === 'tempo_guided') {
+              setData.reps = currentExercise.defaultReps;
+          } else if (state.executionMode === 'static_hold') {
+              setData.duration = currentExercise.defaultDuration;
+          }
+          
+          const newSetsData = [...state.setsData, setData];
+          updateState({ setsData: newSetsData });
+      }
+
+      function startNextExercise() {
+          const state = getWorkoutState();
+          const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
+          const executionMode = nextExercise.execution_mode || 'tempo_guided';
+          
+          let nextState = {
+              status: 'running',
+              currentSet: 1,
+              currentRep: 1,
+              manualRepCount: 0,
+              executionMode: executionMode
+          };
+
+          if (executionMode === 'tempo_guided') {
+              nextState.executionQueue = buildExecutionQueueForCurrentSet();
+              nextState.currentPhaseIndex = 0;
+              nextState.phaseTimeElapsed = 0;
+          } else if (executionMode === 'static_hold') {
+              nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
+          }
+          
+          updateState(nextState);
+      }
+
+      export function advanceToNextSet() {
+        logSetData();
+        const state = getWorkoutState();
+        const newSet = state.currentSet + 1;
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+
+        if (newSet > currentExercise.defaultSets) {
+          advanceToNextExercise();
+        } else {
+          let nextState = {
+            status: 'running',
+            currentSet: newSet,
+            phaseTimeElapsed: 0,
+            currentRep: 1,
+            manualRepCount: 0,
+          };
+          if (state.executionMode === 'tempo_guided') {
+            nextState.executionQueue = buildExecutionQueueForCurrentSet();
+            nextState.currentPhaseIndex = 0;
+          } else if (state.executionMode === 'static_hold') {
+            nextState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+          }
+          updateState(nextState);
+        }
+      }
+
+      export function advanceToNextExercise() {
+        const state = getWorkoutState();
+        const newIndex = state.currentExerciseIndex + 1;
+
+        if (newIndex >= state.exerciseQueue.length) {
+          document.dispatchEvent(new CustomEvent('workoutFinished'));
+        } else {
+          updateState({
+            currentExerciseIndex: newIndex
+          });
+          startNextExercise();
+        }
       }
   - file: src/core/trainer/state.js
     content: |
@@ -597,7 +395,8 @@ patches:
         phaseTimeElapsed: 0,
         restTimeRemaining: 0,
         setTimeRemaining: 0,
-        startTime: 0
+        startTime: 0,
+        setsData: [] // Array to store data for each completed set
       };
 
       let workoutState = { ...initialWorkoutState };
@@ -712,6 +511,16 @@ patches:
           renderCharts(state);
       }
 
+      function getSetDetails(setData) {
+          if (setData.reps) {
+              return `${setData.reps} reps`;
+          }
+          if (setData.duration) {
+              return `${setData.duration}s`;
+          }
+          return '';
+      }
+
       export function renderDebriefingPage(state) {
         const summaryContainer = document.getElementById('debriefing-summary');
         const statsContainer = document.getElementById('debriefing-stats');
@@ -737,12 +546,24 @@ patches:
 
         const summaryHTML = summary.exercises.map(exercise => {
             const isCompleted = exercise.setsCompleted === exercise.defaultSets;
+            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
+                <div class="set-detail-item">
+                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
+                    <span>${getSetDetails(setData)}</span>
+                </div>
+            `).join('');
+
             return `
                 <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <h4>${exercise.name}</h4>
-                    <p>${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
-                    <div class="debriefing-status">
-                        ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                    <div class="debriefing-card-header">
+                        <h4>${exercise.name}</h4>
+                        <div class="debriefing-status">
+                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                        </div>
+                    </div>
+                    <p class="sets-summary">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted} / ${exercise.defaultSets}</p>
+                    <div class="sets-details-container">
+                        ${setsDetailsHTML}
                     </div>
                 </div>
             `;
@@ -811,6 +632,16 @@ patches:
         return '';
       }
 
+      function getSetDetails(setData) {
+          if (setData.reps) {
+              return `${setData.reps} reps`;
+          }
+          if (setData.duration) {
+              return `${setData.duration}s`;
+          }
+          return '';
+      }
+
       function renderCalendarView(state, weekStart) {
         const calendarGrid = document.getElementById('calendar-grid');
         const todayISO = toISODateString(new Date());
@@ -872,9 +703,19 @@ patches:
               dayLogHTML += `<div class="log-workout-summary">
                 <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
                 ${completedWorkout.exercises.map(ex => `
-                  <div class="log-item">
-                    <span>${ex.name}</span>
-                    <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                  <div class="log-workout-exercise">
+                    <div class="log-item">
+                      <strong>${ex.name}</strong>
+                      <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                    </div>
+                    <div class="log-sets-details">
+                      ${ex.setsData.map((setData, i) => `
+                        <div class="log-set-item">
+                          <span>Serie ${i + 1}</span>
+                          <span>${getSetDetails(setData)}</span>
+                        </div>
+                      `).join('')}
+                    </div>
                   </div>
                 `).join('')}
               </div>`;
@@ -918,19 +759,6 @@ patches:
         renderCalendarView(state, weekStart);
         renderLogView(state, weekStart);
       }
-  - file: src/utils/constants.js
-    content: |
-      export const DEFAULT_CONFIG_URL = '';
-      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
-      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
-      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
-      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
-      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
-      export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
-      export const WEEK_STARTS_ON_MONDAY = 1;
-      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
-      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
-      export const WORKOUT_SLOT_ID = 'Allenamento';
   - file: styles/debriefing.css
     content: |
       /* --- DEBRIEFING VIEW STYLES --- */
@@ -1005,25 +833,52 @@ patches:
           position: relative;
           overflow: hidden;
       }
+      
+      .debriefing-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.5rem;
+      }
 
       .debriefing-card h4 {
           font-size: 1.2rem;
-          margin-bottom: 0.5rem;
+          margin: 0;
+      }
+      
+      .sets-summary {
+        font-size: 0.9rem;
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 1rem;
       }
 
-      .debriefing-card p {
-          color: var(--text-color-muted);
+      .sets-details-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .set-detail-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        color: var(--text-color);
+      }
+      
+      .set-detail-item span:first-child {
+        color: var(--text-color-muted);
       }
 
       .debriefing-status {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
           font-size: 0.8rem;
           font-weight: bold;
           text-transform: uppercase;
           padding: 0.25rem 0.5rem;
           border-radius: 4px;
+          flex-shrink: 0;
       }
 
       .debriefing-card.completed .debriefing-status {
@@ -1107,25 +962,18 @@ patches:
       .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
       .log-item strong { color: var(--text-color-muted); }
       .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+      
       .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
       .log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 0.5rem; font-size: 1rem; }
+      .log-workout-exercise { margin-bottom: 1rem; }
+      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
+      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
+      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
+      .log-set-item span:first-child { color: var(--text-color-muted); }
 
       @media (min-width: 768px) {
           #app-container { padding: 2rem; }
           .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
-  - file: templates/debriefing.html
-    content: |
-      <div id="debriefing-page" class="page-view hidden">
-          <h3 id="debriefing-title"></h3>
-          <div id="debriefing-stats-container">
-              <h4 id="debriefing-stats-title"></h4>
-              <div id="debriefing-stats">
-                  </div>
-          </div>
-          <div id="debriefing-summary">
-              </div>
-          <button id="back-to-planner-btn" class="btn btn-primary"></button>
-      </div>
 commands:
-  - "echo 'Storico allenamenti e statistiche implementati con successo.'"
+  - "echo 'Storico allenamenti e statistiche implementati. Il bug dell-ultimo esercizio è risolto.'"

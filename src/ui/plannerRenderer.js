@@ -57,6 +57,16 @@ function getRecipeButtonHTML(meal, state) {
   return '';
 }
 
+function getSetDetails(setData) {
+    if (setData.reps) {
+        return `${setData.reps} reps`;
+    }
+    if (setData.duration) {
+        return `${setData.duration}s`;
+    }
+    return '';
+}
+
 function renderCalendarView(state, weekStart) {
   const calendarGrid = document.getElementById('calendar-grid');
   const todayISO = toISODateString(new Date());
@@ -118,9 +128,19 @@ function renderLogView(state, weekStart) {
         dayLogHTML += `<div class="log-workout-summary">
           <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
           ${completedWorkout.exercises.map(ex => `
-            <div class="log-item">
-              <span>${ex.name}</span>
-              <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+            <div class="log-workout-exercise">
+              <div class="log-item">
+                <strong>${ex.name}</strong>
+                <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+              </div>
+              <div class="log-sets-details">
+                ${ex.setsData.map((setData, i) => `
+                  <div class="log-set-item">
+                    <span>Serie ${i + 1}</span>
+                    <span>${getSetDetails(setData)}</span>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           `).join('')}
         </div>`;

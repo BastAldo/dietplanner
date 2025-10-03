@@ -18,7 +18,7 @@ export function resetWorkoutState() {
 
 function handleWorkoutFinished() {
   const finalState = getState();
-  const summary = createWorkoutSummary(finalState);
+  const summary = createWorkoutSummary(finalState, true);
   setLastWorkoutSummary(summary);
   addWorkoutToHistory(summary);
 
@@ -39,7 +39,8 @@ export function initializeWorkout(plannedExercises) {
     currentSet: 1,
     currentRep: 1,
     executionMode: firstExercise.execution_mode || 'tempo_guided',
-    startTime: Date.now()
+    startTime: Date.now(),
+    setsData: []
   };
   updateState(initialState);
   document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
@@ -115,29 +116,39 @@ export function incrementManualRep() {
     }
 }
 
-function createWorkoutSummary(finalState) {
+function createWorkoutSummary(finalState, isNaturalCompletion = false) {
     const totalTime = Date.now() - finalState.startTime;
-    let totalSets = 0;
     
-    const exercises = finalState.exerciseQueue.map((exercise, index) => {
-        const setsCompleted = index < finalState.currentExerciseIndex
-            ? exercise.defaultSets
-            : (index === finalState.currentExerciseIndex ? Math.max(0, finalState.currentSet - 1) : 0);
-        totalSets += setsCompleted;
-        return { ...exercise, setsCompleted };
+    const exercisesWithDetails = finalState.exerciseQueue.map((exercise, index) => {
+        const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+        
+        let setsCompleted = setsForThisExercise.length;
+
+        // Correzione per l'ultimo esercizio completato naturalmente
+        if (isNaturalCompletion && index === finalState.currentExerciseIndex) {
+            setsCompleted = exercise.defaultSets;
+        }
+
+        return { 
+            ...exercise, 
+            setsCompleted: setsCompleted,
+            setsData: setsForThisExercise
+        };
     });
+
+    const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
 
     return {
         date: toISODateString(new Date(finalState.startTime)),
         totalTime,
         totalSets,
-        exercises
+        exercises: exercisesWithDetails
     };
 }
 
 export function endWorkout() {
   const finalState = getState();
-  const summary = createWorkoutSummary(finalState);
+  const summary = createWorkoutSummary(finalState, false);
   setLastWorkoutSummary(summary);
   addWorkoutToHistory(summary);
 

@@ -12,7 +12,8 @@ const initialWorkoutState = {
   phaseTimeElapsed: 0,
   restTimeRemaining: 0,
   setTimeRemaining: 0,
-  startTime: 0
+  startTime: 0,
+  setsData: [] // Array to store data for each completed set
 };
 
 let workoutState = { ...initialWorkoutState };
