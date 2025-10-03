@@ -1,6 +1,5 @@
 import { getWorkoutState, updateState } from './state.js';
 import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
-import { endWorkout } from '../trainer.js';
 
 export function advanceToNextSet() {
   const state = getWorkoutState();
@@ -26,7 +25,7 @@ export function advanceToNextExercise() {
   const newIndex = state.currentExerciseIndex + 1;
 
   if (newIndex >= state.exerciseQueue.length) {
-    endWorkout();
+    updateState({ status: 'finished' });
   } else {
     updateState({
       currentExerciseIndex: newIndex,

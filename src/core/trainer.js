@@ -1,13 +1,11 @@
-import { setView } from './state.js';
+import { setView } from '../state.js';
 import { log } from '../utils/logger.js';
-import { getWorkoutState, resetState, updateState } from './trainer/state.js';
+import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
-import { advanceToNextExercise } from './trainer/machine.js';
 import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
 
-export function getWorkoutState() {
-  return getWorkoutState();
-}
+// Re-export to maintain the public API
+export { getState as getWorkoutState };
 
 export function resetWorkoutState() {
   log('Trainer', 'Resetting workout state.');
@@ -31,7 +29,7 @@ export function initializeWorkout(plannedExercises) {
 }
 
 export function startWorkout() {
-  const state = getWorkoutState();
+  const state = getState();
   log('Trainer', 'Attempting to start workout. Current status:', state.status);
   if (state.status === 'idle') {
     const executionQueue = buildExecutionQueueForCurrentSet();
@@ -43,13 +41,13 @@ export function startWorkout() {
       currentRep: 1,
     });
     startAnimation();
-    log('Trainer', 'Workout started. New status:', getWorkoutState().status);
+    log('Trainer', 'Workout started. New status:', getState().status);
   }
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
 export function pauseWorkout() {
-  const state = getWorkoutState();
+  const state = getState();
   if (state.status === 'running' || state.status === 'resting') {
     updateState({
       prePauseStatus: state.status,
@@ -61,7 +59,7 @@ export function pauseWorkout() {
 }
 
 export function resumeWorkout() {
-  const state = getWorkoutState();
+  const state = getState();
   if (state.status === 'paused') {
     updateState({
       status: state.prePauseStatus,

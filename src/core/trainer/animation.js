@@ -1,5 +1,6 @@
 import { getWorkoutState, updateState } from './state.js';
 import { advanceToNextSet } from './machine.js';
+import { setView } from '../state.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
@@ -12,6 +13,12 @@ function tick(timestamp) {
   lastTickTimestamp = timestamp;
 
   const state = getWorkoutState();
+
+  if (state.status === 'finished') {
+    stopAnimation();
+    setView('planner');
+    return;
+  }
 
   if (state.status === 'running') {
     const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
@@ -48,8 +55,7 @@ function tick(timestamp) {
   
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
   
-  const newState = getWorkoutState();
-  if (newState.status !== 'paused' && newState.status !== 'idle' && newState.status !== 'finished') {
+  if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
     animationFrameId = requestAnimationFrame(tick);
   }
 }
