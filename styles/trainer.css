@@ -37,12 +37,12 @@
     margin-bottom: 1rem;
 }
 
-.current-exercise-name {
+#current-exercise-name {
     font-size: 2rem;
     font-weight: bold;
 }
 
-.current-exercise-details {
+#current-exercise-details {
     font-size: 1.25rem;
     color: var(--text-color-muted);
     margin-bottom: 0.5rem;
@@ -65,7 +65,7 @@
 }
 
 .timer-ring-display {
-    font-size: 3rem;
+    font-size: 2.5rem;
     font-weight: bold;
     fill: var(--text-color);
     text-transform: uppercase;
@@ -85,6 +85,7 @@
     stroke-linecap: round;
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
+    transition: stroke-dashoffset 0.1s linear;
 }
 
 @keyframes flash {

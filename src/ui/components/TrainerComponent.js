@@ -1,6 +1,7 @@
 import { startWorkout, pauseWorkout, resumeWorkout, endWorkout } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
+import { UI_TEXT } from '../../utils/constants.js';
 
 const RING_RADIUS = 80;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -14,6 +15,7 @@ export class TrainerComponent {
             exerciseDetails: this.container.querySelector('#current-exercise-details'),
             repDisplay: this.container.querySelector('#current-rep-display'),
             upcomingList: this.container.querySelector('#upcoming-exercises-list'),
+            upcomingTitle: this.container.querySelector('.upcoming-exercises-container h4'),
             
             btnStart: this.container.querySelector('#trainer-start-btn'),
             btnPause: this.container.querySelector('#trainer-pause-btn'),
@@ -30,6 +32,7 @@ export class TrainerComponent {
     mount() {
         this.createTimerRing();
         this.container.addEventListener('click', this.handleControls.bind(this));
+        this.elements.upcomingTitle.textContent = UI_TEXT.TRAINER_UPCOMING_LABEL;
     }
 
     destroy() {
@@ -117,7 +120,7 @@ export class TrainerComponent {
         const currentExercise = exerciseQueue[currentExerciseIndex];
         this.elements.exerciseName.textContent = currentExercise.name;
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-        this.elements.repDisplay.textContent = (status === 'running') ? `Rip. ${state.currentRep}` : '';
+        this.elements.repDisplay.textContent = (status === 'running') ? `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}` : '';
 
         this.elements.upcomingList.innerHTML = '';
         exerciseQueue.slice(currentExerciseIndex + 1).forEach(ex => {
@@ -164,14 +167,15 @@ export class TrainerComponent {
 
     renderRest(state) {
         const { restTimeRemaining } = state;
-        const secondsRemaining = Math.ceil(restTimeRemaining / 1000);
-        this.ringText.textContent = secondsRemaining;
+        this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
         this.ringText.classList.remove('flashing');
-        this.updateTimerRing((restTimeRemaining / (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000)) * 100);
+        const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
+        const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
+        this.updateTimerRing(progressPercent);
     }
     
-    renderPaused(state) {
-      this.ringText.textContent = 'PAUSA';
+    renderPaused() {
+      this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
       this.ringText.classList.remove('flashing');
     }
 

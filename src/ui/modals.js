@@ -4,6 +4,7 @@ import { showNotification } from './notifications.js';
 import { UI_TEXT, MEAL_TYPES, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { renderIcon } from './icons.js';
 import { log } from '../utils/logger.js';
+import { formatIngredients } from '../utils/formatters.js';
 
 let currentEditingDayISO = null;
 let sortableInstance = null;
@@ -20,22 +21,6 @@ function getRecipeButtonHTML(meal, state) {
             </button>`;
   }
   return '';
-}
-
-function formatIngredients(meal) {
-    if (!meal.ingredienti || !Array.isArray(meal.ingredienti)) return '';
-    
-    const ingredientsList = meal.ingredienti.map(item => {
-        let quantity = '';
-        if (item.quantita_g) quantity = `${item.quantita_g}g`;
-        else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
-        else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
-        else if (item.quantita_pezzi) quantity = `x${item.quantita_pezzi}`;
-        
-        return `${item.id.replace(/_/g, ' ')} ${quantity}`.trim();
-    }).join(', ');
-    
-    return `<p>${ingredientsList}</p>`;
 }
 
 function formatExerciseDetails(exercise) {
@@ -154,8 +139,10 @@ export function openExerciseEditorModal(slotId, instanceId) {
 
   if (!exercise) return;
 
-  modal.querySelector('#exercise-editor-title').textContent = `Modifica: ${exercise.name}`;
+  modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
   modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+  document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
+  
   form.elements.sets.value = exercise.defaultSets;
   form.elements.rest.value = exercise.defaultRest;
 
