@@ -1,20 +1,21 @@
-commit_message: "feat(trainer): Implementa modalità di esecuzione multiple per gli esercizi"
+commit_message: "fix(trainer): Ripristina UI unificata con ring e corregge bug di transizione"
 rationale: |
-  Questo commit introduce una funzionalità architetturale chiave come descritto in `docs/02_ARCHITECTURE.md`: le modalità di esecuzione multiple per gli esercizi nel Trainer.
+  Questo commit risolve due problemi critici introdotti nella precedente implementazione delle modalità di allenamento: un bug di stato che causava la visualizzazione di `NaN:NaN` e una regressione della UI che frammentava l'esperienza utente.
 
-  Sono state implementate tre modalità distinte:
-  1.  `tempo_guided`: La modalità esistente, basata su un ciclo di tempo guidato per ogni ripetizione.
-  2.  `static_hold`: Una nuova modalità per esercizi isometrici (es. Plank), che visualizza un timer centrale con un conto alla rovescia per la durata della serie.
-  3.  `manual_reps`: Una nuova modalità per serie a sfinimento, che mostra un contatore e un pulsante per permettere all'utente di registrare manualmente ogni ripetizione completata.
+  **Correzione del Bug di Transizione (`NaN:NaN`)**:
+  - Il problema era causato da una pulizia incompleta dello stato durante il passaggio da un esercizio all'altro.
+  - È stata modificata la funzione `advanceToNextExercise` in `src/core/trainer/machine.js` per eseguire una reinizializzazione completa e robusta dello stato. Ora, prima di passare all'esercizio successivo, vengono resettate tutte le variabili specifiche delle modalità precedenti (`setTimeRemaining`, `manualRepCount`, `executionQueue`, etc.) e viene impostata correttamente la `executionMode` del nuovo esercizio. Questo garantisce che ogni esercizio parta da uno stato pulito, eliminando il bug.
 
-  Per supportare ciò, sono state apportate le seguenti modifiche:
-  - **`templates/trainer.html`**: Aggiunti i nuovi elementi UI per le modalità `static_hold` e `manual_reps`.
-  - **`styles/trainer.css`**: Aggiunti gli stili per i nuovi elementi, garantendo un'integrazione visiva coerente.
-  - **`src/config/uiText.js`**: Inserite le nuove etichette testuali necessarie per l'interfaccia.
-  - **`src/core/trainer/state.js`**: Esteso lo stato del trainer per gestire le variabili specifiche delle nuove modalità (es. `setTimeRemaining`, `manualRepCount`).
-  - **`src/core/trainer/animation.js`**: Aggiornato il loop di animazione per gestire il countdown del timer in modalità `static_hold`.
-  - **`src/core/trainer.js`**: La logica principale del trainer è stata refattorizzata per essere polimorfica. Ora controlla la proprietà `execution_mode` dell'esercizio corrente e avvia/gestisce la logica e lo stato appropriati. È stata aggiunta una nuova funzione `incrementManualRep` per la modalità manuale.
-  - **`src/ui/components/TrainerComponent.js`**: Il componente UI è stato reso dinamico. Il metodo `render` ora mostra e nasconde i contenitori UI corretti (`mode-tempo-guided`, `mode-static-hold`, `mode-manual-reps`) in base alla modalità attiva e aggiorna i relativi display (timer, contatore, etc.).
+  **Ripristino della UI Unificata**:
+  - In risposta al feedback dell'utente, è stata abbandonata l'architettura a tre interfacce separate. L'approccio è stato refattorizzato per mantenere il "timer ring" come elemento visivo centrale e coerente per tutte le modalità di esecuzione.
+  - **`templates/trainer.html`**: I contenitori specifici per le modalità `static_hold` e `manual_reps` sono stati rimossi. Ora esiste un unico contenitore principale per il trainer che ospita sempre il ring.
+  - **`styles/trainer.css`**: Gli stili sono stati aggiornati per permettere al testo all'interno del ring di adattarsi dinamicamente in termini di dimensione e formato, a seconda della modalità attiva.
+  - **`src/ui/components/TrainerComponent.js`**: Il componente è stato profondamente refattorizzato. Invece di alternare la visibilità di blocchi HTML, ora modifica dinamicamente il contenuto del testo SVG del ring e l'avanzamento del suo bordo per riflettere lo stato corrente:
+    - `tempo_guided`: Mostra il nome della fase e il progresso della fase.
+    - `static_hold`: Mostra il tempo rimanente (`mm:ss`) e il progresso totale della serie.
+    - `manual_reps`: Mostra il conteggio delle ripetizioni e il progresso verso l'obiettivo.
+
+  Questo intervento ripristina la coerenza visiva, migliora l'esperienza utente e rende la logica di stato del trainer più stabile e prevedibile.
 patches:
   - file: templates/trainer.html
     content: |
@@ -31,25 +32,12 @@ patches:
                   <p id="current-rep-display"></p>
                   <div id="upcoming-exercise-display"></div>
               </div>
-
+      
               <div id="trainer-display-modes">
-                  <div id="mode-tempo-guided" class="hidden">
-                      <div id="timer-ring-container" class="timer-ring-container">
-                          </div>
-                  </div>
-                  <div id="mode-static-hold" class="hidden">
-                      <div class="static-timer-display">
-                          <span id="static-timer-time">00:00</span>
-                      </div>
-                  </div>
-                  <div id="mode-manual-reps" class="hidden">
-                      <div class="manual-rep-counter">
-                          <span id="manual-rep-count">0</span>
-                          <span id="manual-rep-label"></span>
-                      </div>
+                  <div id="timer-ring-container" class="timer-ring-container">
                   </div>
               </div>
-
+      
               <div id="trainer-main-controls" class="trainer-controls">
                   <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
                   <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
@@ -58,338 +46,54 @@ patches:
               </div>
           </div>
       </div>
-  - file: src/config/uiText.js
+  - file: src/core/trainer/machine.js
     content: |
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_PROGRESS', text: 'Progressi' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
-        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
-        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
-        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
-        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
-        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
-        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
-        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
-        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
-        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
-        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
-        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
-        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
-        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
-        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
-        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
-        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
-        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
-        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
-        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
-        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
-        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
-        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
-        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
-        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
-        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
-        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
-        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
-        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
-        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
-        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
-        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
-        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
-        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' }
-      ];
+      import { getWorkoutState, updateState, resetState } from './state.js';
+      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
 
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
-  - file: src/core/trainer/state.js
-    content: |
-      const initialWorkoutState = {
-        exerciseQueue: [],
-        currentExerciseIndex: -1,
-        status: 'idle', // idle, running, paused, resting, finished
-        executionMode: 'tempo_guided', // tempo_guided, static_hold, manual_reps
-        prePauseStatus: '',
-        currentSet: 0,
-        currentRep: 0,
-        manualRepCount: 0,
-        executionQueue: [],
-        currentPhaseIndex: -1,
-        phaseTimeElapsed: 0,
-        restTimeRemaining: 0,
-        setTimeRemaining: 0
-      };
-
-      let workoutState = { ...initialWorkoutState };
-
-      export function getWorkoutState() {
-        return workoutState;
-      }
-
-      export function updateState(newState) {
-        workoutState = { ...workoutState, ...newState };
-      }
-
-      export function resetState() {
-        workoutState = { ...initialWorkoutState };
-      }
-  - file: src/core/trainer.js
-    content: |
-      import { setView } from './state.js';
-      import { log } from '../utils/logger.js';
-      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
-      import { startAnimation, stopAnimation } from './trainer/animation.js';
-      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
-      import { advanceToNextSet } from './trainer/machine.js';
-
-      export { getState as getWorkoutState };
-
-      export function resetWorkoutState() {
-        log('Trainer', 'Resetting workout state.');
-        stopAnimation();
-        resetState();
-      }
-
-      export function initializeWorkout(plannedExercises) {
-        if (!plannedExercises || plannedExercises.length === 0) {
-          return;
-        }
-        resetWorkoutState();
-        const firstExercise = plannedExercises[0];
-        const initialState = {
-          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
-          currentExerciseIndex: 0,
-          currentSet: 1,
-          currentRep: 1,
-          executionMode: firstExercise.execution_mode || 'tempo_guided',
-        };
-        updateState(initialState);
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-
-      export function startWorkout() {
-        const state = getState();
-        log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
-        if (state.status !== 'idle') return;
-
-        let startState = { status: 'running' };
-
-        if (state.executionMode === 'tempo_guided') {
-            startState.executionQueue = buildExecutionQueueForCurrentSet();
-            startState.currentPhaseIndex = 0;
-            startState.phaseTimeElapsed = 0;
-            startState.currentRep = 1;
-        } else if (state.executionMode === 'static_hold') {
-            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-        } else if (state.executionMode === 'manual_reps') {
-            startState.manualRepCount = 0;
-        }
-        
-        updateState(startState);
-        startAnimation();
-        log('Trainer', 'Workout started. New state:', getState());
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-
-      export function pauseWorkout() {
-        const state = getState();
-        if (state.status === 'running' || state.status === 'resting') {
-          updateState({
-            prePauseStatus: state.status,
-            status: 'paused',
-          });
-          stopAnimation();
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-      }
-
-      export function resumeWorkout() {
-        const state = getState();
-        if (state.status === 'paused') {
-          updateState({
-            status: state.prePauseStatus,
-            prePauseStatus: '',
-          });
-          startAnimation();
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-      }
-
-      export function incrementManualRep() {
-          const state = getState();
-          if (state.status === 'running' && state.executionMode === 'manual_reps') {
-              const newRepCount = state.manualRepCount + 1;
-              updateState({ manualRepCount: newRepCount });
-
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              const targetReps = currentExercise.defaultReps;
-
-              if (targetReps && newRepCount >= targetReps) {
-                  const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-                  updateState({
-                    status: 'resting',
-                    restTimeRemaining: currentExercise.defaultRest * 1000,
-                  });
-              }
-              document.dispatchEvent(new CustomEvent('workoutStateChange'));
-          }
-      }
-
-      export function endWorkout() {
-        updateState({ status: 'finished' });
-        stopAnimation();
-        setView('planner');
-      }
-  - file: src/core/trainer/animation.js
-    content: |
-      import { getWorkoutState, updateState } from './state.js';
-      import { advanceToNextSet } from './machine.js';
-      import { setView } from '../state.js';
-
-      let animationFrameId = null;
-      let lastTickTimestamp = 0;
-
-      function tick(timestamp) {
-        if (lastTickTimestamp === 0) {
-          lastTickTimestamp = timestamp;
-        }
-        const deltaTime = timestamp - lastTickTimestamp;
-        lastTickTimestamp = timestamp;
-
+      export function advanceToNextSet() {
         const state = getWorkoutState();
+        const newSet = state.currentSet + 1;
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
 
-        if (state.status === 'finished') {
-          stopAnimation();
-          setView('planner');
-          return;
-        }
-
-        if (state.status === 'running') {
-            if (state.executionMode === 'tempo_guided') {
-                const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-                const currentPhase = state.executionQueue[state.currentPhaseIndex];
-
-                if (newPhaseTimeElapsed >= currentPhase.duration) {
-                  const newPhaseIndex = state.currentPhaseIndex + 1;
-                  const nextPhase = state.executionQueue[newPhaseIndex];
-
-                  if (nextPhase) {
-                    updateState({
-                      currentPhaseIndex: newPhaseIndex,
-                      phaseTimeElapsed: 0,
-                      currentRep: nextPhase.rep,
-                    });
-                  } else {
-                    const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-                    updateState({
-                      status: 'resting',
-                      restTimeRemaining: currentExercise.defaultRest * 1000,
-                    });
-                  }
-                } else {
-                  updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-                }
-            } else if (state.executionMode === 'static_hold') {
-                const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
-                if (newSetTimeRemaining <= 0) {
-                    const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-                    updateState({
-                      status: 'resting',
-                      restTimeRemaining: currentExercise.defaultRest * 1000,
-                    });
-                } else {
-                    updateState({ setTimeRemaining: newSetTimeRemaining });
-                }
-            }
-        } else if (state.status === 'resting') {
-          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
-          if (newRestTimeRemaining <= 0) {
-            advanceToNextSet();
-          } else {
-            updateState({ restTimeRemaining: newRestTimeRemaining });
+        if (newSet > currentExercise.defaultSets) {
+          advanceToNextExercise();
+        } else {
+          let nextState = {
+            status: 'running',
+            currentSet: newSet,
+            phaseTimeElapsed: 0,
+            currentRep: 1,
+            manualRepCount: 0,
+          };
+          if (state.executionMode === 'tempo_guided') {
+            nextState.executionQueue = buildExecutionQueueForCurrentSet();
+            nextState.currentPhaseIndex = 0;
+          } else if (state.executionMode === 'static_hold') {
+            nextState.setTimeRemaining = currentExercise.defaultDuration * 1000;
           }
-        }
-        
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        
-        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
-          animationFrameId = requestAnimationFrame(tick);
+          updateState(nextState);
         }
       }
 
-      export function startAnimation() {
-        if (animationFrameId) return;
-        lastTickTimestamp = 0;
-        animationFrameId = requestAnimationFrame(tick);
-      }
+      export function advanceToNextExercise() {
+        const state = getWorkoutState();
+        const newIndex = state.currentExerciseIndex + 1;
 
-      export function stopAnimation() {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
+        if (newIndex >= state.exerciseQueue.length) {
+          updateState({ status: 'finished' });
+        } else {
+          const nextExercise = state.exerciseQueue[newIndex];
+          // Full state reset to defaults, then apply next exercise's info
+          const currentState = getWorkoutState(); // get current queue
+          resetState(); // Reset to initial state
+          updateState({
+            exerciseQueue: currentState.exerciseQueue, // Restore queue
+            currentExerciseIndex: newIndex,
+            status: 'idle',
+            currentSet: 1,
+            executionMode: nextExercise.execution_mode || 'tempo_guided',
+          });
         }
       }
   - file: src/ui/components/TrainerComponent.js
@@ -417,15 +121,7 @@ patches:
                   btnResume: this.container.querySelector('#trainer-resume-btn'),
                   btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
 
-                  modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
                   ringContainer: this.container.querySelector('#timer-ring-container'),
-                  
-                  modeStaticContainer: this.container.querySelector('#mode-static-hold'),
-                  staticTimerTime: this.container.querySelector('#static-timer-time'),
-
-                  modeManualContainer: this.container.querySelector('#mode-manual-reps'),
-                  manualRepCount: this.container.querySelector('#manual-rep-count'),
-                  manualRepLabel: this.container.querySelector('#manual-rep-label'),
               };
 
               this.ringProgress = null;
@@ -436,7 +132,6 @@ patches:
               this.createTimerRing();
               this.container.addEventListener('click', this.handleControls.bind(this));
               this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
-              this.elements.manualRepLabel.textContent = UI_TEXT.TRAINER_MANUAL_REPS_LABEL;
           }
 
           destroy() {
@@ -510,8 +205,16 @@ patches:
               const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
               this.ringProgress.style.strokeDashoffset = offset;
           }
+          
+          formatTime(ms) {
+              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+              return `${minutes}:${seconds}`;
+          }
 
           render(state) {
+              if (!this.ringText) return; // Guard against rendering before mount
               const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
 
               if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
@@ -523,6 +226,8 @@ patches:
                   this.elements.btnPause.classList.add('hidden');
                   this.elements.btnResume.classList.add('hidden');
                   this.elements.btnManualRep.classList.add('hidden');
+                  this.ringText.textContent = '';
+                  this.updateTimerRing(0);
                   return;
               };
 
@@ -549,58 +254,20 @@ patches:
               this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
               this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
 
-              this.elements.modeTempoContainer.classList.toggle('hidden', executionMode !== 'tempo_guided');
-              this.elements.modeStaticContainer.classList.toggle('hidden', executionMode !== 'static_hold');
-              this.elements.modeManualContainer.classList.toggle('hidden', executionMode !== 'manual_reps');
-              
-              if (executionMode === 'tempo_guided') {
-                  this.renderTempoGuided(state);
-              } else if (executionMode === 'static_hold') {
-                  this.renderStaticHold(state);
-              } else if (executionMode === 'manual_reps') {
-                  this.renderManualReps(state);
-              }
-          }
-          
-          formatTime(ms) {
-              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-              return `${minutes}:${seconds}`;
-          }
-
-          renderTempoGuided(state) {
-              if (!this.ringText) { return; }
-              const { status } = state;
-              if (status === 'running') this.renderPhase(state);
-              else if (status === 'resting') this.renderRest(state);
-              else if (status === 'paused') this.renderPaused(state);
-              else if (status === 'idle') {
+              // --- Main Render Logic ---
+              if (status === 'running') {
+                  this.ringText.classList.remove('flashing');
+                  if (executionMode === 'tempo_guided') this.renderPhase(state);
+                  else if (executionMode === 'static_hold') this.renderStaticHold(state);
+                  else if (executionMode === 'manual_reps') this.renderManualReps(state);
+              } else if (status === 'resting') {
+                  this.renderRest(state);
+              } else if (status === 'paused') {
+                  this.renderPaused(state);
+              } else if (status === 'idle') {
                   this.ringText.textContent = '';
                   this.ringText.classList.remove('flashing');
                   this.updateTimerRing(0);
-              }
-          }
-          
-          renderStaticHold(state) {
-              const { status, setTimeRemaining } = state;
-              if (status === 'running') {
-                  this.elements.staticTimerTime.textContent = this.formatTime(setTimeRemaining);
-              } else if (status === 'resting') {
-                  this.elements.staticTimerTime.textContent = this.formatTime(state.restTimeRemaining);
-              } else if (status === 'paused') {
-                  this.elements.staticTimerTime.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-              } else {
-                  this.elements.staticTimerTime.textContent = this.formatTime(0);
-              }
-          }
-          
-          renderManualReps(state) {
-              const { status, manualRepCount } = state;
-              if (status === 'running') {
-                  this.elements.manualRepCount.textContent = manualRepCount;
-              } else {
-                  this.elements.manualRepCount.textContent = '0';
               }
           }
 
@@ -614,6 +281,7 @@ patches:
 
               this.ringText.textContent = phaseNameDisplay;
               this.ringText.classList.toggle('flashing', isPrePhase);
+              this.ringText.classList.remove('is-timer', 'is-rep-count');
 
               if (isPrePhase) {
                   this.updateTimerRing(100);
@@ -623,26 +291,49 @@ patches:
               }
           }
 
-          renderRest(state) {
-              const { restTimeRemaining, executionMode } = state;
-              
-              if (executionMode === 'tempo_guided') {
-                  this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-                  this.ringText.classList.remove('flashing');
-                  const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-                  const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-                  this.updateTimerRing(progressPercent);
-              } else if (executionMode === 'static_hold') {
-                  this.elements.staticTimerTime.textContent = this.formatTime(restTimeRemaining);
+          renderStaticHold(state) {
+              const { setTimeRemaining } = state;
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const totalDuration = currentExercise.defaultDuration * 1000;
+              const progressPercent = (totalDuration > 0) ? ((totalDuration - setTimeRemaining) / totalDuration) * 100 : 100;
+
+              this.ringText.textContent = this.formatTime(setTimeRemaining);
+              this.ringText.classList.add('is-timer');
+              this.ringText.classList.remove('is-rep-count');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderManualReps(state) {
+              const { manualRepCount } = state;
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+              let progressPercent = 0;
+              if (targetReps > 0) {
+                  progressPercent = (manualRepCount / targetReps) * 100;
               }
+
+              this.ringText.textContent = manualRepCount;
+              this.ringText.classList.add('is-rep-count');
+              this.ringText.classList.remove('is-timer');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderRest(state) {
+              const { restTimeRemaining } = state;
+              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
+              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
+              
+              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
+              this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
+              this.updateTimerRing(progressPercent);
           }
           
-          renderPaused() {
-              const state = getWorkoutState();
-              if (state.executionMode === 'tempo_guided') {
-                this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-                this.ringText.classList.remove('flashing');
-              }
+          renderPaused(state) {
+              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+              this.ringText.classList.remove('flashing');
+              // Mantieni la classe di stile precedente per coerenza
+              if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
+              if(state.executionMode === 'manual_reps') this.ringText.classList.add('is-rep-count');
           }
 
           formatExerciseDetails(state) {
@@ -746,6 +437,7 @@ patches:
           justify-content: center;
           align-items: center;
           flex-grow: 1;
+          min-height: 280px;
       }
 
       .timer-ring-container {
@@ -764,6 +456,18 @@ patches:
           fill: var(--text-color);
           text-transform: uppercase;
           text-anchor: middle;
+          transition: font-size 0.2s ease;
+      }
+      
+      .timer-ring-display.is-timer {
+          font-size: 4rem;
+          font-family: 'Courier New', Courier, monospace;
+          text-transform: none;
+      }
+
+      .timer-ring-display.is-rep-count {
+          font-size: 6rem;
+          text-transform: none;
       }
 
       .timer-ring-bg {
@@ -792,30 +496,6 @@ patches:
         fill: var(--secondary-color);
       }
 
-      .static-timer-display {
-          font-size: 5rem;
-          font-weight: bold;
-          font-family: 'Courier New', Courier, monospace;
-      }
-      
-      .manual-rep-counter {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-      }
-
-      #manual-rep-count {
-          font-size: 6rem;
-          font-weight: bold;
-          line-height: 1;
-      }
-      
-      #manual-rep-label {
-          font-size: 1.5rem;
-          color: var(--text-color-muted);
-          text-transform: uppercase;
-      }
-
       .trainer-controls {
           display: flex;
           gap: 1rem;
@@ -832,4 +512,4 @@ patches:
           font-size: 1.25rem;
       }
 commands:
-  - "echo 'Modalità di esecuzione multiple implementate. Assicurarsi che il file esercizi.json contenga il campo opzionale \"execution_mode\" (es. \"static_hold\" o \"manual_reps\") per gli esercizi pertinenti.'"
+  - "echo 'Bug di transizione risolto e UI del trainer unificata. Ora tutte le modalità di allenamento utilizzano il ring centrale.'"

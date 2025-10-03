@@ -81,6 +81,7 @@
     justify-content: center;
     align-items: center;
     flex-grow: 1;
+    min-height: 280px;
 }
 
 .timer-ring-container {
@@ -99,6 +100,18 @@
     fill: var(--text-color);
     text-transform: uppercase;
     text-anchor: middle;
+    transition: font-size 0.2s ease;
+}
+
+.timer-ring-display.is-timer {
+    font-size: 4rem;
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: none;
+}
+
+.timer-ring-display.is-rep-count {
+    font-size: 6rem;
+    text-transform: none;
 }
 
 .timer-ring-bg {
@@ -125,30 +138,6 @@
 .flashing {
   animation: flash 1.4s infinite;
   fill: var(--secondary-color);
-}
-
-.static-timer-display {
-    font-size: 5rem;
-    font-weight: bold;
-    font-family: 'Courier New', Courier, monospace;
-}
-
-.manual-rep-counter {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-#manual-rep-count {
-    font-size: 6rem;
-    font-weight: bold;
-    line-height: 1;
-}
-
-#manual-rep-label {
-    font-size: 1.5rem;
-    color: var(--text-color-muted);
-    text-transform: uppercase;
 }
 
 .trainer-controls {

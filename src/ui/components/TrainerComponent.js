@@ -21,15 +21,7 @@ export class TrainerComponent {
             btnResume: this.container.querySelector('#trainer-resume-btn'),
             btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
 
-            modeTempoContainer: this.container.querySelector('#mode-tempo-guided'),
             ringContainer: this.container.querySelector('#timer-ring-container'),
-            
-            modeStaticContainer: this.container.querySelector('#mode-static-hold'),
-            staticTimerTime: this.container.querySelector('#static-timer-time'),
-
-            modeManualContainer: this.container.querySelector('#mode-manual-reps'),
-            manualRepCount: this.container.querySelector('#manual-rep-count'),
-            manualRepLabel: this.container.querySelector('#manual-rep-label'),
         };
 
         this.ringProgress = null;
@@ -40,7 +32,6 @@ export class TrainerComponent {
         this.createTimerRing();
         this.container.addEventListener('click', this.handleControls.bind(this));
         this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
-        this.elements.manualRepLabel.textContent = UI_TEXT.TRAINER_MANUAL_REPS_LABEL;
     }
 
     destroy() {
@@ -114,8 +105,16 @@ export class TrainerComponent {
         const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
         this.ringProgress.style.strokeDashoffset = offset;
     }
+    
+    formatTime(ms) {
+        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
 
     render(state) {
+        if (!this.ringText) return; // Guard against rendering before mount
         const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
 
         if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
@@ -127,6 +126,8 @@ export class TrainerComponent {
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
             this.elements.btnManualRep.classList.add('hidden');
+            this.ringText.textContent = '';
+            this.updateTimerRing(0);
             return;
         };
 
@@ -153,58 +154,20 @@ export class TrainerComponent {
         this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
         this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
 
-        this.elements.modeTempoContainer.classList.toggle('hidden', executionMode !== 'tempo_guided');
-        this.elements.modeStaticContainer.classList.toggle('hidden', executionMode !== 'static_hold');
-        this.elements.modeManualContainer.classList.toggle('hidden', executionMode !== 'manual_reps');
-        
-        if (executionMode === 'tempo_guided') {
-            this.renderTempoGuided(state);
-        } else if (executionMode === 'static_hold') {
-            this.renderStaticHold(state);
-        } else if (executionMode === 'manual_reps') {
-            this.renderManualReps(state);
-        }
-    }
-    
-    formatTime(ms) {
-        const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-        const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-        const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-        return `${minutes}:${seconds}`;
-    }
-
-    renderTempoGuided(state) {
-        if (!this.ringText) { return; }
-        const { status } = state;
-        if (status === 'running') this.renderPhase(state);
-        else if (status === 'resting') this.renderRest(state);
-        else if (status === 'paused') this.renderPaused(state);
-        else if (status === 'idle') {
+        // --- Main Render Logic ---
+        if (status === 'running') {
+            this.ringText.classList.remove('flashing');
+            if (executionMode === 'tempo_guided') this.renderPhase(state);
+            else if (executionMode === 'static_hold') this.renderStaticHold(state);
+            else if (executionMode === 'manual_reps') this.renderManualReps(state);
+        } else if (status === 'resting') {
+            this.renderRest(state);
+        } else if (status === 'paused') {
+            this.renderPaused(state);
+        } else if (status === 'idle') {
             this.ringText.textContent = '';
             this.ringText.classList.remove('flashing');
             this.updateTimerRing(0);
-        }
-    }
-    
-    renderStaticHold(state) {
-        const { status, setTimeRemaining } = state;
-        if (status === 'running') {
-            this.elements.staticTimerTime.textContent = this.formatTime(setTimeRemaining);
-        } else if (status === 'resting') {
-            this.elements.staticTimerTime.textContent = this.formatTime(state.restTimeRemaining);
-        } else if (status === 'paused') {
-            this.elements.staticTimerTime.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-        } else {
-            this.elements.staticTimerTime.textContent = this.formatTime(0);
-        }
-    }
-    
-    renderManualReps(state) {
-        const { status, manualRepCount } = state;
-        if (status === 'running') {
-            this.elements.manualRepCount.textContent = manualRepCount;
-        } else {
-            this.elements.manualRepCount.textContent = '0';
         }
     }
 
@@ -218,6 +181,7 @@ export class TrainerComponent {
 
         this.ringText.textContent = phaseNameDisplay;
         this.ringText.classList.toggle('flashing', isPrePhase);
+        this.ringText.classList.remove('is-timer', 'is-rep-count');
 
         if (isPrePhase) {
             this.updateTimerRing(100);
@@ -227,26 +191,49 @@ export class TrainerComponent {
         }
     }
 
-    renderRest(state) {
-        const { restTimeRemaining, executionMode } = state;
-        
-        if (executionMode === 'tempo_guided') {
-            this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-            this.ringText.classList.remove('flashing');
-            const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-            const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-            this.updateTimerRing(progressPercent);
-        } else if (executionMode === 'static_hold') {
-            this.elements.staticTimerTime.textContent = this.formatTime(restTimeRemaining);
+    renderStaticHold(state) {
+        const { setTimeRemaining } = state;
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const totalDuration = currentExercise.defaultDuration * 1000;
+        const progressPercent = (totalDuration > 0) ? ((totalDuration - setTimeRemaining) / totalDuration) * 100 : 100;
+
+        this.ringText.textContent = this.formatTime(setTimeRemaining);
+        this.ringText.classList.add('is-timer');
+        this.ringText.classList.remove('is-rep-count');
+        this.updateTimerRing(progressPercent);
+    }
+
+    renderManualReps(state) {
+        const { manualRepCount } = state;
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const targetReps = currentExercise.defaultReps;
+        let progressPercent = 0;
+        if (targetReps > 0) {
+            progressPercent = (manualRepCount / targetReps) * 100;
         }
+
+        this.ringText.textContent = manualRepCount;
+        this.ringText.classList.add('is-rep-count');
+        this.ringText.classList.remove('is-timer');
+        this.updateTimerRing(progressPercent);
+    }
+
+    renderRest(state) {
+        const { restTimeRemaining } = state;
+        const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
+        const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
+        
+        this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
+        this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
+        this.updateTimerRing(progressPercent);
     }
     
-    renderPaused() {
-        const state = getWorkoutState();
-        if (state.executionMode === 'tempo_guided') {
-          this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-          this.ringText.classList.remove('flashing');
-        }
+    renderPaused(state) {
+        this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+        this.ringText.classList.remove('flashing');
+        // Mantieni la classe di stile precedente per coerenza
+        if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
+        if(state.executionMode === 'manual_reps') this.ringText.classList.add('is-rep-count');
     }
 
     formatExerciseDetails(state) {
