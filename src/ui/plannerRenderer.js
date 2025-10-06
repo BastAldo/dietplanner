@@ -76,6 +76,58 @@ function formatDuration(ms) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function renderPlannerSummaryWidget(state, weekStart) {
+  const widgetContainer = document.getElementById('planner-summary-widget');
+  let totalCalories = 0;
+  let dayCount = 0;
+  let plannedWorkouts = 0;
+  let completedWorkouts = 0;
+
+  for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(weekStart);
+      dayDate.setDate(dayDate.getDate() + i);
+      const isoDate = toISODateString(dayDate);
+      
+      let dailyMin = 0;
+      let hasMeals = false;
+      MEAL_TYPES.forEach(type => {
+          const meal = state.weeklyPlan[`${isoDate}-${type}`];
+          if (meal) {
+              dailyMin += Number(meal.calories_min) || 0;
+              hasMeals = true;
+          }
+      });
+
+      if (hasMeals) {
+          totalCalories += dailyMin;
+          dayCount++;
+      }
+
+      if (state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`]) {
+          plannedWorkouts += state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`].length > 0 ? 1 : 0;
+      }
+      if (state.workoutHistory[isoDate]) {
+          completedWorkouts += state.workoutHistory[isoDate].length;
+      }
+  }
+  
+  const avgCalories = dayCount > 0 ? Math.round(totalCalories / dayCount) : 0;
+
+  widgetContainer.innerHTML = `
+      <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
+      <div class="planner-summary-stats">
+          <div class="planner-summary-stat">
+              <span class="stat-value">${avgCalories}</span>
+              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
+          </div>
+          <div class="planner-summary-stat">
+              <span class="stat-value">${completedWorkouts} / ${plannedWorkouts}</span>
+              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
+          </div>
+      </div>
+  `;
+}
+
 function renderCalendarView(state, weekStart) {
   const calendarGrid = document.getElementById('calendar-grid');
   const todayISO = toISODateString(new Date());
@@ -145,7 +197,7 @@ function renderLogView(state, weekStart) {
                   <span>/</span>
                   <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
                   <span>/</span>
-                  <span>Riposo: ${formatDuration(workout.totalRestTime)}</span>
+                  <span>Recupero: ${formatDuration(workout.totalRestTime)}</span>
                   </div>
                   ${workout.exercises.map(ex => `
                   <div class="log-workout-exercise">
@@ -189,6 +241,10 @@ export function renderPlannerPage(state) {
   const logView = document.getElementById('log-view');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');
   const viewLogBtn = document.getElementById('view-log-btn');
+
+  if (state.currentView === 'planner' || state.currentView === 'log') {
+      renderPlannerSummaryWidget(state, weekStart);
+  }
 
   if (state.currentView === 'planner') {
       calendarGrid.classList.remove('hidden');

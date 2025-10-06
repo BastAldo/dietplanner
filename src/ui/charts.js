@@ -4,6 +4,7 @@ import { UI_TEXT } from '../config/uiText.js';
 
 let plannerChartInstance = null;
 let biometricsChartInstance = null;
+let correlationChartInstance = null;
 let currentPlannerChartType = 'bar';
 
 const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -191,6 +192,78 @@ function renderBiometricsChart(state) {
   });
 }
 
+function renderCorrelationChart(state) {
+    const sortedBiometrics = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (sortedBiometrics.length < 2) return;
+
+    const labels = sortedBiometrics.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+    const weightData = sortedBiometrics.map(entry => entry.weight || null);
+
+    const calorieData = sortedBiometrics.map(entry => {
+        const isoDate = entry.date;
+        let dailyMin = 0;
+        MEAL_TYPES.forEach(type => {
+            const meal = state.weeklyPlan[`${isoDate}-${type}`];
+            if (meal) {
+                dailyMin += Number(meal.calories_min) || 0;
+            }
+        });
+        return dailyMin > 0 ? dailyMin : null;
+    });
+
+    const colors = getChartColors();
+    const ctx = document.getElementById('correlation-chart-canvas').getContext('2d');
+    correlationChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Peso (kg)',
+                    data: weightData,
+                    type: 'line',
+                    borderColor: colors.secondary,
+                    tension: 0.1,
+                    yAxisID: 'yWeight',
+                },
+                {
+                    label: 'Kcal Assunte',
+                    data: calorieData,
+                    backgroundColor: colors.primary + '80',
+                    yAxisID: 'yKcal',
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                yWeight: {
+                    type: 'linear',
+                    position: 'left',
+                    ticks: { color: colors.secondary },
+                    grid: { color: colors.borderColor }
+                },
+                yKcal: {
+                    type: 'linear',
+                    position: 'right',
+                    ticks: { color: colors.primary },
+                    grid: { display: false }
+                },
+                x: {
+                    ticks: { color: colors.textColor },
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: colors.textColor }
+                }
+            }
+        }
+    });
+}
+
 function handleChartTypeChange(event, state) {
     const type = event.target.dataset.type;
     if (type && type !== currentPlannerChartType) {
@@ -206,15 +279,15 @@ function handleChartTypeChange(event, state) {
 }
 
 export function renderCharts(state) {
-    if (plannerChartInstance) {
-        plannerChartInstance.destroy();
-    }
-    if (biometricsChartInstance) {
-        biometricsChartInstance.destroy();
-    }
+    if (plannerChartInstance) plannerChartInstance.destroy();
+    if (biometricsChartInstance) biometricsChartInstance.destroy();
+    if (correlationChartInstance) correlationChartInstance.destroy();
 
     renderPlannerChart(state);
     renderBiometricsChart(state);
+    renderCorrelationChart(state);
+    
+    document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
 
     const switcher = document.querySelector('.chart-type-switcher');
     const boundHandler = (e) => handleChartTypeChange(e, state);

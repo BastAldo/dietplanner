@@ -73,6 +73,7 @@ const UI_TEXT_CONFIG = [
   { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
   { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
   { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+  { id: 'CHARTS_CORRELATION_TITLE', text: 'Correlazione Peso e Calorie' },
   { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
   { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
   { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
@@ -108,10 +109,12 @@ const UI_TEXT_CONFIG = [
   { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
   { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
   { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
-  { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' },
-  { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo Esercizio' },
-  { id: 'DEBRIEFING_REST_TIME', text: 'Tempo Riposo' },
-  { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' }
+  { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
+  { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
+  { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
+  { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
+  { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
+  { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
