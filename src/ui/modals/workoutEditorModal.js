@@ -86,7 +86,6 @@ export function openWorkoutEditorModal(isoDate) {
           updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
           openWorkoutEditorModal(isoDate); // Refresh this modal
       } else if (btnEditExercise) {
-          modal.classList.add('modal-hidden');
           openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId), isoDate);
       }
   };
