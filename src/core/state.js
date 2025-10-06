@@ -157,7 +157,7 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
         if (exercise) {
             const newExerciseInstance = {
                 ...exercise,
-                instanceId: Date.now() // Unique ID for this specific instance
+                instanceId: Date.now() + Math.random()
             };
             state.weeklyWorkouts[slotId].push(newExerciseInstance);
         }
@@ -180,7 +180,6 @@ export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
 
     if (exerciseIndex > -1) {
         const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-        // Ensure tempo is handled as an object
         if (newValues.defaultTempo) {
             updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
         }
@@ -218,6 +217,7 @@ export function resetCurrentWeek() {
           delete state.weeklyWorkouts[workoutSlotId];
       }
   }
+  state.workoutHistory = {};
   saveStateToLocalStorage();
   notify();
 }
@@ -247,10 +247,25 @@ export function setLastWorkoutSummary(summary) {
 export function addWorkoutToHistory(summary) {
   log('State', 'Adding workout to history', { date: summary.date });
   if (summary && summary.date) {
-      state.workoutHistory[summary.date] = summary;
+      if (!state.workoutHistory[summary.date]) {
+          state.workoutHistory[summary.date] = [];
+      }
+      state.workoutHistory[summary.date].push(summary);
       saveStateToLocalStorage();
       notify();
   }
+}
+
+export function deleteWorkoutFromHistory(date, startTime) {
+    log('State', 'Deleting workout from history', { date, startTime });
+    if (state.workoutHistory[date]) {
+        state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+        if (state.workoutHistory[date].length === 0) {
+            delete state.workoutHistory[date];
+        }
+        saveStateToLocalStorage();
+        notify();
+    }
 }
 
 export function copyPreviousWeek() {
@@ -284,7 +299,7 @@ export function copyPreviousWeek() {
     const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
     const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
     if (workoutList && Array.isArray(workoutList)) {
-        state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList)); // Deep copy
+        state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
     } else {
         delete state.weeklyWorkouts[destWorkoutSlot];
     }

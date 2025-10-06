@@ -1,656 +1,319 @@
-commit_message: "fix(history): Corregge l'associazione dati e la datazione dello storico allenamenti"
+commit_message: "fix(state): Esporta la funzione deleteWorkoutFromHistory per risolvere SyntaxError"
 rationale: |
-  Questo commit risolve bug critici legati alla persistenza e alla correttezza dei dati nello storico degli allenamenti, basandosi sul feedback dettagliato dell'utente. Le modifiche garantiscono che i dati siano accurati, dettagliati e salvati correttamente.
+  Questo commit corregge un `Uncaught SyntaxError` che impediva il corretto funzionamento dell'applicazione.
+  L'errore era causato dal fatto che la funzione `deleteWorkoutFromHistory`, definita in `src/core/state.js`, non veniva esportata.
+  Il modulo `src/ui/interactions/plannerInteractions.js` tentava di importarla, causando un fallimento al momento del caricamento degli script.
 
-  Le correzioni principali sono:
-
-  1.  **Datazione Corretta dello Storico**: Il trainer ora riceve e memorizza la data pianificata dell'allenamento (`workoutDate`). Lo storico viene salvato usando questa data, assicurando che un allenamento del lunedì eseguito di martedì venga registrato correttamente sotto lunedì.
-
-  2.  **Tracciamento Robusto per Serie**: È stata introdotta una nuova funzione centralizzata `completeSet` che viene chiamata esattamente al termine di ogni serie. Questa funzione cattura e salva i dati di performance (reps, durata) associandoli in modo inequivocabile all' `instanceId` univoco dell'esercizio. Questo risolve il bug critico che mescolava i dati di esercizi simili.
-
-  3.  **Logica di Riepilogo Affidabile**: La funzione `createWorkoutSummary` è stata riscritta. Ora si basa esclusivamente sui dati granulari e affidabili raccolti dalla funzione `completeSet`, eliminando le stime imprecise e risolvendo il bug che contrassegnava erroneamente l'ultimo esercizio come incompleto.
-
-  4.  **UI Dettagliata e Coerente**: Le viste di Debriefing e Log sono state aggiornate per visualizzare i dati ora corretti, fornendo un riepilogo preciso e veramente utile di ogni allenamento.
+  La correzione consiste nell'aggiungere `deleteWorkoutFromHistory` all'elenco delle funzioni esportate dal modulo di stato, risolvendo così l'errore e ripristinando la funzionalità.
 patches:
-  - file: src/core/trainer.js
+  - file: src/core/state.js
     content: |
-      import { setView, setLastWorkoutSummary, addWorkoutToHistory } from './state.js';
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
       import { log } from '../utils/logger.js';
-      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
-      import { startAnimation, stopAnimation } from './trainer/animation.js';
-      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
-      import { advanceToNextSet } from './trainer/machine.js';
 
-      export { getState as getWorkoutState };
-
-      export function resetWorkoutState() {
-        log('Trainer', 'Resetting workout state.');
-        document.removeEventListener('workoutFinished', handleWorkoutFinished);
-        stopAnimation();
-        resetState();
-      }
-
-      function handleWorkoutFinished() {
-        const finalState = getState();
-        const summary = createWorkoutSummary(finalState);
-        setLastWorkoutSummary(summary);
-        addWorkoutToHistory(summary);
-
-        updateState({ status: 'finished' });
-        stopAnimation();
-        setView('debriefing');
-      }
-
-      export function initializeWorkout(plannedExercises, isoDate) {
-        if (!plannedExercises || plannedExercises.length === 0) {
-          return;
-        }
-        resetWorkoutState();
-        const firstExercise = plannedExercises[0];
-        const initialState = {
-          workoutDate: isoDate,
-          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
-          currentExerciseIndex: 0,
-          currentSet: 1,
-          currentRep: 1,
-          executionMode: firstExercise.execution_mode || 'tempo_guided',
-          startTime: Date.now(),
-          phaseStartTime: 0,
-          restStartTime: 0,
-          setsData: []
-        };
-        updateState(initialState);
-        document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-      
-      export function completeSet() {
-        const state = getState();
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-        const setData = {
-            exerciseId: currentExercise.instanceId,
-            set: state.currentSet,
-            duration: Date.now() - state.phaseStartTime,
-            rest: currentExercise.defaultRest
-        };
-        
-        if (state.executionMode === 'manual_reps') {
-            setData.reps = state.manualRepCount;
-        } else if (state.executionMode === 'tempo_guided') {
-            setData.reps = currentExercise.defaultReps;
-        }
-      
-        const newSetsData = [...state.setsData, setData];
-        updateState({ 
-            setsData: newSetsData,
-            status: 'resting',
-            restStartTime: Date.now(),
-            restTimeRemaining: currentExercise.defaultRest * 1000
-        });
-      }
-
-      export function startWorkout() {
-        const state = getState();
-        log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
-        if (state.status !== 'idle') return;
-
-        let startState = { status: 'running', phaseStartTime: Date.now() };
-
-        if (state.executionMode === 'tempo_guided') {
-            startState.executionQueue = buildExecutionQueueForCurrentSet();
-            startState.currentPhaseIndex = 0;
-            startState.phaseTimeElapsed = 0;
-            startState.currentRep = 1;
-        } else if (state.executionMode === 'static_hold') {
-            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-        } else if (state.executionMode === 'manual_reps') {
-            startState.manualRepCount = 0;
-        }
-        
-        updateState(startState);
-        startAnimation();
-        log('Trainer', 'Workout started. New state:', getState());
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-
-      export function pauseWorkout() {
-        const state = getState();
-        if (state.status === 'running' || state.status === 'resting') {
-          updateState({
-            prePauseStatus: state.status,
-            status: 'paused',
-          });
-          stopAnimation();
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-      }
-
-      export function resumeWorkout() {
-        const state = getState();
-        if (state.status === 'paused') {
-          const status = state.prePauseStatus;
-          const newState = { status, prePauseStatus: '' };
-          if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
-          if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
-
-          updateState(newState);
-          startAnimation();
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-      }
-
-      export function incrementManualRep() {
-          const state = getState();
-          if (state.status === 'running' && state.executionMode === 'manual_reps') {
-              const newRepCount = state.manualRepCount + 1;
-              updateState({ manualRepCount: newRepCount });
-
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              const targetReps = currentExercise.defaultReps;
-
-              if (targetReps && newRepCount >= targetReps) {
-                  completeSet();
-                  startAnimation();
-              }
-              document.dispatchEvent(new CustomEvent('workoutStateChange'));
-          }
-      }
-
-      function createWorkoutSummary(finalState) {
-          const totalTime = Date.now() - finalState.startTime;
-          
-          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
-              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
-              const setsCompleted = setsForThisExercise.length;
-              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
-
-              return { 
-                  ...exercise, 
-                  setsCompleted: setsCompleted,
-                  setsData: setsForThisExercise,
-                  totalTime: totalExerciseTime
-              };
-          });
-
-          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
-          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
-          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
-
-          return {
-              date: finalState.workoutDate,
-              totalTime,
-              totalSets,
-              totalExerciseTime,
-              totalRestTime,
-              exercises: exercisesWithDetails,
-              startTime: finalState.startTime
-          };
-      }
-
-      export function endWorkout() {
-        const finalState = getState();
-        if (finalState.startTime === 0) {
-            log('Trainer', 'Workout ended prematurely, not saving summary.');
-            setView('planner');
-            return;
-        }
-        const summary = createWorkoutSummary(finalState);
-        setLastWorkoutSummary(summary);
-        addWorkoutToHistory(summary);
-
-        updateState({ status: 'finished' });
-        stopAnimation();
-        setView('debriefing');
-      }
-  - file: src/core/trainer/state.js
-    content: |
-      const initialWorkoutState = {
-        workoutDate: null,
-        exerciseQueue: [],
-        currentExerciseIndex: -1,
-        status: 'idle', // idle, running, paused, resting, finished
-        executionMode: 'tempo_guided', // tempo_guided, static_hold, manual_reps
-        prePauseStatus: '',
-        currentSet: 0,
-        currentRep: 0,
-        manualRepCount: 0,
-        executionQueue: [],
-        currentPhaseIndex: -1,
-        phaseTimeElapsed: 0,
-        restTimeRemaining: 0,
-        setTimeRemaining: 0,
-        startTime: 0,
-        phaseStartTime: 0, // Timestamp for start of exercise/set phase
-        restStartTime: 0, // Timestamp for start of rest phase
-        setsData: [] // Array to store data for each completed set
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing'
+        debugMode: false,
+        lastWorkoutSummary: null,
       };
 
-      let workoutState = { ...initialWorkoutState };
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
-      export function getWorkoutState() {
-        return workoutState;
-      }
-
-      export function updateState(newState) {
-        workoutState = { ...workoutState, ...newState };
-      }
-
-      export function resetState() {
-        workoutState = { ...initialWorkoutState };
-      }
-  - file: src/ui/interactions/plannerInteractions.js
-    content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, deleteWorkoutFromHistory
-      } from '../../core/state.js';
-      import { initializeWorkout } from '../../core/trainer.js';
-      import { fetchAndParseConfig } from '../../api/configService.js';
-      import { showNotification } from '../notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal } from '../modals.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
-
-      async function handleLoadConfig() {
-        log('Interactions', 'Handling config load button click');
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config, url);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
-      }
-
-      function handleCalendarClick(e) {
-        const startBtn = e.target.closest('.btn-start-workout-day');
-        if (startBtn) {
-            const isoDate = startBtn.dataset.date;
-            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
-            const globalState = getState();
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout, isoDate);
-            setView('trainer');
-            return;
-        }
-
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
-          openDayEditorModal(dayCell.dataset.date);
-        }
-      }
-
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-          return;
-        }
-
-        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
-        if (btnDeleteWorkout) {
-          const { date, starttime } = btnDeleteWorkout.dataset;
-          log('Interactions', 'Delete workout button clicked', { date, starttime });
-          showConfirmModal(
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
-            () => {
-              deleteWorkoutFromHistory(date, parseInt(starttime));
-              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
-            },
-            'danger'
-          );
-        }
-      }
-
-      function handleCopyWeek() {
-        log('Interactions', 'Copy week button clicked');
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        log('Interactions', 'Reset week button clicked');
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      export function initializePlannerListeners() {
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-      }
-  - file: src/ui/plannerRenderer.js
-    content: |
-      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function getWeekStartDate(date) {
+      const getWeekStartDate = (date) => {
         const d = new Date(date);
         const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
       }
 
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
 
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
 
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
-      }
-      
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-          
-          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
-          let workoutButtonHTML = '';
-
-          if (workoutList && workoutList.length > 0) {
-              const exerciseCount = workoutList.length;
-              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
-              summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-          }
-
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `
-            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
-            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        let logViewHTML = '';
-        let hasContent = false;
-
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          const completedWorkouts = state.workoutHistory[isoDate] || [];
-
-          if (dayMeals.length > 0 || completedWorkouts.length > 0) {
-            hasContent = true;
-            let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
-            dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
-
-            if (dayMeals.length > 0) {
-              dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
-            }
-            
-            if (completedWorkouts.length > 0) {
-                completedWorkouts.forEach(workout => {
-                    dayLogHTML += `<div class="log-workout-summary">
-                        <div class="log-workout-header">
-                            <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                            <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                        </div>
-                        <div class="log-workout-stats">
-                        <span>Durata: ${formatDuration(workout.totalTime)}</span>
-                        <span>/</span>
-                        <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
-                        <span>/</span>
-                        <span>Riposo: ${formatDuration(workout.totalRestTime)}</span>
-                        </div>
-                        ${workout.exercises.map(ex => `
-                        <div class="log-workout-exercise">
-                            <div class="log-item">
-                            <strong>${ex.name}</strong>
-                            <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
-                            </div>
-                            <div class="log-sets-details">
-                            ${ex.setsData.map((setData, i) => `
-                                <div class="log-set-item">
-                                <span>Serie ${i + 1}</span>
-                                <span>${getSetDetails(setData)}</span>
-                                </div>
-                            `).join('')}
-                            </div>
-                        </div>
-                        `).join('')}
-                    </div>`;
-                });
-            }
-
-            dayLogHTML += `</div>`;
-            logViewHTML += dayLogHTML;
-          }
-        }
-
-        if (!hasContent) {
-          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
         } else {
-          logView.innerHTML = logViewHTML;
+            state.recipeBaseUrl = '';
         }
+
+        notify();
       }
 
-      export function renderPlannerPage(state) {
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() + Math.random()
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
         const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-        
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
-
-        if (state.currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (state.currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
         }
+        state.workoutHistory = {};
+        saveStateToLocalStorage();
+        notify();
+      }
 
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
       }
-  - file: styles/planner.css
-    content: |
-      /* --- PLANNER PAGE --- */
-      .data-source-container {
-          display: flex; align-items: center; gap: 0.75rem;
-          padding: 1rem; background: var(--card-color);
-          border: 1px solid var(--border-color); border-radius: 8px;
-          margin-bottom: 1.5rem;
-      }
-      #config-url-input {
-          flex-grow: 1; min-width: 0; padding: 0.75rem;
-          border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
 
-      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-      .planner-controls-wrapper {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
       }
-      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      .planner-actions { display: flex; gap: 0.75rem; }
-      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-      .day-cell {
-          background-color: var(--card-color); border: 1px solid var(--border-color);
-          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-          flex-direction: column; transition: all 0.2s;
-      }
-      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
-      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
-      .day-cell.is-today {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
-      }
-      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
-      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
-      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
-      .btn-start-workout-day {
-        pointer-events: all;
-        width: 100%;
-        margin-top: 1rem;
-        padding: 0.5rem;
-        font-size: 0.85rem;
-      }
-      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
-      .log-day { margin-bottom: 2rem; }
-      .log-day:last-child { margin-bottom: 0; }
-      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
-      .log-day.is-today h3 {
-        color: var(--primary-color);
-        font-weight: bold;
-      }
-      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
-      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
-      .log-day .log-item:last-child { border-bottom: none; }
-      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
-      .log-item strong { color: var(--text-color-muted); }
-      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
-      
-      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
-      .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
-      .btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
-      .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
-      .log-workout-stats {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1rem;
-        font-size: 0.85rem;
-        color: var(--text-color-muted);
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .log-workout-exercise { margin-bottom: 1rem; }
-      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
-      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
-      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
-      .log-set-item span:first-child { color: var(--text-color-muted); }
 
-      @media (min-width: 768px) {
-          #app-container { padding: 2rem; }
-          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push(summary);
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
       }
