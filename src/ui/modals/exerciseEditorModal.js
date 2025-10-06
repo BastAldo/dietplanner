@@ -9,7 +9,7 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
   const modal = document.getElementById('exercise-editor-modal');
   const form = modal.querySelector('form');
   const workoutList = state.weeklyWorkouts[slotId] || [];
-  const exercise = workoutList.find(ex => ex.instanceId === instanceId);
+  const exercise = workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
 
   if (!exercise) return;
 
@@ -61,7 +61,7 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
               down: parseInt(form.elements.tempo_down.value)
           };
       }
-      updateExerciseInstanceInWorkout(slotId, instanceId, newValues);
+      updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
       modal.classList.add('modal-hidden');
       openWorkoutEditorModal(returnIsoDate);
   };

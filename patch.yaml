@@ -1,11 +1,83 @@
-commit_message: "fix(trainer): Corregge il flusso di editing e il ciclo di vita del debriefing"
+commit_message: "fix(modals): Corregge il bug di confronto dei tipi nell'editor degli esercizi"
 rationale: |
-  Questo commit risolve due bug critici che compromettevano l'esperienza utente nella gestione degli allenamenti.
+  Questo commit risolve un bug critico che impediva l'apertura del modale di modifica di un esercizio (`exercise-editor-modal`).
 
-  1.  **Flusso di Editing Interrotto**: È stato corretto il bug in `src/ui/modals/workoutEditorModal.js` che causava la chiusura del modale principale di editing dell'allenamento quando si tentava di modificare un singolo esercizio. Rimuovendo la riga che nascondeva il modale, il flusso ora è coerente e l'utente non perde il contesto di lavoro.
+  La causa era una mancata corrispondenza di tipo: `instanceId` veniva letto come una stringa dall'attributo `data-instance-id` dell'elemento HTML, ma era memorizzato come un numero nello stato dell'applicazione. Il confronto con uguaglianza stretta (`===`) falliva, impedendo di trovare l'esercizio corretto.
 
-  2.  **Debriefing Allenamento non Persistente**: È stato risolto un problema di gestione dello stato in `src/ui/trainerRenderer.js`. La funzione `destroyTrainerController` eseguiva un reset prematuro dello stato dell'allenamento (`resetWorkoutState()`), impedendo la visualizzazione del debriefing nelle sessioni successive alla prima. Rimuovendo questa chiamata, lo stato dell'allenamento completato viene conservato correttamente, garantendo che la schermata di riepilogo sia sempre disponibile dopo ogni sessione.
+  La soluzione implementata in `src/ui/modals/exerciseEditorModal.js` consiste nel convertire esplicitamente l'`instanceId` ricevuto in un numero (`parseFloat`) prima di cercare l'esercizio nell'array. Questo garantisce che il confronto avvenga correttamente e che il modale possa essere aperto come previsto.
 patches:
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { getState, updateExerciseInstanceInWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
+        log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
+        
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'block';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'block';
+            form.elements.duration.value = exercise.defaultDuration;
+        }
+
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
+
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(returnIsoDate);
+        };
+        
+        modal.classList.remove('modal-hidden');
+      }
   - file: src/ui/modals/workoutEditorModal.js
     content: |
       import { getState, updateWeeklyWorkout, reorderWorkoutExercises } from '../../core/state.js';
@@ -93,49 +165,14 @@ patches:
                 modal.classList.add('modal-hidden');
                 openWorkoutSelectionModal(btnAddExercise.dataset.slotId, isoDate);
             } else if (btnRemoveExercise) {
-                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseFloat(btnRemoveExercise.dataset.instanceId));
                 openWorkoutEditorModal(isoDate); // Refresh this modal
             } else if (btnEditExercise) {
-                openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId), isoDate);
+                openExerciseEditorModal(btnEditExercise.dataset.slotId, btnEditExercise.dataset.instanceId, isoDate);
             }
         };
 
         modal.classList.remove('modal-hidden');
       }
-  - file: src/ui/trainerRenderer.js
-    content: |
-      import { getWorkoutState, resetWorkoutState } from '../core/trainer.js';
-      import { TrainerComponent } from './components/TrainerComponent.js';
-      import { log } from '../utils/logger.js';
-
-      let trainerComponent = null;
-
-      function handleWorkoutStateChange() {
-          if (trainerComponent) {
-              trainerComponent.render(getWorkoutState());
-          }
-      }
-
-      export function initializeTrainerController() {
-          log('TrainerRenderer', 'Initializing TrainerComponent...');
-          const container = document.getElementById('trainer-page');
-          if (container && !trainerComponent) {
-              trainerComponent = new TrainerComponent(container);
-              trainerComponent.mount();
-              document.addEventListener('workoutStateChange', handleWorkoutStateChange);
-              handleWorkoutStateChange();
-              log('TrainerRenderer', 'TrainerComponent initialized.');
-          }
-      }
-
-      export function destroyTrainerController() {
-          log('TrainerRenderer', 'Destroying TrainerComponent...');
-          if (trainerComponent) {
-              trainerComponent.destroy();
-              trainerComponent = null;
-          }
-          document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
-          log('TrainerRenderer', 'TrainerComponent destroyed.');
-      }
 commands:
-  - "echo 'Bug di editing allenamento e ciclo di vita del debriefing risolti.'"
+  - "echo 'Bug di editing degli esercizi risolto. Il modale ora si apre correttamente.'"

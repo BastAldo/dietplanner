@@ -83,10 +83,10 @@ export function openWorkoutEditorModal(isoDate) {
           modal.classList.add('modal-hidden');
           openWorkoutSelectionModal(btnAddExercise.dataset.slotId, isoDate);
       } else if (btnRemoveExercise) {
-          updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseInt(btnRemoveExercise.dataset.instanceId));
+          updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseFloat(btnRemoveExercise.dataset.instanceId));
           openWorkoutEditorModal(isoDate); // Refresh this modal
       } else if (btnEditExercise) {
-          openExerciseEditorModal(btnEditExercise.dataset.slotId, parseInt(btnEditExercise.dataset.instanceId), isoDate);
+          openExerciseEditorModal(btnEditExercise.dataset.slotId, btnEditExercise.dataset.instanceId, isoDate);
       }
   };
 
