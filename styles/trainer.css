@@ -25,6 +25,25 @@
     text-align: center;
 }
 
+.trainer-header-controls {
+    position: absolute;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+#audio-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-color-muted);
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+#audio-toggle-btn.active {
+    color: var(--primary-color);
+}
+
 .trainer-body {
     flex-grow: 1;
     display: flex;
@@ -129,6 +148,10 @@
     transform-origin: 50% 50%;
     transition: stroke-dashoffset 0.1s linear;
 }
+
+.timer-ring-progress.phase-up { stroke: var(--success-color); }
+.timer-ring-progress.phase-hold { stroke: var(--warning-color); }
+.timer-ring-progress.phase-down { stroke: var(--danger-color); }
 
 @keyframes flash {
   0%, 100% { opacity: 1; }

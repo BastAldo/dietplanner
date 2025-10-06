@@ -70,13 +70,17 @@
             <label for="ex-edit-rest">Riposo (s)</label>
             <input type="number" id="ex-edit-rest" name="rest" min="0">
           </div>
+          <div class="form-group weight-group">
+            <label for="ex-edit-weight" id="ex-edit-weight-label"></label>
+            <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5">
+          </div>
           <div class="tempo-group">
             <div class="form-group">
               <label for="ex-edit-tempo-up">Salita (s)</label>
               <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0">
             </div>
             <div class="form-group">
-              <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">Tenuta (s)</label>
+              <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label"></label>
               <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0">
             </div>
             <div class="form-group">
@@ -121,7 +125,7 @@
           <button class="modal-close-btn" data-target="manual-workout-modal"></button>
         </div>
         <div class="modal-body">
-            <form id="manual-workout-form">
+            <form id="manual-workout-form" class="structured-form">
                 <div class="form-group">
                     <label id="manual-workout-name-label" for="manual-workout-name"></label>
                     <input type="text" id="manual-workout-name" name="name" required>
@@ -131,8 +135,20 @@
                     <input type="text" id="manual-workout-duration" name="duration">
                 </div>
                 <div class="form-group">
-                    <label id="manual-workout-details-label" for="manual-workout-details"></label>
-                    <textarea id="manual-workout-details" name="details" rows="3"></textarea>
+                    <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                    <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                    <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                </div>
+                <div class="form-group">
+                    <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                    <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                </div>
+                <div class="form-group full-width">
+                    <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                    <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
                 </div>
             </form>
         </div>
