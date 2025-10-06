@@ -64,7 +64,10 @@
 .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
 
 .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
-.log-workout-summary h4 { color: var(--secondary-color); margin-bottom: 1rem; font-size: 1rem; }
+.log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
+.btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
+.btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
 .log-workout-stats {
   display: flex;
   flex-wrap: wrap;

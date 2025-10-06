@@ -1,6 +1,6 @@
 import {
   resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-  copyPreviousWeek, getState
+  copyPreviousWeek, getState, deleteWorkoutFromHistory
 } from '../../core/state.js';
 import { initializeWorkout } from '../../core/trainer.js';
 import { fetchAndParseConfig } from '../../api/configService.js';
@@ -63,6 +63,22 @@ function handleLogViewClick(e) {
       log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
       showRecipeModal(meal);
     }
+    return;
+  }
+
+  const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
+  if (btnDeleteWorkout) {
+    const { date, starttime } = btnDeleteWorkout.dataset;
+    log('Interactions', 'Delete workout button clicked', { date, starttime });
+    showConfirmModal(
+      UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+      UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+      () => {
+        deleteWorkoutFromHistory(date, parseInt(starttime));
+        showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
+      },
+      'danger'
+    );
   }
 }
 

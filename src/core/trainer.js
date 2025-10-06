@@ -75,7 +75,7 @@ export function completeSet() {
 
 export function startWorkout() {
   const state = getState();
-  log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
+  log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
   if (state.status !== 'idle') return;
 
   let startState = { status: 'running', phaseStartTime: Date.now() };
@@ -167,12 +167,18 @@ function createWorkoutSummary(finalState) {
         totalSets,
         totalExerciseTime,
         totalRestTime,
-        exercises: exercisesWithDetails
+        exercises: exercisesWithDetails,
+        startTime: finalState.startTime
     };
 }
 
 export function endWorkout() {
   const finalState = getState();
+  if (finalState.startTime === 0) {
+      log('Trainer', 'Workout ended prematurely, not saving summary.');
+      setView('planner');
+      return;
+  }
   const summary = createWorkoutSummary(finalState);
   setLastWorkoutSummary(summary);
   addWorkoutToHistory(summary);

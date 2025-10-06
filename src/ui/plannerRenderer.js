@@ -122,9 +122,9 @@ function renderLogView(state, weekStart) {
     dayDate.setDate(dayDate.getDate() + i);
     const isoDate = toISODateString(dayDate);
     const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-    const completedWorkout = state.workoutHistory[isoDate];
+    const completedWorkouts = state.workoutHistory[isoDate] || [];
 
-    if (dayMeals.length > 0 || completedWorkout) {
+    if (dayMeals.length > 0 || completedWorkouts.length > 0) {
       hasContent = true;
       let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
       dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
@@ -133,33 +133,38 @@ function renderLogView(state, weekStart) {
         dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
       }
       
-      if (completedWorkout) {
-        dayLogHTML += `<div class="log-workout-summary">
-          <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-          <div class="log-workout-stats">
-            <span>Durata: ${formatDuration(completedWorkout.totalTime)}</span>
-            <span>/</span>
-            <span>Lavoro: ${formatDuration(completedWorkout.totalExerciseTime)}</span>
-            <span>/</span>
-            <span>Riposo: ${formatDuration(completedWorkout.totalRestTime)}</span>
-          </div>
-          ${completedWorkout.exercises.map(ex => `
-            <div class="log-workout-exercise">
-              <div class="log-item">
-                <strong>${ex.name}</strong>
-                <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
-              </div>
-              <div class="log-sets-details">
-                ${ex.setsData.map((setData, i) => `
-                  <div class="log-set-item">
-                    <span>Serie ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
+      if (completedWorkouts.length > 0) {
+          completedWorkouts.forEach(workout => {
+              dayLogHTML += `<div class="log-workout-summary">
+                  <div class="log-workout-header">
+                      <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                      <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
                   </div>
-                `).join('')}
-              </div>
-            </div>
-          `).join('')}
-        </div>`;
+                  <div class="log-workout-stats">
+                  <span>Durata: ${formatDuration(workout.totalTime)}</span>
+                  <span>/</span>
+                  <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
+                  <span>/</span>
+                  <span>Riposo: ${formatDuration(workout.totalRestTime)}</span>
+                  </div>
+                  ${workout.exercises.map(ex => `
+                  <div class="log-workout-exercise">
+                      <div class="log-item">
+                      <strong>${ex.name}</strong>
+                      <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                      </div>
+                      <div class="log-sets-details">
+                      ${ex.setsData.map((setData, i) => `
+                          <div class="log-set-item">
+                          <span>Serie ${i + 1}</span>
+                          <span>${getSetDetails(setData)}</span>
+                          </div>
+                      `).join('')}
+                      </div>
+                  </div>
+                  `).join('')}
+              </div>`;
+          });
       }
 
       dayLogHTML += `</div>`;

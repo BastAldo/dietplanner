@@ -91,7 +91,7 @@ patches:
 
       export function startWorkout() {
         const state = getState();
-        log('Trainer', 'Attempting to start workout.', { status: state.status, mode: state.executionMode });
+        log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
         if (state.status !== 'idle') return;
 
         let startState = { status: 'running', phaseStartTime: Date.now() };
@@ -183,12 +183,18 @@ patches:
               totalSets,
               totalExerciseTime,
               totalRestTime,
-              exercises: exercisesWithDetails
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime
           };
       }
 
       export function endWorkout() {
         const finalState = getState();
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
+        }
         const summary = createWorkoutSummary(finalState);
         setLastWorkoutSummary(summary);
         addWorkoutToHistory(summary);
@@ -196,156 +202,6 @@ patches:
         updateState({ status: 'finished' });
         stopAnimation();
         setView('debriefing');
-      }
-  - file: src/core/trainer/animation.js
-    content: |
-      import { getWorkoutState, updateState } from './state.js';
-      import { advanceToNextSet } from './machine.js';
-      import { setView } from '../state.js';
-      import { completeSet } from '../trainer.js';
-
-      let animationFrameId = null;
-      let lastTickTimestamp = 0;
-
-      function tick(timestamp) {
-        if (lastTickTimestamp === 0) {
-          lastTickTimestamp = timestamp;
-        }
-        const deltaTime = timestamp - lastTickTimestamp;
-        lastTickTimestamp = timestamp;
-
-        const state = getWorkoutState();
-
-        if (state.status === 'finished') {
-          stopAnimation();
-          return;
-        }
-
-        if (state.status === 'running') {
-            if (state.executionMode === 'tempo_guided') {
-                const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-                const currentPhase = state.executionQueue[state.currentPhaseIndex];
-
-                if (newPhaseTimeElapsed >= currentPhase.duration) {
-                  const newPhaseIndex = state.currentPhaseIndex + 1;
-                  const nextPhase = state.executionQueue[newPhaseIndex];
-
-                  if (nextPhase) {
-                    updateState({
-                      currentPhaseIndex: newPhaseIndex,
-                      phaseTimeElapsed: 0,
-                      currentRep: nextPhase.rep,
-                    });
-                  } else {
-                    completeSet();
-                  }
-                } else {
-                  updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-                }
-            } else if (state.executionMode === 'static_hold') {
-                const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
-                if (newSetTimeRemaining <= 0) {
-                    completeSet();
-                } else {
-                    updateState({ setTimeRemaining: newSetTimeRemaining });
-                }
-            }
-        } else if (state.status === 'resting') {
-          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
-          if (newRestTimeRemaining <= 0) {
-            advanceToNextSet();
-          } else {
-            updateState({ restTimeRemaining: newRestTimeRemaining });
-          }
-        }
-        
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        
-        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
-          animationFrameId = requestAnimationFrame(tick);
-        }
-      }
-
-      export function startAnimation() {
-        if (animationFrameId) return;
-        lastTickTimestamp = 0;
-        animationFrameId = requestAnimationFrame(tick);
-      }
-
-      export function stopAnimation() {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
-        }
-      }
-  - file: src/core/trainer/machine.js
-    content: |
-      import { getWorkoutState, updateState, resetState } from './state.js';
-      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
-
-      function startNextExercise() {
-          const state = getWorkoutState();
-          const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
-          const executionMode = nextExercise.execution_mode || 'tempo_guided';
-          
-          let nextState = {
-              status: 'running',
-              currentSet: 1,
-              currentRep: 1,
-              manualRepCount: 0,
-              executionMode: executionMode,
-              phaseStartTime: Date.now(),
-          };
-
-          if (executionMode === 'tempo_guided') {
-              nextState.executionQueue = buildExecutionQueueForCurrentSet();
-              nextState.currentPhaseIndex = 0;
-              nextState.phaseTimeElapsed = 0;
-          } else if (executionMode === 'static_hold') {
-              nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
-          }
-          
-          updateState(nextState);
-      }
-
-      export function advanceToNextSet() {
-        const state = getWorkoutState();
-        const newSet = state.currentSet + 1;
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-
-        if (newSet > currentExercise.defaultSets) {
-          advanceToNextExercise();
-        } else {
-          let nextState = {
-            status: 'running',
-            currentSet: newSet,
-            phaseTimeElapsed: 0,
-            currentRep: 1,
-            manualRepCount: 0,
-            phaseStartTime: Date.now()
-          };
-          if (state.executionMode === 'tempo_guided') {
-            nextState.executionQueue = buildExecutionQueueForCurrentSet();
-            nextState.currentPhaseIndex = 0;
-          } else if (state.executionMode === 'static_hold') {
-            nextState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-          }
-          updateState(nextState);
-        }
-      }
-
-      export function advanceToNextExercise() {
-        const state = getWorkoutState();
-        const newIndex = state.currentExerciseIndex + 1;
-
-        if (newIndex >= state.exerciseQueue.length) {
-          document.dispatchEvent(new CustomEvent('workoutFinished'));
-        } else {
-          updateState({
-            currentExerciseIndex: newIndex
-          });
-          startNextExercise();
-        }
       }
   - file: src/core/trainer/state.js
     content: |
@@ -387,7 +243,7 @@ patches:
     content: |
       import {
         resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState
+        copyPreviousWeek, getState, deleteWorkoutFromHistory
       } from '../../core/state.js';
       import { initializeWorkout } from '../../core/trainer.js';
       import { fetchAndParseConfig } from '../../api/configService.js';
@@ -450,6 +306,22 @@ patches:
             log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
             showRecipeModal(meal);
           }
+          return;
+        }
+
+        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
+        if (btnDeleteWorkout) {
+          const { date, starttime } = btnDeleteWorkout.dataset;
+          log('Interactions', 'Delete workout button clicked', { date, starttime });
+          showConfirmModal(
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+            () => {
+              deleteWorkoutFromHistory(date, parseInt(starttime));
+              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
+            },
+            'danger'
+          );
         }
       }
 
@@ -480,4 +352,305 @@ patches:
         document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
         document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
         document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+      }
+  - file: src/ui/plannerRenderer.js
+    content: |
+      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || typeof meal.calories_min !== 'number') return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0 && maxCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0, max = 0;
+        MEAL_TYPES.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
+          if (meal && typeof meal.calories_min === 'number') {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
+        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      function getSetDetails(setData) {
+          let details = [];
+          if (setData.reps) {
+              details.push(`${setData.reps} reps`);
+          }
+          if (setData.duration) {
+              details.push(`${formatDuration(setData.duration)}`);
+          }
+          return details.join(' / ');
+      }
+      
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      function renderCalendarView(state, weekStart) {
+        const calendarGrid = document.getElementById('calendar-grid');
+        const todayISO = toISODateString(new Date());
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+          
+          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
+          let workoutButtonHTML = '';
+
+          if (workoutList && workoutList.length > 0) {
+              const exerciseCount = workoutList.length;
+              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
+              summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
+              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
+          }
+
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          if (isoDate === todayISO) {
+            dayCell.classList.add('is-today');
+          }
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `
+            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
+            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        const logView = document.getElementById('log-view');
+        const todayISO = toISODateString(new Date());
+        let logViewHTML = '';
+        let hasContent = false;
+
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+          const completedWorkouts = state.workoutHistory[isoDate] || [];
+
+          if (dayMeals.length > 0 || completedWorkouts.length > 0) {
+            hasContent = true;
+            let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
+            dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
+
+            if (dayMeals.length > 0) {
+              dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+            }
+            
+            if (completedWorkouts.length > 0) {
+                completedWorkouts.forEach(workout => {
+                    dayLogHTML += `<div class="log-workout-summary">
+                        <div class="log-workout-header">
+                            <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                            <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                        </div>
+                        <div class="log-workout-stats">
+                        <span>Durata: ${formatDuration(workout.totalTime)}</span>
+                        <span>/</span>
+                        <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
+                        <span>/</span>
+                        <span>Riposo: ${formatDuration(workout.totalRestTime)}</span>
+                        </div>
+                        ${workout.exercises.map(ex => `
+                        <div class="log-workout-exercise">
+                            <div class="log-item">
+                            <strong>${ex.name}</strong>
+                            <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                            </div>
+                            <div class="log-sets-details">
+                            ${ex.setsData.map((setData, i) => `
+                                <div class="log-set-item">
+                                <span>Serie ${i + 1}</span>
+                                <span>${getSetDetails(setData)}</span>
+                                </div>
+                            `).join('')}
+                            </div>
+                        </div>
+                        `).join('')}
+                    </div>`;
+                });
+            }
+
+            dayLogHTML += `</div>`;
+            logViewHTML += dayLogHTML;
+          }
+        }
+
+        if (!hasContent) {
+          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+        } else {
+          logView.innerHTML = logViewHTML;
+        }
+      }
+
+      export function renderPlannerPage(state) {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+        
+        const calendarGrid = document.getElementById('calendar-grid');
+        const logView = document.getElementById('log-view');
+        const viewCalendarBtn = document.getElementById('view-calendar-btn');
+        const viewLogBtn = document.getElementById('view-log-btn');
+
+        if (state.currentView === 'planner') {
+            calendarGrid.classList.remove('hidden');
+            logView.classList.add('hidden');
+            viewCalendarBtn.classList.add('active');
+            viewLogBtn.classList.remove('active');
+        } else if (state.currentView === 'log') {
+            calendarGrid.classList.add('hidden');
+            logView.classList.remove('hidden');
+            viewCalendarBtn.classList.remove('active');
+            viewLogBtn.classList.add('active');
+        }
+
+        renderCalendarView(state, weekStart);
+        renderLogView(state, weekStart);
+      }
+  - file: styles/planner.css
+    content: |
+      /* --- PLANNER PAGE --- */
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .planner-controls-wrapper {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+      }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .planner-actions { display: flex; gap: 0.75rem; }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; transition: all 0.2s;
+      }
+      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
+      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell.is-today {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
+      }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+      .btn-start-workout-day {
+        pointer-events: all;
+        width: 100%;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+      }
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+      .log-day.is-today h3 {
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+      
+      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
+      .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
+      .btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
+      .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
+      .log-workout-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        font-size: 0.85rem;
+        color: var(--text-color-muted);
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .log-workout-exercise { margin-bottom: 1rem; }
+      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
+      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
+      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
+      .log-set-item span:first-child { color: var(--text-color-muted); }
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
