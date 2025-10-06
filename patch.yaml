@@ -1,11 +1,141 @@
-commit_message: "fix(state): Esporta la funzione deleteWorkoutFromHistory per risolvere SyntaxError"
+commit_message: "fix(history): Ristruttura lo storico allenamenti per supportare sessioni multiple e corregge bug critici"
 rationale: |
-  Questo commit corregge un `Uncaught SyntaxError` che impediva il corretto funzionamento dell'applicazione.
-  L'errore era causato dal fatto che la funzione `deleteWorkoutFromHistory`, definita in `src/core/state.js`, non veniva esportata.
-  Il modulo `src/ui/interactions/plannerInteractions.js` tentava di importarla, causando un fallimento al momento del caricamento degli script.
+  Questo commit esegue un refactoring fondamentale del sistema di storico degli allenamenti per risolvere una serie di bug critici che causavano crash, dati corrotti e una UI incoerente.
 
-  La correzione consiste nell'aggiungere `deleteWorkoutFromHistory` all'elenco delle funzioni esportate dal modulo di stato, risolvendo così l'errore e ripristinando la funzionalità.
+  Le modifiche principali sono:
+
+  1.  **Struttura Dati Robusta**: La logica in `src/core/state.js` è stata riscritta per garantire che `workoutHistory[date]` sia sempre un array. Questo risolve il `TypeError: .push is not a function` e permette di salvare correttamente più sessioni di allenamento per lo stesso giorno.
+
+  2.  **Gestione Casi Limite**: La funzione `endWorkout` in `src/core/trainer.js` ora impedisce il salvataggio di riepiloghi corrotti se un allenamento viene interrotto prima di iniziare, risolvendo il bug che mostrava tempi assurdi nel debriefing.
+
+  3.  **UI Multi-Sessione**: La vista "Log" (`plannerRenderer.js`) ora scorre l'array di allenamenti per ogni giorno, visualizzando correttamente tutte le sessioni completate. È stata aggiunta anche la funzionalità di cancellazione per ogni singola sessione.
+
+  4.  **ID Univoci**: La generazione di `instanceId` è stata resa più robusta utilizzando `Math.random()`, eliminando i bug di contaminazione dei dati quando si utilizzano più volte esercizi identici nello stesso allenamento.
+
+  5.  **Correzione Export**: La funzione `deleteWorkoutFromHistory` è stata correttamente esportata da `state.js`, risolvendo il `SyntaxError` del commit precedente.
 patches:
+  - file: src/config/uiText.js
+    content: |
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_PROGRESS', text: 'Progressi' },
+        { id: 'NAV_CHARTS', text: 'Grafici' },
+        { id: 'NAV_RECIPES', text: 'Ricette' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'LOAD_BUTTON', text: 'Carica' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'DELETE_WORKOUT_CONFIRM_TITLE', text: 'Elimina Allenamento' },
+        { id: 'DELETE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare questo allenamento dallo storico? L\'azione è irreversibile.' },
+        { id: 'DELETE_WORKOUT_SUCCESS', text: 'Allenamento eliminato dallo storico.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
+        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
+        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
+        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
+        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
+        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
+        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
+        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
+        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
+        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
+        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
+        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
+        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
+        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
+        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
+        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
+        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
+        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
+        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
+        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
+        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
+        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
+        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
+        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
+        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
+        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
+        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
+        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
+        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
+        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
+        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
+        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
+        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
+        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
+        { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
+        { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
+        { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
+        { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
+        { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
+        { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
+        { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
+        { id: 'DEBRIEFING_TOTAL_SETS', text: 'Serie Totali' },
+        { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo Esercizio' },
+        { id: 'DEBRIEFING_REST_TIME', text: 'Tempo Riposo' },
+        { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' }
+      ];
+
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
   - file: src/core/state.js
     content: |
       import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
