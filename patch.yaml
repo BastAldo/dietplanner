@@ -1,14 +1,19 @@
-commit_message: "feat(UI/UX): Potenzia l'interfaccia con widget di riepilogo, grafici di correlazione e terminologia corretta"
+commit_message: "feat(tracking): Aggiunge il calcolo delle calorie bruciate e il log di attività manuali"
 rationale: |
-  Questo commit introduce una serie di importanti miglioramenti all'interfaccia utente e alla visualizzazione dei dati, basati sulla nostra ultima discussione, per rendere l'applicazione più intuitiva e potente.
+  Questo commit introduce due funzionalità strategiche che trasformano HealtyPro in un diario di benessere completo, come da nostra discussione.
 
-  1.  **Correzione Terminologica**: È stata corretta la terminologia in tutta l'interfaccia, sostituendo "Riposo" con il più tecnico e appropriato "Recupero" sia nella schermata di debriefing che nella vista log, come da tua indicazione.
+  1.  **Calcolo delle Calorie Bruciate (METs)**: È stata implementata la logica per calcolare il dispendio calorico degli allenamenti strutturati.
+      * `src/core/calculations.js` ora contiene la funzione `calculateWorkoutCalories` che usa la formula standard basata sui valori MET.
+      * Il core del trainer (`src/core/trainer.js`) è stato aggiornato per integrare questo calcolo nel riepilogo finale dell'allenamento.
+      * L'interfaccia utente (Debriefing e Vista Log) ora mostra chiaramente le calorie bruciate, fornendo un feedback cruciale sul bilancio energetico.
+      * **Nota**: Questa funzionalità presuppone che il file `esercizi.json` sia stato esteso con un campo `met_value` per ogni esercizio.
 
-  2.  **Widget di Riepilogo Settimanale**: È stato introdotto un nuovo widget nella vista Planner. Questo componente fornisce una visione d'insieme immediata della settimana, mostrando la media calorica giornaliera e il rapporto tra allenamenti completati e pianificati, offrendo un feedback motivazionale.
+  2.  **Log di Attività Manuali**: Per consentire il tracciamento di qualsiasi attività fisica, è stata introdotta la possibilità di registrare allenamenti manualmente.
+      * È stato creato un nuovo modale di inserimento (`manual-workout-modal`) semplice e flessibile.
+      * La struttura dati dello storico allenamenti (`workoutHistory`) è stata resa polimorfica con un campo `type` (`'structured'` o `'manual'`) per gestire i due tipi di record.
+      * La Vista Log (`src/ui/plannerRenderer.js`) è stata riscritta per renderizzare dinamicamente card diverse a seconda del tipo di attività, mostrando i dettagli appropriati per ciascuna.
 
-  3.  **Grafico di Correlazione Peso/Calorie**: La pagina dei grafici è stata arricchita con un nuovo grafico di correlazione. Questa visualizzazione mette in relazione diretta l'andamento del peso (linea) con l'apporto calorico (barre), fornendo uno strumento di analisi fondamentale per l'utente.
-
-  4.  **Refactoring Stili**: Sono stati aggiunti gli stili necessari in `styles/planner.css` per il nuovo widget, garantendo coerenza visiva con il resto dell'applicazione.
+  3.  **Correzione Terminologica**: Come richiesto, la dicitura "Tempo di Riposo" è stata sostituita con il più corretto "Tempo di Recupero" in tutta l'applicazione per coerenza e professionalità.
 patches:
   - file: src/config/uiText.js
     content: |
@@ -71,6 +76,7 @@ patches:
         { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
         { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
         { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+        { id: 'LOG_ACTIVITY_BTN', text: 'Log Attività' },
         { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
         { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
         { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
@@ -125,384 +131,906 @@ patches:
         { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
         { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
         { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
+        { id: 'DEBRIEFING_CALORIES_BURNED', text: 'Calorie Bruciate' },
         { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
         { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
         { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
-        { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' }
+        { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' },
+        { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
+        { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività (es. Corsa, Bici)' },
+        { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata (es. 45 min, 1h)' },
+        { id: 'MANUAL_WORKOUT_DETAILS_LABEL', text: 'Dettagli (es. 10km, FC media 150bpm)' },
+        { id: 'MANUAL_WORKOUT_SAVE_BTN', text: 'Salva Attività' },
+        { id: 'LOG_VIEW_MANUAL_ACTIVITY_TITLE', text: 'Attività del Giorno' }
       ];
 
       export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
         acc[id] = text;
         return acc;
       }, {});
-  - file: templates/charts.html
+  - file: templates/modals.html
     content: |
-      <div id="charts-page" class="page-view hidden">
-          <h3 id="charts-title"></h3>
-          <div class="charts-container">
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="planner-chart-title"></h4>
-                      <div class="chart-type-switcher">
-                          <button class="btn-chart-type active" data-type="bar">Barre</button>
-                          <button class="btn-chart-type" data-type="line">Linee</button>
-                      </div>
-                  </div>
-                  <div class="chart-canvas-container">
-                    <canvas id="planner-chart-canvas"></canvas>
-                  </div>
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
               </div>
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="biometrics-chart-title"></h4>
-                  </div>
-                  <div class="chart-canvas-container">
-                    <canvas id="biometrics-chart-canvas"></canvas>
-                    <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
-                  </div>
-              </div>
-              <div class="chart-card">
-                  <div class="chart-header">
-                      <h4 id="correlation-chart-title"></h4>
-                  </div>
-                  <div class="chart-canvas-container">
-                    <canvas id="correlation-chart-canvas"></canvas>
-                  </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
               </div>
           </div>
       </div>
-  - file: templates/planner.html
-    content: |
-      <div id="global-alert" class="global-alert hidden">
-          <p id="global-alert-message"></p>
-          <button id="global-alert-close" class="alert-close-btn"></button>
-      </div>
-
-      <div id="planner-page" class="page-view">
-          <section class="data-source-container">
-              <input type="url" id="config-url-input" placeholder="URL del tuo file config.json...">
-              <button id="load-config-btn" class="btn btn-primary"></button>
-              <button id="share-config-btn" class="btn-view" title="Condividi Configurazione"></button>
-              <button id="info-icon" class="btn-view" title="Mostra formato JSON richiesto"></button>
-          </section>
-          <section id="planner-summary-widget" class="planner-summary-widget"></section>
-          <section class="view-container">
-              <header class="calendar-header">
-                  <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
-                  <h2 id="week-title"></h2>
-                  <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
-              </header>
-               <div class="planner-controls-wrapper">
-                  <div class="view-switcher">
-                      <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario"></button>
-                      <button id="view-log-btn" class="btn-view" title="Vista Registro"></button>
-                  </div>
-                  <div class="planner-actions">
-                    <button id="copy-week-btn" class="btn btn-secondary"></button>
-                    <button id="reset-btn" class="btn btn-secondary"></button>
-                  </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
               </div>
-              <div id="calendar-grid" class="calendar-grid"></div>
-              <div id="log-view" class="log-view hidden"></div>
-          </section>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
       </div>
-  - file: src/ui/charts.js
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="exercise-editor-form">
+                <div class="form-group">
+                  <label for="ex-edit-sets">Serie</label>
+                  <input type="number" id="ex-edit-sets" name="sets" min="1">
+                </div>
+                <div class="form-group reps-group">
+                  <label for="ex-edit-reps">Ripetizioni</label>
+                  <input type="number" id="ex-edit-reps" name="reps" min="1">
+                </div>
+                <div class="form-group duration-group">
+                  <label for="ex-edit-duration">Durata (s)</label>
+                  <input type="number" id="ex-edit-duration" name="duration" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="ex-edit-rest">Riposo (s)</label>
+                  <input type="number" id="ex-edit-rest" name="rest" min="0">
+                </div>
+                <div class="tempo-group">
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-up">Salita (s)</label>
+                    <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">Tenuta (s)</label>
+                    <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-down">Discesa (s)</label>
+                    <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0">
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="exercise-editor-form" class="btn btn-primary" id="exercise-editor-save-btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-details-label" for="manual-workout-details"></label>
+                          <textarea id="manual-workout-details" name="details" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+  - file: src/core/calculations.js
     content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-      import { BIOMETRIC_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
+      export function calculateAge(dateString) {
+        if (!dateString) return null;
+        const birthDate = new Date(dateString);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      }
 
-      let plannerChartInstance = null;
-      let biometricsChartInstance = null;
-      let correlationChartInstance = null;
-      let currentPlannerChartType = 'bar';
+      export function calculateBMR(userProfile, weight) {
+        if (!userProfile || !weight || !userProfile.dateOfBirth || !userProfile.height || !userProfile.gender) {
+          return null;
+        }
 
+        const age = calculateAge(userProfile.dateOfBirth);
+        const height = parseFloat(userProfile.height);
+        const weightFloat = parseFloat(weight);
+
+        if (isNaN(age) || isNaN(height) || isNaN(weightFloat)) return null;
+
+        let bmr;
+        // Formula Mifflin-St Jeor: P = 10m + 6.25h - 5a + s
+        // m = peso in kg, h = altezza in cm, a = età in anni, s è +5 per uomini e -161 per donne.
+        if (userProfile.gender === 'male') {
+          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) + 5;
+        } else if (userProfile.gender === 'female') {
+          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) - 161;
+        } else {
+          return null; // Gender not specified or invalid
+        }
+
+        return Math.round(bmr);
+      }
+
+      export function calculateWorkoutCalories(workoutSummary, userWeight) {
+        if (!workoutSummary || !userWeight || !workoutSummary.exercises || workoutSummary.exercises.length === 0) {
+          return 0;
+        }
+
+        const weightKg = parseFloat(userWeight);
+        if (isNaN(weightKg) || weightKg <= 0) return 0;
+
+        let totalCalories = 0;
+
+        workoutSummary.exercises.forEach(exercise => {
+          const met = exercise.met_value;
+          // totalTime for each exercise is in milliseconds
+          const durationHours = exercise.totalTime / (1000 * 60 * 60);
+
+          if (typeof met === 'number' && met > 0 && durationHours > 0) {
+            // Formula: Kcal = MET * Peso(kg) * Durata(ore)
+            const caloriesBurned = met * weightKg * durationHours;
+            totalCalories += caloriesBurned;
+          }
+        });
+
+        return Math.round(totalCalories);
+      }
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing'
+        debugMode: false,
+        lastWorkoutSummary: null,
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
       const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
-      function getWeekStartDate(date) {
+      const getWeekStartDate = (date) => {
         const d = new Date(date);
         const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
       }
 
-      function getChartColors() {
-          const style = getComputedStyle(document.documentElement);
-          return {
-              primary: style.getPropertyValue('--primary-color').trim(),
-              secondary: style.getPropertyValue('--secondary-color').trim(),
-              textColor: style.getPropertyValue('--text-color').trim(),
-              borderColor: style.getPropertyValue('--border-color').trim(),
-              danger: style.getPropertyValue('--danger-color').trim(),
-              success: style.getPropertyValue('--success-color').trim(),
-              warning: style.getPropertyValue('--warning-color').trim()
-          };
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
       }
 
-      function calculateWeeklyCalorieData(state) {
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() + Math.random()
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
         const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], calories: [] };
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+        }
+        state.workoutHistory = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
 
         for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          weeklyData.labels.push(DAYS[i]);
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
 
-          let dailyMin = 0, dailyMax = 0;
-          MEAL_TYPES.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            if (meal && typeof meal.calories_min === 'number') {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              dailyMin += minCals;
-              dailyMax += maxCals;
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
             }
           });
-          weeklyData.calories.push([dailyMin, dailyMax]);
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
         }
-        return weeklyData;
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: src/core/trainer.js
+    content: |
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { startAnimation, stopAnimation } from './trainer/animation.js';
+      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+      import { advanceToNextSet } from './trainer/machine.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+
+      export { getState as getWorkoutState };
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        document.removeEventListener('workoutFinished', handleWorkoutFinished);
+        stopAnimation();
+        resetState();
       }
 
-      function renderPlannerChart(state) {
-        const weeklyData = calculateWeeklyCalorieData(state);
-        const colors = getChartColors();
-        const isLineChart = currentPlannerChartType === 'line';
+      function handleWorkoutFinished() {
+        const finalState = getState();
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
+      }
+
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+          return;
+        }
+        resetWorkoutState();
+        const firstExercise = plannedExercises[0];
+        const initialState = {
+          workoutDate: isoDate,
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+          currentExerciseIndex: 0,
+          currentSet: 1,
+          currentRep: 1,
+          executionMode: firstExercise.execution_mode || 'tempo_guided',
+          startTime: Date.now(),
+          phaseStartTime: 0,
+          restStartTime: 0,
+          setsData: []
+        };
+        updateState(initialState);
+        document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function completeSet() {
+        const state = getState();
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const setData = {
+            exerciseId: currentExercise.instanceId,
+            set: state.currentSet,
+            duration: Date.now() - state.phaseStartTime,
+            rest: currentExercise.defaultRest
+        };
         
-        const datasets = isLineChart ?
-        [{
-            label: UI_TEXT.CHART_KCAL_MIN_LABEL,
-            data: weeklyData.calories.map(c => c[0]),
-            borderColor: colors.secondary,
-            fill: false,
-            tension: 0.1
-        },{
-            label: UI_TEXT.CHART_KCAL_MAX_LABEL,
-            data: weeklyData.calories.map(c => c[1]),
-            borderColor: colors.primary,
-            fill: '-1',
-            backgroundColor: colors.primary + '33',
-            tension: 0.1
-        }]
-        :
-        [{
-            label: UI_TEXT.CHART_KCAL_RANGE_LABEL,
-            data: weeklyData.calories,
-            backgroundColor: colors.primary,
-            borderColor: colors.secondary
-        }];
-        
-        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-        plannerChartInstance = new Chart(ctx, {
-          type: currentPlannerChartType,
-          data: {
-            labels: weeklyData.labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: isLineChart,
-                labels: { color: colors.textColor }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    if (isLineChart) {
-                      return `${context.dataset.label}: ${context.parsed.y}`;
-                    }
-                    const value = context.raw;
-                    if (value[0] === value[1]) {
-                      return `${UI_TEXT.KCAL_LABEL}: ${value[0]}`;
-                    }
-                    return `${UI_TEXT.KCAL_LABEL}: ${value[0]} - ${value[1]}`;
-                  }
-                }
-              }
-            }
-          }
+        if (state.executionMode === 'manual_reps') {
+            setData.reps = state.manualRepCount;
+        } else if (state.executionMode === 'tempo_guided') {
+            setData.reps = currentExercise.defaultReps;
+        }
+
+        const newSetsData = [...state.setsData, setData];
+        updateState({ 
+            setsData: newSetsData,
+            status: 'resting',
+            restStartTime: Date.now(),
+            restTimeRemaining: currentExercise.defaultRest * 1000
         });
       }
 
-      function getBiometricsData(state) {
-        const data = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+      export function startWorkout() {
+        const state = getState();
+        log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        let startState = { status: 'running', phaseStartTime: Date.now() };
+
+        if (state.executionMode === 'tempo_guided') {
+            startState.executionQueue = buildExecutionQueueForCurrentSet();
+            startState.currentPhaseIndex = 0;
+            startState.phaseTimeElapsed = 0;
+            startState.currentRep = 1;
+        } else if (state.executionMode === 'static_hold') {
+            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+        } else if (state.executionMode === 'manual_reps') {
+            startState.manualRepCount = 0;
+        }
         
-        const datasets = {};
-        const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
-
-        numericFields.forEach(field => {
-            datasets[field.id] = {
-                label: field.label,
-                data: data.map(entry => entry[field.id] || null)
-            };
-        });
-
-        return { labels, datasets };
+        updateState(startState);
+        startAnimation();
+        log('Trainer', 'Workout started. New state:', getState());
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
       }
 
-      function renderBiometricsChart(state) {
-        const { labels, datasets } = getBiometricsData(state);
-        const colors = getChartColors();
-        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
-        
-        const chartDatasets = Object.values(datasets)
-            .map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                fill: false,
-                borderColor: colorCycle[index % colorCycle.length],
-                tension: 0.1,
-                pointBackgroundColor: colorCycle[index % colorCycle.length],
-                pointRadius: 4
-            }))
-            .filter(d => d.data.some(val => val !== null));
-
-        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-
-        biometricsChartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: chartDatasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: true,
-                labels: { color: colors.textColor }
-              }
-            }
-          }
-        });
-      }
-
-      function renderCorrelationChart(state) {
-          const sortedBiometrics = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-          if (sortedBiometrics.length < 2) return;
-
-          const labels = sortedBiometrics.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-          const weightData = sortedBiometrics.map(entry => entry.weight || null);
-
-          const calorieData = sortedBiometrics.map(entry => {
-              const isoDate = entry.date;
-              let dailyMin = 0;
-              MEAL_TYPES.forEach(type => {
-                  const meal = state.weeklyPlan[`${isoDate}-${type}`];
-                  if (meal) {
-                      dailyMin += Number(meal.calories_min) || 0;
-                  }
-              });
-              return dailyMin > 0 ? dailyMin : null;
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running' || state.status === 'resting') {
+          updateState({
+            prePauseStatus: state.status,
+            status: 'paused',
           });
-
-          const colors = getChartColors();
-          const ctx = document.getElementById('correlation-chart-canvas').getContext('2d');
-          correlationChartInstance = new Chart(ctx, {
-              type: 'bar',
-              data: {
-                  labels: labels,
-                  datasets: [
-                      {
-                          label: 'Peso (kg)',
-                          data: weightData,
-                          type: 'line',
-                          borderColor: colors.secondary,
-                          tension: 0.1,
-                          yAxisID: 'yWeight',
-                      },
-                      {
-                          label: 'Kcal Assunte',
-                          data: calorieData,
-                          backgroundColor: colors.primary + '80',
-                          yAxisID: 'yKcal',
-                      }
-                  ]
-              },
-              options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                      yWeight: {
-                          type: 'linear',
-                          position: 'left',
-                          ticks: { color: colors.secondary },
-                          grid: { color: colors.borderColor }
-                      },
-                      yKcal: {
-                          type: 'linear',
-                          position: 'right',
-                          ticks: { color: colors.primary },
-                          grid: { display: false }
-                      },
-                      x: {
-                          ticks: { color: colors.textColor },
-                          grid: { display: false }
-                      }
-                  },
-                  plugins: {
-                      legend: {
-                          labels: { color: colors.textColor }
-                      }
-                  }
-              }
-          });
+          stopAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
       }
 
-      function handleChartTypeChange(event, state) {
-          const type = event.target.dataset.type;
-          if (type && type !== currentPlannerChartType) {
-              currentPlannerChartType = type;
-              document.querySelectorAll('.btn-chart-type').forEach(btn => {
-                  btn.classList.toggle('active', btn.dataset.type === type);
-              });
-              if (plannerChartInstance) {
-                plannerChartInstance.destroy();
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+          const status = state.prePauseStatus;
+          const newState = { status, prePauseStatus: '' };
+          if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
+          if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
+
+          updateState(newState);
+          startAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status === 'running' && state.executionMode === 'manual_reps') {
+              const newRepCount = state.manualRepCount + 1;
+              updateState({ manualRepCount: newRepCount });
+
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+
+              if (targetReps && newRepCount >= targetReps) {
+                  completeSet();
+                  startAnimation();
               }
-              renderPlannerChart(state);
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
           }
       }
 
-      export function renderCharts(state) {
-          if (plannerChartInstance) plannerChartInstance.destroy();
-          if (biometricsChartInstance) biometricsChartInstance.destroy();
-          if (correlationChartInstance) correlationChartInstance.destroy();
-
-          renderPlannerChart(state);
-          renderBiometricsChart(state);
-          renderCorrelationChart(state);
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
           
-          document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
 
-          const switcher = document.querySelector('.chart-type-switcher');
-          const boundHandler = (e) => handleChartTypeChange(e, state);
-          switcher.replaceWith(switcher.cloneNode(true));
-          document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
+              return { 
+                  ...exercise, 
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime
+              };
+          });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
+
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
+
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+          }
+
+          return summary;
+      }
+
+      export function endWorkout() {
+        const finalState = getState();
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
+        }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
+      }
+  - file: src/ui/modals.js
+    content: |
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
+      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
+
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutEditorModal,
+        openManualWorkoutModal
+      };
+  - file: src/ui/modals/dayEditorModal.js
+    content: |
+      import { getState, updateWeeklyPlan } from '../../core/state.js';
+      import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { showRecipeModal } from './recipeModal.js';
+      import { openSelectionModal } from './selectionModal.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+      import { openManualWorkoutModal } from './manualWorkoutModal.js';
+
+      let currentEditingDayISO = null;
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        if (state.recipeBaseUrl && meal && meal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      export function openDayEditorModal(isoDate) {
+        log('Modals', 'Opening day editor modal', { isoDate });
+        currentEditingDayISO = isoDate;
+        const state = getState();
+        const dayEditorModal = document.getElementById('day-editor-modal');
+        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
+        const body = dayEditorModal.querySelector('#day-editor-body');
+        
+        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
+          const slotId = `${isoDate}-${mealType}`;
+          const plannedMeal = state.weeklyPlan[slotId];
+          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
+          
+          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+          if (meal) {
+            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
+          }
+          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+        }).join('');
+
+        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+        
+        let workoutDetailsHTML;
+        if (plannedWorkoutList.length > 0) {
+            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
+            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
+        } else {
+            workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
+        }
+        
+        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+
+        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+
+        body.onclick = e => {
+          const btnAddMeal = e.target.closest('.btn-add-meal');
+          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
+          const btnRecipe = e.target.closest('.btn-view-recipe');
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnManageWorkout = e.target.closest('.btn-manage-workout');
+          const btnLogActivity = e.target.closest('.btn-log-activity');
+
+          if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId, isoDate); }
+          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
+          else if (btnRecipe) {
+            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+            if (meal) showRecipeModal(meal);
+          }
+          else if (btnAddExercise) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnManageWorkout) {
+            dayEditorModal.classList.add('modal-hidden');
+            openWorkoutEditorModal(isoDate);
+          }
+          else if (btnLogActivity) {
+            dayEditorModal.classList.add('modal-hidden');
+            openManualWorkoutModal(isoDate);
+          }
+        };
+        dayEditorModal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/manualWorkoutModal.js
+    content: |
+      import { addManualWorkoutToHistory } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openDayEditorModal } from './dayEditorModal.js';
+
+      export function openManualWorkoutModal(isoDate) {
+        log('Modals', 'Opening manual workout modal', { isoDate });
+        const modal = document.getElementById('manual-workout-modal');
+        const form = modal.querySelector('#manual-workout-form');
+
+        // Imposta i testi dall'UI_TEXT
+        modal.querySelector('#manual-workout-modal-title').textContent = UI_TEXT.MANUAL_WORKOUT_MODAL_TITLE;
+        modal.querySelector('#manual-workout-name-label').textContent = UI_TEXT.MANUAL_WORKOUT_NAME_LABEL;
+        modal.querySelector('#manual-workout-duration-label').textContent = UI_TEXT.MANUAL_WORKOUT_DURATION_LABEL;
+        modal.querySelector('#manual-workout-details-label').textContent = UI_TEXT.MANUAL_WORKOUT_DETAILS_LABEL;
+        modal.querySelector('#manual-workout-save-btn').textContent = UI_TEXT.MANUAL_WORKOUT_SAVE_BTN;
+
+        form.reset();
+
+        form.onsubmit = e => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          const activityData = {
+            name: formData.get('name'),
+            duration: formData.get('duration'),
+            details: formData.get('details')
+          };
+          addManualWorkoutToHistory(isoDate, activityData);
+          modal.classList.add('modal-hidden');
+          openDayEditorModal(isoDate); // Riapri l'editor del giorno per vedere il risultato
+        };
+
+        modal.classList.remove('modal-hidden');
       }
   - file: src/ui/pageRenderers.js
     content: |
@@ -626,6 +1154,13 @@ patches:
             return;
         }
 
+        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
+                <span class="stat-value">${summary.totalCaloriesBurned}</span>
+            </div>
+        ` : '';
+
         const statsHTML = `
             <div class="stat-item">
                 <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
@@ -639,6 +1174,7 @@ patches:
                 <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
                 <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
             </div>
+            ${caloriesBurnedHTML}
         `;
         statsContainer.innerHTML = statsHTML;
 
@@ -865,35 +1401,50 @@ patches:
             
             if (completedWorkouts.length > 0) {
                 completedWorkouts.forEach(workout => {
-                    dayLogHTML += `<div class="log-workout-summary">
-                        <div class="log-workout-header">
-                            <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                            <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                        </div>
-                        <div class="log-workout-stats">
-                        <span>Durata: ${formatDuration(workout.totalTime)}</span>
-                        <span>/</span>
-                        <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
-                        <span>/</span>
-                        <span>Recupero: ${formatDuration(workout.totalRestTime)}</span>
-                        </div>
-                        ${workout.exercises.map(ex => `
-                        <div class="log-workout-exercise">
-                            <div class="log-item">
-                            <strong>${ex.name}</strong>
-                            <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                    if (workout.type === 'structured') {
+                        dayLogHTML += `<div class="log-workout-summary">
+                            <div class="log-workout-header">
+                                <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                                <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
                             </div>
-                            <div class="log-sets-details">
-                            ${ex.setsData.map((setData, i) => `
-                                <div class="log-set-item">
-                                <span>Serie ${i + 1}</span>
-                                <span>${getSetDetails(setData)}</span>
+                            <div class="log-workout-stats">
+                                <span>Durata: ${formatDuration(workout.totalTime)}</span>
+                                <span>/</span>
+                                <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
+                                <span>/</span>
+                                <span>Recupero: ${formatDuration(workout.totalRestTime)}</span>
+                                ${workout.totalCaloriesBurned > 0 ? `<span>/</span><span>Kcal: ${workout.totalCaloriesBurned}</span>` : ''}
+                            </div>
+                            ${workout.exercises.map(ex => `
+                            <div class="log-workout-exercise">
+                                <div class="log-item">
+                                <strong>${ex.name}</strong>
+                                <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
                                 </div>
-                            `).join('')}
+                                <div class="log-sets-details">
+                                ${ex.setsData.map((setData, i) => `
+                                    <div class="log-set-item">
+                                    <span>Serie ${i + 1}</span>
+                                    <span>${getSetDetails(setData)}</span>
+                                    </div>
+                                `).join('')}
+                                </div>
                             </div>
-                        </div>
-                        `).join('')}
-                    </div>`;
+                            `).join('')}
+                        </div>`;
+                    } else if (workout.type === 'manual') {
+                        dayLogHTML += `<div class="log-workout-summary">
+                            <div class="log-workout-header">
+                                <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
+                                <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                            </div>
+                            <div class="log-item">
+                                <strong>${workout.name}</strong>
+                                <span>${workout.duration || ''}</span>
+                            </div>
+                            ${workout.details ? `<div class="log-item-details">${workout.details.replace(/\n/g, '<br>')}</div>` : ''}
+                        </div>`;
+                    }
                 });
             }
 
@@ -939,126 +1490,5 @@ patches:
         renderCalendarView(state, weekStart);
         renderLogView(state, weekStart);
       }
-  - file: styles/planner.css
-    content: |
-      /* --- PLANNER PAGE --- */
-      .data-source-container {
-          display: flex; align-items: center; gap: 0.75rem;
-          padding: 1rem; background: var(--card-color);
-          border: 1px solid var(--border-color); border-radius: 8px;
-          margin-bottom: 1.5rem;
-      }
-      #config-url-input {
-          flex-grow: 1; min-width: 0; padding: 0.75rem;
-          border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
-
-      .planner-summary-widget {
-          background: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
-      }
-      .planner-summary-title {
-          color: var(--secondary-color);
-          text-align: center;
-          margin-bottom: 1rem;
-          font-size: 1.25rem;
-      }
-      .planner-summary-stats {
-          display: flex;
-          justify-content: space-around;
-          text-align: center;
-      }
-      .planner-summary-stat .stat-value {
-          font-size: 1.75rem;
-          font-weight: bold;
-          color: var(--primary-color);
-      }
-      .planner-summary-stat .stat-label {
-          font-size: 0.8rem;
-          color: var(--text-color-muted);
-          text-transform: uppercase;
-      }
-
-      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-      .planner-controls-wrapper {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
-      }
-      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      .planner-actions { display: flex; gap: 0.75rem; }
-      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-      .day-cell {
-          background-color: var(--card-color); border: 1px solid var(--border-color);
-          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-          flex-direction: column; transition: all 0.2s;
-      }
-      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
-      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
-      .day-cell.is-today {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
-      }
-      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
-      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
-      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
-      .btn-start-workout-day {
-        pointer-events: all;
-        width: 100%;
-        margin-top: 1rem;
-        padding: 0.5rem;
-        font-size: 0.85rem;
-      }
-      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
-      .log-day { margin-bottom: 2rem; }
-      .log-day:last-child { margin-bottom: 0; }
-      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
-      .log-day.is-today h3 {
-        color: var(--primary-color);
-        font-weight: bold;
-      }
-      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
-      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
-      .log-day .log-item:last-child { border-bottom: none; }
-      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
-      .log-item strong { color: var(--text-color-muted); }
-      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
-
-      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
-      .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
-      .btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
-      .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
-      .log-workout-stats {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1rem;
-        font-size: 0.85rem;
-        color: var(--text-color-muted);
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .log-workout-exercise { margin-bottom: 1rem; }
-      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
-      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
-      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
-      .log-set-item span:first-child { color: var(--text-color-muted); }
-
-      @media (min-width: 768px) {
-          #app-container { padding: 2rem; }
-          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
-      }
 commands:
-  - "echo 'Interfaccia utente potenziata con nuove metriche, grafici e terminologia corretta.'"
+  - "echo 'Funzionalità di tracking completate: calorie bruciate e log attività manuali implementati.'"

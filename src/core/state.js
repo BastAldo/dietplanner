@@ -245,15 +245,31 @@ export function setLastWorkoutSummary(summary) {
 }
 
 export function addWorkoutToHistory(summary) {
-  log('State', 'Adding workout to history', { date: summary.date });
+  log('State', 'Adding structured workout to history', { date: summary.date });
   if (summary && summary.date) {
       if (!state.workoutHistory[summary.date]) {
           state.workoutHistory[summary.date] = [];
       }
-      state.workoutHistory[summary.date].push(summary);
+      state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
       saveStateToLocalStorage();
       notify();
   }
+}
+
+export function addManualWorkoutToHistory(date, activityData) {
+    log('State', 'Adding manual workout to history', { date, activityData });
+    if (!state.workoutHistory[date]) {
+        state.workoutHistory[date] = [];
+    }
+    const manualWorkout = {
+        type: 'manual',
+        date: date,
+        startTime: Date.now(),
+        ...activityData
+    };
+    state.workoutHistory[date].push(manualWorkout);
+    saveStateToLocalStorage();
+    notify();
 }
 
 export function deleteWorkoutFromHistory(date, startTime) {

@@ -114,3 +114,30 @@
       <div id="recipe-modal-body" class="modal-body recipe-body"></div>
   </div>
 </div>
+<div id="manual-workout-modal" class="modal-overlay modal-hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="manual-workout-modal-title"></h3>
+          <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+        </div>
+        <div class="modal-body">
+            <form id="manual-workout-form">
+                <div class="form-group">
+                    <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                    <input type="text" id="manual-workout-name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                    <input type="text" id="manual-workout-duration" name="duration">
+                </div>
+                <div class="form-group">
+                    <label id="manual-workout-details-label" for="manual-workout-details"></label>
+                    <textarea id="manual-workout-details" name="details" rows="3"></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+        </div>
+    </div>
+</div>

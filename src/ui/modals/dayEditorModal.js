@@ -6,6 +6,7 @@ import { log } from '../../utils/logger.js';
 import { showRecipeModal } from './recipeModal.js';
 import { openSelectionModal } from './selectionModal.js';
 import { openWorkoutEditorModal } from './workoutEditorModal.js';
+import { openManualWorkoutModal } from './manualWorkoutModal.js';
 
 let currentEditingDayISO = null;
 
@@ -49,9 +50,9 @@ export function openDayEditorModal(isoDate) {
   let workoutDetailsHTML;
   if (plannedWorkoutList.length > 0) {
       const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-      workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
+      workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
   } else {
-      workoutDetailsHTML = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+      workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
   }
   
   const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
@@ -64,6 +65,7 @@ export function openDayEditorModal(isoDate) {
     const btnRecipe = e.target.closest('.btn-view-recipe');
     const btnAddExercise = e.target.closest('.btn-add-exercise');
     const btnManageWorkout = e.target.closest('.btn-manage-workout');
+    const btnLogActivity = e.target.closest('.btn-log-activity');
 
     if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId, isoDate); }
     else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
@@ -78,6 +80,10 @@ export function openDayEditorModal(isoDate) {
     else if (btnManageWorkout) {
       dayEditorModal.classList.add('modal-hidden');
       openWorkoutEditorModal(isoDate);
+    }
+    else if (btnLogActivity) {
+      dayEditorModal.classList.add('modal-hidden');
+      openManualWorkoutModal(isoDate);
     }
   };
   dayEditorModal.classList.remove('modal-hidden');

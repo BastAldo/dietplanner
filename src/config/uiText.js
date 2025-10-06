@@ -57,6 +57,7 @@ const UI_TEXT_CONFIG = [
   { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
   { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
   { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+  { id: 'LOG_ACTIVITY_BTN', text: 'Log Attività' },
   { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
   { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
   { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
@@ -111,10 +112,17 @@ const UI_TEXT_CONFIG = [
   { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
   { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
   { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
+  { id: 'DEBRIEFING_CALORIES_BURNED', text: 'Calorie Bruciate' },
   { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
   { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
   { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
-  { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' }
+  { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' },
+  { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
+  { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività (es. Corsa, Bici)' },
+  { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata (es. 45 min, 1h)' },
+  { id: 'MANUAL_WORKOUT_DETAILS_LABEL', text: 'Dettagli (es. 10km, FC media 150bpm)' },
+  { id: 'MANUAL_WORKOUT_SAVE_BTN', text: 'Salva Attività' },
+  { id: 'LOG_VIEW_MANUAL_ACTIVITY_TITLE', text: 'Attività del Giorno' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

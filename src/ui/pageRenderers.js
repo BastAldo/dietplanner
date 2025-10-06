@@ -118,6 +118,13 @@ export function renderDebriefingPage(state) {
       return;
   }
 
+  const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
+      <div class="stat-item">
+          <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
+          <span class="stat-value">${summary.totalCaloriesBurned}</span>
+      </div>
+  ` : '';
+
   const statsHTML = `
       <div class="stat-item">
           <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
@@ -131,6 +138,7 @@ export function renderDebriefingPage(state) {
           <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
           <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
       </div>
+      ${caloriesBurnedHTML}
   `;
   statsContainer.innerHTML = statsHTML;
 

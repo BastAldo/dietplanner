@@ -34,3 +34,28 @@ export function calculateBMR(userProfile, weight) {
 
   return Math.round(bmr);
 }
+
+export function calculateWorkoutCalories(workoutSummary, userWeight) {
+  if (!workoutSummary || !userWeight || !workoutSummary.exercises || workoutSummary.exercises.length === 0) {
+    return 0;
+  }
+
+  const weightKg = parseFloat(userWeight);
+  if (isNaN(weightKg) || weightKg <= 0) return 0;
+
+  let totalCalories = 0;
+
+  workoutSummary.exercises.forEach(exercise => {
+    const met = exercise.met_value;
+    // totalTime for each exercise is in milliseconds
+    const durationHours = exercise.totalTime / (1000 * 60 * 60);
+
+    if (typeof met === 'number' && met > 0 && durationHours > 0) {
+      // Formula: Kcal = MET * Peso(kg) * Durata(ore)
+      const caloriesBurned = met * weightKg * durationHours;
+      totalCalories += caloriesBurned;
+    }
+  });
+
+  return Math.round(totalCalories);
+}

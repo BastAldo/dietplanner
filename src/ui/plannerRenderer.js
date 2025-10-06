@@ -187,35 +187,50 @@ function renderLogView(state, weekStart) {
       
       if (completedWorkouts.length > 0) {
           completedWorkouts.forEach(workout => {
-              dayLogHTML += `<div class="log-workout-summary">
-                  <div class="log-workout-header">
-                      <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                      <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                  </div>
-                  <div class="log-workout-stats">
-                  <span>Durata: ${formatDuration(workout.totalTime)}</span>
-                  <span>/</span>
-                  <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
-                  <span>/</span>
-                  <span>Recupero: ${formatDuration(workout.totalRestTime)}</span>
-                  </div>
-                  ${workout.exercises.map(ex => `
-                  <div class="log-workout-exercise">
-                      <div class="log-item">
-                      <strong>${ex.name}</strong>
-                      <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+              if (workout.type === 'structured') {
+                  dayLogHTML += `<div class="log-workout-summary">
+                      <div class="log-workout-header">
+                          <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                          <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
                       </div>
-                      <div class="log-sets-details">
-                      ${ex.setsData.map((setData, i) => `
-                          <div class="log-set-item">
-                          <span>Serie ${i + 1}</span>
-                          <span>${getSetDetails(setData)}</span>
+                      <div class="log-workout-stats">
+                          <span>Durata: ${formatDuration(workout.totalTime)}</span>
+                          <span>/</span>
+                          <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
+                          <span>/</span>
+                          <span>Recupero: ${formatDuration(workout.totalRestTime)}</span>
+                          ${workout.totalCaloriesBurned > 0 ? `<span>/</span><span>Kcal: ${workout.totalCaloriesBurned}</span>` : ''}
+                      </div>
+                      ${workout.exercises.map(ex => `
+                      <div class="log-workout-exercise">
+                          <div class="log-item">
+                          <strong>${ex.name}</strong>
+                          <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
                           </div>
-                      `).join('')}
+                          <div class="log-sets-details">
+                          ${ex.setsData.map((setData, i) => `
+                              <div class="log-set-item">
+                              <span>Serie ${i + 1}</span>
+                              <span>${getSetDetails(setData)}</span>
+                              </div>
+                          `).join('')}
+                          </div>
                       </div>
-                  </div>
-                  `).join('')}
-              </div>`;
+                      `).join('')}
+                  </div>`;
+              } else if (workout.type === 'manual') {
+                  dayLogHTML += `<div class="log-workout-summary">
+                      <div class="log-workout-header">
+                          <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
+                          <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                      </div>
+                      <div class="log-item">
+                          <strong>${workout.name}</strong>
+                          <span>${workout.duration || ''}</span>
+                      </div>
+                      ${workout.details ? `<div class="log-item-details">${workout.details.replace(/\n/g, '<br>')}</div>` : ''}
+                  </div>`;
+              }
           });
       }
 

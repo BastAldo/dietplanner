@@ -1,9 +1,10 @@
-import { setView, setLastWorkoutSummary, addWorkoutToHistory } from './state.js';
+import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
 import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
 import { advanceToNextSet } from './trainer/machine.js';
+import { calculateWorkoutCalories } from './calculations.js';
 
 export { getState as getWorkoutState };
 
@@ -161,15 +162,24 @@ function createWorkoutSummary(finalState) {
     const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
     const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
 
-    return {
+    const summary = {
         date: finalState.workoutDate,
         totalTime,
         totalSets,
         totalExerciseTime,
         totalRestTime,
         exercises: exercisesWithDetails,
-        startTime: finalState.startTime
+        startTime: finalState.startTime,
+        totalCaloriesBurned: 0
     };
+
+    const globalState = getGlobalState();
+    const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+    if (latestWeight) {
+      summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+    }
+
+    return summary;
 }
 
 export function endWorkout() {
