@@ -1,4 +1,4 @@
-import { setView, updateWorkoutInHistory } from '../../core/state.js';
+import { getState, setView, updateWorkoutInHistory } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { showNotification } from '../notifications.js';
 

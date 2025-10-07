@@ -30,11 +30,29 @@
 .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
 .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
 .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-#exercise-editor-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+#exercise-editor-form {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
+  align-items: end;
+}
 #exercise-editor-form .form-group { display: flex; flex-direction: column; }
 #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
 #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
-#exercise-editor-form .tempo-group, #exercise-editor-form .weight-group { grid-column: 1 / -1; }
+#exercise-editor-form .sets-group { grid-column: 1 / 3; }
+#exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+#exercise-editor-form .rest-group { grid-column: 5 / 7; }
+#exercise-editor-form .weight-group { grid-column: 1 / 4; }
+#exercise-editor-form .tempo-group {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
 
 .structured-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .structured-form .full-width { grid-column: 1 / -1; }

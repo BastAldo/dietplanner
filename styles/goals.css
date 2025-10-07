@@ -15,3 +15,7 @@
     flex-direction: column;
     gap: 1.5rem;
 }
+
+.goals-form .form-group input {
+  max-width: 200px;
+}

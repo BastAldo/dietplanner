@@ -73,6 +73,11 @@
     overflow: hidden;
 }
 
+#debriefing-feedback {
+  max-width: 400px;
+  margin: 0 auto 2rem auto;
+}
+
 .debriefing-card-header {
   display: flex;
   justify-content: space-between;
