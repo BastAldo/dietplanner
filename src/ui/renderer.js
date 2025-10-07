@@ -22,6 +22,7 @@ function populateIcons() {
     document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
     document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
     document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+    document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
 
     document.querySelectorAll('.modal-close-btn').forEach(btn => {
         btn.innerHTML = renderIcon('CLOSE');
@@ -87,6 +88,7 @@ export function renderApp() {
 
   [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
   [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+  document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
 
   if (state.currentView === 'planner' || state.currentView === 'log') {
     plannerPage.classList.remove('hidden');

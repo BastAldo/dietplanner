@@ -28,16 +28,16 @@
     font-size: 1.25rem;
 }
 .planner-summary-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 1.5rem;
+    justify-content: center;
     align-items: center;
 }
 .planner-summary-stat {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    justify-content: center;
 }
 .planner-summary-stat .stat-icon {
     color: var(--secondary-color);
@@ -105,8 +105,10 @@
 .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
 .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
-.btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
+.log-workout-header-actions { display: flex; gap: 0.5rem; }
+.btn-delete-workout, .btn-edit-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
 .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
+.btn-edit-workout:hover { color: var(--primary-color); background-color: rgba(149, 117, 205, 0.1); }
 .log-workout-stats {
   display: flex;
   flex-wrap: wrap;

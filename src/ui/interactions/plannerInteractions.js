@@ -5,7 +5,7 @@ import {
 import { initializeWorkout } from '../../core/trainer.js';
 import { fetchAndParseConfig } from '../../api/configService.js';
 import { showNotification } from '../notifications.js';
-import { openDayEditorModal, showConfirmModal, showRecipeModal } from '../modals.js';
+import { openDayEditorModal, showConfirmModal, showRecipeModal, openWorkoutLogEditorModal } from '../modals.js';
 import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
@@ -79,6 +79,15 @@ function handleLogViewClick(e) {
       },
       'danger'
     );
+    return;
+  }
+
+  const btnEditWorkout = e.target.closest('.btn-edit-workout');
+  if (btnEditWorkout) {
+    const { date, starttime } = btnEditWorkout.dataset;
+    log('Interactions', 'Edit workout button clicked', { date, starttime });
+    openWorkoutLogEditorModal(date, parseInt(starttime, 10));
+    return;
   }
 }
 

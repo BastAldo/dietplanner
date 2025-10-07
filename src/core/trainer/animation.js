@@ -2,7 +2,8 @@ import { getWorkoutState, updateState } from './state.js';
 import { advanceToNextSet } from './machine.js';
 import { setView } from '../state.js';
 import { completeSet } from '../trainer.js';
-import { playTick, playStartCue, playStopCue } from '../../utils/audioFeedback.js';
+import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
+import { UI_TEXT } from '../../config/uiText.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
@@ -31,7 +32,18 @@ function tick(timestamp) {
             const newPhaseIndex = state.currentPhaseIndex + 1;
             const nextPhase = state.executionQueue[newPhaseIndex];
 
-            if (isAudioEnabled) playTick();
+            if (isAudioEnabled) {
+              playTick();
+              if(nextPhase) {
+                const phaseName = nextPhase.name.replace('pre-', '');
+                let speechText = '';
+                if (phaseName === 'up') speechText = UI_TEXT.VOICE_GUIDE_PHASE_UP;
+                else if (phaseName === 'hold') speechText = UI_TEXT.VOICE_GUIDE_PHASE_HOLD;
+                else if (phaseName === 'down') speechText = UI_TEXT.VOICE_GUIDE_PHASE_DOWN;
+                if(speechText) speak(speechText);
+              }
+            }
+
 
             if (nextPhase) {
               updateState({
@@ -58,7 +70,10 @@ function tick(timestamp) {
   } else if (state.status === 'resting') {
     const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
     if (newRestTimeRemaining <= 0) {
-      if (isAudioEnabled) playStartCue();
+      if (isAudioEnabled) {
+        playStartCue();
+        speak(UI_TEXT.VOICE_GUIDE_SET_START);
+      }
       advanceToNextSet();
     } else {
       updateState({ restTimeRemaining: newRestTimeRemaining });

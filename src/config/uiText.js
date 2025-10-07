@@ -141,7 +141,20 @@ const UI_TEXT_CONFIG = [
   { id: 'GOALS_BIOMETRICS_LEGEND', text: 'Dati Biometrici' },
   { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
   { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' },
-  { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' }
+  { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' },
+  { id: 'WORKOUT_LOG_EDITOR_TITLE', text: 'Modifica Allenamento Registrato' },
+  { id: 'WORKOUT_LOG_SAVE_SUCCESS', text: 'Allenamento aggiornato con successo!' },
+  { id: 'WORKOUT_LOG_SET_LABEL', text: 'Set' },
+  { id: 'WORKOUT_LOG_REPS_LABEL', text: 'Reps' },
+  { id: 'WORKOUT_LOG_WEIGHT_LABEL', text: 'Peso' },
+  { id: 'VOICE_GUIDE_WORKOUT_START', text: 'Allenamento iniziato' },
+  { id: 'VOICE_GUIDE_NEXT_EXERCISE', text: 'Prossimo esercizio' },
+  { id: 'VOICE_GUIDE_REST_START', text: 'Riposo' },
+  { id: 'VOICE_GUIDE_SET_START', text: 'Inizio' },
+  { id: 'VOICE_GUIDE_PHASE_UP', text: 'su' },
+  { id: 'VOICE_GUIDE_PHASE_HOLD', text: 'tieni' },
+  { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
+  { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

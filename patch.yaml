@@ -1,15 +1,376 @@
-commit_message: "feat(UX): Potenzia riepilogo, unifica UI trainer e corregge layout"
+commit_message: "feat(UX): Migliora UI, introduce editing log e feedback vocale trainer"
 rationale: |
-  Questo commit implementa una serie di miglioramenti significativi all'interfaccia utente, basati sul feedback ricevuto, per aumentare la coerenza, la chiarezza e il valore informativo dell'applicazione.
+  Questo commit introduce una serie di miglioramenti sostanziali basati sulle richieste dell'utente, con l'obiettivo di elevare l'usabilità, la reattività e la completezza funzionale dell'applicazione.
 
-  1.  **Potenziamento Riepilogo Settimanale**: Il widget di riepilogo nel planner è stato completamente riprogettato. Ora mostra metriche più utili e motivazionali, come le calorie totali bruciate durante gli allenamenti della settimana e i chilogrammi mancanti per raggiungere l'obiettivo di peso impostato. Il layout è stato riorganizzato in una griglia CSS per una presentazione più pulita e ordinata.
+  1. **Riorganizzazione dell'Interfaccia Utente**:
+     - È stato implementato un menu hamburger per la navigazione su dispositivi mobili. Questo risolve il problema di leggibilità delle voci di menu su schermi di piccole dimensioni, rendendo l'app più moderna e user-friendly.
+     - Il layout del riepilogo settimanale nel planner è stato corretto utilizzando Flexbox con wrapping, garantendo che tutti gli elementi siano sempre visibili e correttamente allineati, eliminando così i problemi di "spaginamento" su mobile.
 
-  2.  **Unificazione Stile Trainer**: L'interfaccia del trainer è stata resa visivamente coerente tra le diverse modalità di esercizio (`tempo_guided`, `static_hold`, `manual_reps`). Le variazioni drastiche della dimensione del font sono state eliminate in favore di uno stile unificato, che utilizza il colore e il tipo di carattere per differenziare le informazioni, migliorando la leggibilità e riducendo la distrazione per l'utente.
+  2. **Introduzione Modifica Allenamenti Registrati**:
+     - È stata aggiunta la funzionalità, precedentemente assente, di modificare gli allenamenti già salvati nella cronologia (Log).
+     - Al click sull'icona "Modifica", un nuovo modale permette all'utente di correggere i dati di ogni singola serie (peso, ripetizioni), offrendo un controllo completo e la possibilità di rimediare a errori di inserimento.
 
-  3.  **Correzione Layout Header Trainer**: È stato risolto un bug di layout nell'header del trainer che causava la sovrapposizione di elementi. La struttura HTML è stata resa più logica e il CSS è stato refattorizzato per utilizzare Flexbox, garantendo un allineamento corretto e robusto su tutte le risoluzioni.
-
-  4.  **Aggiunta Testo Esplicativo**: È stato inserito il testo esplicativo mancante nella pagina "Obiettivi", guidando meglio l'utente nella comprensione e nell'utilizzo della funzionalità, come originariamente previsto.
+  3. **Integrazione Feedback Vocale nel Trainer**:
+     - È stato implementato un sistema di guida vocale opzionale all'interno della vista Trainer.
+     - Quando l'audio è attivo, l'applicazione ora fornisce istruzioni vocali chiare per guidare l'utente attraverso le varie fasi dell'esercizio (salita, tenuta, discesa) e i periodi di riposo, migliorando l'esperienza di allenamento a mani libere.
 patches:
+  - file: index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="styles/base.css">
+          <link rel="stylesheet" href="styles/planner.css">
+          <link rel="stylesheet" href="styles/progress.css">
+          <link rel="stylesheet" href="styles/modals.css">
+          <link rel="stylesheet" href="styles/charts.css">
+          <link rel="stylesheet" href="styles/recipes.css">
+          <link rel="stylesheet" href="styles/trainer.css">
+          <link rel="stylesheet" href="styles/debriefing.css">
+          <link rel="stylesheet" href="styles/goals.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-progress" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-charts" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-recipes" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-goals" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-profile" class="btn-nav">
+                          <span></span>
+                      </button>
+                  </nav>
+                  <button id="hamburger-btn" class="hamburger-btn"></button>
+              </div>
+          </header>
+
+          <main id="app-container">
+          </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="modal-container">
+          </div>
+      </body>
+      </html>
+  - file: styles/base.css
+    content: |
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: 60px;
+      }
+      .hidden { display: none !important; }
+
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed; top: 80px; right: 1rem; z-index: 2000;
+        display: flex; flex-direction: column; gap: 0.5rem;
+      }
+      .toast {
+        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
+        border-radius: 8px; border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
+        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
+      }
+      .toast.show { opacity: 1; transform: translateX(0); }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
+
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
+      }
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; padding: 0; }
+      .alert-close-btn svg { display: block; }
+      .alert-close-btn:hover { color: var(--text-color); }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: 60px;
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
+      }
+      .header-content {
+        width: 100%; max-width: 1200px; display: flex;
+        justify-content: space-between; align-items: center;
+      }
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+      .main-nav { display: none; }
+      .btn-nav {
+        background: transparent; border: none; color: var(--text-color-muted);
+        padding: 0.5rem; border-radius: 8px; cursor: pointer; font-weight: bold;
+        transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
+      }
+      .btn-nav svg { fill: currentColor; }
+      .btn-nav span { display: none; } /* Hide text on mobile by default */
+      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
+      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      #info-icon { padding: 0.5rem; }
+      .hamburger-btn { display: flex; background: none; border: none; color: var(--text-color); z-index: 1002; }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .page-view { width: 100%; }
+      .app-footer {
+          padding: 1.5rem 1rem; margin-top: 1.5rem;
+          display: flex; justify-content: center;
+          gap: 0.75rem;
+      }
+
+      /* --- GENERAL COMPONENTS --- */
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+
+      /* Responsive Nav */
+      @media (min-width: 768px) {
+          .main-nav { display: flex; gap: 0.5rem; }
+          .hamburger-btn { display: none; }
+          .btn-nav { padding: 0.5rem 1rem; }
+          .btn-nav span { display: inline; }
+      }
+
+      /* Stili per il menu mobile */
+      .main-nav.is-mobile {
+          display: flex;
+          flex-direction: column;
+          position: fixed;
+          top: 60px;
+          left: 0;
+          width: 100%;
+          height: calc(100vh - 60px);
+          background-color: var(--bg-color);
+          padding: 1rem;
+          gap: 1rem;
+          transform: translateX(-100%);
+          transition: transform 0.3s ease-in-out;
+      }
+      .main-nav.is-mobile.is-open {
+          transform: translateX(0);
+      }
+      .main-nav.is-mobile .btn-nav {
+          justify-content: center;
+          padding: 1rem;
+          font-size: 1.2rem;
+      }
+      .main-nav.is-mobile .btn-nav span {
+          display: inline;
+      }
+  - file: styles/planner.css
+    content: |
+      /* --- PLANNER PAGE --- */
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+
+      .planner-summary-widget {
+          background: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+      }
+      .planner-summary-title {
+          color: var(--secondary-color);
+          text-align: center;
+          margin-bottom: 1.5rem;
+          font-size: 1.25rem;
+      }
+      .planner-summary-stats {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 1.5rem;
+          justify-content: center;
+          align-items: center;
+      }
+      .planner-summary-stat {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+      }
+      .planner-summary-stat .stat-icon {
+          color: var(--secondary-color);
+      }
+      .planner-summary-stat .stat-value {
+          font-size: 1.5rem;
+          font-weight: bold;
+          color: var(--primary-color);
+      }
+      .planner-summary-stat .stat-label {
+          font-size: 0.8rem;
+          color: var(--text-color-muted);
+          text-transform: uppercase;
+      }
+
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .planner-controls-wrapper {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+      }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .planner-actions { display: flex; gap: 0.75rem; }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; transition: all 0.2s;
+      }
+      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
+      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell.is-today {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
+      }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+      .btn-start-workout-day {
+        pointer-events: all;
+        width: 100%;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+      }
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+      .log-day.is-today h3 {
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+
+      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
+      .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
+      .log-workout-header-actions { display: flex; gap: 0.5rem; }
+      .btn-delete-workout, .btn-edit-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
+      .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
+      .btn-edit-workout:hover { color: var(--primary-color); background-color: rgba(149, 117, 205, 0.1); }
+      .log-workout-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        font-size: 0.85rem;
+        color: var(--text-color-muted);
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .log-workout-exercise { margin-bottom: 1rem; }
+      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
+      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
+      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
+      .log-set-item span:first-child { color: var(--text-color-muted); }
+
+      .log-manual-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.5rem;
+        padding: 0.75rem 0;
+        font-size: 0.9rem;
+      }
+      .log-manual-details div {
+        word-break: break-word;
+      }
+      .log-item-details {
+        font-style: italic;
+        color: var(--text-color-muted);
+        width: 100%;
+      }
+
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+      }
   - file: src/config/uiText.js
     content: |
       const UI_TEXT_CONFIG = [
@@ -155,223 +516,799 @@ patches:
         { id: 'GOALS_BIOMETRICS_LEGEND', text: 'Dati Biometrici' },
         { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
         { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' },
-        { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' }
+        { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' },
+        { id: 'WORKOUT_LOG_EDITOR_TITLE', text: 'Modifica Allenamento Registrato' },
+        { id: 'WORKOUT_LOG_SAVE_SUCCESS', text: 'Allenamento aggiornato con successo!' },
+        { id: 'WORKOUT_LOG_SET_LABEL', text: 'Set' },
+        { id: 'WORKOUT_LOG_REPS_LABEL', text: 'Reps' },
+        { id: 'WORKOUT_LOG_WEIGHT_LABEL', text: 'Peso' },
+        { id: 'VOICE_GUIDE_WORKOUT_START', text: 'Allenamento iniziato' },
+        { id: 'VOICE_GUIDE_NEXT_EXERCISE', text: 'Prossimo esercizio' },
+        { id: 'VOICE_GUIDE_REST_START', text: 'Riposo' },
+        { id: 'VOICE_GUIDE_SET_START', text: 'Inizio' },
+        { id: 'VOICE_GUIDE_PHASE_UP', text: 'su' },
+        { id: 'VOICE_GUIDE_PHASE_HOLD', text: 'tieni' },
+        { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
+        { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' }
       ];
 
       export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
         acc[id] = text;
         return acc;
       }, {});
-  - file: src/ui/pageRenderers.js
+  - file: src/core/state.js
     content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+        debugMode: false,
+        lastWorkoutSummary: null,
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
       }
 
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() + Math.random()
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+        }
+        state.workoutHistory = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
           });
-      }
 
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderGoalsPage(state) {
-          const form = document.getElementById('goals-form');
-          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
-          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
-          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
-          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
-          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
-          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
-          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
-          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
-          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
-          form.elements.target_weight.value = state.userGoals.target_weight || '';
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
           } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
+              delete state.weeklyWorkouts[destWorkoutSlot];
           }
-          renderCharts(state);
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: src/core/trainer/animation.js
+    content: |
+      import { getWorkoutState, updateState } from './state.js';
+      import { advanceToNextSet } from './machine.js';
+      import { setView } from '../state.js';
+      import { completeSet } from '../trainer.js';
+      import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+
+      let animationFrameId = null;
+      let lastTickTimestamp = 0;
+
+      function tick(timestamp) {
+        if (lastTickTimestamp === 0) {
+          lastTickTimestamp = timestamp;
+        }
+        const deltaTime = timestamp - lastTickTimestamp;
+        lastTickTimestamp = timestamp;
+
+        const state = getWorkoutState();
+        const { isAudioEnabled } = state;
+
+        if (state.status === 'finished') {
+          stopAnimation();
+          return;
+        }
+
+        if (state.status === 'running') {
+            if (state.executionMode === 'tempo_guided') {
+                const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+                const currentPhase = state.executionQueue[state.currentPhaseIndex];
+
+                if (newPhaseTimeElapsed >= currentPhase.duration) {
+                  const newPhaseIndex = state.currentPhaseIndex + 1;
+                  const nextPhase = state.executionQueue[newPhaseIndex];
+
+                  if (isAudioEnabled) {
+                    playTick();
+                    if(nextPhase) {
+                      const phaseName = nextPhase.name.replace('pre-', '');
+                      let speechText = '';
+                      if (phaseName === 'up') speechText = UI_TEXT.VOICE_GUIDE_PHASE_UP;
+                      else if (phaseName === 'hold') speechText = UI_TEXT.VOICE_GUIDE_PHASE_HOLD;
+                      else if (phaseName === 'down') speechText = UI_TEXT.VOICE_GUIDE_PHASE_DOWN;
+                      if(speechText) speak(speechText);
+                    }
+                  }
+
+
+                  if (nextPhase) {
+                    updateState({
+                      currentPhaseIndex: newPhaseIndex,
+                      phaseTimeElapsed: 0,
+                      currentRep: nextPhase.rep,
+                    });
+                  } else {
+                    if (isAudioEnabled) playStopCue();
+                    completeSet();
+                  }
+                } else {
+                  updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
+                }
+            } else if (state.executionMode === 'static_hold') {
+                const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
+                if (newSetTimeRemaining <= 0) {
+                    if (isAudioEnabled) playStopCue();
+                    completeSet();
+                } else {
+                    updateState({ setTimeRemaining: newSetTimeRemaining });
+                }
+            }
+        } else if (state.status === 'resting') {
+          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
+          if (newRestTimeRemaining <= 0) {
+            if (isAudioEnabled) {
+              playStartCue();
+              speak(UI_TEXT.VOICE_GUIDE_SET_START);
+            }
+            advanceToNextSet();
+          } else {
+            updateState({ restTimeRemaining: newRestTimeRemaining });
+          }
+        }
+
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+
+        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
+          animationFrameId = requestAnimationFrame(tick);
+        }
       }
 
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.weight) {
-              details.push(`${setData.weight} kg`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
+      export function startAnimation() {
+        if (animationFrameId) return;
+        lastTickTimestamp = 0;
+        animationFrameId = requestAnimationFrame(tick);
       }
 
-      export function renderDebriefingPage(state) {
-        const summaryContainer = document.getElementById('debriefing-summary');
-        const statsContainer = document.getElementById('debriefing-stats');
-        const summary = state.lastWorkoutSummary;
+      export function stopAnimation() {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+      }
+  - file: src/ui/icons.js
+    content: |
+      const ICONS = {
+        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
+        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
+        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
+        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
+        BAR_CHART: '<path d="M120 288V480H48c-17.7 0-32-14.3-32-32V320c0-17.7 14.3-32 32-32h72zm128 0V480H192V288h56zm128 0V480H320V288h56zm128 0V480H448V288h56zM544 64H32C14.3 64 0 78.3 0 96V416c0 53 43 96 96 96H544c53 0 96-43 96-96V96c0-17.7-14.3-32-32-32z"/>',
+        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
+        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
+        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
+        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
+        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
+        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
+        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>',
+        BOOK: '<path d="M568 32H128C92.7 32 64 60.7 64 96V512c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zM128 512V96h320v352c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32zm352-32c0 17.7-14.3 32-32 32H416V96h32c17.7 0 32 14.3 32 32V480z"/>',
+        EDIT: '<path d="M490.3 40.4C512.2 62.2 512.2 97.8 490.3 119.6L460.3 149.7L318.9 7.59998L349 37.6999C370.8 15.8999 406.4 15.8999 428.2 37.6999L490.3 40.4zM167 313L7.59998 472.4L167 472.4C167 472.4 167 313 167 313zM203 277L285.4 359.4L133.2 511.6L50.8001 429.2L203 277z"/>',
+        DRAG_HANDLE: '<path d="M96 160C96 142.3 110.3 128 128 128L512 128C529.7 128 544 142.3 544 160C544 177.7 529.7 192 512 192L128 192C110.3 192 96 177.7 96 160zM96 320C96 302.3 110.3 288 128 288L512 288C529.7 288 544 302.3 544 320C544 337.7 529.7 352 512 352L128 352C110.3 352 96 337.7 96 320zM544 480C544 497.7 529.7 512 512 512L128 512C110.3 512 96 497.7 96 480C96 462.3 110.3 448 128 448L512 448C529.7 448 544 462.3 544 480z"/>',
+        GOAL: '<path d="M128 64C128 46.3 142.3 32 160 32H384c17.7 0 32 14.3 32 32V64H128zM32 96H448V416c0 35.3-28.7 64-64 64H96c-35.3 0-64-28.7-64-64V96zM128 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32s-14.3-32-32-32H128z"/>',
+        AUDIO_ON: '<path d="M215 71.1C203.2 81.3 195.8 93.3 192.4 106.3C189.9 115.5 192.3 125.3 198.8 132.1L234.7 171.4C222.7 169.3 211.1 162.7 201.5 153.2C188.2 139.9 180.2 121.7 178.7 102.3C177.2 83 182.2 64.1 192.7 48.4C203.3 32.7 218.8 21.2 236.8 15.3C254.8 9.3 274.3 9.3 292.3 15.3C301.7 18.5 310.5 23.5 318.5 29.8L282.6 68.1C274.3 62.8 265.1 59.4 255.4 58.3C245.7 57.2 235.9 58.3 226.9 61.7C222.4 63.4 218.4 65.9 215 71.1zM503.2 418.1C515.7 430.6 515.7 450.9 503.2 463.4C490.7 475.9 470.4 475.9 457.9 463.4L6.1 11.6C-6.4 -0.9 -6.4 19.4 6.1 31.9C18.6 44.4 38.9 44.4 51.4 31.9L161.9 142.4L127.1 177.1C121.6 182.7 118.4 190.1 118.4 197.8C118.4 215.1 132.3 229 149.6 229H256v128c0 17.7 14.3 32 32 32s32-14.3 32-32V256.9L457.9 463.4zM320 128.8V128h32v4.8L320 128.8z"/>',
+        AUDIO_OFF: '<path d="M127.1 177.1C121.6 182.7 118.4 190.1 118.4 197.8C118.4 215.1 132.3 229 149.6 229H256v128c0 17.7 14.3 32 32 32s32-14.3 32-32V229h16.3c10.3 0 19.9-4.9 25.9-13.1c6-8.2 8-18.4 5.3-27.9l-42.3-154.6c-2.3-8.3-8.8-14.8-17.1-17.1L152.2 6.7C143.9 4.4 133.7 6.4 125.5 12.4c-8.2 6-11.4 16.2-9.1 24.6l32.9 120.4L127.1 177.1z"/>',
+        HAMBURGER: '<path d="M32 96c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zm0 128c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zM32 352c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32z"/>'
+      };
 
-        if (!summary || !summary.exercises) {
-            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
-            statsContainer.innerHTML = '';
-            document.getElementById('debriefing-feedback').classList.add('hidden');
+      const viewBoxes = {
+        APP_LOGO: '0 0 512 512',
+        PLANNER: '0 0 544 544',
+        PROFILE: '0 0 528 576',
+        WEIGHT_SCALE: '0 0 640 512',
+        BAR_CHART: '0 0 640 512',
+        SHARE: '0 0 544 576',
+        INFO: '0 0 576 576',
+        LOG_VIEW: '0 0 544 576',
+        RECIPE: '0 0 640 576',
+        TRASH: '0 0 448 512',
+        CLOSE: '0 0 640 512',
+        KEBAB_MENU: '0 0 376 544',
+        BOOK: '0 0 576 576',
+        EDIT: '0 0 512 512',
+        DRAG_HANDLE: '0 0 640 640',
+        GOAL: '0 0 448 512',
+        AUDIO_ON: '0 0 512 512',
+        AUDIO_OFF: '0 0 336 448',
+        HAMBURGER: '0 0 448 512'
+      };
+
+      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
+        const iconPath = ICONS[name];
+        if (!iconPath) return '';
+        const viewBox = viewBoxes[name] || '0 0 512 512';
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      }
+  - file: src/ui/interactions/globalInteractions.js
+    content: |
+      import { setView, getState, setAppState } from '../../core/state.js';
+      import { showConfirmModal } from '../modals.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      function handleShareConfig() {
+        log('Interactions', 'Share config button clicked');
+        const state = getState();
+        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
+        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+      }
+
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      async function handleSaveBackup() {
+        log('Interactions', 'Save backup button clicked');
+        const state = getState();
+        const backupData = {
+          configUrl: state.configUrl,
+          weeklyPlan: state.weeklyPlan,
+          weeklyWorkouts: state.weeklyWorkouts,
+          workoutHistory: state.workoutHistory,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile,
+          userGoals: state.userGoals
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
+          }
+        } else { triggerDownload(blob, fileName); }
+      }
+
+      function handleRestoreBackup() {
+          log('Interactions', 'Restore backup button clicked');
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              'danger'
+                          );
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
+
+      function handleHamburgerClick() {
+          const nav = document.getElementById('main-nav');
+          nav.classList.toggle('is-open');
+          nav.classList.toggle('is-mobile');
+      }
+
+      export function initializeGlobalListeners() {
+        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+        document.getElementById('hamburger-btn').addEventListener('click', handleHamburgerClick);
+
+        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
+        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
+        document.getElementById('nav-goals').addEventListener('click', () => setView('goals'));
+        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
+
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const modalId = e.currentTarget.dataset.target;
+            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+          });
+        });
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
+        });
+        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+      }
+  - file: src/ui/interactions/plannerInteractions.js
+    content: |
+      import {
+        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+        copyPreviousWeek, getState, deleteWorkoutFromHistory
+      } from '../../core/state.js';
+      import { initializeWorkout } from '../../core/trainer.js';
+      import { fetchAndParseConfig } from '../../api/configService.js';
+      import { showNotification } from '../notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal, openWorkoutLogEditorModal } from '../modals.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      async function handleLoadConfig() {
+        log('Interactions', 'Handling config load button click');
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) { showNotification(error.message, 'error'); }
+      }
+
+      function handleCalendarClick(e) {
+        const startBtn = e.target.closest('.btn-start-workout-day');
+        if (startBtn) {
+            const isoDate = startBtn.dataset.date;
+            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
+            const globalState = getState();
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout, isoDate);
+            setView('trainer');
             return;
         }
 
-        document.getElementById('debriefing-feedback').classList.remove('hidden');
-        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
-        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
-        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
-
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-                <span class="stat-value">${summary.totalCaloriesBurned}</span>
-            </div>
-        ` : '';
-
-        const tonnageHTML = summary.totalTonnage > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-                <span class="stat-value">${summary.totalTonnage} kg</span>
-            </div>
-        ` : '';
-
-        const statsHTML = `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-            </div>
-            ${caloriesBurnedHTML}
-            ${tonnageHTML}
-        `;
-        statsContainer.innerHTML = statsHTML;
-
-        const summaryHTML = summary.exercises.map(exercise => {
-            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-                <div class="set-detail-item">
-                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
-                </div>
-            `).join('');
-
-            return `
-                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header">
-                        <h4>${exercise.name}</h4>
-                        <div class="debriefing-status">
-                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                        </div>
-                    </div>
-                    <div class="debriefing-card-body">
-                      <div class="exercise-stats">
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
-                      </div>
-                      <div class="sets-details-container">
-                          ${setsDetailsHTML}
-                      </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        summaryContainer.innerHTML = summaryHTML;
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+          openDayEditorModal(dayCell.dataset.date);
+        }
       }
+
+      function handleRecipeClick(e) {
+        const recipeItem = e.target.closest('.recipe-list-item');
+        if (recipeItem) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+          return;
+        }
+
+        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
+        if (btnDeleteWorkout) {
+          const { date, starttime } = btnDeleteWorkout.dataset;
+          log('Interactions', 'Delete workout button clicked', { date, starttime });
+          showConfirmModal(
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+            () => {
+              deleteWorkoutFromHistory(date, parseInt(starttime));
+              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
+            },
+            'danger'
+          );
+          return;
+        }
+
+        const btnEditWorkout = e.target.closest('.btn-edit-workout');
+        if (btnEditWorkout) {
+          const { date, starttime } = btnEditWorkout.dataset;
+          log('Interactions', 'Edit workout button clicked', { date, starttime });
+          openWorkoutLogEditorModal(date, parseInt(starttime, 10));
+          return;
+        }
+      }
+
+      function handleCopyWeek() {
+        log('Interactions', 'Copy week button clicked');
+        showConfirmModal(
+          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        log('Interactions', 'Reset week button clicked');
+        showConfirmModal(
+          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
+        );
+      }
+
+      export function initializePlannerListeners() {
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+      }
+  - file: src/ui/modals.js
+    content: |
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
+      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
+      import { openWorkoutLogEditorModal } from './modals/workoutLogEditorModal.js';
+
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutEditorModal,
+        openManualWorkoutModal,
+        openWorkoutLogEditorModal
+      };
   - file: src/ui/plannerRenderer.js
     content: |
       import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
@@ -596,7 +1533,10 @@ patches:
                         dayLogHTML += `<div class="log-workout-summary">
                             <div class="log-workout-header">
                                 <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                                <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                                <div class="log-workout-header-actions">
+                                    <button class="btn-edit-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Modifica Allenamento">${renderIcon('EDIT')}</button>
+                                    <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                                </div>
                             </div>
                             <div class="log-workout-stats">
                                 <span>Durata: ${formatDuration(workout.totalTime)}</span>
@@ -631,7 +1571,9 @@ patches:
                         dayLogHTML += `<div class="log-workout-summary">
                             <div class="log-workout-header">
                                 <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
-                                <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                                <div class="log-workout-header-actions">
+                                  <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                                </div>
                             </div>
                             <div class="log-item">
                                 <strong>${workout.name}</strong>
@@ -685,643 +1627,586 @@ patches:
         renderCalendarView(state, weekStart);
         renderLogView(state, weekStart);
       }
-  - file: styles/planner.css
+  - file: src/ui/renderer.js
     content: |
-      /* --- PLANNER PAGE --- */
-      .data-source-container {
-          display: flex; align-items: center; gap: 0.75rem;
-          padding: 1rem; background: var(--card-color);
-          border: 1px solid var(--border-color); border-radius: 8px;
-          margin-bottom: 1.5rem;
-      }
-      #config-url-input {
-          flex-grow: 1; min-width: 0; padding: 0.75rem;
-          border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
-      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage } from './pageRenderers.js';
+      import { renderRecipesPage } from './recipesRenderer.js';
+      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { log } from '../utils/logger.js';
 
-      .planner-summary-widget {
-          background: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
-      }
-      .planner-summary-title {
-          color: var(--secondary-color);
-          text-align: center;
-          margin-bottom: 1.5rem;
-          font-size: 1.25rem;
-      }
-      .planner-summary-stats {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          gap: 1.5rem;
-          align-items: center;
-      }
-      .planner-summary-stat {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          justify-content: center;
-      }
-      .planner-summary-stat .stat-icon {
-          color: var(--secondary-color);
-      }
-      .planner-summary-stat .stat-value {
-          font-size: 1.5rem;
-          font-weight: bold;
-          color: var(--primary-color);
-      }
-      .planner-summary-stat .stat-label {
-          font-size: 0.8rem;
-          color: var(--text-color-muted);
-          text-transform: uppercase;
+      let isTrainerActive = false;
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
+
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
       }
 
-      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
-      .planner-controls-wrapper {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
-      }
-      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      .planner-actions { display: flex; gap: 0.75rem; }
-      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-      .day-cell {
-          background-color: var(--card-color); border: 1px solid var(--border-color);
-          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
-          flex-direction: column; transition: all 0.2s;
-      }
-      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
-      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
-      .day-cell.is-today {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
-      }
-      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
-      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
-      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
-      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
-      .btn-start-workout-day {
-        pointer-events: all;
-        width: 100%;
-        margin-top: 1rem;
-        padding: 0.5rem;
-        font-size: 0.85rem;
-      }
-      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
-      .log-day { margin-bottom: 2rem; }
-      .log-day:last-child { margin-bottom: 0; }
-      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
-      .log-day.is-today h3 {
-        color: var(--primary-color);
-        font-weight: bold;
-      }
-      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
-      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
-      .log-day .log-item:last-child { border-bottom: none; }
-      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
-      .log-item strong { color: var(--text-color-muted); }
-      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
-
-      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
-      .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-      .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
-      .btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
-      .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
-      .log-workout-stats {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1rem;
-        font-size: 0.85rem;
-        color: var(--text-color-muted);
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .log-workout-exercise { margin-bottom: 1rem; }
-      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
-      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
-      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
-      .log-set-item span:first-child { color: var(--text-color-muted); }
-
-      .log-manual-details {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem 1.5rem;
-        padding: 0.75rem 0;
-        font-size: 0.9rem;
-      }
-      .log-manual-details div {
-        word-break: break-word;
-      }
-      .log-item-details {
-        font-style: italic;
-        color: var(--text-color-muted);
-        width: 100%;
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
+        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
+        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
+        populateIcons();
       }
 
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const goalsPage = document.getElementById('goals-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+        const debriefingPage = document.getElementById('debriefing-page');
 
-      @media (min-width: 768px) {
-          #app-container { padding: 2rem; }
-          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navGoalsBtn = document.getElementById('nav-goals');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
+
+        if (state.currentView !== 'trainer' && isTrainerActive) {
+            log('Renderer', 'View is not trainer, destroying trainer controller...');
+            destroyTrainerController();
+            isTrainerActive = false;
+        }
+
+        [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+        document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (state.currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (state.currentView === 'goals') {
+          goalsPage.classList.remove('hidden');
+          navGoalsBtn.classList.add('active');
+          renderGoalsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        } else if (state.currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          log('Renderer', 'View is trainer, checking if trainer is active...');
+          if (!isTrainerActive) {
+            log('Renderer', 'Trainer is not active, initializing trainer controller...');
+            initializeTrainerController();
+            isTrainerActive = true;
+          }
+        } else if (state.currentView === 'debriefing') {
+          debriefingPage.classList.remove('hidden');
+          renderDebriefingPage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
       }
-  - file: styles/trainer.css
+  - file: src/utils/audioFeedback.js
     content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
+      let audioContext = null;
+      const synth = window.speechSynthesis;
+      let voices = [];
+
+      function getAudioContext() {
+          if (!audioContext) {
+              try {
+                  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              } catch (e) {
+                  console.error("Web Audio API is not supported in this browser");
+              }
+          }
+          return audioContext;
       }
 
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          gap: 1rem;
+      function loadVoices() {
+        voices = synth.getVoices().filter(v => v.lang.startsWith('it'));
       }
-
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-      }
-
-      .trainer-header-controls {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-      }
-
-      #audio-toggle-btn {
-          background: none;
-          border: none;
-          color: var(--text-color-muted);
-          cursor: pointer;
-          padding: 0.5rem;
-      }
-
-      #audio-toggle-btn.active {
-          color: var(--primary-color);
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-          overflow-y: auto;
-      }
-
-      .exercise-info-container {
-          margin-top: 1rem;
-          margin-bottom: 1rem;
-      }
-
-      #current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-      }
-
-      #current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-      }
-
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-        min-height: 1.2em;
-      }
-
-      #current-rep-display.hidden-rep {
-        visibility: hidden;
-      }
-
-      #upcoming-exercise-display {
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        margin-top: 0.75rem;
-        font-style: italic;
-      }
-
-      #upcoming-exercise-display strong {
-        color: var(--text-color);
-        font-style: normal;
-      }
-
-      #trainer-display-modes {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          flex-grow: 1;
-          min-height: 280px;
-      }
-
-      .timer-ring-container {
-          width: 280px;
-          height: 280px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-display {
-          font-size: 3rem;
-          font-weight: bold;
-          fill: var(--text-color);
-          text-anchor: middle;
-      }
-
-      .timer-ring-display.is-timer,
-      .timer-ring-display.is-rep-count {
-          font-family: 'Courier New', Courier, monospace;
-      }
-      
-      .timer-ring-display.is-phase {
-          font-size: 2.5rem;
-          text-transform: uppercase;
+      loadVoices();
+      if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = loadVoices;
       }
 
 
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 12;
+      function playSound(type) {
+          const ctx = getAudioContext();
+          if (!ctx) return;
+
+          if (ctx.state === 'suspended') {
+              ctx.resume();
+          }
+
+          const oscillator = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          const now = ctx.currentTime;
+
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          gainNode.gain.setValueAtTime(0, now);
+
+          if (type === 'start') {
+              oscillator.type = 'sawtooth';
+              oscillator.frequency.setValueAtTime(523.25, now); // C5
+              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+          } else if (type === 'stop') {
+              oscillator.type = 'square';
+              oscillator.frequency.setValueAtTime(261.63, now); // C4
+              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+          } else if (type === 'tick') {
+              oscillator.type = 'triangle';
+              oscillator.frequency.setValueAtTime(1046.50, now); // C6
+              gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+          }
+
+          oscillator.start(now);
+          oscillator.stop(now + 1); // Stop after 1 second max
       }
 
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 12;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear;
+      export function speak(text) {
+          if (synth.speaking) {
+              synth.cancel();
+          }
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.voice = voices[0] || synth.getVoices().find(v => v.default && v.lang.startsWith('it'));
+          utterance.lang = 'it-IT';
+          utterance.rate = 1.2;
+          synth.speak(utterance);
       }
 
-      .timer-ring-progress.phase-up { stroke: var(--success-color); }
-      .timer-ring-progress.phase-hold { stroke: var(--warning-color); }
-      .timer-ring-progress.phase-down { stroke: var(--danger-color); }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
+      export function playStartCue() {
+          playSound('start');
       }
 
-      .flashing {
-        animation: flash 1.4s infinite;
-        fill: var(--secondary-color);
+      export function playStopCue() {
+          playSound('stop');
       }
 
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px;
-          width: 100%;
-          padding-bottom: 1rem;
+      export function playTick() {
+          playSound('tick');
       }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
-  - file: templates/trainer.html
+  - file: sw.js
     content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
-              <h2 id="trainer-title">Allenamento</h2>
-              <div class="trainer-header-controls">
-                  <button id="audio-toggle-btn"></button>
-                  <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
-              </div>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-                  <p id="current-rep-display"></p>
-                  <div id="upcoming-exercise-display"></div>
-              </div>
+      const CACHE_NAME = 'healtypro-v16';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'styles/debriefing.css',
+        'styles/goals.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'templates/debriefing.html',
+        'templates/goals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/config/forms.js',
+        'src/config/uiText.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions/globalInteractions.js',
+        'src/ui/interactions/plannerInteractions.js',
+        'src/ui/interactions/profileInteractions.js',
+        'src/ui/interactions/progressInteractions.js',
+        'src/ui/interactions/debriefingInteractions.js',
+        'src/ui/interactions/goalsInteractions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/modals/confirmModal.js',
+        'src/ui/modals/dayEditorModal.js',
+        'src/ui/modals/exerciseEditorModal.js',
+        'src/ui/modals/recipeModal.js',
+        'src/ui/modals/selectionModal.js',
+        'src/ui/modals/workoutEditorModal.js',
+        'src/ui/modals/workoutLogEditorModal.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'src/utils/audioFeedback.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
 
-              <div id="trainer-display-modes">
-                  <div id="timer-ring-container" class="timer-ring-container">
-                  </div>
-              </div>
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
 
-              <div id="trainer-main-controls" class="trainer-controls">
-                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
-                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
-                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
-                  <button id="trainer-manual-rep-btn" class="btn btn-primary btn-large hidden"></button>
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
               </div>
           </div>
       </div>
-  - file: src/ui/components/TrainerComponent.js
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="exercise-editor-form">
+                <div class="form-group sets-group">
+                  <label for="ex-edit-sets">Serie</label>
+                  <input type="number" id="ex-edit-sets" name="sets" min="1">
+                </div>
+                <div class="form-group reps-group">
+                  <label for="ex-edit-reps">Ripetizioni</label>
+                  <input type="number" id="ex-edit-reps" name="reps" min="1">
+                </div>
+                <div class="form-group duration-group">
+                  <label for="ex-edit-duration">Durata (s)</label>
+                  <input type="number" id="ex-edit-duration" name="duration" min="1">
+                </div>
+                <div class="form-group rest-group">
+                  <label for="ex-edit-rest">Riposo (s)</label>
+                  <input type="number" id="ex-edit-rest" name="rest" min="0">
+                </div>
+                <div class="form-group weight-group">
+                  <label for="ex-edit-weight" id="ex-edit-weight-label"></label>
+                  <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5">
+                </div>
+                <div class="tempo-group">
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-up">Salita (s)</label>
+                    <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label"></label>
+                    <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-down">Discesa (s)</label>
+                    <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5">
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="exercise-editor-form" class="btn btn-primary" id="exercise-editor-save-btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+      <div id="workout-log-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-log-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-log-editor-modal"></button>
+            </div>
+            <div id="workout-log-editor-body" class="modal-body"></div>
+            <div class="modal-footer">
+                <button id="workout-log-editor-save-btn" class="btn btn-primary"></button>
+            </div>
+        </div>
+      </div>
+  - file: src/ui/modals/workoutLogEditorModal.js
     content: |
-      import { getWorkoutState, updateState } from '../../core/trainer/state.js';
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
-      import { log } from '../../utils/logger.js';
+      import { getState, updateWorkoutInHistory } from '../../core/state.js';
       import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { showNotification } from '../notifications.js';
 
-      const RING_RADIUS = 128;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+      let currentWorkout = null;
 
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
+      function renderLogEditorForm(workout) {
+          const body = document.getElementById('workout-log-editor-body');
+          let formHTML = '<form id="workout-log-editor-form">';
 
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
+          workout.exercises.forEach((exercise, exIndex) => {
+              formHTML += `
+                  <fieldset class="log-editor-fieldset">
+                      <legend>${exercise.name}</legend>
+                      ${exercise.setsData.map((set, setIndex) => `
+                          <div class="log-editor-set-row">
+                              <span>${UI_TEXT.WORKOUT_LOG_SET_LABEL} ${setIndex + 1}</span>
+                              <div class="form-group">
+                                  <label>${UI_TEXT.WORKOUT_LOG_REPS_LABEL}</label>
+                                  <input type="number" name="reps_${exIndex}_${setIndex}" value="${set.reps || ''}" min="0">
+                              </div>
+                              <div class="form-group">
+                                  <label>${UI_TEXT.WORKOUT_LOG_WEIGHT_LABEL}</label>
+                                  <input type="number" name="weight_${exIndex}_${setIndex}" value="${set.weight || ''}" min="0" step="0.1">
+                              </div>
+                          </div>
+                      `).join('')}
+                  </fieldset>
+              `;
+          });
+          formHTML += '</form>';
+          body.innerHTML = formHTML;
+      }
 
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-                  btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
-                  btnAudio: this.container.querySelector('#audio-toggle-btn'),
 
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-              };
+      function handleSaveChanges() {
+          const form = document.getElementById('workout-log-editor-form');
+          const formData = new FormData(form);
+          const updatedWorkout = JSON.parse(JSON.stringify(currentWorkout)); // Deep copy
 
-              this.ringProgress = null;
-              this.ringText = null;
-          }
+          updatedWorkout.exercises.forEach((exercise, exIndex) => {
+              exercise.setsData.forEach((set, setIndex) => {
+                  const reps = formData.get(`reps_${exIndex}_${setIndex}`);
+                  const weight = formData.get(`weight_${exIndex}_${setIndex}`);
+                  set.reps = reps ? parseInt(reps, 10) : 0;
+                  set.weight = weight ? parseFloat(weight) : 0;
+              });
+          });
 
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
-              this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
-              this.updateAudioButton(getWorkoutState().isAudioEnabled);
-          }
+          // Recalculate totalTonnage
+          updatedWorkout.totalTonnage = updatedWorkout.exercises.reduce((total, exercise) => {
+            const exerciseTonnage = exercise.setsData.reduce((acc, set) => acc + (set.reps * set.weight), 0);
+            exercise.tonnage = exerciseTonnage;
+            return total + exerciseTonnage;
+          }, 0);
 
-          destroy() {
-              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.handleControls.bind(this));
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
-              }
-              log('TrainerComponent', 'Component destroyed.');
-          }
+          updateWorkoutInHistory(updatedWorkout.date, updatedWorkout.startTime, updatedWorkout);
+          showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
+          document.getElementById('workout-log-editor-modal').classList.add('modal-hidden');
+      }
 
-          handleControls(e) {
-              const target = e.target.closest('button');
-              if (!target) return;
+      export function openWorkoutLogEditorModal(date, startTime) {
+          log('Modals', 'Opening workout log editor modal', { date, startTime });
+          const state = getState();
+          const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
 
-              const targetId = target.id;
-              log('TrainerComponent', `Control button clicked: ${targetId}`);
-              switch (targetId) {
-                  case 'trainer-start-btn': startWorkout(); break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn': endWorkout(); break;
-                  case 'trainer-back-btn': setView('planner'); break;
-                  case 'trainer-manual-rep-btn': incrementManualRep(); break;
-                  case 'audio-toggle-btn': this.toggleAudio(); break;
-              }
-          }
+          if (!workout || workout.type !== 'structured') return;
+          currentWorkout = workout;
 
-          toggleAudio() {
-              const currentState = getWorkoutState();
-              const newState = !currentState.isAudioEnabled;
-              updateState({ isAudioEnabled: newState });
-              this.updateAudioButton(newState);
-          }
+          const modal = document.getElementById('workout-log-editor-modal');
+          modal.querySelector('#workout-log-editor-title').textContent = UI_TEXT.WORKOUT_LOG_EDITOR_TITLE;
+          modal.querySelector('#workout-log-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
 
-          updateAudioButton(isAudioEnabled) {
-              this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
-              this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
-          }
+          renderLogEditorForm(workout);
 
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) {
-                log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
-                return;
-              }
-              log('TrainerComponent', 'Creating timer ring SVG...');
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              const svgSize = (RING_RADIUS + 12) * 2;
-              svg.setAttribute('width', svgSize);
-              svg.setAttribute('height', svgSize);
-              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
+          const saveBtn = document.getElementById('workout-log-editor-save-btn');
+          // Rimuovi vecchi listener prima di aggiungerne di nuovi
+          saveBtn.replaceWith(saveBtn.cloneNode(true));
+          document.getElementById('workout-log-editor-save-btn').addEventListener('click', handleSaveChanges);
 
-              const center = svgSize / 2;
 
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', center);
-              backgroundCircle.setAttribute('cy', center);
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', center);
-              progressCircle.setAttribute('cy', center);
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-              log('TrainerComponent', 'Timer ring SVG created and references set.');
-          }
-
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
-
-          formatTime(ms) {
-              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-              return `${minutes}:${seconds}`;
-          }
-
-          render(state) {
-              if (!this.ringText) return; // Guard against rendering before mount
-              const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
-
-              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
-                  this.elements.exerciseName.textContent = '';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.elements.btnStart.classList.add('hidden');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  this.elements.btnManualRep.classList.add('hidden');
-                  this.ringText.textContent = '';
-                  this.updateTimerRing(0);
-                  return;
-              };
-
-              const currentExercise = exerciseQueue[currentExerciseIndex];
-              this.elements.exerciseName.textContent = currentExercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-
-              if (status === 'running' && executionMode === 'tempo_guided') {
-                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
-                this.elements.repDisplay.classList.remove('hidden-rep');
-              } else {
-                this.elements.repDisplay.classList.add('hidden-rep');
-              }
-
-              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
-              if (upcomingExercises) {
-                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
-              } else {
-                this.elements.upcomingDisplay.innerHTML = '';
-              }
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-              this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
-
-              // --- Main Render Logic ---
-              if (status === 'running') {
-                  this.ringText.classList.remove('flashing');
-                  if (executionMode === 'tempo_guided') this.renderPhase(state);
-                  else if (executionMode === 'static_hold') this.renderStaticHold(state);
-                  else if (executionMode === 'manual_reps') this.renderManualReps(state);
-              } else if (status === 'resting') {
-                  this.renderRest(state);
-              } else if (status === 'paused') {
-                  this.renderPaused(state);
-              } else if (status === 'idle') {
-                  this.ringText.textContent = '';
-                  this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count', 'is-phase');
-                  this.updateTimerRing(0);
-              }
-          }
-
-          renderPhase(state) {
-              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
-              const phase = executionQueue[currentPhaseIndex];
-              if (!phase) return;
-
-              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.name.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.add('is-phase');
-              this.ringText.classList.toggle('flashing', isPrePhase);
-              this.ringText.classList.remove('is-timer', 'is-rep-count');
-
-              if (isPrePhase) {
-                  this.updateTimerRing(100);
-              } else {
-                  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
-                  this.updateTimerRing(progressPercent);
-              }
-          }
-
-          renderStaticHold(state) {
-              const { setTimeRemaining } = state;
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              const totalDuration = currentExercise.defaultDuration * 1000;
-              const progressPercent = (totalDuration > 0) ? ((totalDuration - setTimeRemaining) / totalDuration) * 100 : 100;
-
-              this.ringText.textContent = this.formatTime(setTimeRemaining);
-              this.ringText.classList.add('is-timer');
-              this.ringText.classList.remove('is-rep-count', 'is-phase');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderManualReps(state) {
-              const { manualRepCount } = state;
-              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-              const targetReps = currentExercise.defaultReps;
-              let progressPercent = 0;
-              if (targetReps > 0) {
-                  progressPercent = (manualRepCount / targetReps) * 100;
-              }
-
-              this.ringText.textContent = manualRepCount;
-              this.ringText.classList.add('is-rep-count');
-              this.ringText.classList.remove('is-timer', 'is-phase');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderRest(state) {
-              const { restTimeRemaining } = state;
-              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
-              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-
-              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-              this.ringText.classList.add('is-phase');
-              this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderPaused(state) {
-              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-              this.ringText.classList.add('is-phase');
-              this.ringText.classList.remove('flashing');
-              // Mantieni la classe di stile precedente per coerenza
-              if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
-              if(state.executionMode === 'manual_reps') this.ringText.classList.add('is-rep-count');
-          }
-
-          formatExerciseDetails(state) {
-              const { exerciseQueue, currentExerciseIndex, currentSet, executionMode } = state;
-              const exercise = exerciseQueue[currentExerciseIndex];
-              if (!exercise) return '';
-              const sets = exercise.defaultSets;
-              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
-              if (executionMode === 'tempo_guided' || executionMode === 'manual_reps') {
-                  const reps = exercise.defaultReps;
-                  details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-              } else if (executionMode === 'static_hold') {
-                  const duration = exercise.defaultDuration;
-                  details += ` | ${duration}s`;
-              }
-              if (exercise.defaultWeight) {
-                  details += ` @ ${exercise.defaultWeight}kg`;
-              }
-              return details;
-          }
+          modal.classList.remove('modal-hidden');
       }
 commands: []

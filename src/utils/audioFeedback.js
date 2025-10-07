@@ -1,4 +1,6 @@
 let audioContext = null;
+const synth = window.speechSynthesis;
+let voices = [];
 
 function getAudioContext() {
     if (!audioContext) {
@@ -10,6 +12,15 @@ function getAudioContext() {
     }
     return audioContext;
 }
+
+function loadVoices() {
+  voices = synth.getVoices().filter(v => v.lang.startsWith('it'));
+}
+loadVoices();
+if (speechSynthesis.onvoiceschanged !== undefined) {
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+
 
 function playSound(type) {
     const ctx = getAudioContext();
@@ -46,6 +57,17 @@ function playSound(type) {
 
     oscillator.start(now);
     oscillator.stop(now + 1); // Stop after 1 second max
+}
+
+export function speak(text) {
+    if (synth.speaking) {
+        synth.cancel();
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = voices[0] || synth.getVoices().find(v => v.default && v.lang.startsWith('it'));
+    utterance.lang = 'it-IT';
+    utterance.rate = 1.2;
+    synth.speak(utterance);
 }
 
 export function playStartCue() {

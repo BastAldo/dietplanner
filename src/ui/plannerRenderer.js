@@ -220,7 +220,10 @@ function renderLogView(state, weekStart) {
                   dayLogHTML += `<div class="log-workout-summary">
                       <div class="log-workout-header">
                           <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                          <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                          <div class="log-workout-header-actions">
+                              <button class="btn-edit-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Modifica Allenamento">${renderIcon('EDIT')}</button>
+                              <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                          </div>
                       </div>
                       <div class="log-workout-stats">
                           <span>Durata: ${formatDuration(workout.totalTime)}</span>
@@ -255,7 +258,9 @@ function renderLogView(state, weekStart) {
                   dayLogHTML += `<div class="log-workout-summary">
                       <div class="log-workout-header">
                           <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
-                          <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                          <div class="log-workout-header-actions">
+                            <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                          </div>
                       </div>
                       <div class="log-item">
                           <strong>${workout.name}</strong>

@@ -82,10 +82,17 @@ function handleRestoreBackup() {
     fileInput.click();
 }
 
+function handleHamburgerClick() {
+    const nav = document.getElementById('main-nav');
+    nav.classList.toggle('is-open');
+    nav.classList.toggle('is-mobile');
+}
+
 export function initializeGlobalListeners() {
   document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
   document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
   document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+  document.getElementById('hamburger-btn').addEventListener('click', handleHamburgerClick);
 
   document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
   document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
