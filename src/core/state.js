@@ -226,7 +226,7 @@ export function resetCurrentWeek() {
       });
       const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
       if (state.weeklyWorkouts[workoutSlotId]) {
-          delete state.weeklyWorkouts[workoutSlotId];
+          delete state.weeklyWorkouts[slotId];
       }
   }
   state.workoutHistory = {};
@@ -310,6 +310,32 @@ export function updateWorkoutInHistory(date, startTime, updates) {
         }
     }
 }
+
+export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
+  log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
+  if (!state.workoutHistory[date]) return;
+
+  const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+  if (workoutIndex === -1) return;
+
+  const workout = state.workoutHistory[date][workoutIndex];
+  const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
+  if (exerciseIndex === -1) return;
+
+  // Update sets data for the specific exercise
+  workout.exercises[exerciseIndex].setsData = newSetsData;
+
+  // Recalculate tonnage for the exercise
+  const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+  workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
+
+  // Recalculate total tonnage for the entire workout
+  workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
+
+  saveStateToLocalStorage();
+  notify();
+}
+
 
 export function copyPreviousWeek() {
   log('State', 'Copying previous week');

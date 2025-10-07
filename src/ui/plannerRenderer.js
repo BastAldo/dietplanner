@@ -221,7 +221,6 @@ function renderLogView(state, weekStart) {
                       <div class="log-workout-header">
                           <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
                           <div class="log-workout-header-actions">
-                              <button class="btn-edit-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Modifica Allenamento">${renderIcon('EDIT')}</button>
                               <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
                           </div>
                       </div>
@@ -234,8 +233,10 @@ function renderLogView(state, weekStart) {
                       ${workout.exercises.map(ex => `
                       <div class="log-workout-exercise">
                           <div class="log-item">
-                          <strong>${ex.name}</strong>
-                          <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                            <strong>${ex.name}</strong>
+                            <div class="log-workout-header-actions">
+                              <button class="btn-edit-logged-exercise" data-date="${workout.date}" data-starttime="${workout.startTime}" data-instanceid="${ex.instanceId}" title="Modifica Esercizio">${renderIcon('EDIT')}</button>
+                            </div>
                           </div>
                           <div class="log-sets-details">
                           ${ex.setsData.map((setData, i) => `
