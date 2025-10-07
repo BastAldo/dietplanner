@@ -66,7 +66,7 @@ export function speak(text) {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.voice = voices[0] || synth.getVoices().find(v => v.default && v.lang.startsWith('it'));
     utterance.lang = 'it-IT';
-    utterance.rate = 1.2;
+    utterance.rate = 1.0;
     synth.speak(utterance);
 }
 

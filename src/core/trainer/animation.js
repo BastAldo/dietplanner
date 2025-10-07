@@ -34,7 +34,7 @@ function tick(timestamp) {
 
             if (isAudioEnabled) {
               playTick();
-              if(nextPhase) {
+              if(nextPhase && nextPhase.name.startsWith('pre-')) {
                 const phaseName = nextPhase.name.replace('pre-', '');
                 let speechText = '';
                 if (phaseName === 'up') speechText = UI_TEXT.VOICE_GUIDE_PHASE_UP;
@@ -43,7 +43,6 @@ function tick(timestamp) {
                 if(speechText) speak(speechText);
               }
             }
-
 
             if (nextPhase) {
               updateState({

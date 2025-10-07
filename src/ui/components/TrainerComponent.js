@@ -4,6 +4,7 @@ import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
+import { showConfirmModal } from '../modals.js';
 
 const RING_RADIUS = 128;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -57,7 +58,14 @@ export class TrainerComponent {
             case 'trainer-start-btn': startWorkout(); break;
             case 'trainer-pause-btn': pauseWorkout(); break;
             case 'trainer-resume-btn': resumeWorkout(); break;
-            case 'trainer-end-btn': endWorkout(); break;
+            case 'trainer-end-btn':
+                showConfirmModal(
+                    UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
+                    UI_TEXT.TERMINATE_WORKOUT_CONFIRM_MSG,
+                    () => endWorkout(),
+                    'danger'
+                );
+                break;
             case 'trainer-back-btn': setView('planner'); break;
             case 'trainer-manual-rep-btn': incrementManualRep(); break;
             case 'audio-toggle-btn': this.toggleAudio(); break;

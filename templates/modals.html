@@ -52,46 +52,10 @@
         <h3 id="exercise-editor-title"></h3>
         <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
       </div>
-      <div class="modal-body">
-        <form id="exercise-editor-form">
-          <div class="form-group sets-group">
-            <label for="ex-edit-sets">Serie</label>
-            <input type="number" id="ex-edit-sets" name="sets" min="1">
-          </div>
-          <div class="form-group reps-group">
-            <label for="ex-edit-reps">Ripetizioni</label>
-            <input type="number" id="ex-edit-reps" name="reps" min="1">
-          </div>
-          <div class="form-group duration-group">
-            <label for="ex-edit-duration">Durata (s)</label>
-            <input type="number" id="ex-edit-duration" name="duration" min="1">
-          </div>
-          <div class="form-group rest-group">
-            <label for="ex-edit-rest">Riposo (s)</label>
-            <input type="number" id="ex-edit-rest" name="rest" min="0">
-          </div>
-          <div class="form-group weight-group">
-            <label for="ex-edit-weight" id="ex-edit-weight-label"></label>
-            <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5">
-          </div>
-          <div class="tempo-group">
-            <div class="form-group">
-              <label for="ex-edit-tempo-up">Salita (s)</label>
-              <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5">
-            </div>
-            <div class="form-group">
-              <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label"></label>
-              <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5">
-            </div>
-            <div class="form-group">
-              <label for="ex-edit-tempo-down">Discesa (s)</label>
-              <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5">
-            </div>
-          </div>
-        </form>
+      <div id="exercise-editor-body" class="modal-body">
       </div>
       <div class="modal-footer">
-          <button type="submit" form="exercise-editor-form" class="btn btn-primary" id="exercise-editor-save-btn"></button>
+          <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
       </div>
   </div>
 </div>
@@ -156,16 +120,4 @@
             <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
         </div>
     </div>
-</div>
-<div id="logged-exercise-editor-modal" class="modal-overlay modal-hidden">
-  <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="logged-exercise-editor-title"></h3>
-        <button class="modal-close-btn" data-target="logged-exercise-editor-modal"></button>
-      </div>
-      <div id="logged-exercise-editor-body" class="modal-body"></div>
-      <div class="modal-footer">
-          <button id="logged-exercise-editor-save-btn" class="btn btn-primary"></button>
-      </div>
-  </div>
 </div>

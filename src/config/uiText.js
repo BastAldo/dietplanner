@@ -155,7 +155,9 @@ const UI_TEXT_CONFIG = [
   { id: 'VOICE_GUIDE_PHASE_UP', text: 'su' },
   { id: 'VOICE_GUIDE_PHASE_HOLD', text: 'tieni' },
   { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
-  { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' }
+  { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' },
+  { id: 'TERMINATE_WORKOUT_CONFIRM_TITLE', text: 'Termina Allenamento' },
+  { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
