@@ -1,55 +1,152 @@
-commit_message: "fix(UX): Corregge bug RPE, migliora UI editor e arricchisce feedback audio"
+commit_message: "refactor(UX): Riprogetta layout Obiettivi, Editor Esercizi e fissa bug responsive"
 rationale: |
-  Questo commit affronta una serie di bug critici e migliora significativamente l'esperienza utente (UX) in diverse aree chiave dell'applicazione, basandosi sul feedback ricevuto.
+  Questo commit è un intervento mirato a risolvere specifiche criticità di usabilità e bug di layout emerse dal feedback, migliorando significativamente la coerenza e la qualità dell'interfaccia utente.
 
-  1.  **Bug Fix Critici**:
-      * **Salvataggio RPE**: È stato risolto un `ReferenceError` fatale nella schermata di debriefing che impediva il salvataggio dello Sforzo Percepito (RPE). La funzione `getState` necessaria non era stata importata. Inoltre, la logica è stata migliorata per disabilitare il campo di input e il pulsante dopo un salvataggio riuscito, prevenendo invii multipli.
-      * **Icone Audio**: Sono state aggiunte le icone `AUDIO_ON` e `AUDIO_OFF` mancanti, risolvendo un bug che impediva la visualizzazione del controllo per attivare/disattivare l'audio nella vista Trainer.
+  1.  **Riprogettazione Pagina Obiettivi**: La pagina "Obiettivi" è stata trasformata da un semplice form a una sezione funzionale. È stato aggiunto un testo esplicativo per guidare l'utente e, soprattutto, è stata introdotta la possibilità di impostare un **obiettivo di peso**. Il layout è stato reso più bilanciato e gradevole. Il widget di riepilogo nel planner è stato potenziato per mostrare i progressi verso questo nuovo obiettivo, creando un ciclo di feedback completo.
 
-  2.  **Refactoring UI/UX**:
-      * **Editor Esercizio**: Il layout del modale di modifica esercizio è stato completamente riprogettato. Utilizzando un CSS Grid più sofisticato, i campi ora sono compatti, correttamente allineati e raggruppati logicamente, risolvendo i problemi di disallineamento e di spazio sprecato. Anche il campo "Peso", precedentemente non visibile, ora viene mostrato correttamente.
-      * **Pagina Obiettivi**: Gli stili del form sono stati affinati per dare ai campi di input una larghezza più appropriata al contenuto, migliorando l'estetica della pagina.
-      * **Responsività Debriefing**: Sono state introdotte delle media query per migliorare il layout della pagina di riepilogo su schermi di medie dimensioni, garantendo una visualizzazione più ordinata.
+  2.  **Refactoring Layout Editor Esercizio**: Il modale per la modifica degli esercizi è stato completamente ridisegnato. I campi di input ora seguono un layout a griglia compatto e logico, eliminando disallineamenti e sprechi di spazio. Il campo "Peso" è ora sempre visibile, dando all'utente pieno controllo sulla personalizzazione dell'allenamento.
 
-  3.  **Potenziamento Funzionalità**:
-      * **Feedback Audio**: Il sistema di feedback audio è stato potenziato per essere più ricco e meno monotono. Utilizzando diverse forme d'onda (sawtooth, square) e un inviluppo di ampiezza (gain envelope), i suoni per l'inizio, la fine e il tick sono ora più distinti e gradevoli, migliorando l'immersività dell'esperienza di allenamento senza aggiungere dipendenze esterne.
+  3.  **Fix Bug Responsive**: È stato risolto un bug critico di layout nella vista "Log" che causava un overflow orizzontale su dispositivi mobili quando venivano visualizzati i dettagli di un'attività manuale. L'interfaccia ora si adatta correttamente a tutte le dimensioni dello schermo, rispettando i principi di design "mobile-first".
 patches:
-  - file: src/ui/interactions/debriefingInteractions.js
+  - file: styles/planner.css
     content: |
-      import { getState, setView, updateWorkoutInHistory } from '../../core/state.js';
-      import { log } from '../../utils/logger.js';
-      import { showNotification } from '../notifications.js';
+      /* --- PLANNER PAGE --- */
+      .data-source-container {
+          display: flex; align-items: center; gap: 0.75rem;
+          padding: 1rem; background: var(--card-color);
+          border: 1px solid var(--border-color); border-radius: 8px;
+          margin-bottom: 1.5rem;
+      }
+      #config-url-input {
+          flex-grow: 1; min-width: 0; padding: 0.75rem;
+          border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      #config-url-input:focus { outline: none; border-color: var(--primary-color); }
+      #info-icon { font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); flex-shrink: 0; }
 
-      function handleBackToPlanner() {
-        log('Interactions', 'Back to planner button clicked from debriefing');
-        setView('planner');
+      .planner-summary-widget {
+          background: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+      }
+      .planner-summary-title {
+          color: var(--secondary-color);
+          text-align: center;
+          margin-bottom: 1rem;
+          font-size: 1.25rem;
+      }
+      .planner-summary-stats {
+          display: flex;
+          justify-content: space-around;
+          text-align: center;
+          flex-wrap: wrap;
+          gap: 1rem;
+      }
+      .planner-summary-stat .stat-value {
+          font-size: 1.75rem;
+          font-weight: bold;
+          color: var(--primary-color);
+      }
+      .planner-summary-stat .stat-label {
+          font-size: 0.8rem;
+          color: var(--text-color-muted);
+          text-transform: uppercase;
       }
 
-      function handleSaveRPE() {
-        const rpeInput = document.getElementById('rpe-input');
-        const rpeValue = parseInt(rpeInput.value, 10);
-        if (rpeValue >= 1 && rpeValue <= 10) {
-          const { lastWorkoutSummary } = getState();
-          if (lastWorkoutSummary) {
-            updateWorkoutInHistory(lastWorkoutSummary.date, lastWorkoutSummary.startTime, { rpe: rpeValue });
-            showNotification('RPE salvato!', 'success');
-            rpeInput.disabled = true;
-            document.getElementById('save-rpe-btn').disabled = true;
-          }
-        } else {
-          showNotification('Inserisci un valore RPE valido (1-10)', 'error');
-        }
+      .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
+      .planner-controls-wrapper {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+      }
+      .view-switcher { display: flex; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      .planner-actions { display: flex; gap: 0.75rem; }
+      .calendar-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+      .day-cell {
+          background-color: var(--card-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 1rem; min-height: 120px; display: flex;
+          flex-direction: column; transition: all 0.2s;
+      }
+      .day-cell:not(:has(.btn-start-workout-day)) { cursor: pointer; }
+      .day-cell:not(:has(.btn-start-workout-day)):hover { border-color: var(--primary-color); transform: translateY(-3px); }
+      .day-cell.is-today {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 10px rgba(149, 117, 205, 0.5);
+      }
+      .day-cell__header { display: flex; justify-content: space-between; font-weight: bold; color: var(--text-color-muted); text-transform: uppercase; font-size: 0.8rem; pointer-events: none; }
+      .day-cell__body { margin-top: 0.5rem; flex-grow: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; }
+      .daily-calories { font-size: 1rem; font-weight: bold; color: var(--secondary-color); }
+      .daily-summary-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+      .btn-start-workout-day {
+        pointer-events: all;
+        width: 100%;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+      }
+      .log-view { padding: 1rem; background: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); }
+      .log-day { margin-bottom: 2rem; }
+      .log-day:last-child { margin-bottom: 0; }
+      .log-day h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; margin-bottom: 0.5rem; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+      .log-day.is-today h3 {
+        color: var(--primary-color);
+        font-weight: bold;
+      }
+      .log-day__total-calories { font-size: 0.9rem; font-weight: normal; color: var(--text-color-muted); }
+      .log-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0; font-size: 0.95rem; border-bottom: 1px solid var(--border-color); }
+      .log-day .log-item:last-child { border-bottom: none; }
+      .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
+      .log-item strong { color: var(--text-color-muted); }
+      .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+
+      .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
+      .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+      .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
+      .btn-delete-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
+      .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
+      .log-workout-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        font-size: 0.85rem;
+        color: var(--text-color-muted);
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .log-workout-exercise { margin-bottom: 1rem; }
+      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
+      .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
+      .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
+      .log-set-item span:first-child { color: var(--text-color-muted); }
+
+      .log-manual-details {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1.5rem;
+        padding: 0.75rem 0;
+        font-size: 0.9rem;
+      }
+      .log-manual-details div {
+        word-break: break-word;
+      }
+      .log-item-details {
+        font-style: italic;
+        color: var(--text-color-muted);
+        width: 100%;
       }
 
-      export function initializeDebriefingListeners() {
-        const debriefingPage = document.getElementById('debriefing-page');
-        debriefingPage.addEventListener('click', (e) => {
-          if (e.target.id === 'back-to-planner-btn') {
-            handleBackToPlanner();
-          } else if (e.target.id === 'save-rpe-btn') {
-            handleSaveRPE();
-          }
-        });
+
+      @media (min-width: 768px) {
+          #app-container { padding: 2rem; }
+          .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 1rem; }
       }
   - file: styles/goals.css
     content: |
@@ -59,9 +156,25 @@ patches:
           margin-bottom: 1.5rem;
       }
 
+      .goals-container {
+        max-width: 800px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .goals-explanation {
+        background-color: var(--card-color);
+        border-left: 4px solid var(--secondary-color);
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: var(--text-color-muted);
+      }
+
       .goals-form {
-          max-width: 600px;
-          margin: 0 auto;
           padding: 1.5rem;
           background: var(--card-color);
           border-radius: 8px;
@@ -71,350 +184,522 @@ patches:
           gap: 1.5rem;
       }
 
-      .goals-form .form-group input {
-        max-width: 200px;
-      }
-  - file: styles/debriefing.css
-    content: |
-      /* --- DEBRIEFING VIEW STYLES --- */
-      #debriefing-page {
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 1rem;
-          text-align: center;
-      }
-
-      #debriefing-page h3 {
-          color: var(--primary-color);
-          margin-bottom: 2rem;
-          font-size: 1.75rem;
-      }
-
-      #debriefing-stats-container {
-        margin-bottom: 2rem;
-      }
-
-      #debriefing-stats-container h4 {
-        color: var(--secondary-color);
-        margin-bottom: 1rem;
-        font-size: 1.25rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-
-      #debriefing-stats {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 1.5rem 2rem;
-        padding: 1.5rem;
-        background: var(--card-color);
+      .goals-form fieldset {
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        margin-bottom: 2rem;
+        padding: 1.5rem;
+        display: grid;
+        gap: 1.5rem;
       }
 
-      .stat-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-
-      .stat-label {
-        font-size: 0.8rem;
-        color: var(--text-color-muted);
-        text-transform: uppercase;
-        margin-bottom: 0.5rem;
-      }
-
-      .stat-value {
-        font-size: 1.75rem;
+      .goals-form legend {
+        padding: 0 0.5rem;
         font-weight: bold;
         color: var(--primary-color);
-        font-family: 'Courier New', Courier, monospace;
       }
 
-      #debriefing-summary {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1rem;
-          margin-bottom: 2rem;
-      }
-
-      .debriefing-card {
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          text-align: left;
-          position: relative;
-          overflow: hidden;
-      }
-
-      #debriefing-feedback {
-        max-width: 400px;
-        margin: 0 auto 2rem auto;
-      }
-
-      .debriefing-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.5rem;
-      }
-
-      .debriefing-card h4 {
-          font-size: 1.2rem;
-          margin: 0;
-      }
-
-      .debriefing-card-body {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-
-      .exercise-stats {
-        display: flex;
-        gap: 1rem;
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        font-weight: bold;
-      }
-
-      .sets-details-container {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid var(--border-color);
-      }
-
-      .set-detail-item {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.9rem;
-        color: var(--text-color);
-      }
-
-      .set-detail-item span:first-child {
-        color: var(--text-color-muted);
-      }
-
-      .debriefing-status {
-          font-size: 0.8rem;
-          font-weight: bold;
-          text-transform: uppercase;
-          padding: 0.25rem 0.5rem;
-          border-radius: 4px;
-          flex-shrink: 0;
-      }
-
-      .debriefing-card.completed .debriefing-status {
-          color: var(--success-color);
-          background-color: rgba(102, 187, 106, 0.1);
-      }
-
-      .debriefing-card.incomplete .debriefing-status {
-          color: var(--warning-color);
-          background-color: rgba(253, 216, 53, 0.1);
-      }
-
-      @media (min-width: 768px) {
-          #debriefing-summary {
-              grid-template-columns: repeat(2, 1fr);
-          }
-      }
-  - file: styles/modals.css
-    content: |
-      /* --- MODALS --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn svg { width: 1em; height: 1em; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-      .day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
-      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-      .meal-details-container { flex-grow: 1; min-width: 0; }
-      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
-      .workout-summary-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-      .meal-details { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-color); }
-      .meal-details:last-of-type { border-bottom: none; }
-      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
-      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
-      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
-      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
-      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
-      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-
-      #exercise-editor-form {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 1rem;
-        align-items: end;
-      }
-      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
-      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
-      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
-      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
-      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
-      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
-      #exercise-editor-form .tempo-group {
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        border-top: 1px solid var(--border-color);
-        padding-top: 1rem;
-        margin-top: 1rem;
-      }
-
-      .structured-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-      .structured-form .full-width { grid-column: 1 / -1; }
-
-      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
-      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
-      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
-
-      @media (max-width: 480px) {
-        .workout-summary {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.75rem;
-        }
-        .workout-summary-actions {
-          width: 100%;
-          display: flex;
-          flex-wrap: wrap;
-        }
-        .workout-summary-actions .btn {
-          flex-grow: 1;
+      @media (min-width: 600px) {
+        .goals-form fieldset {
+          grid-template-columns: repeat(2, 1fr);
         }
       }
-  - file: src/utils/audioFeedback.js
+  - file: templates/goals.html
     content: |
-      let audioContext = null;
-
-      function getAudioContext() {
-          if (!audioContext) {
-              try {
-                  audioContext = new (window.AudioContext || window.webkitAudioContext)();
-              } catch (e) {
-                  console.error("Web Audio API is not supported in this browser");
-              }
-          }
-          return audioContext;
-      }
-
-      function playSound(type) {
-          const ctx = getAudioContext();
-          if (!ctx) return;
-
-          if (ctx.state === 'suspended') {
-              ctx.resume();
-          }
-
-          const oscillator = ctx.createOscillator();
-          const gainNode = ctx.createGain();
-          const now = ctx.currentTime;
-
-          oscillator.connect(gainNode);
-          gainNode.connect(ctx.destination);
-          gainNode.gain.setValueAtTime(0, now);
-
-          if (type === 'start') {
-              oscillator.type = 'sawtooth';
-              oscillator.frequency.setValueAtTime(523.25, now); // C5
-              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-          } else if (type === 'stop') {
-              oscillator.type = 'square';
-              oscillator.frequency.setValueAtTime(261.63, now); // C4
-              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-          } else if (type === 'tick') {
-              oscillator.type = 'triangle';
-              oscillator.frequency.setValueAtTime(1046.50, now); // C6
-              gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
-              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-          }
-
-          oscillator.start(now);
-          oscillator.stop(now + 1); // Stop after 1 second max
-      }
-
-      export function playStartCue() {
-          playSound('start');
-      }
-
-      export function playStopCue() {
-          playSound('stop');
-      }
-
-      export function playTick() {
-          playSound('tick');
-      }
-  - file: src/ui/icons.js
+      <div id="goals-page" class="page-view hidden">
+          <div class="goals-container">
+              <h3 id="goals-title"></h3>
+              <div class="goals-explanation" id="goals-explanation-text"></div>
+              <form id="goals-form" class="goals-form">
+                  <fieldset>
+                      <legend id="goals-activity-legend"></legend>
+                      <div class="form-group">
+                          <label id="goal-calories-label" for="goal-calories"></label>
+                          <input type="number" id="goal-calories" name="avg_calories" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="goal-workouts-label" for="goal-workouts"></label>
+                          <input type="number" id="goal-workouts" name="num_workouts" min="0">
+                      </div>
+                  </fieldset>
+                  <fieldset>
+                      <legend id="goals-biometrics-legend"></legend>
+                      <div class="form-group">
+                          <label id="goal-weight-label" for="goal-weight"></label>
+                          <input type="number" id="goal-weight" name="target_weight" min="0" step="0.1">
+                      </div>
+                  </fieldset>
+                  <div class="form-actions">
+                      <button type="submit" class="btn btn-primary" id="goals-save-btn"></button>
+                  </div>
+              </form>
+          </div>
+      </div>
+  - file: src/ui/pageRenderers.js
     content: |
-      const ICONS = {
-        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
-        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
-        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
-        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
-        BAR_CHART: '<path d="M120 288V480H48c-17.7 0-32-14.3-32-32V320c0-17.7 14.3-32 32-32h72zm128 0V480H192V288h56zm128 0V480H320V288h56zm128 0V480H448V288h56zM544 64H32C14.3 64 0 78.3 0 96V416c0 53 43 96 96 96H544c53 0 96-43 96-96V96c0-17.7-14.3-32-32-32z"/>',
-        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
-        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
-        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
-        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
-        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
-        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
-        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>',
-        BOOK: '<path d="M568 32H128C92.7 32 64 60.7 64 96V512c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zM128 512V96h320v352c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32zm352-32c0 17.7-14.3 32-32 32H416V96h32c17.7 0 32 14.3 32 32V480z"/>',
-        EDIT: '<path d="M490.3 40.4C512.2 62.2 512.2 97.8 490.3 119.6L460.3 149.7L318.9 7.59998L349 37.6999C370.8 15.8999 406.4 15.8999 428.2 37.6999L490.3 40.4zM167 313L7.59998 472.4L167 472.4C167 472.4 167 313 167 313zM203 277L285.4 359.4L133.2 511.6L50.8001 429.2L203 277z"/>',
-        DRAG_HANDLE: '<path d="M96 160C96 142.3 110.3 128 128 128L512 128C529.7 128 544 142.3 544 160C544 177.7 529.7 192 512 192L128 192C110.3 192 96 177.7 96 160zM96 320C96 302.3 110.3 288 128 288L512 288C529.7 288 544 302.3 544 320C544 337.7 529.7 352 512 352L128 352C110.3 352 96 337.7 96 320zM544 480C544 497.7 529.7 512 512 512L128 512C110.3 512 96 497.7 96 480C96 462.3 110.3 448 128 448L512 448C529.7 448 544 462.3 544 480z"/>',
-        GOAL: '<path d="M128 64C128 46.3 142.3 32 160 32H384c17.7 0 32 14.3 32 32V64H128zM32 96H448V416c0 35.3-28.7 64-64 64H96c-35.3 0-64-28.7-64-64V96zM128 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32s-14.3-32-32-32H128z"/>',
-        AUDIO_ON: '<path d="M215 71.1C203.2 81.3 195.8 93.3 192.4 106.3C189.9 115.5 192.3 125.3 198.8 132.1L234.7 171.4C222.7 169.3 211.1 162.7 201.5 153.2C188.2 139.9 180.2 121.7 178.7 102.3C177.2 83 182.2 64.1 192.7 48.4C203.3 32.7 218.8 21.2 236.8 15.3C254.8 9.3 274.3 9.3 292.3 15.3C301.7 18.5 310.5 23.5 318.5 29.8L282.6 68.1C274.3 62.8 265.1 59.4 255.4 58.3C245.7 57.2 235.9 58.3 226.9 61.7C222.4 63.4 218.4 65.9 215 71.1zM503.2 418.1C515.7 430.6 515.7 450.9 503.2 463.4C490.7 475.9 470.4 475.9 457.9 463.4L6.1 11.6C-6.4 -0.9 -6.4 19.4 6.1 31.9C18.6 44.4 38.9 44.4 51.4 31.9L161.9 142.4L127.1 177.1C121.6 182.7 118.4 190.1 118.4 197.8C118.4 215.1 132.3 229 149.6 229H256v128c0 17.7 14.3 32 32 32s32-14.3 32-32V256.9L457.9 463.4zM320 128.8V128h32v4.8L320 128.8z"/>',
-        AUDIO_OFF: '<path d="M127.1 177.1C121.6 182.7 118.4 190.1 118.4 197.8C118.4 215.1 132.3 229 149.6 229H256v128c0 17.7 14.3 32 32 32s32-14.3 32-32V229h16.3c10.3 0 19.9-4.9 25.9-13.1c6-8.2 8-18.4 5.3-27.9l-42.3-154.6c-2.3-8.3-8.8-14.8-17.1-17.1L152.2 6.7C143.9 4.4 133.7 6.4 125.5 12.4c-8.2 6-11.4 16.2-9.1 24.6l32.9 120.4L127.1 177.1z"/>'
-      };
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { renderCharts } from './charts.js';
 
-      const viewBoxes = {
-        APP_LOGO: '0 0 512 512',
-        PLANNER: '0 0 544 544',
-        PROFILE: '0 0 528 576',
-        WEIGHT_SCALE: '0 0 640 512',
-        BAR_CHART: '0 0 640 512',
-        SHARE: '0 0 544 576',
-        INFO: '0 0 576 576',
-        LOG_VIEW: '0 0 544 576',
-        RECIPE: '0 0 640 576',
-        TRASH: '0 0 448 512',
-        CLOSE: '0 0 640 512',
-        KEBAB_MENU: '0 0 376 544',
-        BOOK: '0 0 576 576',
-        EDIT: '0 0 512 512',
-        DRAG_HANDLE: '0 0 640 640',
-        GOAL: '0 0 448 512',
-        AUDIO_ON: '0 0 512 512',
-        AUDIO_OFF: '0 0 336 448'
-      };
-
-      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
-        const iconPath = ICONS[name];
-        if (!iconPath) return '';
-        const viewBox = viewBoxes[name] || '0 0 512 512';
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
       }
+
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+          });
+      }
+
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
+
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
+        }
+
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderGoalsPage(state) {
+          const form = document.getElementById('goals-form');
+          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
+          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
+          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
+          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
+          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
+          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
+          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
+          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
+          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
+          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
+          form.elements.target_weight.value = state.userGoals.target_weight || '';
+      }
+
+      export function renderChartsPage(state) {
+          const placeholder = document.getElementById('biometrics-chart-placeholder');
+          const canvas = document.getElementById('biometrics-chart-canvas');
+          if (state.biometricData.length < 2) {
+              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+              placeholder.classList.remove('hidden');
+              canvas.classList.add('hidden');
+          } else {
+              placeholder.classList.add('hidden');
+              canvas.classList.remove('hidden');
+          }
+          renderCharts(state);
+      }
+
+      function getSetDetails(setData) {
+          let details = [];
+          if (setData.reps) {
+              details.push(`${setData.reps} reps`);
+          }
+          if (setData.weight) {
+              details.push(`${setData.weight} kg`);
+          }
+          if (setData.duration) {
+              details.push(`${formatDuration(setData.duration)}`);
+          }
+          return details.join(' / ');
+      }
+
+      export function renderDebriefingPage(state) {
+        const summaryContainer = document.getElementById('debriefing-summary');
+        const statsContainer = document.getElementById('debriefing-stats');
+        const summary = state.lastWorkoutSummary;
+
+        if (!summary || !summary.exercises) {
+            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+            statsContainer.innerHTML = '';
+            document.getElementById('debriefing-feedback').classList.add('hidden');
+            return;
+        }
+
+        document.getElementById('debriefing-feedback').classList.remove('hidden');
+        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
+        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
+        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
+
+        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
+                <span class="stat-value">${summary.totalCaloriesBurned}</span>
+            </div>
+        ` : '';
+
+        const tonnageHTML = summary.totalTonnage > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
+                <span class="stat-value">${summary.totalTonnage} kg</span>
+            </div>
+        ` : '';
+
+        const statsHTML = `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
+            </div>
+            ${caloriesBurnedHTML}
+            ${tonnageHTML}
+        `;
+        statsContainer.innerHTML = statsHTML;
+
+        const summaryHTML = summary.exercises.map(exercise => {
+            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
+            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
+                <div class="set-detail-item">
+                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
+                    <span>${getSetDetails(setData)}</span>
+                </div>
+            `).join('');
+
+            return `
+                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
+                    <div class="debriefing-card-header">
+                        <h4>${exercise.name}</h4>
+                        <div class="debriefing-status">
+                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                        </div>
+                    </div>
+                    <div class="debriefing-card-body">
+                      <div class="exercise-stats">
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
+                      </div>
+                      <div class="sets-details-container">
+                          ${setsDetailsHTML}
+                      </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        summaryContainer.innerHTML = summaryHTML;
+      }
+  - file: src/ui/interactions/goalsInteractions.js
+    content: |
+      import { saveUserGoals } from '../../core/state.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      function handleGoalsForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Goals form submitted');
+        const formData = new FormData(e.target);
+        const goals = {
+          avg_calories: parseInt(formData.get('avg_calories'), 10) || 0,
+          num_workouts: parseInt(formData.get('num_workouts'), 10) || 0,
+          target_weight: parseFloat(formData.get('target_weight')) || 0,
+        };
+        saveUserGoals(goals);
+        showNotification(UI_TEXT.GOALS_SAVE_SUCCESS, 'success');
+      }
+
+      export function initializeGoalsListeners() {
+        document.getElementById('goals-form').addEventListener('submit', handleGoalsForm);
+      }
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { getState, updateExerciseInstanceInWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
+        log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
+        document.getElementById('ex-edit-weight-label').textContent = UI_TEXT.EXERCISE_WEIGHT_LABEL;
+
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+        form.elements.weight.value = exercise.defaultWeight || 0;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'flex';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'flex';
+            form.elements.duration.value = exercise.defaultDuration;
+        }
+
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
+
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value),
+                defaultWeight: parseFloat(form.elements.weight.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(returnIsoDate);
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="exercise-editor-form">
+                <div class="form-group sets-group">
+                  <label for="ex-edit-sets">Serie</label>
+                  <input type="number" id="ex-edit-sets" name="sets" min="1">
+                </div>
+                <div class="form-group reps-group">
+                  <label for="ex-edit-reps">Ripetizioni</label>
+                  <input type="number" id="ex-edit-reps" name="reps" min="1">
+                </div>
+                <div class="form-group duration-group">
+                  <label for="ex-edit-duration">Durata (s)</label>
+                  <input type="number" id="ex-edit-duration" name="duration" min="1">
+                </div>
+                <div class="form-group rest-group">
+                  <label for="ex-edit-rest">Riposo (s)</label>
+                  <input type="number" id="ex-edit-rest" name="rest" min="0">
+                </div>
+                <div class="form-group weight-group">
+                  <label for="ex-edit-weight" id="ex-edit-weight-label"></label>
+                  <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5">
+                </div>
+                <div class="tempo-group">
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-up">Salita (s)</label>
+                    <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label"></label>
+                    <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-down">Discesa (s)</label>
+                    <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5">
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="exercise-editor-form" class="btn btn-primary" id="exercise-editor-save-btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>

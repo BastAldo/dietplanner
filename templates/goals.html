@@ -1,16 +1,29 @@
 <div id="goals-page" class="page-view hidden">
-    <h3 id="goals-title"></h3>
-    <form id="goals-form" class="goals-form">
-        <div class="form-group">
-            <label id="goal-calories-label" for="goal-calories"></label>
-            <input type="number" id="goal-calories" name="avg_calories" min="0">
-        </div>
-        <div class="form-group">
-            <label id="goal-workouts-label" for="goal-workouts"></label>
-            <input type="number" id="goal-workouts" name="num_workouts" min="0">
-        </div>
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="goals-save-btn"></button>
-        </div>
-    </form>
+    <div class="goals-container">
+        <h3 id="goals-title"></h3>
+        <div class="goals-explanation" id="goals-explanation-text"></div>
+        <form id="goals-form" class="goals-form">
+            <fieldset>
+                <legend id="goals-activity-legend"></legend>
+                <div class="form-group">
+                    <label id="goal-calories-label" for="goal-calories"></label>
+                    <input type="number" id="goal-calories" name="avg_calories" min="0">
+                </div>
+                <div class="form-group">
+                    <label id="goal-workouts-label" for="goal-workouts"></label>
+                    <input type="number" id="goal-workouts" name="num_workouts" min="0">
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend id="goals-biometrics-legend"></legend>
+                <div class="form-group">
+                    <label id="goal-weight-label" for="goal-weight"></label>
+                    <input type="number" id="goal-weight" name="target_weight" min="0" step="0.1">
+                </div>
+            </fieldset>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="goals-save-btn"></button>
+            </div>
+        </form>
+    </div>
 </div>

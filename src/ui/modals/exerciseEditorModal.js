@@ -20,17 +20,18 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
 
   form.elements.sets.value = exercise.defaultSets;
   form.elements.rest.value = exercise.defaultRest;
+  form.elements.weight.value = exercise.defaultWeight || 0;
 
   const repsContainer = form.querySelector('.reps-group');
   const durationContainer = form.querySelector('.duration-group');
 
   if (exercise.type === 'reps') {
-      repsContainer.style.display = 'block';
+      repsContainer.style.display = 'flex';
       durationContainer.style.display = 'none';
       form.elements.reps.value = exercise.defaultReps;
   } else {
       repsContainer.style.display = 'none';
-      durationContainer.style.display = 'block';
+      durationContainer.style.display = 'flex';
       form.elements.duration.value = exercise.defaultDuration;
   }
 
@@ -44,19 +45,12 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
       tempoContainer.style.display = 'none';
   }
 
-  const weightContainer = form.querySelector('.weight-group');
-  if (exercise.can_have_weight) {
-      weightContainer.style.display = 'flex';
-      form.elements.weight.value = exercise.defaultWeight || 0;
-  } else {
-      weightContainer.style.display = 'none';
-  }
-
   form.onsubmit = e => {
       e.preventDefault();
       const newValues = {
           defaultSets: parseInt(form.elements.sets.value),
-          defaultRest: parseInt(form.elements.rest.value)
+          defaultRest: parseInt(form.elements.rest.value),
+          defaultWeight: parseFloat(form.elements.weight.value)
       };
       if (exercise.type === 'reps') {
           newValues.defaultReps = parseInt(form.elements.reps.value);
@@ -69,9 +63,6 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
               hold: parseInt(form.elements.tempo_hold.value),
               down: parseInt(form.elements.tempo_down.value)
           };
-      }
-      if (exercise.can_have_weight) {
-          newValues.defaultWeight = parseFloat(form.elements.weight.value);
       }
       updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
       modal.classList.add('modal-hidden');

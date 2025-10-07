@@ -4,9 +4,25 @@
     margin-bottom: 1.5rem;
 }
 
+.goals-container {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.goals-explanation {
+  background-color: var(--card-color);
+  border-left: 4px solid var(--secondary-color);
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-color-muted);
+}
+
 .goals-form {
-    max-width: 600px;
-    margin: 0 auto;
     padding: 1.5rem;
     background: var(--card-color);
     border-radius: 8px;
@@ -16,6 +32,22 @@
     gap: 1.5rem;
 }
 
-.goals-form .form-group input {
-  max-width: 200px;
+.goals-form fieldset {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.goals-form legend {
+  padding: 0 0.5rem;
+  font-weight: bold;
+  color: var(--primary-color);
+}
+
+@media (min-width: 600px) {
+  .goals-form fieldset {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

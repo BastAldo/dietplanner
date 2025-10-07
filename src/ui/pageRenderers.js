@@ -85,11 +85,16 @@ export function renderProfilePage(state) {
 export function renderGoalsPage(state) {
     const form = document.getElementById('goals-form');
     document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
+    document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
+    document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
+    document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
     document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
     document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
+    document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
     document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
     form.elements.avg_calories.value = state.userGoals.avg_calories || '';
     form.elements.num_workouts.value = state.userGoals.num_workouts || '';
+    form.elements.target_weight.value = state.userGoals.target_weight || '';
 }
 
 export function renderChartsPage(state) {

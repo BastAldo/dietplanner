@@ -10,6 +10,7 @@ function handleGoalsForm(e) {
   const goals = {
     avg_calories: parseInt(formData.get('avg_calories'), 10) || 0,
     num_workouts: parseInt(formData.get('num_workouts'), 10) || 0,
+    target_weight: parseFloat(formData.get('target_weight')) || 0,
   };
   saveUserGoals(goals);
   showNotification(UI_TEXT.GOALS_SAVE_SUCCESS, 'success');
