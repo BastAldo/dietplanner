@@ -1,12 +1,12 @@
-commit_message: "fix(UX): Corregge errore modale, layout riepilogo e finalizza migliorie"
+commit_message: "fix(UX): Risolve bug su modifica log e layout riepilogo"
 rationale: |
-  Questo commit è un intervento correttivo e di completamento che risolve due bug critici e finalizza i miglioramenti dell'esperienza utente discussi.
+  Questo commit corregge due bug critici segnalati dall'utente, migliorando la stabilità funzionale e la resa visiva dell'applicazione.
 
-  1.  **Correzione Errore Fatale su Modifica Log**: È stato risolto un `TypeError` che impediva la modifica degli esercizi registrati. L'errore era causato dalla mancanza della struttura HTML per il modale di modifica (`logged-exercise-editor-modal`) nel file `modals.html`. L'HTML è stato aggiunto, rendendo la funzionalità pienamente operativa.
+  1.  **Correzione Bug su Modifica Esercizio Registrato**: È stato risolto un errore fatale che impediva il funzionamento del pulsante "Modifica" nella vista Log. Il modale di modifica esercizio (`exerciseEditorModal`) è stato completamente refattorizzato per gestire correttamente due contesti: la modifica di un esercizio pianificato e la modifica di uno già registrato. Ora, il modale adatta dinamicamente la sua interfaccia per mostrare i campi pertinenti (valori di default vs. dati effettivi per ogni serie) e invoca la corretta funzione di salvataggio, rendendo la funzionalità di modifica dei log pienamente operativa come previsto.
 
-  2.  **Correzione Layout Riepilogo Mobile**: È stato risolto un problema di layout nel widget del riepilogo settimanale (`.planner-summary-stats`) che, su alcune risoluzioni mobili, nascondeva l'ultimo elemento. Lo stile CSS è stato aggiornato per garantire una distribuzione uniforme degli elementi su tutte le dimensioni dello schermo.
+  2.  **Correzione Layout Riepilogo Desktop e Mobile**: È stato risolto un problema di layout nel widget del riepilogo settimanale. L'implementazione è stata riportata a CSS Grid con `auto-fit`, garantendo che tutti gli elementi siano sempre visibili e distribuiti correttamente su qualsiasi dimensione dello schermo, sia mobile che desktop, eliminando i problemi di wrapping e di elementi nascosti.
 
-  3.  **Finalizzazione Miglioramenti UX**: Questo commit include e rende definitivi i miglioramenti precedentemente approvati: l'introduzione di un modale di conferma prima di terminare un allenamento e il raffinamento della guida vocale del trainer per renderla più chiara e funzionale.
+  Questo intervento mirato ripristina le funzionalità chiave e assicura che l'interfaccia utente sia robusta e coerente su tutte le piattaforme.
 patches:
   - file: styles/planner.css
     content: |
@@ -40,16 +40,17 @@ patches:
           font-size: 1.25rem;
       }
       .planner-summary-stats {
-          display: flex;
-          flex-wrap: wrap;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 1.5rem;
-          justify-content: space-around;
           align-items: center;
+          justify-content: center;
       }
       .planner-summary-stat {
           display: flex;
           align-items: center;
           gap: 0.75rem;
+          justify-content: center;
       }
       .planner-summary-stat .stat-icon {
           color: var(--secondary-color);
@@ -118,9 +119,9 @@ patches:
       .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
       .log-workout-header h4 { color: var(--secondary-color); font-size: 1rem; margin: 0; }
       .log-workout-header-actions { display: flex; gap: 0.5rem; }
-      .btn-delete-workout, .btn-edit-workout { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
+      .btn-delete-workout, .btn-edit-logged-exercise { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.25rem; border-radius: 4px; display: flex; }
       .btn-delete-workout:hover { color: var(--danger-color); background-color: rgba(239, 83, 80, 0.1); }
-      .btn-edit-workout:hover { color: var(--primary-color); background-color: rgba(149, 117, 205, 0.1); }
+      .btn-edit-logged-exercise:hover { color: var(--primary-color); background-color: rgba(149, 117, 205, 0.1); }
       .log-workout-stats {
         display: flex;
         flex-wrap: wrap;
@@ -132,7 +133,7 @@ patches:
         border-bottom: 1px solid var(--border-color);
       }
       .log-workout-exercise { margin-bottom: 1rem; }
-      .log-workout-exercise .log-item { border-bottom: 1px solid var(--border-color); }
+      .log-workout-exercise .log-item { border-bottom: none; }
       .log-sets-details { padding-left: 1rem; border-left: 2px solid var(--border-color); margin-top: 0.5rem; }
       .log-set-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 0.25rem 0; }
       .log-set-item span:first-child { color: var(--text-color-muted); }
@@ -283,163 +284,153 @@ patches:
               </div>
           </div>
       </div>
-      <div id="logged-exercise-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="logged-exercise-editor-title"></h3>
-              <button class="modal-close-btn" data-target="logged-exercise-editor-modal"></button>
-            </div>
-            <div id="logged-exercise-editor-body" class="modal-body"></div>
-            <div class="modal-footer">
-                <button id="logged-exercise-editor-save-btn" class="btn btn-primary"></button>
-            </div>
-        </div>
-      </div>
-  - file: src/ui/interactions/plannerInteractions.js
+  - file: src/ui/modals/exerciseEditorModal.js
     content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, deleteWorkoutFromHistory
-      } from '../../core/state.js';
-      import { initializeWorkout } from '../../core/trainer.js';
-      import { fetchAndParseConfig } from '../../api/configService.js';
-      import { showNotification } from '../notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { getState, updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
       import { UI_TEXT } from '../../config/uiText.js';
       import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+      import { showNotification } from '../notifications.js';
 
-      async function handleLoadConfig() {
-        log('Interactions', 'Handling config load button click');
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config, url);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      function renderPlannerForm(body, exercise) {
+        body.innerHTML = `
+          <form id="exercise-editor-form">
+            <div class="form-group sets-group">
+              <label for="ex-edit-sets">Serie</label>
+              <input type="number" id="ex-edit-sets" name="sets" min="1" value="${exercise.defaultSets}">
+            </div>
+            <div class="form-group reps-group" style="display: ${exercise.type === 'reps' ? 'flex' : 'none'};">
+              <label for="ex-edit-reps">Ripetizioni</label>
+              <input type="number" id="ex-edit-reps" name="reps" min="1" value="${exercise.defaultReps || ''}">
+            </div>
+            <div class="form-group duration-group" style="display: ${exercise.type === 'time' ? 'flex' : 'none'};">
+              <label for="ex-edit-duration">Durata (s)</label>
+              <input type="number" id="ex-edit-duration" name="duration" min="1" value="${exercise.defaultDuration || ''}">
+            </div>
+            <div class="form-group rest-group">
+              <label for="ex-edit-rest">Riposo (s)</label>
+              <input type="number" id="ex-edit-rest" name="rest" min="0" value="${exercise.defaultRest}">
+            </div>
+            <div class="form-group weight-group">
+              <label for="ex-edit-weight" id="ex-edit-weight-label">${UI_TEXT.EXERCISE_WEIGHT_LABEL}</label>
+              <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5" value="${exercise.defaultWeight || 0}">
+            </div>
+            <div class="tempo-group" style="display: ${exercise.defaultTempo ? 'grid' : 'none'};">
+              <div class="form-group">
+                <label for="ex-edit-tempo-up">Salita (s)</label>
+                <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5" value="${exercise.defaultTempo?.up || 0}">
+              </div>
+              <div class="form-group">
+                <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">${UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL}</label>
+                <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5" value="${exercise.defaultTempo?.hold || 0}">
+              </div>
+              <div class="form-group">
+                <label for="ex-edit-tempo-down">Discesa (s)</label>
+                <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5" value="${exercise.defaultTempo?.down || 0}">
+              </div>
+            </div>
+          </form>
+        `;
       }
 
-      function handleCalendarClick(e) {
-        const startBtn = e.target.closest('.btn-start-workout-day');
-        if (startBtn) {
-            const isoDate = startBtn.dataset.date;
-            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
-            const globalState = getState();
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout, isoDate);
-            setView('trainer');
-            return;
+      function renderLogForm(body, exercise) {
+        const showWeight = exercise.defaultWeight || exercise.setsData.some(s => s.weight > 0);
+        let formHTML = `<form id="logged-exercise-form" class="structured-form">`;
+        formHTML += exercise.setsData.map((set, index) => {
+            const weightInput = showWeight ? `
+                <div class="form-group">
+                    <label for="set-weight-${index}">${UI_TEXT.LOGGED_EXERCISE_WEIGHT_LABEL}</label>
+                    <input type="number" id="set-weight-${index}" name="weight_${index}" value="${set.weight || 0}" min="0" step="0.1">
+                </div>
+            ` : '';
+            return `
+                <div class="set-editor-row">
+                    <span class="set-editor-label">${UI_TEXT.LOGGED_EXERCISE_SET_LABEL} ${index + 1}</span>
+                    <div class="form-group">
+                        <label for="set-reps-${index}">${UI_TEXT.LOGGED_EXERCISE_REPS_LABEL}</label>
+                        <input type="number" id="set-reps-${index}" name="reps_${index}" value="${set.reps || 0}" min="0">
+                    </div>
+                    ${weightInput}
+                </div>
+            `;
+        }).join('');
+        formHTML += '</form>';
+        body.innerHTML = formHTML;
+      }
+
+      export function openExerciseEditorModal(slotId, instanceId, returnIsoDate, loggedContext = null) {
+        log('Modals', 'Opening exercise editor modal', { slotId, instanceId, loggedContext });
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const body = modal.querySelector('#exercise-editor-body');
+        const saveBtn = modal.querySelector('#exercise-editor-save-btn');
+
+        if (loggedContext) {
+          // --- LOG EDITING MODE ---
+          const { date, startTime, instanceId: loggedInstanceId } = loggedContext;
+          const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+          if (!workout) return;
+          const exercise = workout.exercises.find(ex => ex.instanceId === loggedInstanceId);
+          if (!exercise) return;
+
+          modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+          saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
+          renderLogForm(body, exercise);
+
+          const form = body.querySelector('#logged-exercise-form');
+          const boundSaveHandler = (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const newSetsData = [...exercise.setsData].map((set, index) => ({
+              ...set,
+              reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
+              weight: parseFloat(formData.get(`weight_${index}`)) || 0,
+            }));
+
+            updateExerciseSetsInHistory(date, startTime, loggedInstanceId, newSetsData);
+            showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
+            modal.classList.add('modal-hidden');
+          };
+          saveBtn.replaceWith(saveBtn.cloneNode(true));
+          document.getElementById('exercise-editor-save-btn').addEventListener('click', boundSaveHandler, { once: true });
+
+        } else {
+          // --- PLANNER EDITING MODE ---
+          const workoutList = state.weeklyWorkouts[slotId] || [];
+          const exercise = workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+          if (!exercise) return;
+
+          modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+          saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+          renderPlannerForm(body, exercise);
+
+          const form = body.querySelector('#exercise-editor-form');
+          const boundSaveHandler = (e) => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value),
+                defaultWeight: parseFloat(form.elements.weight.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(returnIsoDate);
+          };
+          saveBtn.replaceWith(saveBtn.cloneNode(true));
+          document.getElementById('exercise-editor-save-btn').addEventListener('click', boundSaveHandler, { once: true });
         }
 
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
-          openDayEditorModal(dayCell.dataset.date);
-        }
+        modal.classList.remove('modal-hidden');
       }
-
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-          return;
-        }
-
-        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
-        if (btnDeleteWorkout) {
-          const { date, starttime } = btnDeleteWorkout.dataset;
-          log('Interactions', 'Delete workout button clicked', { date, starttime });
-          showConfirmModal(
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
-            () => {
-              deleteWorkoutFromHistory(date, parseInt(starttime));
-              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
-            },
-            'danger'
-          );
-          return;
-        }
-
-        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
-        if(btnEditExercise) {
-          const { date, starttime, instanceid } = btnEditExercise.dataset;
-          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
-          openExerciseEditorModal(null, null, null, {
-            date,
-            startTime: parseInt(starttime, 10),
-            instanceId: parseFloat(instanceid)
-          });
-          return;
-        }
-      }
-
-      function handleCopyWeek() {
-        log('Interactions', 'Copy week button clicked');
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        log('Interactions', 'Reset week button clicked');
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      export function initializePlannerListeners() {
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-      }
-  - file: src/ui/modals.js
-    content: |
-      import { showConfirmModal } from './modals/confirmModal.js';
-      import { openDayEditorModal } from './modals/dayEditorModal.js';
-      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
-      import { showRecipeModal } from './modals/recipeModal.js';
-      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
-      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
-      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
-
-      export {
-        showConfirmModal,
-        openDayEditorModal,
-        openExerciseEditorModal,
-        showRecipeModal,
-        openSelectionModal,
-        openWorkoutSelectionModal,
-        openWorkoutEditorModal,
-        openManualWorkoutModal
-      };
-commands: []
