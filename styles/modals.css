@@ -54,12 +54,18 @@
   margin-top: 1rem;
 }
 
-.structured-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
 .structured-form .full-width { grid-column: 1 / -1; }
 
 .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
 .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
 .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+@media (min-width: 600px) {
+  .structured-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 
 @media (max-width: 480px) {
   .workout-summary {

@@ -122,6 +122,7 @@ const UI_TEXT_CONFIG = [
   { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
   { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
   { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' },
+  { id: 'PLANNER_SUMMARY_WEIGHT_GOAL', text: 'Peso Attuale' },
   { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
   { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
   { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
@@ -135,7 +136,8 @@ const UI_TEXT_CONFIG = [
   { id: 'GOALS_SAVE_BTN', text: 'Salva Obiettivi' },
   { id: 'GOALS_SAVE_SUCCESS', text: 'Obiettivi salvati!' },
   { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
-  { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' }
+  { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' },
+  { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

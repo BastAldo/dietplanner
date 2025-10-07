@@ -75,7 +75,7 @@ function formatDuration(ms) {
 
 function renderPlannerSummaryWidget(state, weekStart) {
   const widgetContainer = document.getElementById('planner-summary-widget');
-  const { userGoals } = state;
+  const { userGoals, biometricData } = state;
   let totalCalories = 0;
   let dayCount = 0;
   let completedWorkouts = 0;
@@ -108,6 +108,8 @@ function renderPlannerSummaryWidget(state, weekStart) {
   const avgCalories = dayCount > 0 ? Math.round(totalCalories / dayCount) : 0;
   const calGoal = userGoals.avg_calories || 0;
   const workoutGoal = userGoals.num_workouts || 0;
+  const weightGoal = userGoals.target_weight || 0;
+  const latestWeight = biometricData.length > 0 ? biometricData[0].weight : 0;
 
   widgetContainer.innerHTML = `
       <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
@@ -120,6 +122,12 @@ function renderPlannerSummaryWidget(state, weekStart) {
               <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
               <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
           </div>
+          ${latestWeight > 0 ? `
+          <div class="planner-summary-stat">
+              <span class="stat-value">${latestWeight} kg ${weightGoal > 0 ? `/ ${weightGoal} kg`: ''}</span>
+              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WEIGHT_GOAL}</span>
+          </div>
+          ` : ''}
       </div>
   `;
 }
