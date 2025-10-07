@@ -6,6 +6,7 @@ import { initializePlannerListeners } from './ui/interactions/plannerInteraction
 import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
 import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
 import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
+import { initializeGoalsListeners } from './ui/interactions/goalsInteractions.js';
 import { loadViews } from './ui/viewLoader.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { UI_TEXT } from './config/uiText.js';
@@ -40,18 +41,19 @@ function registerServiceWorker() {
 async function init() {
   await loadViews();
   document.addEventListener('stateChange', renderApp);
-  
+
   loadStateFromLocalStorage();
   let initialState = getState();
   document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
 
   populateInitialText();
-  
+
   initializeGlobalListeners();
   initializePlannerListeners();
   initializeProgressListeners();
   initializeProfileListeners();
   initializeDebriefingListeners();
+  initializeGoalsListeners();
 
   renderApp();
 
@@ -80,7 +82,7 @@ async function init() {
   } else {
     await loadConfig(initialState.configUrl);
   }
-  
+
   registerServiceWorker();
 }
 

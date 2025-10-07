@@ -16,7 +16,8 @@ const initialWorkoutState = {
   startTime: 0,
   phaseStartTime: 0, // Timestamp for start of exercise/set phase
   restStartTime: 0, // Timestamp for start of rest phase
-  setsData: [] // Array to store data for each completed set
+  setsData: [], // Array to store data for each completed set
+  isAudioEnabled: true // Audio feedback state
 };
 
 let workoutState = { ...initialWorkoutState };

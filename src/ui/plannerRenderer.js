@@ -59,12 +59,9 @@ function getRecipeButtonHTML(meal, state) {
 
 function getSetDetails(setData) {
     let details = [];
-    if (setData.reps) {
-        details.push(`${setData.reps} reps`);
-    }
-    if (setData.duration) {
-        details.push(`${formatDuration(setData.duration)}`);
-    }
+    if (setData.reps) details.push(`${setData.reps} reps`);
+    if (setData.weight) details.push(`${setData.weight} kg`);
+    if (setData.duration) details.push(`${formatDuration(setData.duration)}`);
     return details.join(' / ');
 }
 
@@ -78,16 +75,16 @@ function formatDuration(ms) {
 
 function renderPlannerSummaryWidget(state, weekStart) {
   const widgetContainer = document.getElementById('planner-summary-widget');
+  const { userGoals } = state;
   let totalCalories = 0;
   let dayCount = 0;
-  let plannedWorkouts = 0;
   let completedWorkouts = 0;
 
   for (let i = 0; i < 7; i++) {
       const dayDate = new Date(weekStart);
       dayDate.setDate(dayDate.getDate() + i);
       const isoDate = toISODateString(dayDate);
-      
+
       let dailyMin = 0;
       let hasMeals = false;
       MEAL_TYPES.forEach(type => {
@@ -103,25 +100,24 @@ function renderPlannerSummaryWidget(state, weekStart) {
           dayCount++;
       }
 
-      if (state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`]) {
-          plannedWorkouts += state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`].length > 0 ? 1 : 0;
-      }
       if (state.workoutHistory[isoDate]) {
           completedWorkouts += state.workoutHistory[isoDate].length;
       }
   }
-  
+
   const avgCalories = dayCount > 0 ? Math.round(totalCalories / dayCount) : 0;
+  const calGoal = userGoals.avg_calories || 0;
+  const workoutGoal = userGoals.num_workouts || 0;
 
   widgetContainer.innerHTML = `
       <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
       <div class="planner-summary-stats">
           <div class="planner-summary-stat">
-              <span class="stat-value">${avgCalories}</span>
+              <span class="stat-value">${avgCalories} ${calGoal > 0 ? `/ ${calGoal}`: ''}</span>
               <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
           </div>
           <div class="planner-summary-stat">
-              <span class="stat-value">${completedWorkouts} / ${plannedWorkouts}</span>
+              <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
               <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
           </div>
       </div>
@@ -139,7 +135,7 @@ function renderCalendarView(state, weekStart) {
     const isoDate = toISODateString(dayDate);
     const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
     const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-    
+
     let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
     let workoutButtonHTML = '';
 
@@ -184,7 +180,7 @@ function renderLogView(state, weekStart) {
       if (dayMeals.length > 0) {
         dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
       }
-      
+
       if (completedWorkouts.length > 0) {
           completedWorkouts.forEach(workout => {
               if (workout.type === 'structured') {
@@ -195,11 +191,9 @@ function renderLogView(state, weekStart) {
                       </div>
                       <div class="log-workout-stats">
                           <span>Durata: ${formatDuration(workout.totalTime)}</span>
-                          <span>/</span>
-                          <span>Lavoro: ${formatDuration(workout.totalExerciseTime)}</span>
-                          <span>/</span>
-                          <span>Recupero: ${formatDuration(workout.totalRestTime)}</span>
                           ${workout.totalCaloriesBurned > 0 ? `<span>/</span><span>Kcal: ${workout.totalCaloriesBurned}</span>` : ''}
+                          ${workout.totalTonnage > 0 ? `<span>/</span><span>Volume: ${workout.totalTonnage} kg</span>` : ''}
+                          ${workout.rpe ? `<span>/</span><span>RPE: ${workout.rpe}</span>` : ''}
                       </div>
                       ${workout.exercises.map(ex => `
                       <div class="log-workout-exercise">
@@ -219,6 +213,12 @@ function renderLogView(state, weekStart) {
                       `).join('')}
                   </div>`;
               } else if (workout.type === 'manual') {
+                  let detailsHTML = '';
+                  if (workout.distance) detailsHTML += `<div><strong>Distanza:</strong> ${workout.distance} km</div>`;
+                  if (workout.fc_avg) detailsHTML += `<div><strong>FC Media:</strong> ${workout.fc_avg} bpm</div>`;
+                  if (workout.fc_max) detailsHTML += `<div><strong>FC Max:</strong> ${workout.fc_max} bpm</div>`;
+                  if (workout.notes) detailsHTML += `<div class="log-item-details">${workout.notes.replace(/\n/g, '<br>')}</div>`;
+
                   dayLogHTML += `<div class="log-workout-summary">
                       <div class="log-workout-header">
                           <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
@@ -228,7 +228,7 @@ function renderLogView(state, weekStart) {
                           <strong>${workout.name}</strong>
                           <span>${workout.duration || ''}</span>
                       </div>
-                      ${workout.details ? `<div class="log-item-details">${workout.details.replace(/\n/g, '<br>')}</div>` : ''}
+                      ${detailsHTML ? `<div class="log-manual-details">${detailsHTML}</div>` : ''}
                   </div>`;
               }
           });
@@ -251,7 +251,7 @@ export function renderPlannerPage(state) {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
   document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-  
+
   const calendarGrid = document.getElementById('calendar-grid');
   const logView = document.getElementById('log-view');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');

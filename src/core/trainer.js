@@ -56,9 +56,10 @@ export function completeSet() {
       exerciseId: currentExercise.instanceId,
       set: state.currentSet,
       duration: Date.now() - state.phaseStartTime,
-      rest: currentExercise.defaultRest
+      rest: currentExercise.defaultRest,
+      weight: currentExercise.defaultWeight || 0
   };
-  
+
   if (state.executionMode === 'manual_reps') {
       setData.reps = state.manualRepCount;
   } else if (state.executionMode === 'tempo_guided') {
@@ -66,7 +67,7 @@ export function completeSet() {
   }
 
   const newSetsData = [...state.setsData, setData];
-  updateState({ 
+  updateState({
       setsData: newSetsData,
       status: 'resting',
       restStartTime: Date.now(),
@@ -92,7 +93,7 @@ export function startWorkout() {
   } else if (state.executionMode === 'manual_reps') {
       startState.manualRepCount = 0;
   }
-  
+
   updateState(startState);
   startAnimation();
   log('Trainer', 'Workout started. New state:', getState());
@@ -144,17 +145,21 @@ export function incrementManualRep() {
 
 function createWorkoutSummary(finalState) {
     const totalTime = Date.now() - finalState.startTime;
-    
+    let totalTonnage = 0;
+
     const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
         const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
         const setsCompleted = setsForThisExercise.length;
         const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+        const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+        totalTonnage += exerciseTonnage;
 
-        return { 
-            ...exercise, 
+        return {
+            ...exercise,
             setsCompleted: setsCompleted,
             setsData: setsForThisExercise,
-            totalTime: totalExerciseTime
+            totalTime: totalExerciseTime,
+            tonnage: exerciseTonnage
         };
     });
 
@@ -168,6 +173,7 @@ function createWorkoutSummary(finalState) {
         totalSets,
         totalExerciseTime,
         totalRestTime,
+        totalTonnage,
         exercises: exercisesWithDetails,
         startTime: finalState.startTime,
         totalCaloriesBurned: 0

@@ -12,8 +12,12 @@ export function openManualWorkoutModal(isoDate) {
   modal.querySelector('#manual-workout-modal-title').textContent = UI_TEXT.MANUAL_WORKOUT_MODAL_TITLE;
   modal.querySelector('#manual-workout-name-label').textContent = UI_TEXT.MANUAL_WORKOUT_NAME_LABEL;
   modal.querySelector('#manual-workout-duration-label').textContent = UI_TEXT.MANUAL_WORKOUT_DURATION_LABEL;
-  modal.querySelector('#manual-workout-details-label').textContent = UI_TEXT.MANUAL_WORKOUT_DETAILS_LABEL;
+  modal.querySelector('#manual-workout-distance-label').textContent = UI_TEXT.MANUAL_WORKOUT_DISTANCE_LABEL;
+  modal.querySelector('#manual-workout-fc-avg-label').textContent = UI_TEXT.MANUAL_WORKOUT_FC_AVG_LABEL;
+  modal.querySelector('#manual-workout-fc-max-label').textContent = UI_TEXT.MANUAL_WORKOUT_FC_MAX_LABEL;
+  modal.querySelector('#manual-workout-notes-label').textContent = UI_TEXT.MANUAL_WORKOUT_NOTES_LABEL;
   modal.querySelector('#manual-workout-save-btn').textContent = UI_TEXT.MANUAL_WORKOUT_SAVE_BTN;
+
 
   form.reset();
 
@@ -23,7 +27,10 @@ export function openManualWorkoutModal(isoDate) {
     const activityData = {
       name: formData.get('name'),
       duration: formData.get('duration'),
-      details: formData.get('details')
+      distance: parseFloat(formData.get('distance')) || null,
+      fc_avg: parseInt(formData.get('fc_avg'), 10) || null,
+      fc_max: parseInt(formData.get('fc_max'), 10) || null,
+      notes: formData.get('notes')
     };
     addManualWorkoutToHistory(isoDate, activityData);
     modal.classList.add('modal-hidden');

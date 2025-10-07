@@ -16,7 +16,8 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
   modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
   modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
   document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
-  
+  document.getElementById('ex-edit-weight-label').textContent = UI_TEXT.EXERCISE_WEIGHT_LABEL;
+
   form.elements.sets.value = exercise.defaultSets;
   form.elements.rest.value = exercise.defaultRest;
 
@@ -43,6 +44,14 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
       tempoContainer.style.display = 'none';
   }
 
+  const weightContainer = form.querySelector('.weight-group');
+  if (exercise.can_have_weight) {
+      weightContainer.style.display = 'flex';
+      form.elements.weight.value = exercise.defaultWeight || 0;
+  } else {
+      weightContainer.style.display = 'none';
+  }
+
   form.onsubmit = e => {
       e.preventDefault();
       const newValues = {
@@ -61,10 +70,13 @@ export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
               down: parseInt(form.elements.tempo_down.value)
           };
       }
+      if (exercise.can_have_weight) {
+          newValues.defaultWeight = parseFloat(form.elements.weight.value);
+      }
       updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
       modal.classList.add('modal-hidden');
       openWorkoutEditorModal(returnIsoDate);
   };
-  
+
   modal.classList.remove('modal-hidden');
 }

@@ -1,7 +1,9 @@
+import { getWorkoutState, updateState } from '../../core/trainer/state.js';
 import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
+import { renderIcon } from '../icons.js';
 
 const RING_RADIUS = 128;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -15,11 +17,12 @@ export class TrainerComponent {
             exerciseDetails: this.container.querySelector('#current-exercise-details'),
             repDisplay: this.container.querySelector('#current-rep-display'),
             upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
-            
+
             btnStart: this.container.querySelector('#trainer-start-btn'),
             btnPause: this.container.querySelector('#trainer-pause-btn'),
             btnResume: this.container.querySelector('#trainer-resume-btn'),
             btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
+            btnAudio: this.container.querySelector('#audio-toggle-btn'),
 
             ringContainer: this.container.querySelector('#timer-ring-container'),
         };
@@ -32,6 +35,7 @@ export class TrainerComponent {
         this.createTimerRing();
         this.container.addEventListener('click', this.handleControls.bind(this));
         this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
+        this.updateAudioButton(getWorkoutState().isAudioEnabled);
     }
 
     destroy() {
@@ -44,7 +48,10 @@ export class TrainerComponent {
     }
 
     handleControls(e) {
-        const targetId = e.target.id;
+        const target = e.target.closest('button');
+        if (!target) return;
+
+        const targetId = target.id;
         log('TrainerComponent', `Control button clicked: ${targetId}`);
         switch (targetId) {
             case 'trainer-start-btn': startWorkout(); break;
@@ -53,7 +60,20 @@ export class TrainerComponent {
             case 'trainer-end-btn': endWorkout(); break;
             case 'trainer-back-btn': setView('planner'); break;
             case 'trainer-manual-rep-btn': incrementManualRep(); break;
+            case 'audio-toggle-btn': this.toggleAudio(); break;
         }
+    }
+
+    toggleAudio() {
+        const currentState = getWorkoutState();
+        const newState = !currentState.isAudioEnabled;
+        updateState({ isAudioEnabled: newState });
+        this.updateAudioButton(newState);
+    }
+
+    updateAudioButton(isAudioEnabled) {
+        this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
+        this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
     }
 
     createTimerRing() {
@@ -105,7 +125,7 @@ export class TrainerComponent {
         const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
         this.ringProgress.style.strokeDashoffset = offset;
     }
-    
+
     formatTime(ms) {
         const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
         const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
@@ -134,7 +154,7 @@ export class TrainerComponent {
         const currentExercise = exerciseQueue[currentExerciseIndex];
         this.elements.exerciseName.textContent = currentExercise.name;
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
-        
+
         if (status === 'running' && executionMode === 'tempo_guided') {
           this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
           this.elements.repDisplay.classList.remove('hidden-rep');
@@ -222,12 +242,12 @@ export class TrainerComponent {
         const { restTimeRemaining } = state;
         const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
         const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
-        
+
         this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
         this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
         this.updateTimerRing(progressPercent);
     }
-    
+
     renderPaused(state) {
         this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
         this.ringText.classList.remove('flashing');
@@ -248,6 +268,9 @@ export class TrainerComponent {
         } else if (executionMode === 'static_hold') {
             const duration = exercise.defaultDuration;
             details += ` | ${duration}s`;
+        }
+        if (exercise.defaultWeight) {
+            details += ` @ ${exercise.defaultWeight}kg`;
         }
         return details;
     }

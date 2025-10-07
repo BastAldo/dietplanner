@@ -14,7 +14,7 @@ async function fetchAndInject(url, containerId) {
 export async function loadViews() {
     const appContainer = document.getElementById('app-container');
     const modalContainer = document.getElementById('modal-container');
-    
+
     // Svuota i container per evitare duplicati in caso di ricaricamento a caldo (hot-reloading)
     appContainer.innerHTML = '';
     modalContainer.innerHTML = '';
@@ -24,10 +24,11 @@ export async function loadViews() {
     await fetchAndInject('templates/progress.html', 'app-container');
     await fetchAndInject('templates/charts.html', 'app-container');
     await fetchAndInject('templates/recipes.html', 'app-container');
+    await fetchAndInject('templates/goals.html', 'app-container');
     await fetchAndInject('templates/profile.html', 'app-container');
     await fetchAndInject('templates/trainer.html', 'app-container');
     await fetchAndInject('templates/debriefing.html', 'app-container');
-    
+
     // Carica i modali
     await fetchAndInject('templates/modals.html', 'modal-container');
 }

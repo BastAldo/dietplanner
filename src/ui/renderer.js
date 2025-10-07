@@ -1,6 +1,6 @@
 import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
-import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage } from './pageRenderers.js';
+import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage } from './pageRenderers.js';
 import { renderRecipesPage } from './recipesRenderer.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../config/uiText.js';
@@ -15,13 +15,14 @@ function populateIcons() {
     document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
     document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
     document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+    document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
     document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
     document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
     document.getElementById('info-icon').innerHTML = renderIcon('INFO');
     document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
     document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
     document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
-    
+
     document.querySelectorAll('.modal-close-btn').forEach(btn => {
         btn.innerHTML = renderIcon('CLOSE');
     });
@@ -34,6 +35,7 @@ export function populateInitialText() {
   document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
   document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
   document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+  document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
   document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
@@ -63,6 +65,7 @@ export function renderApp() {
   const progressPage = document.getElementById('progress-page');
   const chartsPage = document.getElementById('charts-page');
   const recipesPage = document.getElementById('recipes-page');
+  const goalsPage = document.getElementById('goals-page');
   const profilePage = document.getElementById('profile-page');
   const trainerPage = document.getElementById('trainer-page');
   const debriefingPage = document.getElementById('debriefing-page');
@@ -71,6 +74,7 @@ export function renderApp() {
   const navProgressBtn = document.getElementById('nav-progress');
   const navChartsBtn = document.getElementById('nav-charts');
   const navRecipesBtn = document.getElementById('nav-recipes');
+  const navGoalsBtn = document.getElementById('nav-goals');
   const navProfileBtn = document.getElementById('nav-profile');
 
   log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
@@ -81,8 +85,8 @@ export function renderApp() {
       isTrainerActive = false;
   }
 
-  [plannerPage, progressPage, chartsPage, recipesPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
-  [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+  [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+  [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
 
   if (state.currentView === 'planner' || state.currentView === 'log') {
     plannerPage.classList.remove('hidden');
@@ -100,6 +104,10 @@ export function renderApp() {
     recipesPage.classList.remove('hidden');
     navRecipesBtn.classList.add('active');
     renderRecipesPage(state);
+  } else if (state.currentView === 'goals') {
+    goalsPage.classList.remove('hidden');
+    navGoalsBtn.classList.add('active');
+    renderGoalsPage(state);
   } else if (state.currentView === 'profile') {
     profilePage.classList.remove('hidden');
     navProfileBtn.classList.add('active');

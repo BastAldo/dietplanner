@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healtypro-v14';
+const CACHE_NAME = 'healtypro-v15';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
@@ -10,6 +10,7 @@ const APP_SHELL_FILES = [
   'styles/recipes.css',
   'styles/trainer.css',
   'styles/debriefing.css',
+  'styles/goals.css',
   'templates/planner.html',
   'templates/progress.html',
   'templates/profile.html',
@@ -18,6 +19,7 @@ const APP_SHELL_FILES = [
   'templates/modals.html',
   'templates/trainer.html',
   'templates/debriefing.html',
+  'templates/goals.html',
   'src/main.js',
   'src/api/configService.js',
   'src/config/forms.js',
@@ -35,6 +37,7 @@ const APP_SHELL_FILES = [
   'src/ui/interactions/profileInteractions.js',
   'src/ui/interactions/progressInteractions.js',
   'src/ui/interactions/debriefingInteractions.js',
+  'src/ui/interactions/goalsInteractions.js',
   'src/ui/notifications.js',
   'src/ui/renderer.js',
   'src/ui/modals.js',
@@ -55,6 +58,7 @@ const APP_SHELL_FILES = [
   'src/utils/constants.js',
   'src/utils/formatters.js',
   'src/utils/logger.js',
+  'src/utils/audioFeedback.js',
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
   'screenshots/screen_desktop.png',

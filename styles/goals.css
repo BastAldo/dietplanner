@@ -1,0 +1,17 @@
+/* --- GOALS PAGE --- */
+#goals-page h3 {
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+}
+
+.goals-form {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    background: var(--card-color);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}

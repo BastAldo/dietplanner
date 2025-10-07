@@ -33,8 +33,11 @@ async function handleSaveBackup() {
   const backupData = {
     configUrl: state.configUrl,
     weeklyPlan: state.weeklyPlan,
+    weeklyWorkouts: state.weeklyWorkouts,
+    workoutHistory: state.workoutHistory,
     biometricData: state.biometricData,
-    userProfile: state.userProfile
+    userProfile: state.userProfile,
+    userGoals: state.userGoals
   };
   const fileName = 'healtypro_backup.txt';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
@@ -83,11 +86,12 @@ export function initializeGlobalListeners() {
   document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
   document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
   document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
-  
+
   document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
   document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
   document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
   document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
+  document.getElementById('nav-goals').addEventListener('click', () => setView('goals'));
   document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
 
   document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));

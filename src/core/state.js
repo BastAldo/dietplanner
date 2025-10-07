@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
 import { log } from '../utils/logger.js';
@@ -12,10 +12,11 @@ let state = {
   workoutHistory: {},
   biometricData: [],
   userProfile: {},
+  userGoals: {},
   configUrl: '',
   recipeBaseUrl: '',
   focusedDate: new Date(),
-  currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing'
+  currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
   debugMode: false,
   lastWorkoutSummary: null,
 };
@@ -73,6 +74,7 @@ export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+  localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
 }
 
 export function loadStateFromLocalStorage() {
@@ -83,6 +85,7 @@ export function loadStateFromLocalStorage() {
   const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
   const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+  const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
 
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
   if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
@@ -90,6 +93,7 @@ export function loadStateFromLocalStorage() {
   if (url) { state.configUrl = url; }
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+  if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
 }
 
 export function setAppState(backupData) {
@@ -100,6 +104,7 @@ export function setAppState(backupData) {
   state.configUrl = backupData.configUrl || '';
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
+  state.userGoals = backupData.userGoals || {};
   saveStateToLocalStorage();
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
   notify();
@@ -110,6 +115,13 @@ export function saveUserProfile(profile) {
   state.userProfile = profile;
   saveStateToLocalStorage();
   notify();
+}
+
+export function saveUserGoals(goals) {
+    log('State', 'Saving user goals', { goals });
+    state.userGoals = goals;
+    saveStateToLocalStorage();
+    notify();
 }
 
 export function addOrUpdateBiometricEntry(entry) {
@@ -232,7 +244,7 @@ export function navigateWeek(direction) {
 
 export function setView(view) {
   log('State', 'Setting new view', { newView: view, oldView: state.currentView });
-  if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing'].includes(view)) {
+  if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
     state.currentView = view;
     notify();
   }
@@ -281,6 +293,21 @@ export function deleteWorkoutFromHistory(date, startTime) {
         }
         saveStateToLocalStorage();
         notify();
+    }
+}
+
+export function updateWorkoutInHistory(date, startTime, updates) {
+    log('State', 'Updating workout in history', { date, startTime, updates });
+    if (state.workoutHistory[date]) {
+        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+        if (workoutIndex > -1) {
+            state.workoutHistory[date][workoutIndex] = {
+                ...state.workoutHistory[date][workoutIndex],
+                ...updates
+            };
+            saveStateToLocalStorage();
+            notify();
+        }
     }
 }
 

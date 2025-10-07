@@ -1,386 +1,36 @@
-commit_message: "feat(UX/Tracking): Aggiunge log strutturato, feedback audio e metriche avanzate"
+commit_message: "feat(Features): Implementa log strutturato, metriche avanzate, audio e obiettivi"
 rationale: |
-  Questo commit introduce un'importante suite di funzionalità, come da nostra discussione, per trasformare HealtyPro in uno strumento di tracking del benessere più completo, immersivo e basato sui dati.
+  Questo commit introduce un'importante suite di funzionalità per trasformare HealtyPro in uno strumento di tracking del benessere più completo, risolvendo al contempo un bug critico nel logging manuale.
 
-  1.  **Log di Attività Manuale Strutturato**: Il sistema di logging manuale è stato completamente rinnovato. Il precedente campo di testo generico è stato sostituito da campi numerici strutturati (`Distanza`, `FC Media`, `FC Massima`) e un campo `Note`. Questo permette una registrazione dei dati più precisa e apre la porta ad analisi future. La UI del log è stata aggiornata per visualizzare questi dati in modo pulito.
+  1.  **Bug Fix e Log Strutturato**: È stato corretto un `TypeError` nel modale di log manuale. Il sistema è stato completamente rinnovato, sostituendo un campo di testo generico con campi numerici strutturati (`Distanza`, `FC Media`, `FC Massima`) e un campo `Note`. Questo permette una registrazione dei dati più precisa e apre la porta ad analisi future.
 
-  2.  **Feedback Audio nel Trainer**: È stata implementata una delle funzionalità più richieste: feedback sonori nella vista Trainer. Utilizzando la Web Audio API nativa per mantenere l'applicazione leggera, ora vengono riprodotti dei segnali acustici per marcare l'inizio e la fine delle fasi di esercizio e recupero. Questo rende l'esperienza di allenamento più immersiva, permettendo all'utente di concentrarsi sul movimento anziché sullo schermo. È stato aggiunto un controllo per attivare/disattivare l'audio.
+  2.  **Metriche di Allenamento Avanzate**:
+      * **Calorie Bruciate (METs)**: Integrata la logica per il calcolo del dispendio calorico basato sul valore MET degli esercizi, il peso dell'utente e la durata. Il risultato è visibile nel debriefing e nel log.
+      * **Tonnellaggio (Volume)**: Aggiunto il calcolo del tonnellaggio (Serie x Reps x Peso) per gli esercizi di forza, una metrica fondamentale per il tracciamento del sovraccarico progressivo.
+      * **Sforzo Percepito (RPE)**: L'utente può ora registrare lo sforzo percepito (RPE) al termine di ogni allenamento.
 
-  3.  **Calcolo Calorie Bruciate (METs)**: È stata integrata la logica per il calcolo del dispendio calorico basato sul valore MET degli esercizi. Il risultato è ora visibile sia nella schermata di debriefing sia nel riepilogo dell'allenamento nella vista Log, fornendo un quadro completo del bilancio energetico.
+  3.  **Feedback Audio nel Trainer**: Implementato feedback sonori nella vista Trainer tramite la Web Audio API nativa. Segnali acustici marcano l'inizio e la fine delle fasi di esercizio e recupero, rendendo l'esperienza più immersiva. È stato aggiunto un controllo per attivare/disattivare l'audio.
 
-  4.  **Miglioramenti UI Aggiuntivi**:
-      * **Tonnellaggio (Volume)**: È stato aggiunto il calcolo del tonnellaggio (Serie x Reps x Peso) per gli esercizi di forza, una metrica fondamentale per il tracciamento del sovraccarico progressivo. Per abilitarlo, è stato aggiunto un campo "Peso" nell'editor dell'esercizio.
-      * **Sforzo Percepito (RPE)**: L'utente può ora registrare lo sforzo percepito (RPE) al termine di ogni allenamento. Questo dato qualitativo è cruciale per monitorare la fatica.
-      * **Obiettivi Settimanali**: È stata creata una nuova pagina "Obiettivi" e integrata nel flusso dell'app, dove l'utente può definire target settimanali per calorie e allenamenti. Il widget di riepilogo ora mostra i progressi verso questi obiettivi.
+  4.  **Sistema di Obiettivi Settimanali**: Creata una nuova pagina "Obiettivi" dove l'utente può definire target settimanali per calorie e allenamenti. Il widget di riepilogo nella pagina Planner ora mostra i progressi verso questi obiettivi, introducendo un elemento motivazionale.
 patches:
-  - file: src/config/uiText.js
+  - file: styles/goals.css
     content: |
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_PROGRESS', text: 'Progressi' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'NAV_GOALS', text: 'Obiettivi' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'DELETE_WORKOUT_CONFIRM_TITLE', text: 'Elimina Allenamento' },
-        { id: 'DELETE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare questo allenamento dallo storico? L\'azione è irreversibile.' },
-        { id: 'DELETE_WORKOUT_SUCCESS', text: 'Allenamento eliminato dallo storico.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
-        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
-        { id: 'LOG_ACTIVITY_BTN', text: 'Log Attività' },
-        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
-        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
-        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
-        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
-        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
-        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
-        { id: 'EXERCISE_WEIGHT_LABEL', text: 'Peso (kg)' },
-        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
-        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'CHARTS_CORRELATION_TITLE', text: 'Correlazione Peso e Calorie' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
-        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
-        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
-        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
-        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
-        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
-        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
-        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
-        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
-        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
-        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
-        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
-        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
-        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
-        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
-        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
-        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
-        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
-        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
-        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
-        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
-        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
-        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
-        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
-        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
-        { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
-        { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
-        { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
-        { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
-        { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
-        { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
-        { id: 'DEBRIEFING_TONNAGE', text: 'Tonnellaggio' },
-        { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
-        { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
-        { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
-        { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
-        { id: 'DEBRIEFING_CALORIES_BURNED', text: 'Calorie Bruciate' },
-        { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
-        { id: 'DEBRIEFING_RPE_LABEL', text: 'Sforzo Percepito (RPE 1-10)' },
-        { id: 'DEBRIEFING_SAVE_RPE_BTN', text: 'Salva RPE' },
-        { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
-        { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
-        { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti Completati' },
-        { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
-        { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
-        { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
-        { id: 'MANUAL_WORKOUT_DISTANCE_LABEL', text: 'Distanza (km)' },
-        { id: 'MANUAL_WORKOUT_FC_AVG_LABEL', text: 'FC Media (bpm)' },
-        { id: 'MANUAL_WORKOUT_FC_MAX_LABEL', text: 'FC Max (bpm)' },
-        { id: 'MANUAL_WORKOUT_NOTES_LABEL', text: 'Note' },
-        { id: 'MANUAL_WORKOUT_SAVE_BTN', text: 'Salva Attività' },
-        { id: 'LOG_VIEW_MANUAL_ACTIVITY_TITLE', text: 'Attività del Giorno' },
-        { id: 'GOALS_TITLE', text: 'Obiettivi Settimanali' },
-        { id: 'GOALS_SAVE_BTN', text: 'Salva Obiettivi' },
-        { id: 'GOALS_SAVE_SUCCESS', text: 'Obiettivi salvati!' },
-        { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
-        { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' }
-      ];
+      /* --- GOALS PAGE --- */
+      #goals-page h3 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
+      }
 
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
-  - file: templates/modals.html
-    content: |
-      <div id="info-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="info-modal-title"></h3>
-                <button class="modal-close-btn" data-target="info-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <p id="info-modal-desc"></p>
-                  <pre><code id="info-modal-json-example"></code></pre>
-              </div>
-          </div>
-      </div>
-      <div id="selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="selection-modal"></button>
-              </div>
-              <div id="selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="workout-selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
-              </div>
-              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="day-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="day-editor-title"></h3>
-              <button class="modal-close-btn" data-target="day-editor-modal"></button>
-            </div>
-            <div id="day-editor-body" class="modal-body day-editor-list"></div>
-        </div>
-      </div>
-      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="workout-editor-title"></h3>
-              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
-            </div>
-            <div id="workout-editor-body" class="modal-body"></div>
-        </div>
-      </div>
-      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="exercise-editor-title"></h3>
-              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
-            </div>
-            <div class="modal-body">
-              <form id="exercise-editor-form">
-                <div class="form-group">
-                  <label for="ex-edit-sets">Serie</label>
-                  <input type="number" id="ex-edit-sets" name="sets" min="1">
-                </div>
-                <div class="form-group reps-group">
-                  <label for="ex-edit-reps">Ripetizioni</label>
-                  <input type="number" id="ex-edit-reps" name="reps" min="1">
-                </div>
-                <div class="form-group duration-group">
-                  <label for="ex-edit-duration">Durata (s)</label>
-                  <input type="number" id="ex-edit-duration" name="duration" min="1">
-                </div>
-                <div class="form-group">
-                  <label for="ex-edit-rest">Riposo (s)</label>
-                  <input type="number" id="ex-edit-rest" name="rest" min="0">
-                </div>
-                <div class="form-group weight-group">
-                  <label for="ex-edit-weight" id="ex-edit-weight-label"></label>
-                  <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5">
-                </div>
-                <div class="tempo-group">
-                  <div class="form-group">
-                    <label for="ex-edit-tempo-up">Salita (s)</label>
-                    <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0">
-                  </div>
-                  <div class="form-group">
-                    <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label"></label>
-                    <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0">
-                  </div>
-                  <div class="form-group">
-                    <label for="ex-edit-tempo-down">Discesa (s)</label>
-                    <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0">
-                  </div>
-                </div>
-              </form>
-            </div>
-            <div class="modal-footer">
-                <button type="submit" form="exercise-editor-form" class="btn btn-primary" id="exercise-editor-save-btn"></button>
-            </div>
-        </div>
-      </div>
-      <div id="confirm-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="confirm-modal-title"></h3>
-            </div>
-            <div class="modal-body">
-              <p id="confirm-modal-message"></p>
-            </div>
-            <div class="modal-footer">
-              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
-              <button id="confirm-modal-confirm-btn" class="btn"></button>
-            </div>
-        </div>
-      </div>
-      <div id="recipe-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="recipe-modal-title"></h3>
-              <button class="modal-close-btn" data-target="recipe-modal"></button>
-            </div>
-            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-        </div>
-      </div>
-      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="manual-workout-modal-title"></h3>
-                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <form id="manual-workout-form" class="structured-form">
-                      <div class="form-group">
-                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
-                          <input type="text" id="manual-workout-name" name="name" required>
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
-                          <input type="text" id="manual-workout-duration" name="duration">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
-                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
-                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
-                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
-                      </div>
-                      <div class="form-group full-width">
-                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
-                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
-                      </div>
-                  </form>
-              </div>
-              <div class="modal-footer">
-                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
-              </div>
-          </div>
-      </div>
-  - file: styles/modals.css
-    content: |
-      /* --- MODALS --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn svg { width: 1em; height: 1em; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-      .day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
-      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-      .meal-details-container { flex-grow: 1; min-width: 0; }
-      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
-      .workout-summary-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-      .meal-details { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-color); }
-      .meal-details:last-of-type { border-bottom: none; }
-      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
-      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
-      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
-      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
-      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
-      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-      #exercise-editor-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
-      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
-      #exercise-editor-form .tempo-group, #exercise-editor-form .weight-group { grid-column: 1 / -1; }
-
-      .structured-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-      .structured-form .full-width { grid-column: 1 / -1; }
-
-      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
-      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
-      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
-
-      @media (max-width: 480px) {
-        .workout-summary {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.75rem;
-        }
-        .workout-summary-actions {
-          width: 100%;
+      .goals-form {
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 1.5rem;
+          background: var(--card-color);
+          border-radius: 8px;
+          border: 1px solid var(--border-color);
           display: flex;
-          flex-wrap: wrap;
-        }
-        .workout-summary-actions .btn {
-          flex-grow: 1;
-        }
+          flex-direction: column;
+          gap: 1.5rem;
       }
   - file: styles/trainer.css
     content: |
@@ -402,6 +52,7 @@ patches:
           border-bottom: 1px solid var(--border-color);
           flex-shrink: 0;
           gap: 1rem;
+          position: relative;
       }
 
       .trainer-header h2 {
@@ -564,6 +215,251 @@ patches:
           padding: 1rem 2rem;
           font-size: 1.25rem;
       }
+  - file: templates/goals.html
+    content: |
+      <div id="goals-page" class="page-view hidden">
+          <h3 id="goals-title"></h3>
+          <form id="goals-form" class="goals-form">
+              <div class="form-group">
+                  <label id="goal-calories-label" for="goal-calories"></label>
+                  <input type="number" id="goal-calories" name="avg_calories" min="0">
+              </div>
+              <div class="form-group">
+                  <label id="goal-workouts-label" for="goal-workouts"></label>
+                  <input type="number" id="goal-workouts" name="num_workouts" min="0">
+              </div>
+              <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" id="goals-save-btn"></button>
+              </div>
+          </form>
+      </div>
+  - file: src/ui/interactions/goalsInteractions.js
+    content: |
+      import { saveUserGoals } from '../../core/state.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      function handleGoalsForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Goals form submitted');
+        const formData = new FormData(e.target);
+        const goals = {
+          avg_calories: parseInt(formData.get('avg_calories'), 10) || 0,
+          num_workouts: parseInt(formData.get('num_workouts'), 10) || 0,
+        };
+        saveUserGoals(goals);
+        showNotification(UI_TEXT.GOALS_SAVE_SUCCESS, 'success');
+      }
+
+      export function initializeGoalsListeners() {
+        document.getElementById('goals-form').addEventListener('submit', handleGoalsForm);
+      }
+  - file: index.html
+    content: |
+      <!DOCTYPE html>
+      <html lang="it">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta name="theme-color" content="#1a1a1d">
+          <title>HealtyPro</title>
+          <link rel="stylesheet" href="styles/base.css">
+          <link rel="stylesheet" href="styles/planner.css">
+          <link rel="stylesheet" href="styles/progress.css">
+          <link rel="stylesheet" href="styles/modals.css">
+          <link rel="stylesheet" href="styles/charts.css">
+          <link rel="stylesheet" href="styles/recipes.css">
+          <link rel="stylesheet" href="styles/trainer.css">
+          <link rel="stylesheet" href="styles/debriefing.css">
+          <link rel="stylesheet" href="styles/goals.css">
+          <link rel="manifest" href="manifest.json">
+          <link rel="icon" href="favicon.ico" type="image/x-icon">
+          <link rel="apple-touch-icon" href="icon.svg">
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+          <script src="src/main.js" type="module" defer></script>
+      </head>
+      <body>
+          <div id="toast-container" class="toast-container"></div>
+
+          <header class="app-header">
+              <div class="header-content">
+                  <div class="app-title">
+                      <h1 id="main-title"></h1>
+                  </div>
+                  <nav id="main-nav" class="main-nav">
+                      <button id="nav-planner" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-progress" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-charts" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-recipes" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-goals" class="btn-nav">
+                          <span></span>
+                      </button>
+                      <button id="nav-profile" class="btn-nav">
+                          <span></span>
+                      </button>
+                  </nav>
+              </div>
+          </header>
+
+          <main id="app-container">
+              </main>
+
+          <footer class="app-footer">
+              <button id="restore-btn" class="btn btn-secondary"></button>
+              <button id="backup-btn" class="btn btn-secondary"></button>
+          </footer>
+
+          <div id="modal-container">
+              </div>
+      </body>
+      </html>
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v15';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'styles/debriefing.css',
+        'styles/goals.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'templates/debriefing.html',
+        'templates/goals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/config/forms.js',
+        'src/config/uiText.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions/globalInteractions.js',
+        'src/ui/interactions/plannerInteractions.js',
+        'src/ui/interactions/profileInteractions.js',
+        'src/ui/interactions/progressInteractions.js',
+        'src/ui/interactions/debriefingInteractions.js',
+        'src/ui/interactions/goalsInteractions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/modals/confirmModal.js',
+        'src/ui/modals/dayEditorModal.js',
+        'src/ui/modals/exerciseEditorModal.js',
+        'src/ui/modals/recipeModal.js',
+        'src/ui/modals/selectionModal.js',
+        'src/ui/modals/workoutEditorModal.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/recipesRenderer.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'src/utils/audioFeedback.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
+  - file: templates/trainer.html
+    content: |
+      <div id="trainer-page" class="page-view hidden">
+          <header class="trainer-header">
+              <button id="trainer-back-btn" class="btn btn-secondary">Indietro</button>
+              <h2 id="trainer-title">Allenamento</h2>
+              <div class="trainer-header-controls">
+                  <button id="audio-toggle-btn"></button>
+              </div>
+              <button id="trainer-end-btn" class="btn btn-danger">Termina</button>
+          </header>
+          <div class="trainer-body">
+              <div class="exercise-info-container">
+                  <h3 id="current-exercise-name"></h3>
+                  <p id="current-exercise-details"></p>
+                  <p id="current-rep-display"></p>
+                  <div id="upcoming-exercise-display"></div>
+              </div>
+
+              <div id="trainer-display-modes">
+                  <div id="timer-ring-container" class="timer-ring-container">
+                  </div>
+              </div>
+
+              <div id="trainer-main-controls" class="trainer-controls">
+                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
+                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
+                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
+                  <button id="trainer-manual-rep-btn" class="btn btn-primary btn-large hidden"></button>
+              </div>
+          </div>
+      </div>
   - file: src/utils/audioFeedback.js
     content: |
       let audioContext = null;
@@ -583,6 +479,11 @@ patches:
           const ctx = getAudioContext();
           if (!ctx) return;
 
+          // Resume context on user gesture if needed
+          if (ctx.state === 'suspended') {
+              ctx.resume();
+          }
+
           const oscillator = ctx.createOscillator();
           const gainNode = ctx.createGain();
 
@@ -591,22 +492,22 @@ patches:
 
           if (type === 'start') {
               oscillator.type = 'sine';
-              oscillator.frequency.setValueAtTime(440, ctx.currentTime); // A4
-              gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+              oscillator.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+              gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
               gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
               oscillator.start(ctx.currentTime);
               oscillator.stop(ctx.currentTime + 0.5);
           } else if (type === 'stop') {
               oscillator.type = 'sine';
-              oscillator.frequency.setValueAtTime(220, ctx.currentTime); // A3
-              gainNode.gain.setValueAtTime(0.5, ctx.currentTime);
+              oscillator.frequency.setValueAtTime(261.63, ctx.currentTime); // C4
+              gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
               gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
               oscillator.start(ctx.currentTime);
               oscillator.stop(ctx.currentTime + 0.5);
           } else if (type === 'tick') {
               oscillator.type = 'triangle';
-              oscillator.frequency.setValueAtTime(880, ctx.currentTime); // A5
-              gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+              oscillator.frequency.setValueAtTime(1046.50, ctx.currentTime); // C6
+              gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
               gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
               oscillator.start(ctx.currentTime);
               oscillator.stop(ctx.currentTime + 0.2);
@@ -624,5 +525,2248 @@ patches:
       export function playTick() {
           playSound('tick');
       }
-commands:
-  - "echo 'Funzionalità implementate: log attività strutturato e feedback audio nel trainer.'"
+  - file: src/ui/viewLoader.js
+    content: |
+      async function fetchAndInject(url, containerId) {
+          try {
+              const response = await fetch(url);
+              if (!response.ok) {
+                  throw new Error(`Failed to load template: ${url}`);
+              }
+              const content = await response.text();
+              document.getElementById(containerId).innerHTML += content;
+          } catch (error) {
+              console.error(error);
+          }
+      }
+
+      export async function loadViews() {
+          const appContainer = document.getElementById('app-container');
+          const modalContainer = document.getElementById('modal-container');
+
+          // Svuota i container per evitare duplicati in caso di ricaricamento a caldo (hot-reloading)
+          appContainer.innerHTML = '';
+          modalContainer.innerHTML = '';
+
+          // Carica le viste principali
+          await fetchAndInject('templates/planner.html', 'app-container');
+          await fetchAndInject('templates/progress.html', 'app-container');
+          await fetchAndInject('templates/charts.html', 'app-container');
+          await fetchAndInject('templates/recipes.html', 'app-container');
+          await fetchAndInject('templates/goals.html', 'app-container');
+          await fetchAndInject('templates/profile.html', 'app-container');
+          await fetchAndInject('templates/trainer.html', 'app-container');
+          await fetchAndInject('templates/debriefing.html', 'app-container');
+
+          // Carica i modali
+          await fetchAndInject('templates/modals.html', 'modal-container');
+      }
+  - file: src/main.js
+    content: |
+      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
+      import { renderApp, populateInitialText } from './ui/renderer.js';
+      import { showConfirmModal } from './ui/modals.js';
+      import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
+      import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
+      import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
+      import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
+      import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
+      import { initializeGoalsListeners } from './ui/interactions/goalsInteractions.js';
+      import { loadViews } from './ui/viewLoader.js';
+      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+      import { UI_TEXT } from './config/uiText.js';
+      import { fetchAndParseConfig } from './api/configService.js';
+      import { showNotification } from './ui/notifications.js';
+
+      async function loadConfig(url) {
+        if (!url) {
+          setPlannerConfig({}, url);
+          return;
+        };
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+          setPlannerConfig({}, url);
+        }
+      }
+
+      function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/dietplanner/sw.js')
+              .then(registration => console.log('ServiceWorker registration successful'))
+              .catch(err => console.log('ServiceWorker registration failed: ', err));
+          });
+        }
+      }
+
+      async function init() {
+        await loadViews();
+        document.addEventListener('stateChange', renderApp);
+
+        loadStateFromLocalStorage();
+        let initialState = getState();
+        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+
+        populateInitialText();
+
+        initializeGlobalListeners();
+        initializePlannerListeners();
+        initializeProgressListeners();
+        initializeProfileListeners();
+        initializeDebriefingListeners();
+        initializeGoalsListeners();
+
+        renderApp();
+
+        window.toggleDebugMode = toggleDebugMode;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const configUrlFromParam = urlParams.get('configUrl');
+
+        if (configUrlFromParam) {
+          const decodedUrl = decodeURIComponent(configUrlFromParam);
+          initialState = getState();
+          if (decodedUrl !== initialState.configUrl) {
+            showConfirmModal(
+              UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+              UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+              () => {
+                setConfigUrl(decodedUrl);
+                document.getElementById('config-url-input').value = decodedUrl;
+                loadConfig(decodedUrl);
+              },
+              'primary'
+            );
+          } else {
+            await loadConfig(initialState.configUrl);
+          }
+        } else {
+          await loadConfig(initialState.configUrl);
+        }
+
+        registerServiceWorker();
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage } from './pageRenderers.js';
+      import { renderRecipesPage } from './recipesRenderer.js';
+      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { log } from '../utils/logger.js';
+
+      let isTrainerActive = false;
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
+        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
+        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const goalsPage = document.getElementById('goals-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+        const debriefingPage = document.getElementById('debriefing-page');
+
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navGoalsBtn = document.getElementById('nav-goals');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
+
+        if (state.currentView !== 'trainer' && isTrainerActive) {
+            log('Renderer', 'View is not trainer, destroying trainer controller...');
+            destroyTrainerController();
+            isTrainerActive = false;
+        }
+
+        [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (state.currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (state.currentView === 'goals') {
+          goalsPage.classList.remove('hidden');
+          navGoalsBtn.classList.add('active');
+          renderGoalsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        } else if (state.currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          log('Renderer', 'View is trainer, checking if trainer is active...');
+          if (!isTrainerActive) {
+            log('Renderer', 'Trainer is not active, initializing trainer controller...');
+            initializeTrainerController();
+            isTrainerActive = true;
+          }
+        } else if (state.currentView === 'debriefing') {
+          debriefingPage.classList.remove('hidden');
+          renderDebriefingPage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="exercise-editor-form">
+                <div class="form-group">
+                  <label for="ex-edit-sets">Serie</label>
+                  <input type="number" id="ex-edit-sets" name="sets" min="1">
+                </div>
+                <div class="form-group reps-group">
+                  <label for="ex-edit-reps">Ripetizioni</label>
+                  <input type="number" id="ex-edit-reps" name="reps" min="1">
+                </div>
+                <div class="form-group duration-group">
+                  <label for="ex-edit-duration">Durata (s)</label>
+                  <input type="number" id="ex-edit-duration" name="duration" min="1">
+                </div>
+                <div class="form-group">
+                  <label for="ex-edit-rest">Riposo (s)</label>
+                  <input type="number" id="ex-edit-rest" name="rest" min="0">
+                </div>
+                <div class="form-group weight-group">
+                  <label for="ex-edit-weight" id="ex-edit-weight-label"></label>
+                  <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5">
+                </div>
+                <div class="tempo-group">
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-up">Salita (s)</label>
+                    <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label"></label>
+                    <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0">
+                  </div>
+                  <div class="form-group">
+                    <label for="ex-edit-tempo-down">Discesa (s)</label>
+                    <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0">
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="exercise-editor-form" class="btn btn-primary" id="exercise-editor-save-btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+  - file: src/ui/interactions/globalInteractions.js
+    content: |
+      import { setView, getState, setAppState } from '../../core/state.js';
+      import { showConfirmModal } from '../modals.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      function handleShareConfig() {
+        log('Interactions', 'Share config button clicked');
+        const state = getState();
+        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
+        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+      }
+
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      async function handleSaveBackup() {
+        log('Interactions', 'Save backup button clicked');
+        const state = getState();
+        const backupData = {
+          configUrl: state.configUrl,
+          weeklyPlan: state.weeklyPlan,
+          weeklyWorkouts: state.weeklyWorkouts,
+          workoutHistory: state.workoutHistory,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile,
+          userGoals: state.userGoals
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
+          }
+        } else { triggerDownload(blob, fileName); }
+      }
+
+      function handleRestoreBackup() {
+          log('Interactions', 'Restore backup button clicked');
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              'danger'
+                          );
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
+
+      export function initializeGlobalListeners() {
+        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+
+        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
+        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
+        document.getElementById('nav-goals').addEventListener('click', () => setView('goals'));
+        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
+
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const modalId = e.currentTarget.dataset.target;
+            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+          });
+        });
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
+        });
+        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
+      }
+  - file: templates/debriefing.html
+    content: |
+      <div id="debriefing-page" class="page-view hidden">
+          <h3 id="debriefing-title"></h3>
+          <div id="debriefing-stats-container">
+              <h4 id="debriefing-stats-title"></h4>
+              <div id="debriefing-stats">
+                  </div>
+          </div>
+          <div id="debriefing-summary">
+              </div>
+
+          <div id="debriefing-feedback" class="debriefing-card">
+              <div class="form-group">
+                  <label id="debriefing-rpe-label" for="rpe-input"></label>
+                  <input type="number" id="rpe-input" name="rpe" min="1" max="10" placeholder="1-10">
+              </div>
+              <button id="save-rpe-btn" class="btn btn-secondary"></button>
+          </div>
+
+          <button id="back-to-planner-btn" class="btn btn-primary"></button>
+      </div>
+  - file: src/ui/interactions/debriefingInteractions.js
+    content: |
+      import { setView, updateWorkoutInHistory } from '../../core/state.js';
+      import { log } from '../../utils/logger.js';
+      import { showNotification } from '../notifications.js';
+
+      function handleBackToPlanner() {
+        log('Interactions', 'Back to planner button clicked from debriefing');
+        setView('planner');
+      }
+
+      function handleSaveRPE() {
+        const rpeInput = document.getElementById('rpe-input');
+        const rpeValue = parseInt(rpeInput.value, 10);
+        if (rpeValue >= 1 && rpeValue <= 10) {
+          const { lastWorkoutSummary } = getState();
+          if (lastWorkoutSummary) {
+            updateWorkoutInHistory(lastWorkoutSummary.date, lastWorkoutSummary.startTime, { rpe: rpeValue });
+            showNotification('RPE salvato!', 'success');
+            rpeInput.disabled = true;
+            document.getElementById('save-rpe-btn').disabled = true;
+          }
+        } else {
+          showNotification('Inserisci un valore RPE valido (1-10)', 'error');
+        }
+      }
+
+      export function initializeDebriefingListeners() {
+        const debriefingPage = document.getElementById('debriefing-page');
+        debriefingPage.addEventListener('click', (e) => {
+          if (e.target.id === 'back-to-planner-btn') {
+            handleBackToPlanner();
+          } else if (e.target.id === 'save-rpe-btn') {
+            handleSaveRPE();
+          }
+        });
+      }
+  - file: src/utils/constants.js
+    content: |
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const LOCAL_STORAGE_KEY_GOALS = 'healtyproUserGoals';
+      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
+      export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+      export const WORKOUT_SLOT_ID = 'Allenamento';
+  - file: src/core/calculations.js
+    content: |
+      export function calculateAge(dateString) {
+        if (!dateString) return null;
+        const birthDate = new Date(dateString);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      }
+
+      export function calculateBMR(userProfile, weight) {
+        if (!userProfile || !weight || !userProfile.dateOfBirth || !userProfile.height || !userProfile.gender) {
+          return null;
+        }
+
+        const age = calculateAge(userProfile.dateOfBirth);
+        const height = parseFloat(userProfile.height);
+        const weightFloat = parseFloat(weight);
+
+        if (isNaN(age) || isNaN(height) || isNaN(weightFloat)) return null;
+
+        let bmr;
+        // Formula Mifflin-St Jeor: P = 10m + 6.25h - 5a + s
+        // m = peso in kg, h = altezza in cm, a = età in anni, s è +5 per uomini e -161 per donne.
+        if (userProfile.gender === 'male') {
+          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) + 5;
+        } else if (userProfile.gender === 'female') {
+          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) - 161;
+        } else {
+          return null; // Gender not specified or invalid
+        }
+
+        return Math.round(bmr);
+      }
+
+      export function calculateWorkoutCalories(workoutSummary, userWeight) {
+        if (!workoutSummary || !userWeight || !workoutSummary.exercises || workoutSummary.exercises.length === 0) {
+          return 0;
+        }
+
+        const weightKg = parseFloat(userWeight);
+        if (isNaN(weightKg) || weightKg <= 0) return 0;
+
+        let totalCalories = 0;
+
+        workoutSummary.exercises.forEach(exercise => {
+          const met = exercise.met_value;
+          // totalTime for each exercise is in milliseconds
+          const durationHours = exercise.totalTime / (1000 * 60 * 60);
+
+          if (typeof met === 'number' && met > 0 && durationHours > 0) {
+            // Formula: Kcal = MET * Peso(kg) * Durata(ore)
+            const caloriesBurned = met * weightKg * durationHours;
+            totalCalories += caloriesBurned;
+          }
+        });
+
+        return Math.round(totalCalories);
+      }
+  - file: src/ui/modals/manualWorkoutModal.js
+    content: |
+      import { addManualWorkoutToHistory } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openDayEditorModal } from './dayEditorModal.js';
+
+      export function openManualWorkoutModal(isoDate) {
+        log('Modals', 'Opening manual workout modal', { isoDate });
+        const modal = document.getElementById('manual-workout-modal');
+        const form = modal.querySelector('#manual-workout-form');
+
+        // Imposta i testi dall'UI_TEXT
+        modal.querySelector('#manual-workout-modal-title').textContent = UI_TEXT.MANUAL_WORKOUT_MODAL_TITLE;
+        modal.querySelector('#manual-workout-name-label').textContent = UI_TEXT.MANUAL_WORKOUT_NAME_LABEL;
+        modal.querySelector('#manual-workout-duration-label').textContent = UI_TEXT.MANUAL_WORKOUT_DURATION_LABEL;
+        modal.querySelector('#manual-workout-distance-label').textContent = UI_TEXT.MANUAL_WORKOUT_DISTANCE_LABEL;
+        modal.querySelector('#manual-workout-fc-avg-label').textContent = UI_TEXT.MANUAL_WORKOUT_FC_AVG_LABEL;
+        modal.querySelector('#manual-workout-fc-max-label').textContent = UI_TEXT.MANUAL_WORKOUT_FC_MAX_LABEL;
+        modal.querySelector('#manual-workout-notes-label').textContent = UI_TEXT.MANUAL_WORKOUT_NOTES_LABEL;
+        modal.querySelector('#manual-workout-save-btn').textContent = UI_TEXT.MANUAL_WORKOUT_SAVE_BTN;
+
+
+        form.reset();
+
+        form.onsubmit = e => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          const activityData = {
+            name: formData.get('name'),
+            duration: formData.get('duration'),
+            distance: parseFloat(formData.get('distance')) || null,
+            fc_avg: parseInt(formData.get('fc_avg'), 10) || null,
+            fc_max: parseInt(formData.get('fc_max'), 10) || null,
+            notes: formData.get('notes')
+          };
+          addManualWorkoutToHistory(isoDate, activityData);
+          modal.classList.add('modal-hidden');
+          openDayEditorModal(isoDate); // Riapri l'editor del giorno per vedere il risultato
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/pageRenderers.js
+    content: |
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { renderCharts } from './charts.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+          });
+      }
+
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
+
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
+        }
+
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderGoalsPage(state) {
+          const form = document.getElementById('goals-form');
+          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
+          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
+          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
+          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
+          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
+          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
+      }
+
+      export function renderChartsPage(state) {
+          const placeholder = document.getElementById('biometrics-chart-placeholder');
+          const canvas = document.getElementById('biometrics-chart-canvas');
+          if (state.biometricData.length < 2) {
+              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+              placeholder.classList.remove('hidden');
+              canvas.classList.add('hidden');
+          } else {
+              placeholder.classList.add('hidden');
+              canvas.classList.remove('hidden');
+          }
+          renderCharts(state);
+      }
+
+      function getSetDetails(setData) {
+          let details = [];
+          if (setData.reps) {
+              details.push(`${setData.reps} reps`);
+          }
+          if (setData.weight) {
+              details.push(`${setData.weight} kg`);
+          }
+          if (setData.duration) {
+              details.push(`${formatDuration(setData.duration)}`);
+          }
+          return details.join(' / ');
+      }
+
+      export function renderDebriefingPage(state) {
+        const summaryContainer = document.getElementById('debriefing-summary');
+        const statsContainer = document.getElementById('debriefing-stats');
+        const summary = state.lastWorkoutSummary;
+
+        if (!summary || !summary.exercises) {
+            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+            statsContainer.innerHTML = '';
+            document.getElementById('debriefing-feedback').classList.add('hidden');
+            return;
+        }
+
+        document.getElementById('debriefing-feedback').classList.remove('hidden');
+        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
+        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
+        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
+
+        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
+                <span class="stat-value">${summary.totalCaloriesBurned}</span>
+            </div>
+        ` : '';
+
+        const tonnageHTML = summary.totalTonnage > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
+                <span class="stat-value">${summary.totalTonnage} kg</span>
+            </div>
+        ` : '';
+
+        const statsHTML = `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
+            </div>
+            ${caloriesBurnedHTML}
+            ${tonnageHTML}
+        `;
+        statsContainer.innerHTML = statsHTML;
+
+        const summaryHTML = summary.exercises.map(exercise => {
+            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
+            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
+                <div class="set-detail-item">
+                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
+                    <span>${getSetDetails(setData)}</span>
+                </div>
+            `).join('');
+
+            return `
+                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
+                    <div class="debriefing-card-header">
+                        <h4>${exercise.name}</h4>
+                        <div class="debriefing-status">
+                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                        </div>
+                    </div>
+                    <div class="debriefing-card-body">
+                      <div class="exercise-stats">
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
+                      </div>
+                      <div class="sets-details-container">
+                          ${setsDetailsHTML}
+                      </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        summaryContainer.innerHTML = summaryHTML;
+      }
+  - file: src/core/trainer.js
+    content: |
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { startAnimation, stopAnimation } from './trainer/animation.js';
+      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+      import { advanceToNextSet } from './trainer/machine.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+
+      export { getState as getWorkoutState };
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        document.removeEventListener('workoutFinished', handleWorkoutFinished);
+        stopAnimation();
+        resetState();
+      }
+
+      function handleWorkoutFinished() {
+        const finalState = getState();
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
+      }
+
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+          return;
+        }
+        resetWorkoutState();
+        const firstExercise = plannedExercises[0];
+        const initialState = {
+          workoutDate: isoDate,
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+          currentExerciseIndex: 0,
+          currentSet: 1,
+          currentRep: 1,
+          executionMode: firstExercise.execution_mode || 'tempo_guided',
+          startTime: Date.now(),
+          phaseStartTime: 0,
+          restStartTime: 0,
+          setsData: []
+        };
+        updateState(initialState);
+        document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function completeSet() {
+        const state = getState();
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const setData = {
+            exerciseId: currentExercise.instanceId,
+            set: state.currentSet,
+            duration: Date.now() - state.phaseStartTime,
+            rest: currentExercise.defaultRest,
+            weight: currentExercise.defaultWeight || 0
+        };
+
+        if (state.executionMode === 'manual_reps') {
+            setData.reps = state.manualRepCount;
+        } else if (state.executionMode === 'tempo_guided') {
+            setData.reps = currentExercise.defaultReps;
+        }
+
+        const newSetsData = [...state.setsData, setData];
+        updateState({
+            setsData: newSetsData,
+            status: 'resting',
+            restStartTime: Date.now(),
+            restTimeRemaining: currentExercise.defaultRest * 1000
+        });
+      }
+
+      export function startWorkout() {
+        const state = getState();
+        log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        let startState = { status: 'running', phaseStartTime: Date.now() };
+
+        if (state.executionMode === 'tempo_guided') {
+            startState.executionQueue = buildExecutionQueueForCurrentSet();
+            startState.currentPhaseIndex = 0;
+            startState.phaseTimeElapsed = 0;
+            startState.currentRep = 1;
+        } else if (state.executionMode === 'static_hold') {
+            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+        } else if (state.executionMode === 'manual_reps') {
+            startState.manualRepCount = 0;
+        }
+
+        updateState(startState);
+        startAnimation();
+        log('Trainer', 'Workout started. New state:', getState());
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running' || state.status === 'resting') {
+          updateState({
+            prePauseStatus: state.status,
+            status: 'paused',
+          });
+          stopAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+          const status = state.prePauseStatus;
+          const newState = { status, prePauseStatus: '' };
+          if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
+          if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
+
+          updateState(newState);
+          startAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status === 'running' && state.executionMode === 'manual_reps') {
+              const newRepCount = state.manualRepCount + 1;
+              updateState({ manualRepCount: newRepCount });
+
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+
+              if (targetReps && newRepCount >= targetReps) {
+                  completeSet();
+                  startAnimation();
+              }
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          }
+      }
+
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalTonnage = 0;
+
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+              totalTonnage += exerciseTonnage;
+
+              return {
+                  ...exercise,
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime,
+                  tonnage: exerciseTonnage
+              };
+          });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
+
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              totalTonnage,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
+
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+          }
+
+          return summary;
+      }
+
+      export function endWorkout() {
+        const finalState = getState();
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
+        }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
+      }
+  - file: src/core/trainer/animation.js
+    content: |
+      import { getWorkoutState, updateState } from './state.js';
+      import { advanceToNextSet } from './machine.js';
+      import { setView } from '../state.js';
+      import { completeSet } from '../trainer.js';
+      import { playTick, playStartCue, playStopCue } from '../../utils/audioFeedback.js';
+
+      let animationFrameId = null;
+      let lastTickTimestamp = 0;
+
+      function tick(timestamp) {
+        if (lastTickTimestamp === 0) {
+          lastTickTimestamp = timestamp;
+        }
+        const deltaTime = timestamp - lastTickTimestamp;
+        lastTickTimestamp = timestamp;
+
+        const state = getWorkoutState();
+        const { isAudioEnabled } = state;
+
+        if (state.status === 'finished') {
+          stopAnimation();
+          return;
+        }
+
+        if (state.status === 'running') {
+            if (state.executionMode === 'tempo_guided') {
+                const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+                const currentPhase = state.executionQueue[state.currentPhaseIndex];
+
+                if (newPhaseTimeElapsed >= currentPhase.duration) {
+                  const newPhaseIndex = state.currentPhaseIndex + 1;
+                  const nextPhase = state.executionQueue[newPhaseIndex];
+
+                  if (isAudioEnabled) playTick();
+
+                  if (nextPhase) {
+                    updateState({
+                      currentPhaseIndex: newPhaseIndex,
+                      phaseTimeElapsed: 0,
+                      currentRep: nextPhase.rep,
+                    });
+                  } else {
+                    if (isAudioEnabled) playStopCue();
+                    completeSet();
+                  }
+                } else {
+                  updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
+                }
+            } else if (state.executionMode === 'static_hold') {
+                const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
+                if (newSetTimeRemaining <= 0) {
+                    if (isAudioEnabled) playStopCue();
+                    completeSet();
+                } else {
+                    updateState({ setTimeRemaining: newSetTimeRemaining });
+                }
+            }
+        } else if (state.status === 'resting') {
+          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
+          if (newRestTimeRemaining <= 0) {
+            if (isAudioEnabled) playStartCue();
+            advanceToNextSet();
+          } else {
+            updateState({ restTimeRemaining: newRestTimeRemaining });
+          }
+        }
+
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+
+        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
+          animationFrameId = requestAnimationFrame(tick);
+        }
+      }
+
+      export function startAnimation() {
+        if (animationFrameId) return;
+        lastTickTimestamp = 0;
+        animationFrameId = requestAnimationFrame(tick);
+      }
+
+      export function stopAnimation() {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+      }
+  - file: src/core/trainer/state.js
+    content: |
+      const initialWorkoutState = {
+        workoutDate: null,
+        exerciseQueue: [],
+        currentExerciseIndex: -1,
+        status: 'idle', // idle, running, paused, resting, finished
+        executionMode: 'tempo_guided', // tempo_guided, static_hold, manual_reps
+        prePauseStatus: '',
+        currentSet: 0,
+        currentRep: 0,
+        manualRepCount: 0,
+        executionQueue: [],
+        currentPhaseIndex: -1,
+        phaseTimeElapsed: 0,
+        restTimeRemaining: 0,
+        setTimeRemaining: 0,
+        startTime: 0,
+        phaseStartTime: 0, // Timestamp for start of exercise/set phase
+        restStartTime: 0, // Timestamp for start of rest phase
+        setsData: [], // Array to store data for each completed set
+        isAudioEnabled: true // Audio feedback state
+      };
+
+      let workoutState = { ...initialWorkoutState };
+
+      export function getWorkoutState() {
+        return workoutState;
+      }
+
+      export function updateState(newState) {
+        workoutState = { ...workoutState, ...newState };
+      }
+
+      export function resetState() {
+        workoutState = { ...initialWorkoutState };
+      }
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { getState, updateExerciseInstanceInWorkout } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openExerciseEditorModal(slotId, instanceId, returnIsoDate) {
+        log('Modals', 'Opening exercise editor modal', { slotId, instanceId });
+        const state = getState();
+        const modal = document.getElementById('exercise-editor-modal');
+        const form = modal.querySelector('form');
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        const exercise = workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+
+        if (!exercise) return;
+
+        modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+        modal.querySelector('#exercise-editor-save-btn').textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+        document.getElementById('ex-edit-tempo-hold-label').textContent = UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL;
+        document.getElementById('ex-edit-weight-label').textContent = UI_TEXT.EXERCISE_WEIGHT_LABEL;
+
+        form.elements.sets.value = exercise.defaultSets;
+        form.elements.rest.value = exercise.defaultRest;
+
+        const repsContainer = form.querySelector('.reps-group');
+        const durationContainer = form.querySelector('.duration-group');
+
+        if (exercise.type === 'reps') {
+            repsContainer.style.display = 'block';
+            durationContainer.style.display = 'none';
+            form.elements.reps.value = exercise.defaultReps;
+        } else {
+            repsContainer.style.display = 'none';
+            durationContainer.style.display = 'block';
+            form.elements.duration.value = exercise.defaultDuration;
+        }
+
+        const tempoContainer = form.querySelector('.tempo-group');
+        if (exercise.defaultTempo) {
+            tempoContainer.style.display = 'grid';
+            form.elements.tempo_up.value = exercise.defaultTempo.up;
+            form.elements.tempo_hold.value = exercise.defaultTempo.hold;
+            form.elements.tempo_down.value = exercise.defaultTempo.down;
+        } else {
+            tempoContainer.style.display = 'none';
+        }
+
+        const weightContainer = form.querySelector('.weight-group');
+        if (exercise.can_have_weight) {
+            weightContainer.style.display = 'flex';
+            form.elements.weight.value = exercise.defaultWeight || 0;
+        } else {
+            weightContainer.style.display = 'none';
+        }
+
+        form.onsubmit = e => {
+            e.preventDefault();
+            const newValues = {
+                defaultSets: parseInt(form.elements.sets.value),
+                defaultRest: parseInt(form.elements.rest.value)
+            };
+            if (exercise.type === 'reps') {
+                newValues.defaultReps = parseInt(form.elements.reps.value);
+            } else {
+                newValues.defaultDuration = parseInt(form.elements.duration.value);
+            }
+            if (exercise.defaultTempo) {
+                newValues.defaultTempo = {
+                    up: parseInt(form.elements.tempo_up.value),
+                    hold: parseInt(form.elements.tempo_hold.value),
+                    down: parseInt(form.elements.tempo_down.value)
+                };
+            }
+            if (exercise.can_have_weight) {
+                newValues.defaultWeight = parseFloat(form.elements.weight.value);
+            }
+            updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal(returnIsoDate);
+        };
+
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/plannerRenderer.js
+    content: |
+      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function getWeekStartDate(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
+        return new Date(d.setDate(diff));
+      }
+
+      function formatShortDate(date) {
+        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
+      }
+
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      function formatMealCalories(meal) {
+        if (!meal || typeof meal.calories_min !== 'number') return '';
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        if (minCals === 0 && maxCals === 0) return '';
+        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
+        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+        return `${minCals} - ${maxCals} ${kcalLabel}`;
+      }
+
+      function calculateDailyCalories(isoDate, weeklyPlan) {
+        let min = 0, max = 0;
+        MEAL_TYPES.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
+          if (meal && typeof meal.calories_min === 'number') {
+            const minCals = Number(meal.calories_min) || 0;
+            const maxCals = Number(meal.calories_max) || minCals;
+            min += minCals;
+            max += maxCals;
+          }
+        });
+        if (min === 0 && max === 0) return '';
+        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+      }
+
+      function getRecipeButtonHTML(meal, state) {
+        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
+        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
+          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
+                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
+                  </button>`;
+        }
+        return '';
+      }
+
+      function getSetDetails(setData) {
+          let details = [];
+          if (setData.reps) details.push(`${setData.reps} reps`);
+          if (setData.weight) details.push(`${setData.weight} kg`);
+          if (setData.duration) details.push(`${formatDuration(setData.duration)}`);
+          return details.join(' / ');
+      }
+
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      function renderPlannerSummaryWidget(state, weekStart) {
+        const widgetContainer = document.getElementById('planner-summary-widget');
+        const { userGoals } = state;
+        let totalCalories = 0;
+        let dayCount = 0;
+        let completedWorkouts = 0;
+
+        for (let i = 0; i < 7; i++) {
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(dayDate.getDate() + i);
+            const isoDate = toISODateString(dayDate);
+
+            let dailyMin = 0;
+            let hasMeals = false;
+            MEAL_TYPES.forEach(type => {
+                const meal = state.weeklyPlan[`${isoDate}-${type}`];
+                if (meal) {
+                    dailyMin += Number(meal.calories_min) || 0;
+                    hasMeals = true;
+                }
+            });
+
+            if (hasMeals) {
+                totalCalories += dailyMin;
+                dayCount++;
+            }
+
+            if (state.workoutHistory[isoDate]) {
+                completedWorkouts += state.workoutHistory[isoDate].length;
+            }
+        }
+
+        const avgCalories = dayCount > 0 ? Math.round(totalCalories / dayCount) : 0;
+        const calGoal = userGoals.avg_calories || 0;
+        const workoutGoal = userGoals.num_workouts || 0;
+
+        widgetContainer.innerHTML = `
+            <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
+            <div class="planner-summary-stats">
+                <div class="planner-summary-stat">
+                    <span class="stat-value">${avgCalories} ${calGoal > 0 ? `/ ${calGoal}`: ''}</span>
+                    <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
+                </div>
+                <div class="planner-summary-stat">
+                    <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
+                    <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
+                </div>
+            </div>
+        `;
+      }
+
+      function renderCalendarView(state, weekStart) {
+        const calendarGrid = document.getElementById('calendar-grid');
+        const todayISO = toISODateString(new Date());
+        calendarGrid.innerHTML = '';
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const dayName = DAYS[i];
+          const isoDate = toISODateString(dayDate);
+          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
+          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+
+          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
+          let workoutButtonHTML = '';
+
+          if (workoutList && workoutList.length > 0) {
+              const exerciseCount = workoutList.length;
+              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
+              summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
+              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
+          }
+
+          const dayCell = document.createElement('div');
+          dayCell.className = 'day-cell';
+          if (isoDate === todayISO) {
+            dayCell.classList.add('is-today');
+          }
+          dayCell.dataset.date = isoDate;
+          dayCell.innerHTML = `
+            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
+            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
+          calendarGrid.appendChild(dayCell);
+        }
+      }
+
+      function renderLogView(state, weekStart) {
+        const logView = document.getElementById('log-view');
+        const todayISO = toISODateString(new Date());
+        let logViewHTML = '';
+        let hasContent = false;
+
+        for (let i = 0; i < 7; i++) {
+          const dayDate = new Date(weekStart);
+          dayDate.setDate(dayDate.getDate() + i);
+          const isoDate = toISODateString(dayDate);
+          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+          const completedWorkouts = state.workoutHistory[isoDate] || [];
+
+          if (dayMeals.length > 0 || completedWorkouts.length > 0) {
+            hasContent = true;
+            let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
+            dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
+
+            if (dayMeals.length > 0) {
+              dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+            }
+
+            if (completedWorkouts.length > 0) {
+                completedWorkouts.forEach(workout => {
+                    if (workout.type === 'structured') {
+                        dayLogHTML += `<div class="log-workout-summary">
+                            <div class="log-workout-header">
+                                <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
+                                <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                            </div>
+                            <div class="log-workout-stats">
+                                <span>Durata: ${formatDuration(workout.totalTime)}</span>
+                                ${workout.totalCaloriesBurned > 0 ? `<span>/</span><span>Kcal: ${workout.totalCaloriesBurned}</span>` : ''}
+                                ${workout.totalTonnage > 0 ? `<span>/</span><span>Volume: ${workout.totalTonnage} kg</span>` : ''}
+                                ${workout.rpe ? `<span>/</span><span>RPE: ${workout.rpe}</span>` : ''}
+                            </div>
+                            ${workout.exercises.map(ex => `
+                            <div class="log-workout-exercise">
+                                <div class="log-item">
+                                <strong>${ex.name}</strong>
+                                <span>${ex.setsCompleted} / ${ex.defaultSets} serie</span>
+                                </div>
+                                <div class="log-sets-details">
+                                ${ex.setsData.map((setData, i) => `
+                                    <div class="log-set-item">
+                                    <span>Serie ${i + 1}</span>
+                                    <span>${getSetDetails(setData)}</span>
+                                    </div>
+                                `).join('')}
+                                </div>
+                            </div>
+                            `).join('')}
+                        </div>`;
+                    } else if (workout.type === 'manual') {
+                        let detailsHTML = '';
+                        if (workout.distance) detailsHTML += `<div><strong>Distanza:</strong> ${workout.distance} km</div>`;
+                        if (workout.fc_avg) detailsHTML += `<div><strong>FC Media:</strong> ${workout.fc_avg} bpm</div>`;
+                        if (workout.fc_max) detailsHTML += `<div><strong>FC Max:</strong> ${workout.fc_max} bpm</div>`;
+                        if (workout.notes) detailsHTML += `<div class="log-item-details">${workout.notes.replace(/\n/g, '<br>')}</div>`;
+
+                        dayLogHTML += `<div class="log-workout-summary">
+                            <div class="log-workout-header">
+                                <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
+                                <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
+                            </div>
+                            <div class="log-item">
+                                <strong>${workout.name}</strong>
+                                <span>${workout.duration || ''}</span>
+                            </div>
+                            ${detailsHTML ? `<div class="log-manual-details">${detailsHTML}</div>` : ''}
+                        </div>`;
+                    }
+                });
+            }
+
+            dayLogHTML += `</div>`;
+            logViewHTML += dayLogHTML;
+          }
+        }
+
+        if (!hasContent) {
+          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
+        } else {
+          logView.innerHTML = logViewHTML;
+        }
+      }
+
+      export function renderPlannerPage(state) {
+        const weekStart = getWeekStartDate(state.focusedDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
+
+        const calendarGrid = document.getElementById('calendar-grid');
+        const logView = document.getElementById('log-view');
+        const viewCalendarBtn = document.getElementById('view-calendar-btn');
+        const viewLogBtn = document.getElementById('view-log-btn');
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+            renderPlannerSummaryWidget(state, weekStart);
+        }
+
+        if (state.currentView === 'planner') {
+            calendarGrid.classList.remove('hidden');
+            logView.classList.add('hidden');
+            viewCalendarBtn.classList.add('active');
+            viewLogBtn.classList.remove('active');
+        } else if (state.currentView === 'log') {
+            calendarGrid.classList.add('hidden');
+            logView.classList.remove('hidden');
+            viewCalendarBtn.classList.remove('active');
+            viewLogBtn.classList.add('active');
+        }
+
+        renderCalendarView(state, weekStart);
+        renderLogView(state, weekStart);
+      }
+  - file: src/ui/components/TrainerComponent.js
+    content: |
+      import { getWorkoutState, updateState } from '../../core/trainer/state.js';
+      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
+      import { setView } from '../../core/state.js';
+      import { log } from '../../utils/logger.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+
+      const RING_RADIUS = 128;
+      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+      export class TrainerComponent {
+          constructor(containerElement) {
+              this.container = containerElement;
+
+              this.elements = {
+                  exerciseName: this.container.querySelector('#current-exercise-name'),
+                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
+                  repDisplay: this.container.querySelector('#current-rep-display'),
+                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
+
+                  btnStart: this.container.querySelector('#trainer-start-btn'),
+                  btnPause: this.container.querySelector('#trainer-pause-btn'),
+                  btnResume: this.container.querySelector('#trainer-resume-btn'),
+                  btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
+                  btnAudio: this.container.querySelector('#audio-toggle-btn'),
+
+                  ringContainer: this.container.querySelector('#timer-ring-container'),
+              };
+
+              this.ringProgress = null;
+              this.ringText = null;
+          }
+
+          mount() {
+              this.createTimerRing();
+              this.container.addEventListener('click', this.handleControls.bind(this));
+              this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
+              this.updateAudioButton(getWorkoutState().isAudioEnabled);
+          }
+
+          destroy() {
+              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
+              this.container.removeEventListener('click', this.handleControls.bind(this));
+              if (this.elements.ringContainer) {
+                  this.elements.ringContainer.innerHTML = '';
+              }
+              log('TrainerComponent', 'Component destroyed.');
+          }
+
+          handleControls(e) {
+              const target = e.target.closest('button');
+              if (!target) return;
+
+              const targetId = target.id;
+              log('TrainerComponent', `Control button clicked: ${targetId}`);
+              switch (targetId) {
+                  case 'trainer-start-btn': startWorkout(); break;
+                  case 'trainer-pause-btn': pauseWorkout(); break;
+                  case 'trainer-resume-btn': resumeWorkout(); break;
+                  case 'trainer-end-btn': endWorkout(); break;
+                  case 'trainer-back-btn': setView('planner'); break;
+                  case 'trainer-manual-rep-btn': incrementManualRep(); break;
+                  case 'audio-toggle-btn': this.toggleAudio(); break;
+              }
+          }
+
+          toggleAudio() {
+              const currentState = getWorkoutState();
+              const newState = !currentState.isAudioEnabled;
+              updateState({ isAudioEnabled: newState });
+              this.updateAudioButton(newState);
+          }
+
+          updateAudioButton(isAudioEnabled) {
+              this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
+              this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
+          }
+
+          createTimerRing() {
+              if (this.elements.ringContainer.querySelector('svg')) {
+                log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
+                return;
+              }
+              log('TrainerComponent', 'Creating timer ring SVG...');
+              this.elements.ringContainer.innerHTML = '';
+              const svgNS = 'http://www.w3.org/2000/svg';
+              const svg = document.createElementNS(svgNS, 'svg');
+              const svgSize = (RING_RADIUS + 12) * 2;
+              svg.setAttribute('width', svgSize);
+              svg.setAttribute('height', svgSize);
+              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
+
+              const center = svgSize / 2;
+
+              const backgroundCircle = document.createElementNS(svgNS, 'circle');
+              backgroundCircle.setAttribute('cx', center);
+              backgroundCircle.setAttribute('cy', center);
+              backgroundCircle.setAttribute('r', RING_RADIUS);
+              backgroundCircle.setAttribute('class', 'timer-ring-bg');
+
+              const progressCircle = document.createElementNS(svgNS, 'circle');
+              progressCircle.setAttribute('cx', center);
+              progressCircle.setAttribute('cy', center);
+              progressCircle.setAttribute('r', RING_RADIUS);
+              progressCircle.setAttribute('class', 'timer-ring-progress');
+              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
+
+              const text = document.createElementNS(svgNS, 'text');
+              text.setAttribute('x', '50%');
+              text.setAttribute('y', '50%');
+              text.setAttribute('dy', '.3em');
+              text.setAttribute('class', 'timer-ring-display');
+
+              svg.appendChild(backgroundCircle);
+              svg.appendChild(progressCircle);
+              svg.appendChild(text);
+              this.elements.ringContainer.prepend(svg);
+              this.ringProgress = progressCircle;
+              this.ringText = text;
+              log('TrainerComponent', 'Timer ring SVG created and references set.');
+          }
+
+          updateTimerRing(percent) {
+              if (!this.ringProgress) return;
+              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
+              this.ringProgress.style.strokeDashoffset = offset;
+          }
+
+          formatTime(ms) {
+              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+              return `${minutes}:${seconds}`;
+          }
+
+          render(state) {
+              if (!this.ringText) return; // Guard against rendering before mount
+              const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
+
+              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
+                  this.elements.exerciseName.textContent = '';
+                  this.elements.exerciseDetails.textContent = '';
+                  this.elements.repDisplay.classList.add('hidden-rep');
+                  this.elements.upcomingDisplay.innerHTML = '';
+                  this.elements.btnStart.classList.add('hidden');
+                  this.elements.btnPause.classList.add('hidden');
+                  this.elements.btnResume.classList.add('hidden');
+                  this.elements.btnManualRep.classList.add('hidden');
+                  this.ringText.textContent = '';
+                  this.updateTimerRing(0);
+                  return;
+              };
+
+              const currentExercise = exerciseQueue[currentExerciseIndex];
+              this.elements.exerciseName.textContent = currentExercise.name;
+              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
+
+              if (status === 'running' && executionMode === 'tempo_guided') {
+                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
+                this.elements.repDisplay.classList.remove('hidden-rep');
+              } else {
+                this.elements.repDisplay.classList.add('hidden-rep');
+              }
+
+              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
+              if (upcomingExercises) {
+                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
+              } else {
+                this.elements.upcomingDisplay.innerHTML = '';
+              }
+
+              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
+              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
+              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
+              this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
+
+              // --- Main Render Logic ---
+              if (status === 'running') {
+                  this.ringText.classList.remove('flashing');
+                  if (executionMode === 'tempo_guided') this.renderPhase(state);
+                  else if (executionMode === 'static_hold') this.renderStaticHold(state);
+                  else if (executionMode === 'manual_reps') this.renderManualReps(state);
+              } else if (status === 'resting') {
+                  this.renderRest(state);
+              } else if (status === 'paused') {
+                  this.renderPaused(state);
+              } else if (status === 'idle') {
+                  this.ringText.textContent = '';
+                  this.ringText.classList.remove('flashing');
+                  this.updateTimerRing(0);
+              }
+          }
+
+          renderPhase(state) {
+              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
+              const phase = executionQueue[currentPhaseIndex];
+              if (!phase) return;
+
+              const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
+              const isPrePhase = phase.name.startsWith('pre-');
+
+              this.ringText.textContent = phaseNameDisplay;
+              this.ringText.classList.toggle('flashing', isPrePhase);
+              this.ringText.classList.remove('is-timer', 'is-rep-count');
+
+              if (isPrePhase) {
+                  this.updateTimerRing(100);
+              } else {
+                  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
+                  this.updateTimerRing(progressPercent);
+              }
+          }
+
+          renderStaticHold(state) {
+              const { setTimeRemaining } = state;
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const totalDuration = currentExercise.defaultDuration * 1000;
+              const progressPercent = (totalDuration > 0) ? ((totalDuration - setTimeRemaining) / totalDuration) * 100 : 100;
+
+              this.ringText.textContent = this.formatTime(setTimeRemaining);
+              this.ringText.classList.add('is-timer');
+              this.ringText.classList.remove('is-rep-count');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderManualReps(state) {
+              const { manualRepCount } = state;
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+              let progressPercent = 0;
+              if (targetReps > 0) {
+                  progressPercent = (manualRepCount / targetReps) * 100;
+              }
+
+              this.ringText.textContent = manualRepCount;
+              this.ringText.classList.add('is-rep-count');
+              this.ringText.classList.remove('is-timer');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderRest(state) {
+              const { restTimeRemaining } = state;
+              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
+              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
+
+              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
+              this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderPaused(state) {
+              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+              this.ringText.classList.remove('flashing');
+              // Mantieni la classe di stile precedente per coerenza
+              if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
+              if(state.executionMode === 'manual_reps') this.ringText.classList.add('is-rep-count');
+          }
+
+          formatExerciseDetails(state) {
+              const { exerciseQueue, currentExerciseIndex, currentSet, executionMode } = state;
+              const exercise = exerciseQueue[currentExerciseIndex];
+              if (!exercise) return '';
+              const sets = exercise.defaultSets;
+              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
+              if (executionMode === 'tempo_guided' || executionMode === 'manual_reps') {
+                  const reps = exercise.defaultReps;
+                  details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
+              } else if (executionMode === 'static_hold') {
+                  const duration = exercise.defaultDuration;
+                  details += ` | ${duration}s`;
+              }
+              if (exercise.defaultWeight) {
+                  details += ` @ ${exercise.defaultWeight}kg`;
+              }
+              return details;
+          }
+      }
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+        debugMode: false,
+        lastWorkoutSummary: null,
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+      }
+
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() + Math.random()
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+        }
+        state.workoutHistory = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }

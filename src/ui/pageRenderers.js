@@ -82,6 +82,16 @@ export function renderProfilePage(state) {
   form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
 }
 
+export function renderGoalsPage(state) {
+    const form = document.getElementById('goals-form');
+    document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
+    document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
+    document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
+    document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
+    form.elements.avg_calories.value = state.userGoals.avg_calories || '';
+    form.elements.num_workouts.value = state.userGoals.num_workouts || '';
+}
+
 export function renderChartsPage(state) {
     const placeholder = document.getElementById('biometrics-chart-placeholder');
     const canvas = document.getElementById('biometrics-chart-canvas');
@@ -101,6 +111,9 @@ function getSetDetails(setData) {
     if (setData.reps) {
         details.push(`${setData.reps} reps`);
     }
+    if (setData.weight) {
+        details.push(`${setData.weight} kg`);
+    }
     if (setData.duration) {
         details.push(`${formatDuration(setData.duration)}`);
     }
@@ -115,13 +128,26 @@ export function renderDebriefingPage(state) {
   if (!summary || !summary.exercises) {
       summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
       statsContainer.innerHTML = '';
+      document.getElementById('debriefing-feedback').classList.add('hidden');
       return;
   }
+
+  document.getElementById('debriefing-feedback').classList.remove('hidden');
+  document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
+  document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
+  document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
 
   const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
       <div class="stat-item">
           <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
           <span class="stat-value">${summary.totalCaloriesBurned}</span>
+      </div>
+  ` : '';
+
+  const tonnageHTML = summary.totalTonnage > 0 ? `
+      <div class="stat-item">
+          <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
+          <span class="stat-value">${summary.totalTonnage} kg</span>
       </div>
   ` : '';
 
@@ -139,6 +165,7 @@ export function renderDebriefingPage(state) {
           <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
       </div>
       ${caloriesBurnedHTML}
+      ${tonnageHTML}
   `;
   statsContainer.innerHTML = statsHTML;
 

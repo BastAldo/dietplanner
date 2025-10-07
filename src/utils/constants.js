@@ -3,6 +3,7 @@ export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
 export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
 export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
 export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+export const LOCAL_STORAGE_KEY_GOALS = 'healtyproUserGoals';
 export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
 export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
 export const WEEK_STARTS_ON_MONDAY = 1;

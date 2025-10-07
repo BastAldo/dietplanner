@@ -2,6 +2,7 @@ import { getWorkoutState, updateState } from './state.js';
 import { advanceToNextSet } from './machine.js';
 import { setView } from '../state.js';
 import { completeSet } from '../trainer.js';
+import { playTick, playStartCue, playStopCue } from '../../utils/audioFeedback.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
@@ -14,6 +15,7 @@ function tick(timestamp) {
   lastTickTimestamp = timestamp;
 
   const state = getWorkoutState();
+  const { isAudioEnabled } = state;
 
   if (state.status === 'finished') {
     stopAnimation();
@@ -29,6 +31,8 @@ function tick(timestamp) {
             const newPhaseIndex = state.currentPhaseIndex + 1;
             const nextPhase = state.executionQueue[newPhaseIndex];
 
+            if (isAudioEnabled) playTick();
+
             if (nextPhase) {
               updateState({
                 currentPhaseIndex: newPhaseIndex,
@@ -36,6 +40,7 @@ function tick(timestamp) {
                 currentRep: nextPhase.rep,
               });
             } else {
+              if (isAudioEnabled) playStopCue();
               completeSet();
             }
           } else {
@@ -44,6 +49,7 @@ function tick(timestamp) {
       } else if (state.executionMode === 'static_hold') {
           const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
           if (newSetTimeRemaining <= 0) {
+              if (isAudioEnabled) playStopCue();
               completeSet();
           } else {
               updateState({ setTimeRemaining: newSetTimeRemaining });
@@ -52,14 +58,15 @@ function tick(timestamp) {
   } else if (state.status === 'resting') {
     const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
     if (newRestTimeRemaining <= 0) {
+      if (isAudioEnabled) playStartCue();
       advanceToNextSet();
     } else {
       updateState({ restTimeRemaining: newRestTimeRemaining });
     }
   }
-  
+
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
-  
+
   if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
     animationFrameId = requestAnimationFrame(tick);
   }
