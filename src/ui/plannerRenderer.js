@@ -75,10 +75,11 @@ function formatDuration(ms) {
 
 function renderPlannerSummaryWidget(state, weekStart) {
   const widgetContainer = document.getElementById('planner-summary-widget');
-  const { userGoals, biometricData } = state;
-  let totalCalories = 0;
+  const { userGoals, biometricData, workoutHistory } = state;
+  let totalCaloriesConsumed = 0;
   let dayCount = 0;
   let completedWorkouts = 0;
+  let totalCaloriesBurned = 0;
 
   for (let i = 0; i < 7; i++) {
       const dayDate = new Date(weekStart);
@@ -96,38 +97,62 @@ function renderPlannerSummaryWidget(state, weekStart) {
       });
 
       if (hasMeals) {
-          totalCalories += dailyMin;
+          totalCaloriesConsumed += dailyMin;
           dayCount++;
       }
 
-      if (state.workoutHistory[isoDate]) {
-          completedWorkouts += state.workoutHistory[isoDate].length;
+      if (workoutHistory[isoDate]) {
+          completedWorkouts += workoutHistory[isoDate].length;
+          workoutHistory[isoDate].forEach(workout => {
+              totalCaloriesBurned += workout.totalCaloriesBurned || 0;
+          });
       }
   }
 
-  const avgCalories = dayCount > 0 ? Math.round(totalCalories / dayCount) : 0;
+  const avgCalories = dayCount > 0 ? Math.round(totalCaloriesConsumed / dayCount) : 0;
   const calGoal = userGoals.avg_calories || 0;
   const workoutGoal = userGoals.num_workouts || 0;
   const weightGoal = userGoals.target_weight || 0;
   const latestWeight = biometricData.length > 0 ? biometricData[0].weight : 0;
+  const kgToGoal = (latestWeight && weightGoal) ? (latestWeight - weightGoal).toFixed(1) : 0;
+
+  let weightProgressHTML = '';
+  if (latestWeight > 0 && weightGoal > 0) {
+      weightProgressHTML = `
+      <div class="planner-summary-stat">
+          <div class="stat-icon">${renderIcon('GOAL', {width: 20, height: 20})}</div>
+          <div>
+              <span class="stat-value">${kgToGoal} kg</span>
+              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WEIGHT_PROGRESS}</span>
+          </div>
+      </div>`;
+  }
 
   widgetContainer.innerHTML = `
       <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
       <div class="planner-summary-stats">
           <div class="planner-summary-stat">
-              <span class="stat-value">${avgCalories} ${calGoal > 0 ? `/ ${calGoal}`: ''}</span>
-              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
+              <div class="stat-icon">${renderIcon('PLANNER', {width: 20, height: 20})}</div>
+              <div>
+                  <span class="stat-value">${avgCalories} ${calGoal > 0 ? ` / ${calGoal}`: ''}</span>
+                  <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
+              </div>
           </div>
           <div class="planner-summary-stat">
-              <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
-              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
+              <div class="stat-icon">${renderIcon('WEIGHT_SCALE', {width: 20, height: 20})}</div>
+              <div>
+                  <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? ` / ${workoutGoal}`: ''}</span>
+                  <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
+              </div>
           </div>
-          ${latestWeight > 0 ? `
           <div class="planner-summary-stat">
-              <span class="stat-value">${latestWeight} kg ${weightGoal > 0 ? `/ ${weightGoal} kg`: ''}</span>
-              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WEIGHT_GOAL}</span>
+              <div class="stat-icon">${renderIcon('BAR_CHART', {width: 20, height: 20})}</div>
+              <div>
+                  <span class="stat-value">${Math.round(totalCaloriesBurned)}</span>
+                  <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_CALORIES_BURNED}</span>
+              </div>
           </div>
-          ` : ''}
+          ${weightProgressHTML}
       </div>
   `;
 }

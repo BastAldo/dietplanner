@@ -85,7 +85,7 @@ export function renderProfilePage(state) {
 export function renderGoalsPage(state) {
     const form = document.getElementById('goals-form');
     document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-    document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION || '';
+    document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
     document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
     document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
     document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;

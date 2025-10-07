@@ -24,18 +24,26 @@
 .planner-summary-title {
     color: var(--secondary-color);
     text-align: center;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
     font-size: 1.25rem;
 }
 .planner-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1.5rem;
+    align-items: center;
+}
+.planner-summary-stat {
     display: flex;
-    justify-content: space-around;
-    text-align: center;
-    flex-wrap: wrap;
-    gap: 1rem;
+    align-items: center;
+    gap: 0.75rem;
+    justify-content: center;
+}
+.planner-summary-stat .stat-icon {
+    color: var(--secondary-color);
 }
 .planner-summary-stat .stat-value {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: bold;
     color: var(--primary-color);
 }

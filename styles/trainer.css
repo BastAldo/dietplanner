@@ -16,21 +16,17 @@
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
     gap: 1rem;
-    position: relative;
 }
 
 .trainer-header h2 {
     font-size: 1.25rem;
     color: var(--primary-color);
-    flex-grow: 1;
-    text-align: center;
 }
 
 .trainer-header-controls {
-    position: absolute;
-    right: 1rem;
     display: flex;
     gap: 0.5rem;
+    align-items: center;
 }
 
 #audio-toggle-btn {
@@ -115,24 +111,22 @@
 }
 
 .timer-ring-display {
-    font-size: 2.2rem;
+    font-size: 3rem;
     font-weight: bold;
     fill: var(--text-color);
-    text-transform: uppercase;
     text-anchor: middle;
-    transition: font-size 0.2s ease;
 }
 
-.timer-ring-display.is-timer {
-    font-size: 4rem;
-    font-family: 'Courier New', Courier, monospace;
-    text-transform: none;
-}
-
+.timer-ring-display.is-timer,
 .timer-ring-display.is-rep-count {
-    font-size: 6rem;
-    text-transform: none;
+    font-family: 'Courier New', Courier, monospace;
 }
+
+.timer-ring-display.is-phase {
+    font-size: 2.5rem;
+    text-transform: uppercase;
+}
+
 
 .timer-ring-bg {
     fill: none;

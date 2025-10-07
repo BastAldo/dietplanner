@@ -186,7 +186,7 @@ export class TrainerComponent {
             this.renderPaused(state);
         } else if (status === 'idle') {
             this.ringText.textContent = '';
-            this.ringText.classList.remove('flashing');
+            this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count', 'is-phase');
             this.updateTimerRing(0);
         }
     }
@@ -200,6 +200,7 @@ export class TrainerComponent {
         const isPrePhase = phase.name.startsWith('pre-');
 
         this.ringText.textContent = phaseNameDisplay;
+        this.ringText.classList.add('is-phase');
         this.ringText.classList.toggle('flashing', isPrePhase);
         this.ringText.classList.remove('is-timer', 'is-rep-count');
 
@@ -219,7 +220,7 @@ export class TrainerComponent {
 
         this.ringText.textContent = this.formatTime(setTimeRemaining);
         this.ringText.classList.add('is-timer');
-        this.ringText.classList.remove('is-rep-count');
+        this.ringText.classList.remove('is-rep-count', 'is-phase');
         this.updateTimerRing(progressPercent);
     }
 
@@ -234,7 +235,7 @@ export class TrainerComponent {
 
         this.ringText.textContent = manualRepCount;
         this.ringText.classList.add('is-rep-count');
-        this.ringText.classList.remove('is-timer');
+        this.ringText.classList.remove('is-timer', 'is-phase');
         this.updateTimerRing(progressPercent);
     }
 
@@ -244,12 +245,14 @@ export class TrainerComponent {
         const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
 
         this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
+        this.ringText.classList.add('is-phase');
         this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
         this.updateTimerRing(progressPercent);
     }
 
     renderPaused(state) {
         this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+        this.ringText.classList.add('is-phase');
         this.ringText.classList.remove('flashing');
         // Mantieni la classe di stile precedente per coerenza
         if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
