@@ -309,36 +309,53 @@ function renderCorrelationChart(state, data, canvasId = 'correlation-chart-canva
     return chart;
 }
 
-function calculateSmoothedWeeklyChange(fullData) {
-    if (fullData.length < 2) return [];
+function linearRegression(data) {
+  const n = data.length;
+  if (n < 2) return 0;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  
+  data.forEach(p => {
+      sumX += p.x;
+      sumY += p.y;
+      sumXY += p.x * p.y;
+      sumXX += p.x * p.x;
+  });
 
-    const movingAverage = [];
-    for (let i = 0; i < fullData.length; i++) {
-        const window = fullData.slice(Math.max(0, i - 6), i + 1);
-        const sum = window.reduce((acc, val) => acc + val.weight, 0);
-        movingAverage.push({ date: fullData[i].date, weight: sum / window.length });
-    }
+  const denominator = (n * sumXX - sumX * sumX);
+  if (denominator === 0) return 0;
 
-    const weeklyChanges = [];
-    for (let i = 1; i < movingAverage.length; i++) {
-        const prev = movingAverage[i - 1];
-        const curr = movingAverage[i];
-        const daysDiff = (new Date(curr.date) - new Date(prev.date)) / (1000 * 60 * 60 * 24);
-        if (daysDiff > 0) {
-            const weightChange = curr.weight - prev.weight;
-            const changePerWeek = (weightChange / daysDiff) * 7;
-            weeklyChanges.push({
-                date: curr.date,
-                change: parseFloat(changePerWeek.toFixed(2))
-            });
-        }
-    }
-    return weeklyChanges;
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  return isNaN(slope) ? 0 : slope;
 }
 
 function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOverrides = {}) {
   const { filteredData } = data;
-  const weeklyChanges = calculateSmoothedWeeklyChange(filteredData);
+  if (filteredData.length < 2) return null;
+
+  const weeklyChanges = [];
+  for (let i = 1; i < filteredData.length; i++) {
+      const currentDate = new Date(filteredData[i].date);
+      const sevenDaysAgo = new Date(currentDate);
+      sevenDaysAgo.setDate(currentDate.getDate() - 7);
+
+      const windowData = filteredData.filter(d => {
+          const dDate = new Date(d.date);
+          return dDate <= currentDate && dDate >= sevenDaysAgo;
+      }).map(entry => ({
+          x: new Date(entry.date).getTime(),
+          y: entry.weight
+      }));
+
+      if (windowData.length >= 2) {
+          const dailyTrend = linearRegression(windowData);
+          const changePerWeek = dailyTrend * 7 * 24 * 60 * 60 * 1000;
+          weeklyChanges.push({
+              date: filteredData[i].date,
+              change: parseFloat(changePerWeek.toFixed(2))
+          });
+      }
+  }
+  
   if (weeklyChanges.length < 1) return null;
 
   const labels = weeklyChanges.map(c => new Date(c.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
@@ -401,9 +418,14 @@ function renderSummaryStats(state, data) {
     return;
   }
 
-  const weeklyChanges = calculateSmoothedWeeklyChange(filteredData);
-  const avgWeeklyChange = weeklyChanges.length > 0 ? weeklyChanges[weeklyChanges.length - 1].change : 0;
+  const trendData = filteredData.map(entry => ({
+      x: new Date(entry.date).getTime(),
+      y: entry.weight
+  }));
   
+  const dailyTrend = linearRegression(trendData);
+  const avgWeeklyChange = dailyTrend * 7 * 24 * 60 * 60 * 1000;
+
   const lastWeight = filteredData[filteredData.length - 1].weight;
   const targetWeight = state.userGoals.target_weight;
   
@@ -412,9 +434,9 @@ function renderSummaryStats(state, data) {
       const weightToLose = lastWeight - targetWeight;
       let weeksToGoal = 'N/A';
 
-      if (avgWeeklyChange < -0.05) { // Perdendo peso in modo significativo
+      if (avgWeeklyChange < -0.05) { // Perdendo peso
           weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
-      } else if (avgWeeklyChange > 0.05 && weightToLose < 0) { // Guadagnando peso (bulk) in modo significativo
+      } else if (avgWeeklyChange > 0.05 && weightToLose < 0) { // Guadagnando peso (bulk)
           weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
       }
       
@@ -440,7 +462,7 @@ function renderSummaryStats(state, data) {
       <div class="stat-label">Peso Attuale</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value">${avgWeeklyChange > 0 ? '+' : ''}${formattedAvgWeeklyChange} kg</div>
+      <div class="stat-value">${avgWeeklyChange >= 0 ? '+' : ''}${formattedAvgWeeklyChange} kg</div>
       <div class="stat-label">Variazione media / settimana</div>
     </div>
     ${goalEstimateHTML}
@@ -513,7 +535,6 @@ export function openChartModal(state, chartId) {
 
   modal.classList.remove('modal-hidden');
 }
-
 
 export function renderCharts(state) {
     destroyAllCharts();

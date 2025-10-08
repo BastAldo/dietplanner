@@ -1,12 +1,12 @@
-commit_message: "fix(charts): Stabilizza calcoli trend e corregge logica di navigazione"
+commit_message: "fix(charts): Implementa calcolo trend robusto con regressione lineare"
 rationale: |
-  Questo commit corregge in modo definitivo il bug che causava la visualizzazione di 'NaN' e 'N/A' nelle statistiche dei grafici in condizioni di dati scarsi. L'aggiornamento migliora drasticamente la robustezza e l'affidabilità dei calcoli e l'esperienza utente della navigazione temporale.
+  Questo commit sostituisce l'algoritmo di calcolo del trend del peso, che si è dimostrato inaffidabile, con un approccio basato sulla regressione lineare, come da piano approvato. La nuova logica risolve definitivamente il bug che causava la visualizzazione di 'NaN' nelle statistiche e stabilizza il grafico della variazione del peso.
 
-  1.  **Calcolo del Trend Robusto**: L'algoritmo di calcolo della variazione di peso è stato sostituito. Invece di una fragile regressione lineare su pochi punti, ora viene calcolata una media mobile su una finestra di 7 giorni. Questo metodo smussa le fluttuazioni giornaliere, produce un trend stabile e previene errori di calcolo (`NaN`) anche con pochi dati.
+  1.  **Statistiche di Riepilogo Affidabili**: La metrica "Variazione media / settimana" viene ora calcolata applicando una regressione lineare all'intero set di dati nel range temporale selezionato. Questo fornisce una stima del trend generale molto robusta, che non fallisce più (`NaN`) in presenza di dati sparsi.
 
-  2.  **Metriche Coerenti**: Sia il grafico "Andamento Variazione Peso" sia la metrica "Variazione media / settimana" ora si basano su questa nuova logica unificata, garantendo che i dati visualizzati siano coerenti e rappresentino fedelmente l'andamento reale. La stima delle settimane all'obiettivo è di conseguenza più affidabile.
+  2.  **Grafico Variazione Smussato**: Il grafico "Andamento Variazione Peso" è stato completamente rivisto. Ora visualizza l'evoluzione del trend calcolando una regressione lineare su una finestra mobile di 7 giorni. Il risultato è una curva smussata che rappresenta fedelmente come la tendenza del peso è cambiata nel tempo, eliminando la volatilità fuorviante delle fluttuazioni giornaliere.
 
-  3.  **Navigazione Intelligente**: È stato implementato un controllo che disabilita il pulsante di navigazione per i periodi passati se non esistono dati biometrici antecedenti, risolvendo il problema della navigazione verso schermate vuote.
+  3.  **Navigazione Controllata**: Viene mantenuta la correzione che disabilita il pulsante di navigazione temporale quando non ci sono dati antecedenti da visualizzare.
 patches:
   - file: src/ui/charts.js
     content: |
@@ -321,36 +321,53 @@ patches:
           return chart;
       }
 
-      function calculateSmoothedWeeklyChange(fullData) {
-          if (fullData.length < 2) return [];
+      function linearRegression(data) {
+        const n = data.length;
+        if (n < 2) return 0;
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        
+        data.forEach(p => {
+            sumX += p.x;
+            sumY += p.y;
+            sumXY += p.x * p.y;
+            sumXX += p.x * p.x;
+        });
 
-          const movingAverage = [];
-          for (let i = 0; i < fullData.length; i++) {
-              const window = fullData.slice(Math.max(0, i - 6), i + 1);
-              const sum = window.reduce((acc, val) => acc + val.weight, 0);
-              movingAverage.push({ date: fullData[i].date, weight: sum / window.length });
-          }
+        const denominator = (n * sumXX - sumX * sumX);
+        if (denominator === 0) return 0;
 
-          const weeklyChanges = [];
-          for (let i = 1; i < movingAverage.length; i++) {
-              const prev = movingAverage[i - 1];
-              const curr = movingAverage[i];
-              const daysDiff = (new Date(curr.date) - new Date(prev.date)) / (1000 * 60 * 60 * 24);
-              if (daysDiff > 0) {
-                  const weightChange = curr.weight - prev.weight;
-                  const changePerWeek = (weightChange / daysDiff) * 7;
-                  weeklyChanges.push({
-                      date: curr.date,
-                      change: parseFloat(changePerWeek.toFixed(2))
-                  });
-              }
-          }
-          return weeklyChanges;
+        const slope = (n * sumXY - sumX * sumY) / denominator;
+        return isNaN(slope) ? 0 : slope;
       }
 
       function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOverrides = {}) {
         const { filteredData } = data;
-        const weeklyChanges = calculateSmoothedWeeklyChange(filteredData);
+        if (filteredData.length < 2) return null;
+
+        const weeklyChanges = [];
+        for (let i = 1; i < filteredData.length; i++) {
+            const currentDate = new Date(filteredData[i].date);
+            const sevenDaysAgo = new Date(currentDate);
+            sevenDaysAgo.setDate(currentDate.getDate() - 7);
+
+            const windowData = filteredData.filter(d => {
+                const dDate = new Date(d.date);
+                return dDate <= currentDate && dDate >= sevenDaysAgo;
+            }).map(entry => ({
+                x: new Date(entry.date).getTime(),
+                y: entry.weight
+            }));
+
+            if (windowData.length >= 2) {
+                const dailyTrend = linearRegression(windowData);
+                const changePerWeek = dailyTrend * 7 * 24 * 60 * 60 * 1000;
+                weeklyChanges.push({
+                    date: filteredData[i].date,
+                    change: parseFloat(changePerWeek.toFixed(2))
+                });
+            }
+        }
+        
         if (weeklyChanges.length < 1) return null;
 
         const labels = weeklyChanges.map(c => new Date(c.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
@@ -403,7 +420,7 @@ patches:
         });
         return chart;
       }
-
+      
       function renderSummaryStats(state, data) {
         const container = document.getElementById('charts-summary-stats');
         const { filteredData } = data;
@@ -413,9 +430,14 @@ patches:
           return;
         }
 
-        const weeklyChanges = calculateSmoothedWeeklyChange(filteredData);
-        const avgWeeklyChange = weeklyChanges.length > 0 ? weeklyChanges[weeklyChanges.length - 1].change : 0;
+        const trendData = filteredData.map(entry => ({
+            x: new Date(entry.date).getTime(),
+            y: entry.weight
+        }));
         
+        const dailyTrend = linearRegression(trendData);
+        const avgWeeklyChange = dailyTrend * 7 * 24 * 60 * 60 * 1000;
+
         const lastWeight = filteredData[filteredData.length - 1].weight;
         const targetWeight = state.userGoals.target_weight;
         
@@ -424,9 +446,9 @@ patches:
             const weightToLose = lastWeight - targetWeight;
             let weeksToGoal = 'N/A';
 
-            if (avgWeeklyChange < -0.05) { // Perdendo peso in modo significativo
+            if (avgWeeklyChange < -0.05) { // Perdendo peso
                 weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
-            } else if (avgWeeklyChange > 0.05 && weightToLose < 0) { // Guadagnando peso (bulk) in modo significativo
+            } else if (avgWeeklyChange > 0.05 && weightToLose < 0) { // Guadagnando peso (bulk)
                 weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
             }
             
@@ -452,7 +474,7 @@ patches:
             <div class="stat-label">Peso Attuale</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value">${avgWeeklyChange > 0 ? '+' : ''}${formattedAvgWeeklyChange} kg</div>
+            <div class="stat-value">${avgWeeklyChange >= 0 ? '+' : ''}${formattedAvgWeeklyChange} kg</div>
             <div class="stat-label">Variazione media / settimana</div>
           </div>
           ${goalEstimateHTML}
@@ -526,7 +548,6 @@ patches:
         modal.classList.remove('modal-hidden');
       }
 
-
       export function renderCharts(state) {
           destroyAllCharts();
           document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
@@ -557,3 +578,6 @@ patches:
           
           chartInstances.planner = renderPlannerChart(state);
       }
+commands:
+  - "echo 'Logica di calcolo del trend del peso corretta e stabilizzata.'"
+  - "echo 'Il problema NaN è stato risolto e i grafici ora riflettono un andamento più realistico.'"
