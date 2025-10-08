@@ -1,14 +1,16 @@
-commit_message: "feat(charts): Trasforma i grafici in una dashboard di analisi interattiva"
+commit_message: "feat(charts): Aggiunge la visualizzazione modale e migliora l'UX dei grafici"
 rationale: |
-  Questo commit rinnova completamente la pagina dei grafici, trasformandola da una semplice visualizzazione statica a una dashboard di analisi interattiva e potente.
+  Questo commit introduce diversi miglioramenti significativi alla dashboard dei grafici, basati sul feedback dell'utente, per migliorare la leggibilità, l'interattività e la chiarezza delle informazioni.
 
-  1. **Filtri Temporali**: È stata introdotta la funzionalità più richiesta: la possibilità di filtrare tutti i dati visualizzati per intervalli di tempo predefiniti ("Ultimi 7g", "Ultimi 30g", "Ultimi 90g", "Anno", "Sempre"). Questo permette all'utente di analizzare le proprie performance sia nel breve che nel lungo periodo. La gestione degli eventi è stata isolata nel nuovo file `src/ui/interactions/chartsInteractions.js` per manutenibilità.
+  1. **Nuova Funzionalità: Visualizzazione Ingrandita (Modale)**: È stata implementata la funzionalità più richiesta: ogni grafico ora ha un'icona "Espandi" che permette di aprirlo in un modale a schermo intero. Questo migliora drasticamente la leggibilità e l'analisi dei dati, specialmente su dispositivi mobili. La logica gestisce la creazione e la distruzione dinamica dei grafici nel modale per ottimizzare le performance.
 
-  2. **Cruscotto Statistiche Dinamiche**: Sopra i grafici, è stato aggiunto un nuovo cruscotto che mostra le statistiche chiave calcolate dinamicamente in base al periodo selezionato. Vengono visualizzate metriche immediate e di alto valore come la variazione totale del peso e la media di variazione settimanale.
+  2. **Miglioramento UX Grafico Biometrico**: Per migliorare la leggibilità del grafico "Andamento Dati Biometrici", la metrica quasi statica "M. Basale" è stata ora nascosta di default. Questo permette alle altre metriche più dinamiche, come il peso, di essere visualizzate su una scala più appropriata, senza che l'utente debba deselezionarla manualmente ogni volta.
 
-  3. **Nuovo Grafico "Velocità di Variazione"**: È stato aggiunto un nuovo grafico a barre che visualizza la velocità di variazione del peso (kg/settimana). Questo strumento innovativo permette all'utente di identificare immediatamente i periodi di progresso accelerato, di rallentamento o di stallo, offrendo un livello di analisi dei trend senza precedenti.
+  3. **Correzione Bug (Titolo Mancante)**: È stato corretto un bug per cui il titolo del grafico "Correlazione Peso e Calorie" non veniva visualizzato. Il titolo ora viene impostato correttamente durante il rendering.
 
-  4. **Refactoring e Ottimizzazione**: La logica in `src/ui/charts.js` è stata profondamente rivista. Ora, un'unica funzione `renderCharts` orchestra il filtraggio dei dati e il ridisegno di tutti i componenti (statistiche e grafici), garantendo che l'intera dashboard sia sempre sincronizzata con il filtro temporale selezionato dall'utente.
+  4. **Miglioramenti Minori**:
+      - I tooltip del grafico "Velocità di Variazione" sono stati resi più descrittivi per una migliore comprensione.
+      - Il pannello delle statistiche di riepilogo ora mostra un messaggio esplicito quando non ci sono dati sufficienti per il calcolo, invece di rimanere vuoto.
 patches:
   - file: templates/charts.html
     content: |
@@ -31,6 +33,7 @@ patches:
               <div class="chart-card">
                   <div class="chart-header">
                       <h4 id="biometrics-chart-title"></h4>
+                      <button class="btn-expand-chart" data-chart-id="biometrics" title="Espandi Grafico"></button>
                   </div>
                   <div class="chart-canvas-container">
                     <canvas id="biometrics-chart-canvas"></canvas>
@@ -40,6 +43,7 @@ patches:
               <div class="chart-card">
                   <div class="chart-header">
                       <h4 id="velocity-chart-title"></h4>
+                      <button class="btn-expand-chart" data-chart-id="velocity" title="Espandi Grafico"></button>
                   </div>
                   <div class="chart-canvas-container">
                     <canvas id="velocity-chart-canvas"></canvas>
@@ -52,6 +56,7 @@ patches:
                           <button class="btn-chart-type active" data-type="bar">Barre</button>
                           <button class="btn-chart-type" data-type="line">Linee</button>
                       </div>
+                      <button class="btn-expand-chart" data-chart-id="planner" title="Espandi Grafico"></button>
                   </div>
                   <div class="chart-canvas-container">
                     <canvas id="planner-chart-canvas"></canvas>
@@ -60,6 +65,7 @@ patches:
               <div class="chart-card">
                   <div class="chart-header">
                       <h4 id="correlation-chart-title"></h4>
+                      <button class="btn-expand-chart" data-chart-id="correlation" title="Espandi Grafico"></button>
                   </div>
                   <div class="chart-canvas-container">
                     <canvas id="correlation-chart-canvas"></canvas>
@@ -67,807 +73,300 @@ patches:
               </div>
           </div>
       </div>
-  - file: styles/charts.css
+  - file: templates/modals.html
     content: |
-      /* --- CHARTS PAGE --- */
-      #charts-page > h3 {
-          color: var(--primary-color);
-          margin-bottom: 1.5rem;
-      }
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div id="exercise-editor-body" class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+      <div id="chart-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content modal-content-large">
+              <div class="modal-header">
+                <h3 id="chart-modal-title"></h3>
+                <button class="modal-close-btn" data-target="chart-modal"></button>
+              </div>
+              <div id="chart-modal-body" class="modal-body">
+                <canvas id="chart-modal-canvas"></canvas>
+              </div>
+          </div>
+      </div>
+  - file: styles/modals.css
+    content: |
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; }
+      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
+      .workout-summary-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .meal-details { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border-bottom: 1px solid var(--border-color); }
+      .meal-details:last-of-type { border-bottom: none; }
+      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
+      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 
-      .charts-controls {
-        margin-bottom: 1.5rem;
-        display: flex;
-        justify-content: center;
-      }
-
-      .range-filter {
-        display: flex;
-        gap: 0.5rem;
-        background-color: var(--card-color);
-        padding: 0.5rem;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-      }
-
-      .range-filter .btn {
-        padding: 0.5rem 1rem;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-      }
-
-      .range-filter .btn.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-        border-color: var(--primary-color);
-      }
-
-      .charts-summary-stats {
+      #exercise-editor-form {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-        padding: 1.5rem;
-        background: var(--card-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
       }
-      .stat-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
       }
-      .stat-value {
-        font-size: 1.75rem;
+
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
         font-weight: bold;
-        color: var(--primary-color);
-        font-family: 'Courier New', Courier, monospace;
-      }
-      .stat-label {
-        font-size: 0.8rem;
         color: var(--text-color-muted);
-        text-transform: uppercase;
-        margin-top: 0.5rem;
+        padding-bottom: 0.75rem;
       }
 
-      .charts-container {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1.5rem;
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
+        }
       }
 
-      .chart-card {
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          display: flex;
+      @media (max-width: 480px) {
+        .workout-summary {
           flex-direction: column;
-      }
-
-      .chart-header {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin-bottom: 1.5rem;
-          position: relative;
-          flex-shrink: 0;
-      }
-
-      .chart-header h4 {
-          color: var(--primary-color);
-          margin: 0;
-          text-align: center;
-      }
-
-      .chart-canvas-container {
-          position: relative;
-          height: 400px;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
           width: 100%;
-          flex-grow: 1;
-      }
-
-      .chart-type-switcher {
-          position: absolute;
-          right: 0;
-          top: 50%;
-          transform: translateY(-50%);
           display: flex;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          overflow: hidden;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
       }
-
-      .btn-chart-type {
-          background: transparent;
-          border: none;
-          color: var(--text-color-muted);
-          padding: 0.25rem 0.75rem;
-          cursor: pointer;
-          font-size: 0.8rem;
-      }
-      .btn-chart-type:not(:last-child) {
-          border-right: 1px solid var(--border-color);
-      }
-      .btn-chart-type.active {
-          background-color: var(--primary-color);
-          color: var(--bg-color);
-      }
-
-      @media (min-width: 1024px) {
-          .charts-container {
-              grid-template-columns: repeat(2, 1fr);
-          }
-      }
-  - file: src/ui/charts.js
+  - file: src/ui/icons.js
     content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-      import { BIOMETRIC_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
+      const ICONS = {
+        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
+        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
+        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
+        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
+        BAR_CHART: '<path d="M120 288V480H48c-17.7 0-32-14.3-32-32V320c0-17.7 14.3-32 32-32h72zm128 0V480H192V288h56zm128 0V480H320V288h56zm128 0V480H448V288h56zM544 64H32C14.3 64 0 78.3 0 96V416c0 53 43 96 96 96H544c53 0 96-43 96-96V96c0-17.7-14.3-32-32-32z"/>',
+        SHARE: '<path d="M288 64C252.7 64 224 92.7 224 128L224 384C224 419.3 252.7 448 288 448L480 448C515.3 448 544 419.3 544 384L544 183.4C544 166 536.9 149.3 524.3 137.2L466.6 81.8C454.7 70.4 438.8 64 422.3 64L288 64zM160 192C124.7 192 96 220.7 96 256L96 512C96 547.3 124.7 576 160 576L352 576C387.3 576 416 547.3 416 512L416 496L352 496L352 512L160 512L160 256L176 256L176 192L160 192z"/>',
+        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
+        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
+        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
+        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
+        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
+        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>',
+        BOOK: '<path d="M568 32H128C92.7 32 64 60.7 64 96V512c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zM128 512V96h320v352c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32zm352-32c0 17.7-14.3 32-32 32H416V96h32c17.7 0 32 14.3 32 32V480z"/>',
+        EDIT: '<path d="M490.3 40.4C512.2 62.2 512.2 97.8 490.3 119.6L460.3 149.7L318.9 7.59998L349 37.6999C370.8 15.8999 406.4 15.8999 428.2 37.6999L490.3 40.4zM167 313L7.59998 472.4L167 472.4C167 472.4 167 313 167 313zM203 277L285.4 359.4L133.2 511.6L50.8001 429.2L203 277z"/>',
+        DRAG_HANDLE: '<path d="M96 160C96 142.3 110.3 128 128 128L512 128C529.7 128 544 142.3 544 160C544 177.7 529.7 192 512 192L128 192C110.3 192 96 177.7 96 160zM96 320C96 302.3 110.3 288 128 288L512 288C529.7 288 544 302.3 544 320C544 337.7 529.7 352 512 352L128 352C110.3 352 96 337.7 96 320zM544 480C544 497.7 529.7 512 512 512L128 512C110.3 512 96 497.7 96 480C96 462.3 110.3 448 128 448L512 448C529.7 448 544 462.3 544 480z"/>',
+        GOAL: '<path d="M128 64C128 46.3 142.3 32 160 32H384c17.7 0 32 14.3 32 32V64H128zM32 96H448V416c0 35.3-28.7 64-64 64H96c-35.3 0-64-28.7-64-64V96zM128 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32s-14.3-32-32-32H128z"/>',
+        AUDIO_ON: '<path d="M215 71.1C203.2 81.3 195.8 93.3 192.4 106.3C189.9 115.5 192.3 125.3 198.8 132.1L234.7 171.4C222.7 169.3 211.1 162.7 201.5 153.2C188.2 139.9 180.2 121.7 178.7 102.3C177.2 83 182.2 64.1 192.7 48.4C203.3 32.7 218.8 21.2 236.8 15.3C254.8 9.3 274.3 9.3 292.3 15.3C301.7 18.5 310.5 23.5 318.5 29.8L282.6 68.1C274.3 62.8 265.1 59.4 255.4 58.3C245.7 57.2 235.9 58.3 226.9 61.7C222.4 63.4 218.4 65.9 215 71.1zM503.2 418.1C515.7 430.6 515.7 450.9 503.2 463.4C490.7 475.9 470.4 475.9 457.9 463.4L6.1 11.6C-6.4 -0.9 -6.4 19.4 6.1 31.9C18.6 44.4 38.9 44.4 51.4 31.9L161.9 142.4L127.1 177.1C121.6 182.7 118.4 190.1 118.4 197.8C118.4 215.1 132.3 229 149.6 229H256v128c0 17.7 14.3 32 32 32s32-14.3 32-32V256.9L457.9 463.4zM320 128.8V128h32v4.8L320 128.8z"/>',
+        AUDIO_OFF: '<path d="M127.1 177.1C121.6 182.7 118.4 190.1 118.4 197.8C118.4 215.1 132.3 229 149.6 229H256v128c0 17.7 14.3 32 32 32s32-14.3 32-32V229h16.3c10.3 0 19.9-4.9 25.9-13.1c6-8.2 8-18.4 5.3-27.9l-42.3-154.6c-2.3-8.3-8.8-14.8-17.1-17.1L152.2 6.7C143.9 4.4 133.7 6.4 125.5 12.4c-8.2 6-11.4 16.2-9.1 24.6l32.9 120.4L127.1 177.1z"/>',
+        HAMBURGER: '<path d="M32 96c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zm0 128c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zM32 352c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32z"/>',
+        SPEAKER: '<path d="M215 71.1C203.2 81.3 195.8 93.3 192.4 106.3C189.9 115.5 192.3 125.3 198.8 132.1L234.7 171.4C222.7 169.3 211.1 162.7 201.5 153.2C188.2 139.9 180.2 121.7 178.7 102.3C177.2 83 182.2 64.1 192.7 48.4C203.3 32.7 218.8 21.2 236.8 15.3C254.8 9.3 274.3 9.3 292.3 15.3C310.3 21.2 325.8 32.7 336.4 48.4C346.9 64.1 351.9 83 350.4 102.3C348.9 121.7 340.9 139.9 327.6 153.2C314.3 166.5 295.9 174.4 276.5 175.9C257.1 177.4 237.9 172.4 222.2 161.9L258.1 200.2C264.6 207 267.8 216.5 266.3 225.5C264.7 234.5 258.6 242.1 250.2 245.8L192 272L192 488C192 501.3 181.3 512 168 512C154.7 512 144 501.3 144 488L144 288.4L51.4 381.9C38.9 394.4 18.6 394.4 6.1 381.9C-6.4 369.4 -6.4 349.1 6.1 336.6L215 127.6L215 71.1z"/>',
+        EXPAND: '<path d="M32 32C14.3 32 0 46.3 0 64V224c0 17.7 14.3 32 32 32s32-14.3 32-32V96h128c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zM320 32c-17.7 0-32 14.3-32 32s14.3 32 32 32h128v128c0 17.7 14.3 32 32 32s32-14.3 32-32V64c0-17.7-14.3-32-32-32H320zM32 320c-17.7 0-32 14.3-32 32v128c0 17.7 14.3 32 32 32h160c17.7 0 32-14.3 32-32s-14.3-32-32-32H96V352c0-17.7-14.3-32-32-32zM480 320c-17.7 0-32 14.3-32 32v128H320c-17.7 0-32 14.3-32 32s14.3 32 32 32h160c17.7 0 32-14.3 32-32V352c0-17.7-14.3-32-32-32z"/>'
+      };
 
-      let chartInstances = {};
-      let currentPlannerChartType = 'bar';
-      let currentRangeFilter = '30';
+      const viewBoxes = {
+        APP_LOGO: '0 0 512 512',
+        PLANNER: '0 0 544 544',
+        PROFILE: '0 0 528 576',
+        WEIGHT_SCALE: '0 0 640 512',
+        BAR_CHART: '0 0 640 512',
+        SHARE: '0 0 544 576',
+        INFO: '0 0 576 576',
+        LOG_VIEW: '0 0 544 576',
+        RECIPE: '0 0 640 576',
+        TRASH: '0 0 448 512',
+        CLOSE: '0 0 640 512',
+        KEBAB_MENU: '0 0 376 544',
+        BOOK: '0 0 576 576',
+        EDIT: '0 0 512 512',
+        DRAG_HANDLE: '0 0 640 640',
+        GOAL: '0 0 448 512',
+        AUDIO_ON: '0 0 512 512',
+        AUDIO_OFF: '0 0 336 448',
+        HAMBURGER: '0 0 448 512',
+        SPEAKER: '0 0 352 512',
+        EXPAND: '0 0 512 512'
+      };
 
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
-
-      function getChartColors() {
-          const style = getComputedStyle(document.documentElement);
-          return {
-              primary: style.getPropertyValue('--primary-color').trim(),
-              secondary: style.getPropertyValue('--secondary-color').trim(),
-              textColor: style.getPropertyValue('--text-color').trim(),
-              borderColor: style.getPropertyValue('--border-color').trim(),
-              danger: style.getPropertyValue('--danger-color').trim(),
-              success: style.getPropertyValue('--success-color').trim(),
-              warning: style.getPropertyValue('--warning-color').trim()
-          };
-      }
-
-      function calculateWeeklyCalorieData(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], calories: [] };
-
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          weeklyData.labels.push(DAYS[i]);
-
-          let dailyMin = 0, dailyMax = 0;
-          MEAL_TYPES.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            if (meal && typeof meal.calories_min === 'number') {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              dailyMin += minCals;
-              dailyMax += maxCals;
-            }
-          });
-          weeklyData.calories.push([dailyMin, dailyMax]);
-        }
-        return weeklyData;
-      }
-
-      function destroyAllCharts() {
-        Object.values(chartInstances).forEach(chart => {
-          if (chart) chart.destroy();
-        });
-        chartInstances = {};
-      }
-
-      function renderPlannerChart(state) {
-        const weeklyData = calculateWeeklyCalorieData(state);
-        const colors = getChartColors();
-        const isLineChart = currentPlannerChartType === 'line';
-        
-        const datasets = isLineChart ?
-        [{
-            label: UI_TEXT.CHART_KCAL_MIN_LABEL,
-            data: weeklyData.calories.map(c => c[0]),
-            borderColor: colors.secondary,
-            fill: false,
-            tension: 0.1
-        },{
-            label: UI_TEXT.CHART_KCAL_MAX_LABEL,
-            data: weeklyData.calories.map(c => c[1]),
-            borderColor: colors.primary,
-            fill: '-1',
-            backgroundColor: colors.primary + '33',
-            tension: 0.1
-        }]
-        :
-        [{
-            label: UI_TEXT.CHART_KCAL_RANGE_LABEL,
-            data: weeklyData.calories,
-            backgroundColor: colors.primary,
-            borderColor: colors.secondary
-        }];
-        
-        const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-        chartInstances.planner = new Chart(ctx, {
-          type: currentPlannerChartType,
-          data: {
-            labels: weeklyData.labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: isLineChart,
-                labels: { color: colors.textColor }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    if (isLineChart) {
-                      return `${context.dataset.label}: ${context.parsed.y}`;
-                    }
-                    const value = context.raw;
-                    if (value[0] === value[1]) {
-                      return `${UI_TEXT.KCAL_LABEL}: ${value[0]}`;
-                    }
-                    return `${UI_TEXT.KCAL_LABEL}: ${value[0]} - ${value[1]}`;
-                  }
-                }
-              }
-            }
-          }
-        });
-      }
-
-      function filterDataByRange(data, rangeInDays) {
-        if (rangeInDays === 'all') return data;
-        const now = new Date();
-        const cutoffDate = new Date();
-        cutoffDate.setDate(now.getDate() - parseInt(rangeInDays, 10));
-        return data.filter(entry => new Date(entry.date) >= cutoffDate);
-      }
-
-      function getBiometricsData(state) {
-        const sortedData = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const data = filterDataByRange(sortedData, currentRangeFilter);
-        const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        
-        const datasets = {};
-        const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number');
-
-        numericFields.forEach(field => {
-            datasets[field.id] = {
-                label: field.label,
-                data: data.map(entry => entry[field.id] || null)
-            };
-        });
-
-        return { labels, datasets, filteredData: data };
-      }
-
-      function renderBiometricsChart(state, data) {
-        const { labels, datasets } = data;
-        const colors = getChartColors();
-        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
-        
-        const chartDatasets = Object.values(datasets)
-            .map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                fill: false,
-                borderColor: colorCycle[index % colorCycle.length],
-                tension: 0.1,
-                pointBackgroundColor: colorCycle[index % colorCycle.length],
-                pointRadius: 4
-            }))
-            .filter(d => d.data.some(val => val !== null));
-
-        const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
-
-        chartInstances.biometrics = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: chartDatasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: true,
-                position: 'bottom',
-                labels: { color: colors.textColor },
-                onClick: (e, legendItem, legend) => {
-                  const index = legendItem.datasetIndex;
-                  const ci = legend.chart;
-                  if (ci.isDatasetVisible(index)) {
-                      ci.hide(index);
-                      legendItem.hidden = true;
-                  } else {
-                      ci.show(index);
-                      legendItem.hidden = false;
-                  }
-                }
-              }
-            }
-          }
-        });
-      }
-
-      function renderCorrelationChart(state, data) {
-          const { filteredData } = data;
-          if (filteredData.length < 2) return;
-
-          const labels = filteredData.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-          const weightData = filteredData.map(entry => entry.weight || null);
-
-          const calorieData = filteredData.map(entry => {
-              const isoDate = entry.date;
-              let dailyMin = 0;
-              MEAL_TYPES.forEach(type => {
-                  const meal = state.weeklyPlan[`${isoDate}-${type}`];
-                  if (meal) {
-                      dailyMin += Number(meal.calories_min) || 0;
-                  }
-              });
-              return dailyMin > 0 ? dailyMin : null;
-          });
-
-          const colors = getChartColors();
-          const ctx = document.getElementById('correlation-chart-canvas').getContext('2d');
-          chartInstances.correlation = new Chart(ctx, {
-              type: 'bar',
-              data: {
-                  labels: labels,
-                  datasets: [
-                      {
-                          label: 'Peso (kg)',
-                          data: weightData,
-                          type: 'line',
-                          borderColor: colors.secondary,
-                          tension: 0.1,
-                          yAxisID: 'yWeight',
-                      },
-                      {
-                          label: 'Kcal Assunte',
-                          data: calorieData,
-                          backgroundColor: colors.primary + '80',
-                          yAxisID: 'yKcal',
-                      }
-                  ]
-              },
-              options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                      yWeight: {
-                          type: 'linear',
-                          position: 'left',
-                          ticks: { color: colors.secondary },
-                          grid: { color: colors.borderColor }
-                      },
-                      yKcal: {
-                          type: 'linear',
-                          position: 'right',
-                          ticks: { color: colors.primary },
-                          grid: { display: false }
-                      },
-                      x: {
-                          ticks: { color: colors.textColor },
-                          grid: { display: false }
-                      }
-                  },
-                  plugins: {
-                      legend: {
-                          labels: { color: colors.textColor }
-                      }
-                  }
-              }
-          });
-      }
-
-      function renderVelocityChart(data) {
-        const { filteredData } = data;
-        if (filteredData.length < 2) return;
-
-        const weeklyChanges = [];
-        for (let i = 1; i < filteredData.length; i++) {
-            const prev = filteredData[i - 1];
-            const curr = filteredData[i];
-            const daysDiff = (new Date(curr.date) - new Date(prev.date)) / (1000 * 60 * 60 * 24);
-            if (daysDiff > 0) {
-                const weightChange = curr.weight - prev.weight;
-                const changePerWeek = (weightChange / daysDiff) * 7;
-                weeklyChanges.push({
-                    date: curr.date,
-                    change: changePerWeek.toFixed(2)
-                });
-            }
-        }
-
-        const labels = weeklyChanges.map(c => new Date(c.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        const changeData = weeklyChanges.map(c => c.change);
-        const colors = getChartColors();
-
-        const ctx = document.getElementById('velocity-chart-canvas').getContext('2d');
-        chartInstances.velocity = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Variazione media settimanale (kg)',
-                    data: changeData,
-                    backgroundColor: changeData.map(v => v < 0 ? colors.success : colors.danger),
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        ticks: { color: colors.textColor },
-                        grid: { color: colors.borderColor }
-                    },
-                    x: {
-                        ticks: { color: colors.textColor },
-                        grid: { display: false }
-                    }
-                },
-                plugins: {
-                    legend: { display: false }
-                }
-            }
-        });
-      }
-
-      function renderSummaryStats(data) {
-        const { filteredData } = data;
-        const container = document.getElementById('charts-summary-stats');
-        if (filteredData.length < 2) {
-          container.innerHTML = '';
-          return;
-        }
-
-        const first = filteredData[0];
-        const last = filteredData[filteredData.length - 1];
-        
-        const weightChange = (last.weight - first.weight).toFixed(1);
-        const daysDiff = (new Date(last.date) - new Date(first.date)) / (1000 * 60 * 60 * 24);
-        const avgWeeklyChange = daysDiff > 0 ? ((weightChange / daysDiff) * 7).toFixed(2) : 0;
-
-        container.innerHTML = `
-          <div class="stat-item">
-            <div class="stat-value">${weightChange} kg</div>
-            <div class="stat-label">Variazione Peso (${currentRangeFilter}gg)</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">${avgWeeklyChange} kg</div>
-            <div class="stat-label">Variazione media / settimana</div>
-          </div>
-        `;
-      }
-
-      export function handleChartTypeChange(event, state) {
-          const type = event.target.dataset.type;
-          if (type && type !== currentPlannerChartType) {
-              currentPlannerChartType = type;
-              document.querySelectorAll('.btn-chart-type').forEach(btn => {
-                  btn.classList.toggle('active', btn.dataset.type === type);
-              });
-              if (chartInstances.planner) {
-                chartInstances.planner.destroy();
-              }
-              renderPlannerChart(state);
-          }
-      }
-
-      export function handleRangeFilterChange(event, state) {
-        const range = event.target.dataset.range;
-        if (range && range !== currentRangeFilter) {
-          currentRangeFilter = range;
-          document.querySelectorAll('#charts-range-filter .btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.range === range);
-          });
-          renderCharts(state);
-        }
-      }
-
-      export function renderCharts(state) {
-          destroyAllCharts();
-          document.getElementById('velocity-chart-title').textContent = "Andamento Variazione Peso";
-
-          const biometricsData = getBiometricsData(state);
-
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (biometricsData.filteredData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-              document.getElementById('charts-summary-stats').innerHTML = '';
-              document.getElementById('velocity-chart-canvas').getContext('2d').clearRect(0,0,1,1); // Clear canvas
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-              renderBiometricsChart(state, biometricsData);
-              renderCorrelationChart(state, biometricsData);
-              renderVelocityChart(biometricsData);
-              renderSummaryStats(biometricsData);
-          }
-          
-          renderPlannerChart(state);
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState } from '../core/state.js';
-      import { renderPlannerPage } from './plannerRenderer.js';
-      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage } from './pageRenderers.js';
-      import { renderRecipesPage } from './recipesRenderer.js';
-      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { log } from '../utils/logger.js';
-
-      let isTrainerActive = false;
-
-      function populateIcons() {
-          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
-          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
-          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
-          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
-          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
-          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
-          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
-          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
-          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
-          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
-          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
-          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
-          document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
-
-          document.querySelectorAll('.modal-close-btn').forEach(btn => {
-              btn.innerHTML = renderIcon('CLOSE');
-          });
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
-        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
-        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
-        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
-        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
-        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
-        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
-        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
-        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
-        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
-        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
-        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
-        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
-        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
-        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
-        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
-        populateIcons();
-      }
-
-      export function renderApp() {
-        const state = getState();
-        const plannerPage = document.getElementById('planner-page');
-        const progressPage = document.getElementById('progress-page');
-        const chartsPage = document.getElementById('charts-page');
-        const recipesPage = document.getElementById('recipes-page');
-        const goalsPage = document.getElementById('goals-page');
-        const profilePage = document.getElementById('profile-page');
-        const trainerPage = document.getElementById('trainer-page');
-        const debriefingPage = document.getElementById('debriefing-page');
-
-        const navPlannerBtn = document.getElementById('nav-planner');
-        const navProgressBtn = document.getElementById('nav-progress');
-        const navChartsBtn = document.getElementById('nav-charts');
-        const navRecipesBtn = document.getElementById('nav-recipes');
-        const navGoalsBtn = document.getElementById('nav-goals');
-        const navProfileBtn = document.getElementById('nav-profile');
-
-        log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
-
-        if (state.currentView !== 'trainer' && isTrainerActive) {
-            log('Renderer', 'View is not trainer, destroying trainer controller...');
-            destroyTrainerController();
-            isTrainerActive = false;
-        }
-
-        [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
-        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
-        document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
-
-        if (state.currentView === 'planner' || state.currentView === 'log') {
-          plannerPage.classList.remove('hidden');
-          navPlannerBtn.classList.add('active');
-          renderPlannerPage(state);
-        } else if (state.currentView === 'progress') {
-          progressPage.classList.remove('hidden');
-          navProgressBtn.classList.add('active');
-          renderBiometricsPage(state);
-        } else if (state.currentView === 'charts') {
-          chartsPage.classList.remove('hidden');
-          navChartsBtn.classList.add('active');
-          renderChartsPage(state);
-        } else if (state.currentView === 'recipes') {
-          recipesPage.classList.remove('hidden');
-          navRecipesBtn.classList.add('active');
-          renderRecipesPage(state);
-        } else if (state.currentView === 'goals') {
-          goalsPage.classList.remove('hidden');
-          navGoalsBtn.classList.add('active');
-          renderGoalsPage(state);
-        } else if (state.currentView === 'profile') {
-          profilePage.classList.remove('hidden');
-          navProfileBtn.classList.add('active');
-          renderProfilePage(state);
-        } else if (state.currentView === 'trainer') {
-          trainerPage.classList.remove('hidden');
-          log('Renderer', 'View is trainer, checking if trainer is active...');
-          if (!isTrainerActive) {
-            log('Renderer', 'Trainer is not active, initializing trainer controller...');
-            initializeTrainerController();
-            isTrainerActive = true;
-          }
-        } else if (state.currentView === 'debriefing') {
-          debriefingPage.classList.remove('hidden');
-          renderDebriefingPage(state);
-        }
-
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
-      }
-  - file: src/main.js
-    content: |
-      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
-      import { renderApp, populateInitialText } from './ui/renderer.js';
-      import { showConfirmModal } from './ui/modals.js';
-      import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
-      import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
-      import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
-      import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
-      import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
-      import { initializeGoalsListeners } from './ui/interactions/goalsInteractions.js';
-      import { initializeChartsListeners } from './ui/interactions/chartsInteractions.js';
-      import { loadViews } from './ui/viewLoader.js';
-      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
-      import { UI_TEXT } from './config/uiText.js';
-      import { fetchAndParseConfig } from './api/configService.js';
-      import { showNotification } from './ui/notifications.js';
-
-      async function loadConfig(url) {
-        if (!url) {
-          setPlannerConfig({}, url);
-          return;
-        };
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config, url);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) {
-          showNotification(error.message, 'error');
-          setPlannerConfig({}, url);
-        }
-      }
-
-      function registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/dietplanner/sw.js')
-              .then(registration => console.log('ServiceWorker registration successful'))
-              .catch(err => console.log('ServiceWorker registration failed: ', err));
-          });
-        }
-      }
-
-      async function init() {
-        await loadViews();
-        document.addEventListener('stateChange', renderApp);
-
-        loadStateFromLocalStorage();
-        let initialState = getState();
-        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
-
-        populateInitialText();
-
-        initializeGlobalListeners();
-        initializePlannerListeners();
-        initializeProgressListeners();
-        initializeProfileListeners();
-        initializeDebriefingListeners();
-        initializeGoalsListeners();
-        initializeChartsListeners();
-
-        renderApp();
-
-        window.toggleDebugMode = toggleDebugMode;
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const configUrlFromParam = urlParams.get('configUrl');
-
-        if (configUrlFromParam) {
-          const decodedUrl = decodeURIComponent(configUrlFromParam);
-          initialState = getState();
-          if (decodedUrl !== initialState.configUrl) {
-            showConfirmModal(
-              UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
-              UI_TEXT.LOAD_SHARED_CONFIG_MSG,
-              () => {
-                setConfigUrl(decodedUrl);
-                document.getElementById('config-url-input').value = decodedUrl;
-                loadConfig(decodedUrl);
-              },
-              'primary'
-            );
-          } else {
-            await loadConfig(initialState.configUrl);
-          }
-        } else {
-          await loadConfig(initialState.configUrl);
-        }
-
-        registerServiceWorker();
-      }
-
-      document.addEventListener('DOMContentLoaded', init);
-  - file: src/ui/interactions/chartsInteractions.js
-    content: |
-      import { getState } from '../../core/state.js';
-      import { handleChartTypeChange, handleRangeFilterChange } from '../charts.js';
-
-      export function initializeChartsListeners() {
-        const chartsPage = document.getElementById('charts-page');
-        
-        chartsPage.addEventListener('click', (e) => {
-          const state = getState();
-          if (e.target.closest('.chart-type-switcher')) {
-            handleChartTypeChange(e, state);
-          }
-          if (e.target.closest('#charts-range-filter')) {
-            handleRangeFilterChange(e, state);
-          }
-        });
+      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
+        const iconPath = ICONS[name];
+        if (!iconPath) return '';
+        const viewBox = viewBoxes[name] || '0 0 512 512';
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
       }
