@@ -16,12 +16,24 @@
   margin-bottom: 2rem;
 }
 
-#debriefing-stats-container h4 {
-  color: var(--secondary-color);
+.debriefing-header-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.debriefing-header-container h4 {
+  color: var(--secondary-color);
+  margin: 0;
   font-size: 1.25rem;
   text-transform: uppercase;
   letter-spacing: 1px;
+}
+
+#speak-summary-btn {
+  font-size: 1.5rem;
 }
 
 #debriefing-stats {

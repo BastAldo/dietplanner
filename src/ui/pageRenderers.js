@@ -141,6 +141,7 @@ export function renderDebriefingPage(state) {
   document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
   document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
   document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
+  document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
 
   const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
       <div class="stat-item">

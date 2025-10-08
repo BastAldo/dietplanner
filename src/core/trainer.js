@@ -5,6 +5,8 @@ import { startAnimation, stopAnimation } from './trainer/animation.js';
 import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
 import { advanceToNextSet } from './trainer/machine.js';
 import { calculateWorkoutCalories } from './calculations.js';
+import { speak, playStartCue } from '../utils/audioFeedback.js';
+import { UI_TEXT } from '../config/uiText.js';
 
 export { getState as getWorkoutState };
 
@@ -81,6 +83,12 @@ export function startWorkout() {
   if (state.status !== 'idle') return;
 
   let startState = { status: 'running', phaseStartTime: Date.now() };
+
+  if (state.isAudioEnabled) {
+    playStartCue();
+    const firstExerciseName = state.exerciseQueue[0].name;
+    speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+  }
 
   if (state.executionMode === 'tempo_guided') {
       startState.executionQueue = buildExecutionQueueForCurrentSet();

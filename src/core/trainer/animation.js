@@ -69,9 +69,18 @@ function tick(timestamp) {
   } else if (state.status === 'resting') {
     const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
     if (newRestTimeRemaining <= 0) {
+      const { exerciseQueue, currentExerciseIndex, currentSet } = state;
+      const currentExercise = exerciseQueue[currentExerciseIndex];
+      const isLastSet = currentSet >= currentExercise.defaultSets;
+
       if (isAudioEnabled) {
-        playStartCue();
-        speak(UI_TEXT.VOICE_GUIDE_SET_START);
+          playStartCue();
+          if (isLastSet) {
+              const nextExercise = exerciseQueue[currentExerciseIndex + 1];
+              if (nextExercise) {
+                  speak(`${UI_TEXT.VOICE_GUIDE_NEXT_EXERCISE}: ${nextExercise.name}`);
+              }
+          }
       }
       advanceToNextSet();
     } else {
