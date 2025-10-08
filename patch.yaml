@@ -1,789 +1,721 @@
-commit_message: "refactor(arch): Centralizza la logica di modifica degli esercizi nel core"
+commit_message: "feat(importer): Aggiunge l'importazione di dati biometrici da CSV"
 rationale: |
-  Questo commit prosegue il refactoring architetturale iniziato in precedenza, applicando lo stesso pattern di centralizzazione della logica di business al modale di modifica degli esercizi.
+  Questo commit introduce una nuova funzionalità che migliora significativamente l'esperienza utente, permettendo l'importazione di dati biometrici direttamente da un file CSV esportato da una bilancia.
 
-  1. **Logica Spostata nel Core (`state.js`)**: Tutta la logica per trovare e aggiornare gli esercizi, sia quelli pianificati che quelli registrati nello storico, è stata estratta dai componenti UI e centralizzata in `src/core/state.js`. Sono state create nuove funzioni "selettore" (`getExerciseForPlanner`, `getExerciseFromHistory`) per recuperare i dati e sono state rafforzate le funzioni esistenti per il salvataggio (`updateExerciseInstanceInWorkout`, `updateExerciseSetsInHistory`), che ora agiscono come unici punti di modifica dello stato.
+  1. **Nuovo Parser CSV (`importer.js`)**: È stato creato un nuovo modulo dedicato, `src/core/importer.js`, la cui unica responsabilità è analizzare il formato specifico dei file CSV della bilancia. Questo parser gestisce l'intestazione del file, il delimitatore a punto e virgola, e la conversione dei formati di data (da GG/MM/AAAA a YYYY-MM-DD) e dei numeri decimali (con la virgola).
 
-  2. **Componenti UI Semplificati**: Di conseguenza, i componenti dell'interfaccia utente sono stati notevolmente semplificati.
-      - I "chiamanti" (`plannerInteractions.js` e `workoutEditorModal.js`) ora hanno la responsabilità di recuperare i dati tramite i nuovi selettori prima di invocare il modale.
-      - Il modale di modifica (`exerciseEditorModal.js`) è stato trasformato in un componente puramente presentazionale. Adesso riceve un oggetto esercizio già pronto e una funzione di callback per il salvataggio, senza più contenere logica di business complessa.
+  2. **Interfaccia Utente**: È stato aggiunto un pulsante "Importa CSV" nella pagina "Progressi" (`templates/progress.html`). La logica di interazione in `progressInteractions.js` gestisce la selezione del file, la lettura tramite `FileReader`, e orchestra il processo di parsing e salvataggio.
 
-  Questo refactoring migliora drasticamente la separazione delle responsabilità (SoC), aumenta la manutenibilità del codice e rende l'architettura generale dell'applicazione più robusta, coerente e facile da estendere in futuro.
+  3. **Gestione dello Stato in Blocco**: Per ottimizzare le performance, è stata introdotta una nuova funzione `addMultipleBiometricEntries` in `src/core/state.js`. Questa funzione importa tutte le nuove misurazioni in un'unica operazione, previene l'inserimento di duplicati basati sulla data e aggiorna l'interfaccia utente una sola volta.
+
+  4. **Flusso Utente Controllato**: Prima di salvare i dati, all'utente viene presentato un modale di conferma che riepiloga il numero di nuove misurazioni trovate, garantendo un pieno controllo sull'operazione. Vengono gestiti anche i casi di errore o di file senza nuovi dati, con notifiche appropriate.
 patches:
-  - file: src/core/state.js
+  - file: templates/progress.html
     content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-      import { resetWorkoutState } from './trainer.js';
-      import { log } from '../utils/logger.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        workoutHistory: {},
-        biometricData: [],
-        userProfile: {},
-        userGoals: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
-        debugMode: false,
-        lastWorkoutSummary: null,
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-
-      export function getMealsForType(mealType) {
-        return state.masterMealList.filter(meal => {
-          if (meal.tipoPasto === 'Tutti') return true;
-          if (Array.isArray(meal.tipoPasto)) {
-            return meal.tipoPasto.includes(mealType);
-          }
-          return meal.tipoPasto === mealType;
-        });
-      }
-
-      export function getExerciseForPlanner(slotId, instanceId) {
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function getExerciseFromHistory(date, startTime, instanceId) {
-        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
-        if (!workout) return null;
-        return workout.exercises.find(ex => ex.instanceId === instanceId);
-      }
-
-      export function toggleDebugMode() {
-        state.debugMode = !state.debugMode;
-        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
-      }
-
-      export function setPlannerConfig(config, url) {
-        log('State', 'Setting new planner config', { url });
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        // Calcola calorie e popola la master list
-        state.masterMealList = processMealsWithCalories(meals, ingredients);
-
-        // Deriva e imposta la recipeBaseUrl
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else {
-            state.recipeBaseUrl = '';
-        }
-
-        notify();
-      }
-
-      export function setConfigUrl(url) {
-        log('State', 'Setting new config URL', { url });
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        log('State', 'Saving all application state to localStorage');
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
-      }
-
-      export function loadStateFromLocalStorage() {
-        log('State', 'Loading all application state from localStorage');
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.configUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
-      }
-
-      export function setAppState(backupData) {
-        log('State', 'Restoring application state from backup');
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.workoutHistory = backupData.workoutHistory || {};
-        state.configUrl = backupData.configUrl || '';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        state.userGoals = backupData.userGoals || {};
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        log('State', 'Saving user profile', { profile });
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function saveUserGoals(goals) {
-          log('State', 'Saving user goals', { goals });
-          state.userGoals = goals;
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        log('State', 'Adding or updating biometric entry', { entry });
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        log('State', 'Deleting biometric entry', { date });
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        log('State', 'Updating weekly plan', { slotId, mealId });
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) { // Add an exercise
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = {
-                      ...exercise,
-                      instanceId: Date.now() + Math.random()
-                  };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) { // Remove an exercise
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
-          if (!state.weeklyWorkouts[slotId]) return;
-
-          const workoutList = state.weeklyWorkouts[slotId];
-          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
-
-          if (exerciseIndex > -1) {
-              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-              if (newValues.defaultTempo) {
-                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
-              }
-              workoutList[exerciseIndex] = updatedExercise;
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
-        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
-          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
-          const workoutList = state.weeklyWorkouts[slotId];
-          const [movedItem] = workoutList.splice(oldIndex, 1);
-          workoutList.splice(newIndex, 0, movedItem);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        log('State', 'Resetting current week');
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[slotId];
-            }
-        }
-        state.workoutHistory = {};
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        log('State', 'Navigating week', { direction });
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
-        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function setLastWorkoutSummary(summary) {
-        log('State', 'Setting last workout summary');
-        state.lastWorkoutSummary = summary;
-        notify();
-      }
-
-      export function addWorkoutToHistory(summary) {
-        log('State', 'Adding structured workout to history', { date: summary.date });
-        if (summary && summary.date) {
-            if (!state.workoutHistory[summary.date]) {
-                state.workoutHistory[summary.date] = [];
-            }
-            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
-            saveStateToLocalStorage();
-            notify();
-        }
-      }
-
-      export function addManualWorkoutToHistory(date, activityData) {
-          log('State', 'Adding manual workout to history', { date, activityData });
-          if (!state.workoutHistory[date]) {
-              state.workoutHistory[date] = [];
-          }
-          const manualWorkout = {
-              type: 'manual',
-              date: date,
-              startTime: Date.now(),
-              ...activityData
-          };
-          state.workoutHistory[date].push(manualWorkout);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function deleteWorkoutFromHistory(date, startTime) {
-          log('State', 'Deleting workout from history', { date, startTime });
-          if (state.workoutHistory[date]) {
-              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
-              if (state.workoutHistory[date].length === 0) {
-                  delete state.workoutHistory[date];
-              }
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function updateWorkoutInHistory(date, startTime, updates) {
-          log('State', 'Updating workout in history', { date, startTime, updates });
-          if (state.workoutHistory[date]) {
-              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-              if (workoutIndex > -1) {
-                  state.workoutHistory[date][workoutIndex] = {
-                      ...state.workoutHistory[date][workoutIndex],
-                      ...updates
-                  };
-                  saveStateToLocalStorage();
-                  notify();
-              }
-          }
-      }
-
-      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
-        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
-        if (!state.workoutHistory[date]) return;
-
-        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-        if (workoutIndex === -1) return;
-
-        const workout = state.workoutHistory[date][workoutIndex];
-        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
-        if (exerciseIndex === -1) return;
-
-        // Update sets data for the specific exercise
-        workout.exercises[exerciseIndex].setsData = newSetsData;
-
-        // Recalculate tonnage for the exercise
-        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
-        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
-
-        // Recalculate total tonnage for the entire workout
-        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
-
-        saveStateToLocalStorage();
-        notify();
-      }
-
-
-      export function copyPreviousWeek() {
-        log('State', 'Copying previous week');
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-  - file: src/ui/interactions/plannerInteractions.js
+      <div id="progress-page" class="page-view hidden">
+          <div id="biometrics-view" class="biometrics-view">
+              <h3 id="biometrics-title"></h3>
+              <form id="biometrics-form" class="biometrics-form"></form>
+              <div class="progress-header">
+                <h3 id="biometrics-history-title"></h3>
+                <button id="import-csv-btn" class="btn btn-secondary"></button>
+              </div>
+              <div id="biometrics-list-container" class="biometrics-list-container">
+                  <div id="biometrics-list" class="biometrics-list"></div>
+              </div>
+          </div>
+      </div>
+  - file: src/config/uiText.js
     content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
-      } from '../../core/state.js';
-      import { initializeWorkout } from '../../core/trainer.js';
-      import { fetchAndParseConfig } from '../../api/configService.js';
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_PROGRESS', text: 'Progressi' },
+        { id: 'NAV_CHARTS', text: 'Grafici' },
+        { id: 'NAV_RECIPES', text: 'Ricette' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'NAV_GOALS', text: 'Obiettivi' },
+        { id: 'LOAD_BUTTON', text: 'Carica' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'DELETE_WORKOUT_CONFIRM_TITLE', text: 'Elimina Allenamento' },
+        { id: 'DELETE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare questo allenamento dallo storico? L\'azione è irreversibile.' },
+        { id: 'DELETE_WORKOUT_SUCCESS', text: 'Allenamento eliminato dallo storico.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
+        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+        { id: 'LOG_ACTIVITY_BTN', text: 'Log Attività' },
+        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
+        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
+        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
+        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
+        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
+        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
+        { id: 'EXERCISE_WEIGHT_LABEL', text: 'Peso (kg)' },
+        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
+        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+        { id: 'CHARTS_CORRELATION_TITLE', text: 'Correlazione Peso e Calorie' },
+        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
+        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
+        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
+        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
+        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
+        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
+        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
+        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
+        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
+        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
+        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
+        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
+        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
+        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
+        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
+        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
+        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
+        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
+        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
+        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
+        { id: 'IMPORT_BIOMETRICS_BTN', text: 'Importa CSV' },
+        { id: 'IMPORT_SUCCESS', text: 'Dati importati con successo!' },
+        { id: 'IMPORT_CONFIRM_TITLE', text: 'Importa Dati Biometrici' },
+        { id: 'IMPORT_NO_NEW_DATA', text: 'Nessuna nuova misurazione trovata nel file.' },
+        { id: 'IMPORT_ERROR_FILE', text: 'Errore durante la lettura del file.' },
+        { id: 'IMPORT_ERROR_FORMAT', text: 'Formato del file CSV non riconosciuto.' },
+        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
+        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
+        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
+        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
+        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
+        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
+        { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
+        { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
+        { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
+        { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
+        { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
+        { id: 'DEBRIEFING_TONNAGE', text: 'Tonnellaggio' },
+        { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
+        { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
+        { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
+        { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
+        { id: 'DEBRIEFING_CALORIES_BURNED', text: 'Calorie Bruciate' },
+        { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
+        { id: 'DEBRIEFING_RPE_LABEL', text: 'Sforzo Percepito (RPE 1-10)' },
+        { id: 'DEBRIEFING_SAVE_RPE_BTN', text: 'Salva RPE' },
+        { id: 'DEBRIEFING_SUMMARY_AUDIO_BTN', text: 'Ascolta Riepilogo' },
+        { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
+        { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
+        { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti' },
+        { id: 'PLANNER_SUMMARY_CALORIES_BURNED', text: 'Kcal Bruciate' },
+        { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Progresso Peso' },
+        { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
+        { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
+        { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
+        { id: 'MANUAL_WORKOUT_DISTANCE_LABEL', text: 'Distanza (km)' },
+        { id: 'MANUAL_WORKOUT_FC_AVG_LABEL', text: 'FC Media (bpm)' },
+        { id: 'MANUAL_WORKOUT_FC_MAX_LABEL', text: 'FC Max (bpm)' },
+        { id: 'MANUAL_WORKOUT_NOTES_LABEL', text: 'Note' },
+        { id: 'MANUAL_WORKOUT_SAVE_BTN', text: 'Salva Attività' },
+        { id: 'LOG_VIEW_MANUAL_ACTIVITY_TITLE', text: 'Attività del Giorno' },
+        { id: 'GOALS_TITLE', text: 'Obiettivi Settimanali' },
+        { id: 'GOALS_SAVE_BTN', text: 'Salva Obiettivi' },
+        { id: 'GOALS_SAVE_SUCCESS', text: 'Obiettivi salvati!' },
+        { id: 'GOALS_EXPLANATION', text: 'Imposta i tuoi obiettivi settimanali per monitorare i progressi. Questi dati verranno visualizzati nel riepilogo del planner per tenerti motivato.' },
+        { id: 'GOALS_ACTIVITY_LEGEND', text: 'Attività Fisica' },
+        { id: 'GOALS_BIOMETRICS_LEGEND', text: 'Dati Biometrici' },
+        { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
+        { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' },
+        { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' },
+        { id: 'WORKOUT_LOG_SAVE_SUCCESS', text: 'Allenamento aggiornato con successo!' },
+        { id: 'LOGGED_EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio Registrato' },
+        { id: 'LOGGED_EXERCISE_SET_LABEL', text: 'Set' },
+        { id: 'LOGGED_EXERCISE_REPS_LABEL', text: 'Reps' },
+        { id: 'LOGGED_EXERCISE_WEIGHT_LABEL', text: 'Peso' },
+        { id: 'LOGGED_EXERCISE_SAVE_BTN', text: 'Salva Modifiche Esercizio' },
+        { id: 'VOICE_GUIDE_WORKOUT_START', text: 'Allenamento iniziato' },
+        { id: 'VOICE_GUIDE_NOW_STARTING', text: 'Inizio con' },
+        { id: 'VOICE_GUIDE_NEXT_EXERCISE', text: 'Prossimo esercizio' },
+        { id: 'VOICE_GUIDE_REST_START', text: 'Recupero' },
+        { id: 'VOICE_GUIDE_SET_START', text: 'Inizio' },
+        { id: 'VOICE_GUIDE_PHASE_UP', text: 'su' },
+        { id: 'VOICE_GUIDE_PHASE_HOLD', text: 'tieni' },
+        { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
+        { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' },
+        { id: 'TERMINATE_WORKOUT_CONFIRM_TITLE', text: 'Termina Allenamento' },
+        { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' }
+      ];
+
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
+  - file: src/ui/interactions/progressInteractions.js
+    content: |
+      import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry, addMultipleBiometricEntries } from '../../core/state.js';
+      import { calculateBMR } from '../../core/calculations.js';
       import { showNotification } from '../notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { showConfirmModal } from '../modals.js';
       import { UI_TEXT } from '../../config/uiText.js';
       import { log } from '../../utils/logger.js';
+      import { parseBiometricsCSV } from '../../core/importer.js';
 
-      async function handleLoadConfig() {
-        log('Interactions', 'Handling config load button click');
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config, url);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      function handleBiometricsForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Biometrics form submitted');
+        const formData = new FormData(e.target);
+        const entry = {};
+        for (let [key, value] of formData.entries()) { entry[key] = value; }
+        addOrUpdateBiometricEntry(entry);
+        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+        e.target.reset();
+        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
       }
 
-      function handleCalendarClick(e) {
-        const startBtn = e.target.closest('.btn-start-workout-day');
-        if (startBtn) {
-            const isoDate = startBtn.dataset.date;
-            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
-            const globalState = getState();
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout, isoDate);
-            setView('trainer');
+      function handleImportCSV() {
+        log('Interactions', 'Import CSV button clicked');
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.csv,text/csv';
+        fileInput.onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = readerEvent => {
+                try {
+                    const csvText = readerEvent.target.result;
+                    const existingEntries = getState().biometricData;
+                    const newEntries = parseBiometricsCSV(csvText).filter(newEntry =>
+                      !existingEntries.some(existing => existing.date === newEntry.date)
+                    );
+
+                    if (newEntries.length > 0) {
+                        showConfirmModal(
+                            UI_TEXT.IMPORT_CONFIRM_TITLE,
+                            `Trovate ${newEntries.length} nuove misurazioni. Vuoi importarle?`,
+                            () => {
+                                addMultipleBiometricEntries(newEntries);
+                                showNotification(UI_TEXT.IMPORT_SUCCESS, 'success');
+                            },
+                            'primary'
+                        );
+                    } else {
+                        showNotification(UI_TEXT.IMPORT_NO_NEW_DATA, 'info');
+                    }
+                } catch (err) {
+                    showNotification(err.message, 'error');
+                }
+            };
+            reader.onerror = () => showNotification(UI_TEXT.IMPORT_ERROR_FILE, 'error');
+            reader.readAsText(file);
+        };
+        fileInput.click();
+      }
+
+      function handleBiometricsListClick(e) {
+        const btnMenu = e.target.closest('.btn-actions-menu');
+        if (btnMenu) {
+            log('Interactions', 'Biometrics actions menu toggled');
+            const dropdown = btnMenu.nextElementSibling;
+            const allDropdowns = document.querySelectorAll('.actions-dropdown');
+            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+            dropdown.classList.toggle('show');
             return;
         }
 
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
-          openDayEditorModal(dayCell.dataset.date);
+        const btnEdit = e.target.closest('.btn-edit-biometrics');
+        if (btnEdit) {
+            const date = btnEdit.dataset.date;
+            log('Interactions', 'Edit biometrics button clicked', { date });
+            const entry = getState().biometricData.find(e => e.date === date);
+            if (entry) {
+                const form = document.getElementById('biometrics-form');
+                for (const key in entry) {
+                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
+                }
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+            const dropdown = btnEdit.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        const btnDelete = e.target.closest('.btn-delete-biometrics');
+        if (btnDelete) {
+            const date = btnDelete.dataset.date;
+            log('Interactions', 'Delete biometrics button clicked', { date });
+            showConfirmModal(
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
+            );
+            const dropdown = btnDelete.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        if (!e.target.closest('.biometrics-actions')) {
+            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
         }
       }
 
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
+      function handleWeightInputChange(e) {
+        const weight = e.target.value;
+        const { userProfile } = getState();
+        const bmrField = document.getElementById('bio-basalMetabolism');
+        const bmr = calculateBMR(userProfile, weight);
+        if (bmr !== null) {
+          bmrField.value = bmr;
+        } else {
+          bmrField.value = '';
+          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
         }
       }
 
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-          return;
-        }
+      export function initializeProgressListeners() {
+        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
+        const progressPage = document.getElementById('progress-page');
+        progressPage.addEventListener('click', handleBiometricsListClick);
+        progressPage.addEventListener('input', e => {
+          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
+        });
+        document.getElementById('import-csv-btn').addEventListener('click', handleImportCSV);
 
-        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
-        if (btnDeleteWorkout) {
-          const { date, starttime } = btnDeleteWorkout.dataset;
-          log('Interactions', 'Delete workout button clicked', { date, starttime });
-          showConfirmModal(
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
-            () => {
-              deleteWorkoutFromHistory(date, parseInt(starttime));
-              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
-            },
-            'danger'
-          );
-          return;
-        }
-
-        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
-        if(btnEditExercise) {
-          const { date, starttime, instanceid } = btnEditExercise.dataset;
-          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
-          const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
-          if (exercise) {
-            openExerciseEditorModal({
-              context: 'history',
-              exercise,
-              date,
-              startTime: parseInt(starttime, 10)
-            });
-          }
-          return;
-        }
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.biometrics-actions')) {
+                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+            }
+        });
       }
-
-      function handleCopyWeek() {
-        log('Interactions', 'Copy week button clicked');
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        log('Interactions', 'Reset week button clicked');
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      export function initializePlannerListeners() {
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-      }
-  - file: src/ui/modals/exerciseEditorModal.js
+  - file: src/ui/pageRenderers.js
     content: |
-      import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-      import { showNotification } from '../notifications.js';
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { renderCharts } from './charts.js';
 
-      function renderPlannerForm(body, exercise) {
-        body.innerHTML = `
-          <form id="exercise-editor-form">
-            <div class="form-group sets-group">
-              <label for="ex-edit-sets">Serie</label>
-              <input type="number" id="ex-edit-sets" name="sets" min="1" value="${exercise.defaultSets}">
-            </div>
-            <div class="form-group reps-group" style="display: ${exercise.type === 'reps' ? 'flex' : 'none'};">
-              <label for="ex-edit-reps">Ripetizioni</label>
-              <input type="number" id="ex-edit-reps" name="reps" min="1" value="${exercise.defaultReps || ''}">
-            </div>
-            <div class="form-group duration-group" style="display: ${exercise.type === 'time' ? 'flex' : 'none'};">
-              <label for="ex-edit-duration">Durata (s)</label>
-              <input type="number" id="ex-edit-duration" name="duration" min="1" value="${exercise.defaultDuration || ''}">
-            </div>
-            <div class="form-group rest-group">
-              <label for="ex-edit-rest">Riposo (s)</label>
-              <input type="number" id="ex-edit-rest" name="rest" min="0" value="${exercise.defaultRest}">
-            </div>
-            <div class="form-group weight-group">
-              <label for="ex-edit-weight" id="ex-edit-weight-label">${UI_TEXT.EXERCISE_WEIGHT_LABEL}</label>
-              <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5" value="${exercise.defaultWeight || 0}">
-            </div>
-            <div class="tempo-group" style="display: ${exercise.defaultTempo ? 'grid' : 'none'};">
-              <div class="form-group">
-                <label for="ex-edit-tempo-up">Salita (s)</label>
-                <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5" value="${exercise.defaultTempo?.up || 0}">
-              </div>
-              <div class="form-group">
-                <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">${UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL}</label>
-                <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5" value="${exercise.defaultTempo?.hold || 0}">
-              </div>
-              <div class="form-group">
-                <label for="ex-edit-tempo-down">Discesa (s)</label>
-                <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5" value="${exercise.defaultTempo?.down || 0}">
-              </div>
-            </div>
-          </form>
-        `;
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
       }
 
-      function renderLogForm(body, exercise) {
-        const showWeight = exercise.defaultWeight || exercise.setsData.some(s => s.weight > 0);
-        let formHTML = `<form id="logged-exercise-form" class="structured-form">`;
-        formHTML += exercise.setsData.map((set, index) => {
-            const weightInput = showWeight ? `
-                <div class="form-group">
-                    <label for="set-weight-${index}">${UI_TEXT.LOGGED_EXERCISE_WEIGHT_LABEL}</label>
-                    <input type="number" id="set-weight-${index}" name="weight_${index}" value="${set.weight || 0}" min="0" step="0.1">
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+          });
+      }
+
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
+        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
+
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
+        }
+
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderGoalsPage(state) {
+          const form = document.getElementById('goals-form');
+          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
+          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
+          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
+          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
+          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
+          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
+          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
+          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
+          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
+          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
+          form.elements.target_weight.value = state.userGoals.target_weight || '';
+      }
+
+      export function renderChartsPage(state) {
+          const placeholder = document.getElementById('biometrics-chart-placeholder');
+          const canvas = document.getElementById('biometrics-chart-canvas');
+          if (state.biometricData.length < 2) {
+              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+              placeholder.classList.remove('hidden');
+              canvas.classList.add('hidden');
+          } else {
+              placeholder.classList.add('hidden');
+              canvas.classList.remove('hidden');
+          }
+          renderCharts(state);
+      }
+
+      function getSetDetails(setData) {
+          let details = [];
+          if (setData.reps) {
+              details.push(`${setData.reps} reps`);
+          }
+          if (setData.weight) {
+              details.push(`${setData.weight} kg`);
+          }
+          if (setData.duration) {
+              details.push(`${formatDuration(setData.duration)}`);
+          }
+          return details.join(' / ');
+      }
+
+      export function renderDebriefingPage(state) {
+        const summaryContainer = document.getElementById('debriefing-summary');
+        const statsContainer = document.getElementById('debriefing-stats');
+        const summary = state.lastWorkoutSummary;
+
+        if (!summary || !summary.exercises) {
+            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+            statsContainer.innerHTML = '';
+            document.getElementById('debriefing-feedback').classList.add('hidden');
+            return;
+        }
+
+        document.getElementById('debriefing-feedback').classList.remove('hidden');
+        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
+        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
+        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
+        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
+
+        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
+                <span class="stat-value">${summary.totalCaloriesBurned}</span>
+            </div>
+        ` : '';
+
+        const tonnageHTML = summary.totalTonnage > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
+                <span class="stat-value">${summary.totalTonnage} kg</span>
+            </div>
+        ` : '';
+
+        const statsHTML = `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
+            </div>
+            ${caloriesBurnedHTML}
+            ${tonnageHTML}
+        `;
+        statsContainer.innerHTML = statsHTML;
+
+        const summaryHTML = summary.exercises.map(exercise => {
+            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
+            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
+                <div class="set-detail-item">
+                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
+                    <span>${getSetDetails(setData)}</span>
                 </div>
-            ` : '';
+            `).join('');
+
             return `
-                <div class="set-editor-row">
-                    <span class="set-editor-label">${UI_TEXT.LOGGED_EXERCISE_SET_LABEL} ${index + 1}</span>
-                    <div class="form-group">
-                        <label for="set-reps-${index}">${UI_TEXT.LOGGED_EXERCISE_REPS_LABEL}</label>
-                        <input type="number" id="set-reps-${index}" name="reps_${index}" value="${set.reps || 0}" min="0">
+                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
+                    <div class="debriefing-card-header">
+                        <h4>${exercise.name}</h4>
+                        <div class="debriefing-status">
+                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                        </div>
                     </div>
-                    ${weightInput}
+                    <div class="debriefing-card-body">
+                      <div class="exercise-stats">
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
+                      </div>
+                      <div class="sets-details-container">
+                          ${setsDetailsHTML}
+                      </div>
+                    </div>
                 </div>
             `;
         }).join('');
-        formHTML += '</form>';
-        body.innerHTML = formHTML;
+
+        summaryContainer.innerHTML = summaryHTML;
       }
-
-      export function openExerciseEditorModal(config) {
-        const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
-        log('Modals', 'Opening exercise editor modal', { config });
-
-        const modal = document.getElementById('exercise-editor-modal');
-        const body = modal.querySelector('#exercise-editor-body');
-        const saveBtn = modal.querySelector('#exercise-editor-save-btn');
-        let form;
-        let saveHandler;
-
-        if (context === 'history') {
-            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-            saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
-            renderLogForm(body, exercise);
-            form = body.querySelector('#logged-exercise-form');
-
-            saveHandler = (e) => {
-                e.preventDefault();
-                const formData = new FormData(form);
-                const newSetsData = [...exercise.setsData].map((set, index) => ({
-                    ...set,
-                    reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
-                    weight: parseFloat(formData.get(`weight_${index}`)) || 0,
-                }));
-
-                updateExerciseSetsInHistory(date, startTime, exercise.instanceId, newSetsData);
-                showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
-                modal.classList.add('modal-hidden');
-            };
-
-        } else if (context === 'planner') {
-            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
-            renderPlannerForm(body, exercise);
-            form = body.querySelector('#exercise-editor-form');
-
-            saveHandler = (e) => {
-                e.preventDefault();
-                const newValues = {
-                    defaultSets: parseInt(form.elements.sets.value),
-                    defaultRest: parseInt(form.elements.rest.value),
-                    defaultWeight: parseFloat(form.elements.weight.value)
-                };
-                if (exercise.type === 'reps') {
-                    newValues.defaultReps = parseInt(form.elements.reps.value);
-                } else {
-                    newValues.defaultDuration = parseInt(form.elements.duration.value);
-                }
-                if (exercise.defaultTempo) {
-                    newValues.defaultTempo = {
-                        up: parseInt(form.elements.tempo_up.value),
-                        hold: parseInt(form.elements.tempo_hold.value),
-                        down: parseInt(form.elements.tempo_down.value)
-                    };
-                }
-                updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
-                modal.classList.add('modal-hidden');
-                openWorkoutEditorModal(returnIsoDate);
-            };
-        }
-
-        saveBtn.replaceWith(saveBtn.cloneNode(true));
-        document.getElementById('exercise-editor-save-btn').addEventListener('click', saveHandler, { once: true });
-        modal.classList.remove('modal-hidden');
-      }
-  - file: src/ui/modals/workoutEditorModal.js
+  - file: styles/progress.css
     content: |
-      import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner } from '../../core/state.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
-      import { log } from '../../utils/logger.js';
-      import { openWorkoutSelectionModal } from './selectionModal.js';
-      import { openExerciseEditorModal } from './exerciseEditorModal.js';
-
-      let sortableInstance = null;
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      /* --- PROGRESS & PROFILE PAGES --- */
+      .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
       }
 
-      function formatExerciseDetails(exercise) {
-        const sets = exercise.defaultSets;
-        const rest = exercise.defaultRest;
-        let details;
-
-        if (exercise.type === 'reps') {
-            const reps = exercise.defaultReps;
-            details = `${sets} x ${reps} | Riposo: ${rest}s`;
-        } else if (exercise.type === 'time') {
-            const duration = exercise.defaultDuration;
-            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
-        }
-
-        if (exercise.defaultTempo) {
-            const { up, hold, down } = exercise.defaultTempo;
-            details += ` | Tempo: ${up}-${hold}-${down}`;
-        }
-        return details;
+      .progress-header h3 {
+        color: var(--primary-color);
+        margin: 0;
       }
 
-      export function openWorkoutEditorModal(isoDate) {
-        log('Modals', 'Opening workout editor modal', { isoDate });
-        const state = getState();
-        const modal = document.getElementById('workout-editor-modal');
-        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
-        const body = modal.querySelector('#workout-editor-body');
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
+      .biometrics-view h3, #profile-page h3 { color: var(--primary-color); margin-bottom: 1.5rem; }
+      .biometrics-form, .profile-form {
+          display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 1.5rem; padding: 1.5rem; background: var(--card-color);
+          border-radius: 8px; border: 1px solid var(--border-color);
+          margin-bottom: 2rem;
+      }
+      .form-group { display: flex; flex-direction: column; }
+      .form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      .form-group input, .form-group textarea, .form-group fieldset {
+          padding: 0.75rem; border: 1px solid var(--border-color);
+          border-radius: 8px; font-size: 1rem; background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+      .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
+      .form-group input[readonly] { background-color: #222; color: var(--text-color-muted); }
+      .form-group textarea { min-height: 80px; resize: vertical; }
+      .form-group fieldset { border: 1px solid var(--border-color); padding: 0.75rem; }
+      .form-group fieldset legend { padding: 0 0.5rem; color: var(--text-color-muted); font-size: 0.9rem; }
+      .form-group fieldset label { display: inline-flex; align-items: center; margin-right: 1.5rem; }
+      .form-group fieldset input { margin-right: 0.5rem; }
+      .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
 
-        let exercisesHTML = plannedWorkoutList.map(exercise => {
-            const exerciseDetails = formatExerciseDetails(exercise);
-            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
-                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
-                        <div class="exercise-info">
-                            <span class="meal-details__name">${exercise.name}</span>
-                            <span class="exercise-details-summary">${exerciseDetails}</span>
-                        </div>
-                        <div class="meal-actions">
-                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
-                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                        </div>
-                    </div>`;
-        }).join('');
+      /* New Biometrics Card List Styles */
+      .biometrics-list-container {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none; /* Firefox */
+      }
+      .biometrics-list-container::-webkit-scrollbar { display: none; /* Safari & Chrome */ }
+      .biometrics-list {
+          display: flex;
+          gap: 1rem;
+          padding-bottom: 1rem;
+          scroll-snap-type: x mandatory;
+      }
+      .biometric-card {
+          flex: 0 0 90%;
+          scroll-snap-align: start;
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          position: relative;
+      }
+      .biometric-card__header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          margin-bottom: 1rem;
+      }
+      .biometric-card__date { font-size: 1.25rem; font-weight: bold; color: var(--primary-color); }
+      .biometric-card__body {
+          display: grid; grid-template-columns: repeat(2, 1fr);
+          gap: 1rem;
+      }
+      .biometric-card__item { display: flex; flex-direction: column; }
+      .biometric-card__label { font-size: 0.8rem; color: var(--text-color-muted); text-transform: uppercase; margin-bottom: 0.25rem; }
+      .biometric-card__value { font-size: 1.1rem; font-weight: 500; }
+      .biometric-card__notes { grid-column: 1 / -1; }
+      .biometric-card__notes .biometric-card__value { font-size: 0.95rem; white-space: pre-wrap; font-style: italic; color: var(--text-color-muted); }
 
-        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+      /* Actions Menu */
+      .biometrics-actions { position: relative; }
+      .btn-actions-menu { background: none; border: none; cursor: pointer; color: var(--text-color-muted); padding: 0.5rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .btn-actions-menu:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .actions-dropdown {
+          display: none; position: absolute; top: 100%; right: 0;
+          background: var(--bg-color); border: 1px solid var(--border-color);
+          border-radius: 8px; padding: 0.5rem; z-index: 10;
+          min-width: 120px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      }
+      .actions-dropdown.show { display: block; }
+      .actions-dropdown button {
+          background: none; border: none; color: var(--text-color);
+          width: 100%; text-align: left; padding: 0.75rem;
+          border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+      }
+      .actions-dropdown button:hover { background-color: var(--card-color); }
+      .actions-dropdown button.delete { color: var(--danger-color); }
 
-        const listContainer = body.querySelector('.workout-editor-list');
+      /* Desktop Layout */
+      @media (min-width: 768px) {
+          .biometrics-list {
+              flex-wrap: wrap;
+          }
+          .biometric-card {
+              flex-basis: 100%; /* Full width cards in a single column */
+          }
+          .biometric-card__body {
+              grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          }
+      }
+  - file: src/core/importer.js
+    content: |
+      import { UI_TEXT } from '../config/uiText.js';
 
-        if (sortableInstance) {
-            sortableInstance.destroy();
+      function parseAndFormatDate(dateStr) {
+        const parts = dateStr.split('/');
+        if (parts.length !== 3) return null;
+        const [day, month, year] = parts;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+
+      function parseAndFormatNumber(numStr) {
+        if (typeof numStr !== 'string' || !numStr) return null;
+        return parseFloat(numStr.replace(',', '.'));
+      }
+
+      export function parseBiometricsCSV(csvText) {
+        const lines = csvText.trim().split('\n');
+        
+        const dataStartIndex = lines.findIndex(line => line.trim().toLowerCase().startsWith('data;ora;kg'));
+        
+        if (dataStartIndex === -1) {
+          throw new Error(UI_TEXT.IMPORT_ERROR_FORMAT);
         }
-        sortableInstance = new Sortable(listContainer, {
-            animation: 150,
-            handle: '.drag-handle',
-            ghostClass: 'sortable-ghost',
-            onEnd: function(evt) {
-                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
-            }
-        });
 
-        body.onclick = e => {
-            const btnAddExercise = e.target.closest('.btn-add-exercise');
-            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
-            const btnEditExercise = e.target.closest('.btn-edit-exercise');
+        const headers = lines[dataStartIndex].trim().split(';').map(h => h.toLowerCase());
+        const dataLines = lines.slice(dataStartIndex + 1);
 
-            if (btnAddExercise) {
-                modal.classList.add('modal-hidden');
-                openWorkoutSelectionModal(btnAddExercise.dataset.slotId, isoDate);
-            } else if (btnRemoveExercise) {
-                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseFloat(btnRemoveExercise.dataset.instanceId));
-                openWorkoutEditorModal(isoDate); // Refresh this modal
-            } else if (btnEditExercise) {
-                const slotId = btnEditExercise.dataset.slotId;
-                const instanceId = btnEditExercise.dataset.instanceId;
-                const exercise = getExerciseForPlanner(slotId, instanceId);
-                if (exercise) {
-                  openExerciseEditorModal({
-                    context: 'planner',
-                    exercise,
-                    slotId,
-                    returnIsoDate: isoDate
-                  });
-                }
-            }
+        const headerMapping = {
+          'data': 'date',
+          'kg': 'weight',
+          'massa grassa': 'fatPercentage',
+          'acqua': 'water',
+          'muscoli': 'muscleMass',
+          'ossa': 'fatMass' // Nota: L'export CSV sembra mappare 'Ossa' a quello che noi chiamiamo 'fatMass' (Massa Grassa in kg)
         };
 
-        modal.classList.remove('modal-hidden');
+        const entries = dataLines.map(line => {
+          const values = line.trim().split(';');
+          if (values.length < headers.length) return null;
+
+          const entry = {};
+          let isValid = false;
+
+          headers.forEach((header, index) => {
+            const mappedKey = headerMapping[header];
+            if (mappedKey) {
+              let value = values[index];
+              if (mappedKey === 'date') {
+                value = parseAndFormatDate(value);
+                if (value) isValid = true;
+              } else {
+                value = parseAndFormatNumber(value);
+              }
+              entry[mappedKey] = value;
+            }
+          });
+
+          return isValid ? entry : null;
+        }).filter(Boolean); // Rimuove eventuali righe nulle/invalide
+
+        return entries;
       }

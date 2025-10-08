@@ -1,4 +1,16 @@
 /* --- PROGRESS & PROFILE PAGES --- */
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.progress-header h3 {
+  color: var(--primary-color);
+  margin: 0;
+}
+
 .biometrics-view h3, #profile-page h3 { color: var(--primary-color); margin-bottom: 1.5rem; }
 .biometrics-form, .profile-form {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

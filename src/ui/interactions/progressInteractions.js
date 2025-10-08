@@ -1,9 +1,10 @@
-import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry } from '../../core/state.js';
+import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry, addMultipleBiometricEntries } from '../../core/state.js';
 import { calculateBMR } from '../../core/calculations.js';
 import { showNotification } from '../notifications.js';
 import { showConfirmModal } from '../modals.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
+import { parseBiometricsCSV } from '../../core/importer.js';
 
 function handleBiometricsForm(e) {
   e.preventDefault();
@@ -15,6 +16,46 @@ function handleBiometricsForm(e) {
   showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
   e.target.reset();
   document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
+}
+
+function handleImportCSV() {
+  log('Interactions', 'Import CSV button clicked');
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.csv,text/csv';
+  fileInput.onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = readerEvent => {
+          try {
+              const csvText = readerEvent.target.result;
+              const existingEntries = getState().biometricData;
+              const newEntries = parseBiometricsCSV(csvText).filter(newEntry =>
+                !existingEntries.some(existing => existing.date === newEntry.date)
+              );
+
+              if (newEntries.length > 0) {
+                  showConfirmModal(
+                      UI_TEXT.IMPORT_CONFIRM_TITLE,
+                      `Trovate ${newEntries.length} nuove misurazioni. Vuoi importarle?`,
+                      () => {
+                          addMultipleBiometricEntries(newEntries);
+                          showNotification(UI_TEXT.IMPORT_SUCCESS, 'success');
+                      },
+                      'primary'
+                  );
+              } else {
+                  showNotification(UI_TEXT.IMPORT_NO_NEW_DATA, 'info');
+              }
+          } catch (err) {
+              showNotification(err.message, 'error');
+          }
+      };
+      reader.onerror = () => showNotification(UI_TEXT.IMPORT_ERROR_FILE, 'error');
+      reader.readAsText(file);
+  };
+  fileInput.click();
 }
 
 function handleBiometricsListClick(e) {
@@ -83,6 +124,7 @@ export function initializeProgressListeners() {
   progressPage.addEventListener('input', e => {
     if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
   });
+  document.getElementById('import-csv-btn').addEventListener('click', handleImportCSV);
 
   // Close dropdown if clicking outside
   document.addEventListener('click', (e) => {
