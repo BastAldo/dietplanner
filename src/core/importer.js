@@ -1,6 +1,7 @@
 import { UI_TEXT } from '../config/uiText.js';
 
 function parseAndFormatDate(dateStr) {
+  if (typeof dateStr !== 'string' || !dateStr) return null;
   const parts = dateStr.split('/');
   if (parts.length !== 3) return null;
   const [day, month, year] = parts;
@@ -27,15 +28,17 @@ export function parseBiometricsCSV(csvText) {
   const headerMapping = {
     'data': 'date',
     'kg': 'weight',
+    'imc': 'bmi',
     'massa grassa': 'fatPercentage',
     'acqua': 'water',
     'muscoli': 'muscleMass',
-    'ossa': 'fatMass' // Nota: L'export CSV sembra mappare 'Ossa' a quello che noi chiamiamo 'fatMass' (Massa Grassa in kg)
   };
+  
+  const tempEntries = new Map();
 
-  const entries = dataLines.map(line => {
+  dataLines.forEach(line => {
     const values = line.trim().split(';');
-    if (values.length < headers.length) return null;
+    if (values.length < headers.length) return;
 
     const entry = {};
     let isValid = false;
@@ -54,8 +57,16 @@ export function parseBiometricsCSV(csvText) {
       }
     });
 
-    return isValid ? entry : null;
-  }).filter(Boolean); // Rimuove eventuali righe nulle/invalide
+    if (isValid) {
+      // Calcola fatMass in kg
+      if (entry.weight && entry.fatPercentage) {
+        entry.fatMass = parseFloat(((entry.weight * entry.fatPercentage) / 100).toFixed(1));
+      }
+      // Usa la data come chiave per mantenere solo l'ultimo record per quel giorno
+      tempEntries.set(entry.date, entry);
+    }
+  });
 
-  return entries;
+  // Converte la mappa di nuovo in un array
+  return Array.from(tempEntries.values());
 }
