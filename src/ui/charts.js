@@ -137,37 +137,39 @@ function renderPlannerChart(state, canvasId = 'planner-chart-canvas', optionsOve
   return chart;
 }
 
-function filterDataByRange(data, rangeInDays, offsetWeeks) {
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() - (offsetWeeks * 7));
-
-  if (rangeInDays === 'all') return data.filter(entry => new Date(entry.date) <= endDate);
-
-  const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - parseInt(rangeInDays, 10));
-  
-  return data.filter(entry => {
-      const entryDate = new Date(entry.date);
-      return entryDate >= startDate && entryDate <= endDate;
-  });
-}
-
 function getBiometricsData(state) {
-  const sortedData = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const data = filterDataByRange(sortedData, currentRangeFilter, dateOffset);
-  const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-  
-  const datasets = {};
-  const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number');
+    const sortedData = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() - (dateOffset * 7));
+    let startDate;
 
-  numericFields.forEach(field => {
-      datasets[field.id] = {
-          label: field.label,
-          data: data.map(entry => entry[field.id] || null)
-      };
-  });
+    if (currentRangeFilter === 'all') {
+        startDate = new Date(sortedData[0]?.date || endDate);
+    } else {
+        startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - parseInt(currentRangeFilter, 10));
+    }
 
-  return { labels, datasets, filteredData: data };
+    const filteredData = sortedData.filter(entry => {
+        const entryDate = new Date(entry.date);
+        return entryDate >= startDate && entryDate <= endDate;
+    });
+
+    const hasOlderData = sortedData.some(entry => new Date(entry.date) < startDate);
+
+    const labels = filteredData.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+    
+    const datasets = {};
+    const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number');
+
+    numericFields.forEach(field => {
+        datasets[field.id] = {
+            label: field.label,
+            data: filteredData.map(entry => entry[field.id] || null)
+        };
+    });
+
+    return { labels, datasets, filteredData, hasOlderData };
 }
 
 function renderBiometricsChart(state, data, canvasId = 'biometrics-chart-canvas', optionsOverrides = {}) {
@@ -307,24 +309,37 @@ function renderCorrelationChart(state, data, canvasId = 'correlation-chart-canva
     return chart;
 }
 
+function calculateSmoothedWeeklyChange(fullData) {
+    if (fullData.length < 2) return [];
+
+    const movingAverage = [];
+    for (let i = 0; i < fullData.length; i++) {
+        const window = fullData.slice(Math.max(0, i - 6), i + 1);
+        const sum = window.reduce((acc, val) => acc + val.weight, 0);
+        movingAverage.push({ date: fullData[i].date, weight: sum / window.length });
+    }
+
+    const weeklyChanges = [];
+    for (let i = 1; i < movingAverage.length; i++) {
+        const prev = movingAverage[i - 1];
+        const curr = movingAverage[i];
+        const daysDiff = (new Date(curr.date) - new Date(prev.date)) / (1000 * 60 * 60 * 24);
+        if (daysDiff > 0) {
+            const weightChange = curr.weight - prev.weight;
+            const changePerWeek = (weightChange / daysDiff) * 7;
+            weeklyChanges.push({
+                date: curr.date,
+                change: parseFloat(changePerWeek.toFixed(2))
+            });
+        }
+    }
+    return weeklyChanges;
+}
+
 function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOverrides = {}) {
   const { filteredData } = data;
-  if (filteredData.length < 2) return null;
-
-  const weeklyChanges = [];
-  for (let i = 1; i < filteredData.length; i++) {
-      const prev = filteredData[i - 1];
-      const curr = filteredData[i];
-      const daysDiff = (new Date(curr.date) - new Date(prev.date)) / (1000 * 60 * 60 * 24);
-      if (daysDiff > 0) {
-          const weightChange = curr.weight - prev.weight;
-          const changePerWeek = (weightChange / daysDiff) * 7;
-          weeklyChanges.push({
-              date: curr.date,
-              change: parseFloat(changePerWeek.toFixed(2))
-          });
-      }
-  }
+  const weeklyChanges = calculateSmoothedWeeklyChange(filteredData);
+  if (weeklyChanges.length < 1) return null;
 
   const labels = weeklyChanges.map(c => new Date(c.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
   const changeData = weeklyChanges.map(c => c.change);
@@ -377,22 +392,6 @@ function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOv
   return chart;
 }
 
-function linearRegression(data) {
-  const n = data.length;
-  if (n < 2) return 0;
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-  
-  data.forEach(p => {
-      sumX += p.x;
-      sumY += p.y;
-      sumXY += p.x * p.y;
-      sumXX += p.x * p.x;
-  });
-
-  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-  return slope || 0;
-}
-
 function renderSummaryStats(state, data) {
   const container = document.getElementById('charts-summary-stats');
   const { filteredData } = data;
@@ -402,13 +401,9 @@ function renderSummaryStats(state, data) {
     return;
   }
 
-  const trendData = filteredData.slice(-7).map(entry => ({
-      x: new Date(entry.date).getTime(),
-      y: entry.weight
-  }));
+  const weeklyChanges = calculateSmoothedWeeklyChange(filteredData);
+  const avgWeeklyChange = weeklyChanges.length > 0 ? weeklyChanges[weeklyChanges.length - 1].change : 0;
   
-  const dailyTrend = linearRegression(trendData);
-  const avgWeeklyChange = (dailyTrend * 7 * 24 * 60 * 60 * 1000).toFixed(2);
   const lastWeight = filteredData[filteredData.length - 1].weight;
   const targetWeight = state.userGoals.target_weight;
   
@@ -417,10 +412,10 @@ function renderSummaryStats(state, data) {
       const weightToLose = lastWeight - targetWeight;
       let weeksToGoal = 'N/A';
 
-      if (avgWeeklyChange < -0.01) { // Perdendo peso
-          weeksToGoal = (weightToLose / -avgWeeklyChange).toFixed(1);
-      } else if (avgWeeklyChange > 0.01 && weightToLose < 0) { // Guadagnando peso (bulk)
-          weeksToGoal = (weightToLose / -avgWeeklyChange).toFixed(1);
+      if (avgWeeklyChange < -0.05) { // Perdendo peso in modo significativo
+          weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
+      } else if (avgWeeklyChange > 0.05 && weightToLose < 0) { // Guadagnando peso (bulk) in modo significativo
+          weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
       }
       
       goalEstimateHTML = `
@@ -438,14 +433,14 @@ function renderSummaryStats(state, data) {
       `;
   }
 
-
+  const formattedAvgWeeklyChange = avgWeeklyChange.toFixed(2);
   container.innerHTML = `
     <div class="stat-item">
       <div class="stat-value">${lastWeight} kg</div>
       <div class="stat-label">Peso Attuale</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value">${avgWeeklyChange > 0 ? '+' : ''}${avgWeeklyChange} kg</div>
+      <div class="stat-value">${avgWeeklyChange > 0 ? '+' : ''}${formattedAvgWeeklyChange} kg</div>
       <div class="stat-label">Variazione media / settimana</div>
     </div>
     ${goalEstimateHTML}
@@ -519,7 +514,6 @@ export function openChartModal(state, chartId) {
   modal.classList.remove('modal-hidden');
 }
 
-
 export function renderCharts(state) {
     destroyAllCharts();
     document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
@@ -527,6 +521,7 @@ export function renderCharts(state) {
     document.getElementById('charts-next-btn').disabled = dateOffset === 0;
 
     const biometricsData = getBiometricsData(state);
+    document.getElementById('charts-prev-btn').disabled = !biometricsData.hasOlderData;
 
     const placeholder = document.getElementById('biometrics-chart-placeholder');
     const canvas = document.getElementById('biometrics-chart-canvas');
