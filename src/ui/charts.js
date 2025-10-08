@@ -514,13 +514,15 @@ export function openChartModal(state, chartId) {
   modal.classList.remove('modal-hidden');
 }
 
+
 export function renderCharts(state) {
     destroyAllCharts();
     document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
     document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
-    document.getElementById('charts-next-btn').disabled = dateOffset === 0;
-
+    
     const biometricsData = getBiometricsData(state);
+
+    document.getElementById('charts-next-btn').disabled = dateOffset === 0;
     document.getElementById('charts-prev-btn').disabled = !biometricsData.hasOlderData;
 
     const placeholder = document.getElementById('biometrics-chart-placeholder');

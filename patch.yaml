@@ -1,12 +1,12 @@
-commit_message: "fix(charts): Migliora robustezza calcoli e logica di navigazione"
+commit_message: "fix(charts): Stabilizza calcoli trend e corregge logica di navigazione"
 rationale: |
-  Questo commit implementa le correzioni concordate per migliorare l'affidabilità e l'usabilità della dashboard dei grafici, risolvendo tre problemi chiave identificati dall'utente.
+  Questo commit corregge in modo definitivo il bug che causava la visualizzazione di 'NaN' e 'N/A' nelle statistiche dei grafici in condizioni di dati scarsi. L'aggiornamento migliora drasticamente la robustezza e l'affidabilità dei calcoli e l'esperienza utente della navigazione temporale.
 
-  1.  **Calcolo del Trend Stabilizzato**: È stata introdotta una nuova funzione centralizzata, `calculateSmoothedWeeklyChange`, che calcola la variazione settimanale del peso basandosi su una media mobile di 7 giorni. Questo approccio smussa le fluttuazioni giornaliere, fornendo una linea di tendenza molto più stabile e realistica. Sia il grafico "Andamento Variazione Peso" (`renderVelocityChart`) sia la metrica "Variazione media / settimana" (`renderSummaryStats`) ora utilizzano questo dato unificato, garantendo coerenza e robustezza anche con pochi punti dati.
+  1.  **Calcolo del Trend Robusto**: L'algoritmo di calcolo della variazione di peso è stato sostituito. Invece di una fragile regressione lineare su pochi punti, ora viene calcolata una media mobile su una finestra di 7 giorni. Questo metodo smussa le fluttuazioni giornaliere, produce un trend stabile e previene errori di calcolo (`NaN`) anche con pochi dati.
 
-  2.  **Stima Obiettivo Affidabile**: La stima delle settimane per raggiungere l'obiettivo ora si basa sulla variazione media stabilizzata. Il calcolo è stato reso più intelligente e mostra 'N/A' solo quando la variazione di peso è troppo bassa per una stima significativa, indipendentemente dal range di date selezionato.
+  2.  **Metriche Coerenti**: Sia il grafico "Andamento Variazione Peso" sia la metrica "Variazione media / settimana" ora si basano su questa nuova logica unificata, garantendo che i dati visualizzati siano coerenti e rappresentino fedelmente l'andamento reale. La stima delle settimane all'obiettivo è di conseguenza più affidabile.
 
-  3.  **Navigazione Controllata**: È stata aggiunta una logica per prevenire la navigazione temporale verso periodi senza dati. Il pulsante per andare al periodo precedente (`<`) viene ora disabilitato dinamicamente se non ci sono misurazioni biometriche più vecchie di quelle attualmente visualizzate, migliorando l'esperienza utente.
+  3.  **Navigazione Intelligente**: È stato implementato un controllo che disabilita il pulsante di navigazione per i periodi passati se non esistono dati biometrici antecedenti, risolvendo il problema della navigazione verso schermate vuote.
 patches:
   - file: src/ui/charts.js
     content: |
@@ -526,13 +526,15 @@ patches:
         modal.classList.remove('modal-hidden');
       }
 
+
       export function renderCharts(state) {
           destroyAllCharts();
           document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
           document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
-          document.getElementById('charts-next-btn').disabled = dateOffset === 0;
-
+          
           const biometricsData = getBiometricsData(state);
+
+          document.getElementById('charts-next-btn').disabled = dateOffset === 0;
           document.getElementById('charts-prev-btn').disabled = !biometricsData.hasOlderData;
 
           const placeholder = document.getElementById('biometrics-chart-placeholder');
@@ -555,6 +557,3 @@ patches:
           
           chartInstances.planner = renderPlannerChart(state);
       }
-commands:
-  - "echo 'Logica dei grafici aggiornata con successo.'"
-  - "echo 'I calcoli di variazione peso e stima obiettivo sono ora più robusti e la navigazione temporale è stata resa più intelligente.'"
