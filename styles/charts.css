@@ -88,7 +88,23 @@
     color: var(--primary-color);
     margin: 0;
     text-align: center;
+    flex-grow: 1;
 }
+.btn-expand-chart {
+  background: none;
+  border: none;
+  color: var(--text-color-muted);
+  cursor: pointer;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0.5rem;
+}
+.chart-header .chart-type-switcher + .btn-expand-chart {
+  right: 5rem;
+}
+
 
 .chart-canvas-container {
     position: relative;

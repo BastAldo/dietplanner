@@ -2,15 +2,17 @@ commit_message: "feat(charts): Aggiunge la visualizzazione modale e migliora l'U
 rationale: |
   Questo commit introduce diversi miglioramenti significativi alla dashboard dei grafici, basati sul feedback dell'utente, per migliorare la leggibilità, l'interattività e la chiarezza delle informazioni.
 
-  1. **Nuova Funzionalità: Visualizzazione Ingrandita (Modale)**: È stata implementata la funzionalità più richiesta: ogni grafico ora ha un'icona "Espandi" che permette di aprirlo in un modale a schermo intero. Questo migliora drasticamente la leggibilità e l'analisi dei dati, specialmente su dispositivi mobili. La logica gestisce la creazione e la distruzione dinamica dei grafici nel modale per ottimizzare le performance.
+  1. **Nuova Funzionalità: Visualizzazione Ingrandita (Modale)**: È stata implementata la funzionalità richiesta: ogni grafico ora ha un'icona "Espandi" che permette di aprirlo in un modale a schermo intero. Questo migliora drasticamente la leggibilità e l'analisi dei dati, specialmente su dispositivi mobili. La logica gestisce la creazione e la distruzione dinamica dei grafici nel modale per ottimizzare le performance.
 
   2. **Miglioramento UX Grafico Biometrico**: Per migliorare la leggibilità del grafico "Andamento Dati Biometrici", la metrica quasi statica "M. Basale" è stata ora nascosta di default. Questo permette alle altre metriche più dinamiche, come il peso, di essere visualizzate su una scala più appropriata, senza che l'utente debba deselezionarla manualmente ogni volta.
 
   3. **Correzione Bug (Titolo Mancante)**: È stato corretto un bug per cui il titolo del grafico "Correlazione Peso e Calorie" non veniva visualizzato. Il titolo ora viene impostato correttamente durante il rendering.
 
-  4. **Miglioramenti Minori**:
-      - I tooltip del grafico "Velocità di Variazione" sono stati resi più descrittivi per una migliore comprensione.
-      - Il pannello delle statistiche di riepilogo ora mostra un messaggio esplicito quando non ci sono dati sufficienti per il calcolo, invece di rimanere vuoto.
+  4. **Correzione Bug (Icona non visibile)**: È stato risolto il problema per cui l'icona "Espandi" non veniva renderizzata, lasciando un pulsante vuoto. La logica di rendering ora popola correttamente i pulsanti con l'icona SVG.
+
+  5. **Miglioramenti Minori**:
+      - I tooltip del grafico "Velocità di Variazione" sono stati resi più descrittivi.
+      - Il pannello delle statistiche di riepilogo ora mostra un messaggio esplicito quando non ci sono dati sufficienti per il calcolo.
 patches:
   - file: templates/charts.html
     content: |
@@ -224,6 +226,7 @@ patches:
       .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
       .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
       #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
       .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
       .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
       .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
@@ -313,6 +316,155 @@ patches:
         .workout-summary-actions .btn {
           flex-grow: 1;
         }
+      }
+  - file: styles/charts.css
+    content: |
+      /* --- CHARTS PAGE --- */
+      #charts-page > h3 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
+      }
+
+      .charts-controls {
+        margin-bottom: 1.5rem;
+        display: flex;
+        justify-content: center;
+      }
+
+      .range-filter {
+        display: flex;
+        gap: 0.5rem;
+        background-color: var(--card-color);
+        padding: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+      }
+
+      .range-filter .btn {
+        padding: 0.5rem 1rem;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+      }
+
+      .range-filter .btn.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+      }
+
+      .charts-summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+        padding: 1.5rem;
+        background: var(--card-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+      }
+      .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 1.75rem;
+        font-weight: bold;
+        color: var(--primary-color);
+        font-family: 'Courier New', Courier, monospace;
+      }
+      .stat-label {
+        font-size: 0.8rem;
+        color: var(--text-color-muted);
+        text-transform: uppercase;
+        margin-top: 0.5rem;
+      }
+
+      .charts-container {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+      }
+
+      .chart-card {
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          padding: 1.5rem;
+          display: flex;
+          flex-direction: column;
+      }
+
+      .chart-header {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 1.5rem;
+          position: relative;
+          flex-shrink: 0;
+      }
+
+      .chart-header h4 {
+          color: var(--primary-color);
+          margin: 0;
+          text-align: center;
+          flex-grow: 1;
+      }
+      .btn-expand-chart {
+        background: none;
+        border: none;
+        color: var(--text-color-muted);
+        cursor: pointer;
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 0.5rem;
+      }
+      .chart-header .chart-type-switcher + .btn-expand-chart {
+        right: 5rem;
+      }
+
+
+      .chart-canvas-container {
+          position: relative;
+          height: 400px;
+          width: 100%;
+          flex-grow: 1;
+      }
+
+      .chart-type-switcher {
+          position: absolute;
+          right: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          overflow: hidden;
+      }
+
+      .btn-chart-type {
+          background: transparent;
+          border: none;
+          color: var(--text-color-muted);
+          padding: 0.25rem 0.75rem;
+          cursor: pointer;
+          font-size: 0.8rem;
+      }
+      .btn-chart-type:not(:last-child) {
+          border-right: 1px solid var(--border-color);
+      }
+      .btn-chart-type.active {
+          background-color: var(--primary-color);
+          color: var(--bg-color);
+      }
+
+      @media (min-width: 1024px) {
+          .charts-container {
+              grid-template-columns: repeat(2, 1fr);
+          }
       }
   - file: src/ui/icons.js
     content: |
