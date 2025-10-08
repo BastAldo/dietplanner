@@ -1,14 +1,10 @@
-commit_message: "fix(importer): Corregge il parsing del CSV biometrico e aggiunge calcoli"
+commit_message: "feat(importer): Aggiunge il calcolo del BMR e l'importazione del profilo utente da CSV"
 rationale: |
-  Questo commit risolve un bug critico nel parser CSV e ne migliora la robustezza, basandosi sull'analisi di un file di export reale.
+  Questo commit potenzia significativamente la funzionalità di importazione da CSV, risolvendo un problema e aggiungendo una nuova feature intelligente.
 
-  1. **Correzione del Mapping Errato**: È stato risolto un grave errore di mapping per cui la colonna "Ossa" del CSV veniva erroneamente assegnata al campo "Massa Grassa (kg)" dell'applicazione, causando dati completamente sballati. Il mapping è stato corretto.
+  1. **Aggiunto Calcolo del Metabolismo Basale (BMR)**: È stato risolto un bug per cui il valore del Metabolismo Basale non veniva calcolato e visualizzato per i record importati da CSV. La logica di interazione in `progressInteractions.js` è stata aggiornata per orchestrare questo calcolo: dopo il parsing del file, invoca la funzione `calculateBMR` per ogni nuova misurazione, arricchendo i dati con il valore del BMR prima di salvarli. Questo assicura che i dati importati siano completi e coerenti con quelli inseriti manualmente.
 
-  2. **Aggiunta Calcolo Massa Grassa (kg)**: È stato identificato che il CSV fornisce la massa grassa solo in percentuale. È stata aggiunta la logica per calcolare il valore assoluto in kg (`fatMass`) utilizzando la formula `Peso * (Grasso % / 100)`, rendendo i dati importati coerenti con quelli inseriti manualmente.
-
-  3. **Integrazione Dati Mancanti (IMC)**: Il parser è stato aggiornato per leggere e importare correttamente anche il valore dell'Indice di Massa Corporea (IMC/BMI) presente nel CSV.
-
-  4. **Gestione Duplicati per Data**: È stata implementata la logica per gestire file CSV con misurazioni multiple per la stessa data. Ora, il parser processa l'intero file e, per ogni data, conserva solo l'ultima misurazione trovata, garantendo che i dati importati siano sempre i più aggiornati ed evitando duplicati.
+  2. **Importazione Dati Profilo Utente**: Il parser in `importer.js` è stato migliorato per leggere anche i dati anagrafici dell'utente (sesso, data di nascita, statura) presenti nell'intestazione del file CSV. Se il profilo utente dell'applicazione è vuoto al momento dell'importazione, il sistema ora chiede all'utente se desidera popolarlo automaticamente con i dati trovati nel file, velocizzando la configurazione iniziale dell'app.
 patches:
   - file: src/core/importer.js
     content: |
@@ -18,13 +14,35 @@ patches:
         if (typeof dateStr !== 'string' || !dateStr) return null;
         const parts = dateStr.split('/');
         if (parts.length !== 3) return null;
-        const [day, month, year] = parts;
-        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        let [day, month, year] = parts;
+        day = day.padStart(2, '0');
+        month = month.padStart(2, '0');
+        return `${year}-${month}-${day}`;
       }
 
       function parseAndFormatNumber(numStr) {
         if (typeof numStr !== 'string' || !numStr) return null;
         return parseFloat(numStr.replace(',', '.'));
+      }
+
+      function parseUserProfile(lines) {
+        const profile = {};
+        lines.forEach(line => {
+          const lowerLine = line.toLowerCase();
+          if (lowerLine.startsWith('sesso')) {
+            profile.gender = lowerLine.includes('maschio') ? 'male' : 'female';
+          } else if (lowerLine.startsWith('data di nascita')) {
+            const dateStr = line.split(' ').pop();
+            profile.dateOfBirth = parseAndFormatDate(dateStr);
+          } else if (lowerLine.startsWith('statura')) {
+            profile.height = parseInt(line.match(/\d+/)[0], 10);
+          } else if (lowerLine.startsWith('nome ')) {
+            profile.firstName = line.substring(line.indexOf(' ')).trim();
+          } else if (lowerLine.startsWith('cognome ')) {
+            profile.lastName = line.substring(line.indexOf(' ')).trim();
+          }
+        });
+        return profile;
       }
 
       export function parseBiometricsCSV(csvText) {
@@ -35,6 +53,9 @@ patches:
         if (dataStartIndex === -1) {
           throw new Error(UI_TEXT.IMPORT_ERROR_FORMAT);
         }
+
+        const profileLines = lines.slice(0, dataStartIndex);
+        const userProfile = parseUserProfile(profileLines);
 
         const headers = lines[dataStartIndex].trim().split(';').map(h => h.toLowerCase());
         const dataLines = lines.slice(dataStartIndex + 1);
@@ -72,15 +93,174 @@ patches:
           });
 
           if (isValid) {
-            // Calcola fatMass in kg
             if (entry.weight && entry.fatPercentage) {
               entry.fatMass = parseFloat(((entry.weight * entry.fatPercentage) / 100).toFixed(1));
             }
-            // Usa la data come chiave per mantenere solo l'ultimo record per quel giorno
             tempEntries.set(entry.date, entry);
           }
         });
 
-        // Converte la mappa di nuovo in un array
-        return Array.from(tempEntries.values());
+        return {
+          userProfile,
+          entries: Array.from(tempEntries.values())
+        };
+      }
+  - file: src/ui/interactions/progressInteractions.js
+    content: |
+      import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry, addMultipleBiometricEntries, saveUserProfile } from '../../core/state.js';
+      import { calculateBMR } from '../../core/calculations.js';
+      import { showNotification } from '../notifications.js';
+      import { showConfirmModal } from '../modals.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { parseBiometricsCSV } from '../../core/importer.js';
+
+      function handleBiometricsForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Biometrics form submitted');
+        const formData = new FormData(e.target);
+        const entry = {};
+        for (let [key, value] of formData.entries()) { entry[key] = value; }
+        addOrUpdateBiometricEntry(entry);
+        showNotification(UI_TEXT.BIOMETRICS_SAVE_SUCCESS, 'success');
+        e.target.reset();
+        document.getElementById('bio-date').value = new Date().toISOString().slice(0, 10);
+      }
+
+      function handleImportCSV() {
+        log('Interactions', 'Import CSV button clicked');
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.csv,text/csv';
+        fileInput.onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = readerEvent => {
+                try {
+                    const csvText = readerEvent.target.result;
+                    const { userProfile: importedProfile, entries: parsedEntries } = parseBiometricsCSV(csvText);
+                    const currentState = getState();
+                    
+                    if (!currentState.userProfile.dateOfBirth && importedProfile.dateOfBirth) {
+                      showConfirmModal(
+                        "Profilo Utente Trovato",
+                        "Il file CSV contiene i dati del tuo profilo. Vuoi importarli?",
+                        () => {
+                          saveUserProfile(importedProfile);
+                          showNotification("Profilo importato con successo!", 'success');
+                        }
+                      );
+                    }
+
+                    const newEntries = parsedEntries.filter(newEntry =>
+                      !currentState.biometricData.some(existing => existing.date === newEntry.date)
+                    );
+
+                    const finalEntries = newEntries.map(entry => {
+                      const profileForBMR = currentState.userProfile.dateOfBirth ? currentState.userProfile : importedProfile;
+                      const bmr = calculateBMR(profileForBMR, entry.weight);
+                      if (bmr !== null) {
+                        entry.basalMetabolism = bmr;
+                      }
+                      return entry;
+                    });
+
+                    if (finalEntries.length > 0) {
+                        showConfirmModal(
+                            UI_TEXT.IMPORT_CONFIRM_TITLE,
+                            `Trovate ${finalEntries.length} nuove misurazioni. Vuoi importarle?`,
+                            () => {
+                                addMultipleBiometricEntries(finalEntries);
+                                showNotification(UI_TEXT.IMPORT_SUCCESS, 'success');
+                            },
+                            'primary'
+                        );
+                    } else {
+                        showNotification(UI_TEXT.IMPORT_NO_NEW_DATA, 'info');
+                    }
+                } catch (err) {
+                    showNotification(err.message, 'error');
+                }
+            };
+            reader.onerror = () => showNotification(UI_TEXT.IMPORT_ERROR_FILE, 'error');
+            reader.readAsText(file);
+        };
+        fileInput.click();
+      }
+
+      function handleBiometricsListClick(e) {
+        const btnMenu = e.target.closest('.btn-actions-menu');
+        if (btnMenu) {
+            log('Interactions', 'Biometrics actions menu toggled');
+            const dropdown = btnMenu.nextElementSibling;
+            const allDropdowns = document.querySelectorAll('.actions-dropdown');
+            allDropdowns.forEach(d => { if (d !== dropdown) d.classList.remove('show'); });
+            dropdown.classList.toggle('show');
+            return;
+        }
+
+        const btnEdit = e.target.closest('.btn-edit-biometrics');
+        if (btnEdit) {
+            const date = btnEdit.dataset.date;
+            log('Interactions', 'Edit biometrics button clicked', { date });
+            const entry = getState().biometricData.find(e => e.date === date);
+            if (entry) {
+                const form = document.getElementById('biometrics-form');
+                for (const key in entry) {
+                    if (form.elements[key]) { form.elements[key].value = entry[key]; }
+                }
+                form.scrollIntoView({ behavior: 'smooth' });
+            }
+            const dropdown = btnEdit.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        const btnDelete = e.target.closest('.btn-delete-biometrics');
+        if (btnDelete) {
+            const date = btnDelete.dataset.date;
+            log('Interactions', 'Delete biometrics button clicked', { date });
+            showConfirmModal(
+                UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+                () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
+            );
+            const dropdown = btnDelete.closest('.actions-dropdown');
+            if (dropdown) dropdown.classList.remove('show');
+            return;
+        }
+
+        if (!e.target.closest('.biometrics-actions')) {
+            document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+        }
+      }
+
+      function handleWeightInputChange(e) {
+        const weight = e.target.value;
+        const { userProfile } = getState();
+        const bmrField = document.getElementById('bio-basalMetabolism');
+        const bmr = calculateBMR(userProfile, weight);
+        if (bmr !== null) {
+          bmrField.value = bmr;
+        } else {
+          bmrField.value = '';
+          bmrField.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function initializeProgressListeners() {
+        document.getElementById('biometrics-form').addEventListener('submit', handleBiometricsForm);
+        const progressPage = document.getElementById('progress-page');
+        progressPage.addEventListener('click', handleBiometricsListClick);
+        progressPage.addEventListener('input', e => {
+          if (e.target.id === 'bio-weight') { handleWeightInputChange(e); }
+        });
+        document.getElementById('import-csv-btn').addEventListener('click', handleImportCSV);
+
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.biometrics-actions')) {
+                document.querySelectorAll('.actions-dropdown').forEach(d => d.classList.remove('show'));
+            }
+        });
       }

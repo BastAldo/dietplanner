@@ -1,4 +1,4 @@
-import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry, addMultipleBiometricEntries } from '../../core/state.js';
+import { getState, addOrUpdateBiometricEntry, deleteBiometricEntry, addMultipleBiometricEntries, saveUserProfile } from '../../core/state.js';
 import { calculateBMR } from '../../core/calculations.js';
 import { showNotification } from '../notifications.js';
 import { showConfirmModal } from '../modals.js';
@@ -30,17 +30,39 @@ function handleImportCSV() {
       reader.onload = readerEvent => {
           try {
               const csvText = readerEvent.target.result;
-              const existingEntries = getState().biometricData;
-              const newEntries = parseBiometricsCSV(csvText).filter(newEntry =>
-                !existingEntries.some(existing => existing.date === newEntry.date)
+              const { userProfile: importedProfile, entries: parsedEntries } = parseBiometricsCSV(csvText);
+              const currentState = getState();
+              
+              if (!currentState.userProfile.dateOfBirth && importedProfile.dateOfBirth) {
+                showConfirmModal(
+                  "Profilo Utente Trovato",
+                  "Il file CSV contiene i dati del tuo profilo. Vuoi importarli?",
+                  () => {
+                    saveUserProfile(importedProfile);
+                    showNotification("Profilo importato con successo!", 'success');
+                  }
+                );
+              }
+
+              const newEntries = parsedEntries.filter(newEntry =>
+                !currentState.biometricData.some(existing => existing.date === newEntry.date)
               );
 
-              if (newEntries.length > 0) {
+              const finalEntries = newEntries.map(entry => {
+                const profileForBMR = currentState.userProfile.dateOfBirth ? currentState.userProfile : importedProfile;
+                const bmr = calculateBMR(profileForBMR, entry.weight);
+                if (bmr !== null) {
+                  entry.basalMetabolism = bmr;
+                }
+                return entry;
+              });
+
+              if (finalEntries.length > 0) {
                   showConfirmModal(
                       UI_TEXT.IMPORT_CONFIRM_TITLE,
-                      `Trovate ${newEntries.length} nuove misurazioni. Vuoi importarle?`,
+                      `Trovate ${finalEntries.length} nuove misurazioni. Vuoi importarle?`,
                       () => {
-                          addMultipleBiometricEntries(newEntries);
+                          addMultipleBiometricEntries(finalEntries);
                           showNotification(UI_TEXT.IMPORT_SUCCESS, 'success');
                       },
                       'primary'

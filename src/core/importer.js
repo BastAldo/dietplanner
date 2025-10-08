@@ -4,13 +4,35 @@ function parseAndFormatDate(dateStr) {
   if (typeof dateStr !== 'string' || !dateStr) return null;
   const parts = dateStr.split('/');
   if (parts.length !== 3) return null;
-  const [day, month, year] = parts;
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  let [day, month, year] = parts;
+  day = day.padStart(2, '0');
+  month = month.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function parseAndFormatNumber(numStr) {
   if (typeof numStr !== 'string' || !numStr) return null;
   return parseFloat(numStr.replace(',', '.'));
+}
+
+function parseUserProfile(lines) {
+  const profile = {};
+  lines.forEach(line => {
+    const lowerLine = line.toLowerCase();
+    if (lowerLine.startsWith('sesso')) {
+      profile.gender = lowerLine.includes('maschio') ? 'male' : 'female';
+    } else if (lowerLine.startsWith('data di nascita')) {
+      const dateStr = line.split(' ').pop();
+      profile.dateOfBirth = parseAndFormatDate(dateStr);
+    } else if (lowerLine.startsWith('statura')) {
+      profile.height = parseInt(line.match(/\d+/)[0], 10);
+    } else if (lowerLine.startsWith('nome ')) {
+      profile.firstName = line.substring(line.indexOf(' ')).trim();
+    } else if (lowerLine.startsWith('cognome ')) {
+      profile.lastName = line.substring(line.indexOf(' ')).trim();
+    }
+  });
+  return profile;
 }
 
 export function parseBiometricsCSV(csvText) {
@@ -21,6 +43,9 @@ export function parseBiometricsCSV(csvText) {
   if (dataStartIndex === -1) {
     throw new Error(UI_TEXT.IMPORT_ERROR_FORMAT);
   }
+
+  const profileLines = lines.slice(0, dataStartIndex);
+  const userProfile = parseUserProfile(profileLines);
 
   const headers = lines[dataStartIndex].trim().split(';').map(h => h.toLowerCase());
   const dataLines = lines.slice(dataStartIndex + 1);
@@ -58,15 +83,15 @@ export function parseBiometricsCSV(csvText) {
     });
 
     if (isValid) {
-      // Calcola fatMass in kg
       if (entry.weight && entry.fatPercentage) {
         entry.fatMass = parseFloat(((entry.weight * entry.fatPercentage) / 100).toFixed(1));
       }
-      // Usa la data come chiave per mantenere solo l'ultimo record per quel giorno
       tempEntries.set(entry.date, entry);
     }
   });
 
-  // Converte la mappa di nuovo in un array
-  return Array.from(tempEntries.values());
+  return {
+    userProfile,
+    entries: Array.from(tempEntries.values())
+  };
 }
