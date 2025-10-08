@@ -5,14 +5,12 @@ import { formatIngredients } from '../../utils/formatters.js';
 import { openDayEditorModal } from './dayEditorModal.js';
 import { openWorkoutEditorModal } from './workoutEditorModal.js';
 
-export function openSelectionModal(slotId, returnIsoDate) {
+export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
   log('Modals', 'Opening meal selection modal', { slotId });
-  const state = getState();
   const mealType = slotId.substring(11);
   const selectionModal = document.getElementById('selection-modal');
   selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
   const list = selectionModal.querySelector('#selection-modal-list');
-  const relevantMeals = state.masterMealList.filter(m => m.tipoPasto === mealType || m.tipoPasto === 'Tutti');
   list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
   
   const closeAndReturn = () => {

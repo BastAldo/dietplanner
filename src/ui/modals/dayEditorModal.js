@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan } from '../../core/state.js';
+import { getState, updateWeeklyPlan, getMealsForType } from '../../core/state.js';
 import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
@@ -37,7 +37,7 @@ export function openDayEditorModal(isoDate) {
     const plannedMeal = state.weeklyPlan[slotId];
     const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
     
-    let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+    let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
     if (meal) {
       mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
     }
@@ -67,7 +67,12 @@ export function openDayEditorModal(isoDate) {
     const btnManageWorkout = e.target.closest('.btn-manage-workout');
     const btnLogActivity = e.target.closest('.btn-log-activity');
 
-    if (btnAddMeal) { dayEditorModal.classList.add('modal-hidden'); openSelectionModal(btnAddMeal.dataset.slotId, isoDate); }
+    if (btnAddMeal) {
+      const mealType = btnAddMeal.dataset.mealType;
+      const relevantMeals = getMealsForType(mealType);
+      dayEditorModal.classList.add('modal-hidden');
+      openSelectionModal(btnAddMeal.dataset.slotId, isoDate, relevantMeals);
+    }
     else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
     else if (btnRecipe) {
       const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);

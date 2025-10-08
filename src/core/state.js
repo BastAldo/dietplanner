@@ -33,6 +33,16 @@ const getWeekStartDate = (date) => {
 
 export const getState = () => ({ ...state });
 
+export function getMealsForType(mealType) {
+  return state.masterMealList.filter(meal => {
+    if (meal.tipoPasto === 'Tutti') return true;
+    if (Array.isArray(meal.tipoPasto)) {
+      return meal.tipoPasto.includes(mealType);
+    }
+    return meal.tipoPasto === mealType;
+  });
+}
+
 export function toggleDebugMode() {
   state.debugMode = !state.debugMode;
   console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
