@@ -51,7 +51,7 @@ export function getExerciseForPlanner(slotId, instanceId) {
 export function getExerciseFromHistory(date, startTime, instanceId) {
   const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
   if (!workout) return null;
-  return workout.exercises.find(ex => ex.instanceId === instanceId);
+  return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
 }
 
 export function toggleDebugMode() {
@@ -153,6 +153,14 @@ export function addOrUpdateBiometricEntry(entry) {
   } else {
     state.biometricData.push(entry);
   }
+  state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function addMultipleBiometricEntries(newEntries) {
+  log('State', 'Adding multiple biometric entries', { count: newEntries.length });
+  state.biometricData = [...state.biometricData, ...newEntries];
   state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
   saveStateToLocalStorage();
   notify();
