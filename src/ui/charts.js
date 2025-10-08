@@ -1,6 +1,7 @@
 import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 import { BIOMETRIC_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
+import { log } from '../utils/logger.js';
 
 let chartInstances = {};
 let currentPlannerChartType = 'bar';
@@ -60,7 +61,7 @@ function destroyAllCharts() {
   chartInstances = {};
 }
 
-function renderPlannerChart(state) {
+function renderPlannerChart(state, canvasId = 'planner-chart-canvas', optionsOverrides = {}) {
   const weeklyData = calculateWeeklyCalorieData(state);
   const colors = getChartColors();
   const isLineChart = currentPlannerChartType === 'line';
@@ -88,8 +89,8 @@ function renderPlannerChart(state) {
       borderColor: colors.secondary
   }];
   
-  const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-  chartInstances.planner = new Chart(ctx, {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const chart = new Chart(ctx, {
     type: currentPlannerChartType,
     data: {
       labels: weeklyData.labels,
@@ -128,9 +129,11 @@ function renderPlannerChart(state) {
             }
           }
         }
-      }
+      },
+      ...optionsOverrides
     }
   });
+  return chart;
 }
 
 function filterDataByRange(data, rangeInDays) {
@@ -159,7 +162,7 @@ function getBiometricsData(state) {
   return { labels, datasets, filteredData: data };
 }
 
-function renderBiometricsChart(state, data) {
+function renderBiometricsChart(state, data, canvasId = 'biometrics-chart-canvas', optionsOverrides = {}) {
   const { labels, datasets } = data;
   const colors = getChartColors();
   const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
@@ -172,13 +175,14 @@ function renderBiometricsChart(state, data) {
           borderColor: colorCycle[index % colorCycle.length],
           tension: 0.1,
           pointBackgroundColor: colorCycle[index % colorCycle.length],
-          pointRadius: 4
+          pointRadius: 4,
+          hidden: dataset.label.includes('M. Basale')
       }))
       .filter(d => d.data.some(val => val !== null));
 
-  const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
+  const ctx = document.getElementById(canvasId).getContext('2d');
 
-  chartInstances.biometrics = new Chart(ctx, {
+  const chart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
@@ -214,14 +218,16 @@ function renderBiometricsChart(state, data) {
             }
           }
         }
-      }
+      },
+      ...optionsOverrides
     }
   });
+  return chart;
 }
 
-function renderCorrelationChart(state, data) {
+function renderCorrelationChart(state, data, canvasId = 'correlation-chart-canvas', optionsOverrides = {}) {
     const { filteredData } = data;
-    if (filteredData.length < 2) return;
+    if (filteredData.length < 2) return null;
 
     const labels = filteredData.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
     const weightData = filteredData.map(entry => entry.weight || null);
@@ -239,8 +245,8 @@ function renderCorrelationChart(state, data) {
     });
 
     const colors = getChartColors();
-    const ctx = document.getElementById('correlation-chart-canvas').getContext('2d');
-    chartInstances.correlation = new Chart(ctx, {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const chart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -286,14 +292,16 @@ function renderCorrelationChart(state, data) {
                 legend: {
                     labels: { color: colors.textColor }
                 }
-            }
+            },
+            ...optionsOverrides
         }
     });
+    return chart;
 }
 
-function renderVelocityChart(data) {
+function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOverrides = {}) {
   const { filteredData } = data;
-  if (filteredData.length < 2) return;
+  if (filteredData.length < 2) return null;
 
   const weeklyChanges = [];
   for (let i = 1; i < filteredData.length; i++) {
@@ -305,7 +313,7 @@ function renderVelocityChart(data) {
           const changePerWeek = (weightChange / daysDiff) * 7;
           weeklyChanges.push({
               date: curr.date,
-              change: changePerWeek.toFixed(2)
+              change: parseFloat(changePerWeek.toFixed(2))
           });
       }
   }
@@ -314,8 +322,8 @@ function renderVelocityChart(data) {
   const changeData = weeklyChanges.map(c => c.change);
   const colors = getChartColors();
 
-  const ctx = document.getElementById('velocity-chart-canvas').getContext('2d');
-  chartInstances.velocity = new Chart(ctx, {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const chart = new Chart(ctx, {
       type: 'bar',
       data: {
           labels,
@@ -339,17 +347,33 @@ function renderVelocityChart(data) {
               }
           },
           plugins: {
-              legend: { display: false }
-          }
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: function(context) {
+                    const index = context[0].dataIndex;
+                    const dataPoint = weeklyChanges[index];
+                    return `Settimana del ${new Date(dataPoint.date).toLocaleDateString('it-IT')}`;
+                  },
+                  label: function(context) {
+                    const value = context.parsed.y;
+                    const prefix = value >= 0 ? '+' : '';
+                    return `Variazione stimata: ${prefix}${value} kg/settimana`;
+                  }
+                }
+              }
+          },
+          ...optionsOverrides
       }
   });
+  return chart;
 }
 
 function renderSummaryStats(data) {
   const { filteredData } = data;
   const container = document.getElementById('charts-summary-stats');
   if (filteredData.length < 2) {
-    container.innerHTML = '';
+    container.innerHTML = `<p class="placeholder-text">Dati insufficienti per il riepilogo.</p>`;
     return;
   }
 
@@ -362,11 +386,11 @@ function renderSummaryStats(data) {
 
   container.innerHTML = `
     <div class="stat-item">
-      <div class="stat-value">${weightChange} kg</div>
-      <div class="stat-label">Variazione Peso (${currentRangeFilter}gg)</div>
+      <div class="stat-value">${weightChange > 0 ? '+' : ''}${weightChange} kg</div>
+      <div class="stat-label">Variazione Peso (ultimi ${currentRangeFilter}gg)</div>
     </div>
     <div class="stat-item">
-      <div class="stat-value">${avgWeeklyChange} kg</div>
+      <div class="stat-value">${avgWeeklyChange > 0 ? '+' : ''}${avgWeeklyChange} kg</div>
       <div class="stat-label">Variazione media / settimana</div>
     </div>
   `;
@@ -374,6 +398,7 @@ function renderSummaryStats(data) {
 
 export function handleChartTypeChange(event, state) {
     const type = event.target.dataset.type;
+    log('Charts', 'Chart type changed', { type });
     if (type && type !== currentPlannerChartType) {
         currentPlannerChartType = type;
         document.querySelectorAll('.btn-chart-type').forEach(btn => {
@@ -382,12 +407,13 @@ export function handleChartTypeChange(event, state) {
         if (chartInstances.planner) {
           chartInstances.planner.destroy();
         }
-        renderPlannerChart(state);
+        chartInstances.planner = renderPlannerChart(state);
     }
 }
 
 export function handleRangeFilterChange(event, state) {
   const range = event.target.dataset.range;
+  log('Charts', 'Range filter changed', { range });
   if (range && range !== currentRangeFilter) {
     currentRangeFilter = range;
     document.querySelectorAll('#charts-range-filter .btn').forEach(btn => {
@@ -397,9 +423,43 @@ export function handleRangeFilterChange(event, state) {
   }
 }
 
+export function openChartModal(state, chartId) {
+  log('Charts', 'Opening chart modal', { chartId });
+  const modal = document.getElementById('chart-modal');
+  const titleEl = document.getElementById('chart-modal-title');
+  const canvasId = 'chart-modal-canvas';
+  
+  if(chartInstances.modalChart) chartInstances.modalChart.destroy();
+
+  const biometricsData = getBiometricsData(state);
+
+  switch(chartId) {
+    case 'planner':
+      titleEl.textContent = UI_TEXT.PLANNER_CHART_TITLE;
+      chartInstances.modalChart = renderPlannerChart(state, canvasId, { plugins: { legend: { display: true } }});
+      break;
+    case 'biometrics':
+      titleEl.textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+      chartInstances.modalChart = renderBiometricsChart(state, biometricsData, canvasId);
+      break;
+    case 'velocity':
+      titleEl.textContent = UI_TEXT.VELOCITY_CHART_TITLE;
+      chartInstances.modalChart = renderVelocityChart(biometricsData, canvasId);
+      break;
+    case 'correlation':
+      titleEl.textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
+      chartInstances.modalChart = renderCorrelationChart(state, biometricsData, canvasId);
+      break;
+  }
+
+  modal.classList.remove('modal-hidden');
+}
+
+
 export function renderCharts(state) {
     destroyAllCharts();
-    document.getElementById('velocity-chart-title').textContent = "Andamento Variazione Peso";
+    document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
+    document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
 
     const biometricsData = getBiometricsData(state);
 
@@ -409,16 +469,17 @@ export function renderCharts(state) {
         placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
         placeholder.classList.remove('hidden');
         canvas.classList.add('hidden');
-        document.getElementById('charts-summary-stats').innerHTML = '';
-        document.getElementById('velocity-chart-canvas').getContext('2d').clearRect(0,0,1,1); // Clear canvas
+        document.getElementById('charts-summary-stats').innerHTML = `<p class="placeholder-text">Dati insufficienti per il riepilogo.</p>`;
+        document.getElementById('velocity-chart-canvas').getContext('2d').clearRect(0,0,1,1);
+        document.getElementById('correlation-chart-canvas').getContext('2d').clearRect(0,0,1,1);
     } else {
         placeholder.classList.add('hidden');
         canvas.classList.remove('hidden');
-        renderBiometricsChart(state, biometricsData);
-        renderCorrelationChart(state, biometricsData);
-        renderVelocityChart(biometricsData);
+        chartInstances.biometrics = renderBiometricsChart(state, biometricsData);
+        chartInstances.correlation = renderCorrelationChart(state, biometricsData);
+        chartInstances.velocity = renderVelocityChart(biometricsData);
         renderSummaryStats(biometricsData);
     }
     
-    renderPlannerChart(state);
+    chartInstances.planner = renderPlannerChart(state);
 }

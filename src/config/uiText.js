@@ -77,6 +77,7 @@ const UI_TEXT_CONFIG = [
   { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
   { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
   { id: 'CHARTS_CORRELATION_TITLE', text: 'Correlazione Peso e Calorie' },
+  { id: 'VELOCITY_CHART_TITLE', text: 'Andamento Variazione Peso' },
   { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
   { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
   { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
