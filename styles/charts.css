@@ -77,34 +77,37 @@
 
 .chart-header {
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
-    position: relative;
     flex-shrink: 0;
+    gap: 1rem;
 }
 
 .chart-header h4 {
     color: var(--primary-color);
     margin: 0;
-    text-align: center;
+    text-align: left;
     flex-grow: 1;
 }
+
+.chart-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
 .btn-expand-chart {
   background: none;
   border: none;
   color: var(--text-color-muted);
   cursor: pointer;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
   padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.chart-header .chart-type-switcher + .btn-expand-chart {
-  right: 5rem;
-}
-
 
 .chart-canvas-container {
     position: relative;
@@ -114,10 +117,6 @@
 }
 
 .chart-type-switcher {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
     display: flex;
     border: 1px solid var(--border-color);
     border-radius: 8px;

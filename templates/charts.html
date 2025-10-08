@@ -17,7 +17,9 @@
         <div class="chart-card">
             <div class="chart-header">
                 <h4 id="biometrics-chart-title"></h4>
-                <button class="btn-expand-chart" data-chart-id="biometrics" title="Espandi Grafico"></button>
+                <div class="chart-header-controls">
+                  <button class="btn-expand-chart" data-chart-id="biometrics" title="Espandi Grafico"></button>
+                </div>
             </div>
             <div class="chart-canvas-container">
               <canvas id="biometrics-chart-canvas"></canvas>
@@ -27,7 +29,9 @@
         <div class="chart-card">
             <div class="chart-header">
                 <h4 id="velocity-chart-title"></h4>
-                <button class="btn-expand-chart" data-chart-id="velocity" title="Espandi Grafico"></button>
+                <div class="chart-header-controls">
+                  <button class="btn-expand-chart" data-chart-id="velocity" title="Espandi Grafico"></button>
+                </div>
             </div>
             <div class="chart-canvas-container">
               <canvas id="velocity-chart-canvas"></canvas>
@@ -36,11 +40,13 @@
         <div class="chart-card">
             <div class="chart-header">
                 <h4 id="planner-chart-title"></h4>
-                <div class="chart-type-switcher">
-                    <button class="btn-chart-type active" data-type="bar">Barre</button>
-                    <button class="btn-chart-type" data-type="line">Linee</button>
+                <div class="chart-header-controls">
+                    <div class="chart-type-switcher">
+                        <button class="btn-chart-type active" data-type="bar">Barre</button>
+                        <button class="btn-chart-type" data-type="line">Linee</button>
+                    </div>
+                    <button class="btn-expand-chart" data-chart-id="planner" title="Espandi Grafico"></button>
                 </div>
-                <button class="btn-expand-chart" data-chart-id="planner" title="Espandi Grafico"></button>
             </div>
             <div class="chart-canvas-container">
               <canvas id="planner-chart-canvas"></canvas>
@@ -49,7 +55,9 @@
         <div class="chart-card">
             <div class="chart-header">
                 <h4 id="correlation-chart-title"></h4>
-                <button class="btn-expand-chart" data-chart-id="correlation" title="Espandi Grafico"></button>
+                <div class="chart-header-controls">
+                  <button class="btn-expand-chart" data-chart-id="correlation" title="Espandi Grafico"></button>
+                </div>
             </div>
             <div class="chart-canvas-container">
               <canvas id="correlation-chart-canvas"></canvas>
