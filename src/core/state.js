@@ -43,6 +43,17 @@ export function getMealsForType(mealType) {
   });
 }
 
+export function getExerciseForPlanner(slotId, instanceId) {
+  const workoutList = state.weeklyWorkouts[slotId] || [];
+  return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+}
+
+export function getExerciseFromHistory(date, startTime, instanceId) {
+  const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+  if (!workout) return null;
+  return workout.exercises.find(ex => ex.instanceId === instanceId);
+}
+
 export function toggleDebugMode() {
   state.debugMode = !state.debugMode;
   console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
@@ -194,7 +205,7 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
 }
 
 export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-  log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+  log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
     if (!state.weeklyWorkouts[slotId]) return;
 
     const workoutList = state.weeklyWorkouts[slotId];

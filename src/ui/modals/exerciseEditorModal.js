@@ -1,4 +1,4 @@
-import { getState, updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
+import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { openWorkoutEditorModal } from './workoutEditorModal.js';
@@ -70,79 +70,68 @@ function renderLogForm(body, exercise) {
   body.innerHTML = formHTML;
 }
 
-export function openExerciseEditorModal(slotId, instanceId, returnIsoDate, loggedContext = null) {
-  log('Modals', 'Opening exercise editor modal', { slotId, instanceId, loggedContext });
-  const state = getState();
+export function openExerciseEditorModal(config) {
+  const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
+  log('Modals', 'Opening exercise editor modal', { config });
+
   const modal = document.getElementById('exercise-editor-modal');
   const body = modal.querySelector('#exercise-editor-body');
   const saveBtn = modal.querySelector('#exercise-editor-save-btn');
+  let form;
+  let saveHandler;
 
-  if (loggedContext) {
-    // --- LOG EDITING MODE ---
-    const { date, startTime, instanceId: loggedInstanceId } = loggedContext;
-    const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
-    if (!workout) return;
-    const exercise = workout.exercises.find(ex => ex.instanceId === loggedInstanceId);
-    if (!exercise) return;
+  if (context === 'history') {
+      modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+      saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
+      renderLogForm(body, exercise);
+      form = body.querySelector('#logged-exercise-form');
 
-    modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-    saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
-    renderLogForm(body, exercise);
+      saveHandler = (e) => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          const newSetsData = [...exercise.setsData].map((set, index) => ({
+              ...set,
+              reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
+              weight: parseFloat(formData.get(`weight_${index}`)) || 0,
+          }));
 
-    const form = body.querySelector('#logged-exercise-form');
-    const boundSaveHandler = (e) => {
-      e.preventDefault();
-      const formData = new FormData(form);
-      const newSetsData = [...exercise.setsData].map((set, index) => ({
-        ...set,
-        reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
-        weight: parseFloat(formData.get(`weight_${index}`)) || 0,
-      }));
-
-      updateExerciseSetsInHistory(date, startTime, loggedInstanceId, newSetsData);
-      showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
-      modal.classList.add('modal-hidden');
-    };
-    saveBtn.replaceWith(saveBtn.cloneNode(true));
-    document.getElementById('exercise-editor-save-btn').addEventListener('click', boundSaveHandler, { once: true });
-
-  } else {
-    // --- PLANNER EDITING MODE ---
-    const workoutList = state.weeklyWorkouts[slotId] || [];
-    const exercise = workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
-    if (!exercise) return;
-
-    modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-    saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
-    renderPlannerForm(body, exercise);
-
-    const form = body.querySelector('#exercise-editor-form');
-    const boundSaveHandler = (e) => {
-      e.preventDefault();
-      const newValues = {
-          defaultSets: parseInt(form.elements.sets.value),
-          defaultRest: parseInt(form.elements.rest.value),
-          defaultWeight: parseFloat(form.elements.weight.value)
+          updateExerciseSetsInHistory(date, startTime, exercise.instanceId, newSetsData);
+          showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
+          modal.classList.add('modal-hidden');
       };
-      if (exercise.type === 'reps') {
-          newValues.defaultReps = parseInt(form.elements.reps.value);
-      } else {
-          newValues.defaultDuration = parseInt(form.elements.duration.value);
-      }
-      if (exercise.defaultTempo) {
-          newValues.defaultTempo = {
-              up: parseInt(form.elements.tempo_up.value),
-              hold: parseInt(form.elements.tempo_hold.value),
-              down: parseInt(form.elements.tempo_down.value)
+
+  } else if (context === 'planner') {
+      modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+      saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+      renderPlannerForm(body, exercise);
+      form = body.querySelector('#exercise-editor-form');
+
+      saveHandler = (e) => {
+          e.preventDefault();
+          const newValues = {
+              defaultSets: parseInt(form.elements.sets.value),
+              defaultRest: parseInt(form.elements.rest.value),
+              defaultWeight: parseFloat(form.elements.weight.value)
           };
-      }
-      updateExerciseInstanceInWorkout(slotId, parseFloat(instanceId), newValues);
-      modal.classList.add('modal-hidden');
-      openWorkoutEditorModal(returnIsoDate);
-    };
-    saveBtn.replaceWith(saveBtn.cloneNode(true));
-    document.getElementById('exercise-editor-save-btn').addEventListener('click', boundSaveHandler, { once: true });
+          if (exercise.type === 'reps') {
+              newValues.defaultReps = parseInt(form.elements.reps.value);
+          } else {
+              newValues.defaultDuration = parseInt(form.elements.duration.value);
+          }
+          if (exercise.defaultTempo) {
+              newValues.defaultTempo = {
+                  up: parseInt(form.elements.tempo_up.value),
+                  hold: parseInt(form.elements.tempo_hold.value),
+                  down: parseInt(form.elements.tempo_down.value)
+              };
+          }
+          updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
+          modal.classList.add('modal-hidden');
+          openWorkoutEditorModal(returnIsoDate);
+      };
   }
 
+  saveBtn.replaceWith(saveBtn.cloneNode(true));
+  document.getElementById('exercise-editor-save-btn').addEventListener('click', saveHandler, { once: true });
   modal.classList.remove('modal-hidden');
 }

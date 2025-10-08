@@ -1,12 +1,14 @@
-commit_message: "refactor(arch): Sposta la logica di filtro dei pasti dallo UI al core"
+commit_message: "refactor(arch): Centralizza la logica di modifica degli esercizi nel core"
 rationale: |
-  Questo commit esegue un importante refactoring architetturale per migliorare la manutenibilità e la coerenza del codice, in linea con il Single Responsibility Principle.
+  Questo commit prosegue il refactoring architetturale iniziato in precedenza, applicando lo stesso pattern di centralizzazione della logica di business al modale di modifica degli esercizi.
 
-  1. **Centralizzazione della Logica**: La logica di business per filtrare i pasti in base al loro tipo (`tipoPasto`) è stata spostata dal modale di selezione (`selectionModal.js`) al gestore dello stato (`state.js`). È stata introdotta una nuova funzione selettore, `getMealsForType`, che ora è l'unica responsabile di questa operazione.
+  1. **Logica Spostata nel Core (`state.js`)**: Tutta la logica per trovare e aggiornare gli esercizi, sia quelli pianificati che quelli registrati nello storico, è stata estratta dai componenti UI e centralizzata in `src/core/state.js`. Sono state create nuove funzioni "selettore" (`getExerciseForPlanner`, `getExerciseFromHistory`) per recuperare i dati e sono state rafforzate le funzioni esistenti per il salvataggio (`updateExerciseInstanceInWorkout`, `updateExerciseSetsInHistory`), che ora agiscono come unici punti di modifica dello stato.
 
-  2. **Miglioramento del Flusso Dati**: Il componente che avvia la selezione (`dayEditorModal.js`) ora utilizza il nuovo selettore per preparare i dati *prima* di passarli al modale di selezione. Questo rende il `selectionModal` un componente "presentazionale" puro, che si occupa solo di visualizzare i dati che riceve, senza contenerne la logica di filtraggio.
+  2. **Componenti UI Semplificati**: Di conseguenza, i componenti dell'interfaccia utente sono stati notevolmente semplificati.
+      - I "chiamanti" (`plannerInteractions.js` e `workoutEditorModal.js`) ora hanno la responsabilità di recuperare i dati tramite i nuovi selettori prima di invocare il modale.
+      - Il modale di modifica (`exerciseEditorModal.js`) è stato trasformato in un componente puramente presentazionale. Adesso riceve un oggetto esercizio già pronto e una funzione di callback per il salvataggio, senza più contenere logica di business complessa.
 
-  3. **Supporto per `tipoPasto` Multiplo**: La nuova logica centralizzata in `getMealsForType` implementa la funzionalità richiesta: ora la proprietà `tipoPasto` di un pasto può essere un array di stringhe (es. `["Pranzo", "Cena"]`), consentendo di definire un pasto una sola volta e utilizzarlo in più contesti, eliminando la necessità di duplicati nel file `pasti.json`. La retrocompatibilità con i formati stringa singola e `"Tutti"` è garantita.
+  Questo refactoring migliora drasticamente la separazione delle responsabilità (SoC), aumenta la manutenibilità del codice e rende l'architettura generale dell'applicazione più robusta, coerente e facile da estendere in futuro.
 patches:
   - file: src/core/state.js
     content: |
@@ -53,6 +55,17 @@ patches:
           }
           return meal.tipoPasto === mealType;
         });
+      }
+
+      export function getExerciseForPlanner(slotId, instanceId) {
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function getExerciseFromHistory(date, startTime, instanceId) {
+        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+        if (!workout) return null;
+        return workout.exercises.find(ex => ex.instanceId === instanceId);
       }
 
       export function toggleDebugMode() {
@@ -206,7 +219,7 @@ patches:
       }
 
       export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in workout', { slotId, instanceId, newValues });
+        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
           if (!state.weeklyWorkouts[slotId]) return;
 
           const workoutList = state.weeklyWorkouts[slotId];
@@ -398,155 +411,379 @@ patches:
         saveStateToLocalStorage();
         notify();
       }
-  - file: src/ui/modals/dayEditorModal.js
+  - file: src/ui/interactions/plannerInteractions.js
     content: |
-      import { getState, updateWeeklyPlan, getMealsForType } from '../../core/state.js';
-      import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import {
+        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+        copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
+      } from '../../core/state.js';
+      import { initializeWorkout } from '../../core/trainer.js';
+      import { fetchAndParseConfig } from '../../api/configService.js';
+      import { showNotification } from '../notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      async function handleLoadConfig() {
+        log('Interactions', 'Handling config load button click');
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) { showNotification(error.message, 'error'); }
+      }
+
+      function handleCalendarClick(e) {
+        const startBtn = e.target.closest('.btn-start-workout-day');
+        if (startBtn) {
+            const isoDate = startBtn.dataset.date;
+            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
+            const globalState = getState();
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout, isoDate);
+            setView('trainer');
+            return;
+        }
+
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+          openDayEditorModal(dayCell.dataset.date);
+        }
+      }
+
+      function handleRecipeClick(e) {
+        const recipeItem = e.target.closest('.recipe-list-item');
+        if (recipeItem) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+          return;
+        }
+
+        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
+        if (btnDeleteWorkout) {
+          const { date, starttime } = btnDeleteWorkout.dataset;
+          log('Interactions', 'Delete workout button clicked', { date, starttime });
+          showConfirmModal(
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+            () => {
+              deleteWorkoutFromHistory(date, parseInt(starttime));
+              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
+            },
+            'danger'
+          );
+          return;
+        }
+
+        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
+        if(btnEditExercise) {
+          const { date, starttime, instanceid } = btnEditExercise.dataset;
+          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
+          const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
+          if (exercise) {
+            openExerciseEditorModal({
+              context: 'history',
+              exercise,
+              date,
+              startTime: parseInt(starttime, 10)
+            });
+          }
+          return;
+        }
+      }
+
+      function handleCopyWeek() {
+        log('Interactions', 'Copy week button clicked');
+        showConfirmModal(
+          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        log('Interactions', 'Reset week button clicked');
+        showConfirmModal(
+          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
+        );
+      }
+
+      export function initializePlannerListeners() {
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+      }
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+      import { showNotification } from '../notifications.js';
+
+      function renderPlannerForm(body, exercise) {
+        body.innerHTML = `
+          <form id="exercise-editor-form">
+            <div class="form-group sets-group">
+              <label for="ex-edit-sets">Serie</label>
+              <input type="number" id="ex-edit-sets" name="sets" min="1" value="${exercise.defaultSets}">
+            </div>
+            <div class="form-group reps-group" style="display: ${exercise.type === 'reps' ? 'flex' : 'none'};">
+              <label for="ex-edit-reps">Ripetizioni</label>
+              <input type="number" id="ex-edit-reps" name="reps" min="1" value="${exercise.defaultReps || ''}">
+            </div>
+            <div class="form-group duration-group" style="display: ${exercise.type === 'time' ? 'flex' : 'none'};">
+              <label for="ex-edit-duration">Durata (s)</label>
+              <input type="number" id="ex-edit-duration" name="duration" min="1" value="${exercise.defaultDuration || ''}">
+            </div>
+            <div class="form-group rest-group">
+              <label for="ex-edit-rest">Riposo (s)</label>
+              <input type="number" id="ex-edit-rest" name="rest" min="0" value="${exercise.defaultRest}">
+            </div>
+            <div class="form-group weight-group">
+              <label for="ex-edit-weight" id="ex-edit-weight-label">${UI_TEXT.EXERCISE_WEIGHT_LABEL}</label>
+              <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5" value="${exercise.defaultWeight || 0}">
+            </div>
+            <div class="tempo-group" style="display: ${exercise.defaultTempo ? 'grid' : 'none'};">
+              <div class="form-group">
+                <label for="ex-edit-tempo-up">Salita (s)</label>
+                <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5" value="${exercise.defaultTempo?.up || 0}">
+              </div>
+              <div class="form-group">
+                <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">${UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL}</label>
+                <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5" value="${exercise.defaultTempo?.hold || 0}">
+              </div>
+              <div class="form-group">
+                <label for="ex-edit-tempo-down">Discesa (s)</label>
+                <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5" value="${exercise.defaultTempo?.down || 0}">
+              </div>
+            </div>
+          </form>
+        `;
+      }
+
+      function renderLogForm(body, exercise) {
+        const showWeight = exercise.defaultWeight || exercise.setsData.some(s => s.weight > 0);
+        let formHTML = `<form id="logged-exercise-form" class="structured-form">`;
+        formHTML += exercise.setsData.map((set, index) => {
+            const weightInput = showWeight ? `
+                <div class="form-group">
+                    <label for="set-weight-${index}">${UI_TEXT.LOGGED_EXERCISE_WEIGHT_LABEL}</label>
+                    <input type="number" id="set-weight-${index}" name="weight_${index}" value="${set.weight || 0}" min="0" step="0.1">
+                </div>
+            ` : '';
+            return `
+                <div class="set-editor-row">
+                    <span class="set-editor-label">${UI_TEXT.LOGGED_EXERCISE_SET_LABEL} ${index + 1}</span>
+                    <div class="form-group">
+                        <label for="set-reps-${index}">${UI_TEXT.LOGGED_EXERCISE_REPS_LABEL}</label>
+                        <input type="number" id="set-reps-${index}" name="reps_${index}" value="${set.reps || 0}" min="0">
+                    </div>
+                    ${weightInput}
+                </div>
+            `;
+        }).join('');
+        formHTML += '</form>';
+        body.innerHTML = formHTML;
+      }
+
+      export function openExerciseEditorModal(config) {
+        const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
+        log('Modals', 'Opening exercise editor modal', { config });
+
+        const modal = document.getElementById('exercise-editor-modal');
+        const body = modal.querySelector('#exercise-editor-body');
+        const saveBtn = modal.querySelector('#exercise-editor-save-btn');
+        let form;
+        let saveHandler;
+
+        if (context === 'history') {
+            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+            saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
+            renderLogForm(body, exercise);
+            form = body.querySelector('#logged-exercise-form');
+
+            saveHandler = (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const newSetsData = [...exercise.setsData].map((set, index) => ({
+                    ...set,
+                    reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
+                    weight: parseFloat(formData.get(`weight_${index}`)) || 0,
+                }));
+
+                updateExerciseSetsInHistory(date, startTime, exercise.instanceId, newSetsData);
+                showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
+                modal.classList.add('modal-hidden');
+            };
+
+        } else if (context === 'planner') {
+            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+            renderPlannerForm(body, exercise);
+            form = body.querySelector('#exercise-editor-form');
+
+            saveHandler = (e) => {
+                e.preventDefault();
+                const newValues = {
+                    defaultSets: parseInt(form.elements.sets.value),
+                    defaultRest: parseInt(form.elements.rest.value),
+                    defaultWeight: parseFloat(form.elements.weight.value)
+                };
+                if (exercise.type === 'reps') {
+                    newValues.defaultReps = parseInt(form.elements.reps.value);
+                } else {
+                    newValues.defaultDuration = parseInt(form.elements.duration.value);
+                }
+                if (exercise.defaultTempo) {
+                    newValues.defaultTempo = {
+                        up: parseInt(form.elements.tempo_up.value),
+                        hold: parseInt(form.elements.tempo_hold.value),
+                        down: parseInt(form.elements.tempo_down.value)
+                    };
+                }
+                updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
+                modal.classList.add('modal-hidden');
+                openWorkoutEditorModal(returnIsoDate);
+            };
+        }
+
+        saveBtn.replaceWith(saveBtn.cloneNode(true));
+        document.getElementById('exercise-editor-save-btn').addEventListener('click', saveHandler, { once: true });
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/modals/workoutEditorModal.js
+    content: |
+      import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner } from '../../core/state.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
       import { UI_TEXT } from '../../config/uiText.js';
       import { renderIcon } from '../icons.js';
       import { log } from '../../utils/logger.js';
-      import { showRecipeModal } from './recipeModal.js';
-      import { openSelectionModal } from './selectionModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-      import { openManualWorkoutModal } from './manualWorkoutModal.js';
+      import { openWorkoutSelectionModal } from './selectionModal.js';
+      import { openExerciseEditorModal } from './exerciseEditorModal.js';
 
-      let currentEditingDayISO = null;
+      let sortableInstance = null;
 
       function formatFullDate(isoDate) {
         const date = new Date(isoDate);
         return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
       }
 
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets;
+        const rest = exercise.defaultRest;
+        let details;
+
+        if (exercise.type === 'reps') {
+            const reps = exercise.defaultReps;
+            details = `${sets} x ${reps} | Riposo: ${rest}s`;
+        } else if (exercise.type === 'time') {
+            const duration = exercise.defaultDuration;
+            details = `${sets} x ${duration}s | Riposo: ${rest}s`;
         }
-        return '';
+
+        if (exercise.defaultTempo) {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
       }
 
-      export function openDayEditorModal(isoDate) {
-        log('Modals', 'Opening day editor modal', { isoDate });
-        currentEditingDayISO = isoDate;
+      export function openWorkoutEditorModal(isoDate) {
+        log('Modals', 'Opening workout editor modal', { isoDate });
         const state = getState();
-        const dayEditorModal = document.getElementById('day-editor-modal');
-        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        const body = dayEditorModal.querySelector('#day-editor-body');
-        
-        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const plannedMeal = state.weeklyPlan[slotId];
-          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            mealDetailsHTML = `<div class="meal-details"><span class="meal-details__name">${meal.nomePasto}</span><div class="meal-actions">${getRecipeButtonHTML(meal, state)}<button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button></div></div>`;
-          }
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-
+        const modal = document.getElementById('workout-editor-modal');
+        modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+        const body = modal.querySelector('#workout-editor-body');
         const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
         const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-        
-        let workoutDetailsHTML;
-        if (plannedWorkoutList.length > 0) {
-            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
-        } else {
-            workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
-        }
-        
-        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
 
-        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
+        let exercisesHTML = plannedWorkoutList.map(exercise => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-slot-id="${workoutSlotId}" data-instance-id="${exercise.instanceId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+
+        const addExerciseButton = `<button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+
+        const listContainer = body.querySelector('.workout-editor-list');
+
+        if (sortableInstance) {
+            sortableInstance.destroy();
+        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
+            }
+        });
 
         body.onclick = e => {
-          const btnAddMeal = e.target.closest('.btn-add-meal');
-          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-          const btnAddExercise = e.target.closest('.btn-add-exercise');
-          const btnManageWorkout = e.target.closest('.btn-manage-workout');
-          const btnLogActivity = e.target.closest('.btn-log-activity');
+            const btnAddExercise = e.target.closest('.btn-add-exercise');
+            const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+            const btnEditExercise = e.target.closest('.btn-edit-exercise');
 
-          if (btnAddMeal) {
-            const mealType = btnAddMeal.dataset.mealType;
-            const relevantMeals = getMealsForType(mealType);
-            dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(btnAddMeal.dataset.slotId, isoDate, relevantMeals);
-          }
-          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
-          else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-          else if (btnAddExercise) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnManageWorkout) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnLogActivity) {
-            dayEditorModal.classList.add('modal-hidden');
-            openManualWorkoutModal(isoDate);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
-      }
-  - file: src/ui/modals/selectionModal.js
-    content: |
-      import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
-      import { formatIngredients } from '../../utils/formatters.js';
-      import { openDayEditorModal } from './dayEditorModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-
-      export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
-        log('Modals', 'Opening meal selection modal', { slotId });
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const list = selectionModal.querySelector('#selection-modal-list');
-        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openDayEditorModal(returnIsoDate);
+            if (btnAddExercise) {
+                modal.classList.add('modal-hidden');
+                openWorkoutSelectionModal(btnAddExercise.dataset.slotId, isoDate);
+            } else if (btnRemoveExercise) {
+                updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseFloat(btnRemoveExercise.dataset.instanceId));
+                openWorkoutEditorModal(isoDate); // Refresh this modal
+            } else if (btnEditExercise) {
+                const slotId = btnEditExercise.dataset.slotId;
+                const instanceId = btnEditExercise.dataset.instanceId;
+                const exercise = getExerciseForPlanner(slotId, instanceId);
+                if (exercise) {
+                  openExerciseEditorModal({
+                    context: 'planner',
+                    exercise,
+                    slotId,
+                    returnIsoDate: isoDate
+                  });
+                }
+            }
         };
 
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { 
-            updateWeeklyPlan(slotId, item.dataset.mealId); 
-            closeAndReturn(); 
-          }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openWorkoutSelectionModal(slotId, returnIsoDate) {
-        log('Modals', 'Opening workout selection modal', { slotId });
-        const state = getState();
-        const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
-        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
-        const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          workoutSelectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
-        };
-
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
-            closeAndReturn();
-          }
-        };
-        workoutSelectionModal.classList.remove('modal-hidden');
+        modal.classList.remove('modal-hidden');
       }

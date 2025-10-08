@@ -1,4 +1,4 @@
-import { getState, updateWeeklyWorkout, reorderWorkoutExercises } from '../../core/state.js';
+import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner } from '../../core/state.js';
 import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
@@ -86,7 +86,17 @@ export function openWorkoutEditorModal(isoDate) {
           updateWeeklyWorkout(btnRemoveExercise.dataset.slotId, null, parseFloat(btnRemoveExercise.dataset.instanceId));
           openWorkoutEditorModal(isoDate); // Refresh this modal
       } else if (btnEditExercise) {
-          openExerciseEditorModal(btnEditExercise.dataset.slotId, btnEditExercise.dataset.instanceId, isoDate);
+          const slotId = btnEditExercise.dataset.slotId;
+          const instanceId = btnEditExercise.dataset.instanceId;
+          const exercise = getExerciseForPlanner(slotId, instanceId);
+          if (exercise) {
+            openExerciseEditorModal({
+              context: 'planner',
+              exercise,
+              slotId,
+              returnIsoDate: isoDate
+            });
+          }
       }
   };
 

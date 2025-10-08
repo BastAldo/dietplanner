@@ -1,6 +1,6 @@
 import {
   resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-  copyPreviousWeek, getState, deleteWorkoutFromHistory
+  copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
 } from '../../core/state.js';
 import { initializeWorkout } from '../../core/trainer.js';
 import { fetchAndParseConfig } from '../../api/configService.js';
@@ -86,11 +86,15 @@ function handleLogViewClick(e) {
   if(btnEditExercise) {
     const { date, starttime, instanceid } = btnEditExercise.dataset;
     log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
-    openExerciseEditorModal(null, null, null, {
-      date,
-      startTime: parseInt(starttime, 10),
-      instanceId: parseFloat(instanceid)
-    });
+    const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
+    if (exercise) {
+      openExerciseEditorModal({
+        context: 'history',
+        exercise,
+        date,
+        startTime: parseInt(starttime, 10)
+      });
+    }
     return;
   }
 }
