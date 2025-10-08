@@ -2,10 +2,9 @@ import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
 import { BIOMETRIC_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
 
-let plannerChartInstance = null;
-let biometricsChartInstance = null;
-let correlationChartInstance = null;
+let chartInstances = {};
 let currentPlannerChartType = 'bar';
+let currentRangeFilter = '30';
 
 const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
@@ -54,6 +53,13 @@ function calculateWeeklyCalorieData(state) {
   return weeklyData;
 }
 
+function destroyAllCharts() {
+  Object.values(chartInstances).forEach(chart => {
+    if (chart) chart.destroy();
+  });
+  chartInstances = {};
+}
+
 function renderPlannerChart(state) {
   const weeklyData = calculateWeeklyCalorieData(state);
   const colors = getChartColors();
@@ -83,7 +89,7 @@ function renderPlannerChart(state) {
   }];
   
   const ctx = document.getElementById('planner-chart-canvas').getContext('2d');
-  plannerChartInstance = new Chart(ctx, {
+  chartInstances.planner = new Chart(ctx, {
     type: currentPlannerChartType,
     data: {
       labels: weeklyData.labels,
@@ -127,12 +133,21 @@ function renderPlannerChart(state) {
   });
 }
 
+function filterDataByRange(data, rangeInDays) {
+  if (rangeInDays === 'all') return data;
+  const now = new Date();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(now.getDate() - parseInt(rangeInDays, 10));
+  return data.filter(entry => new Date(entry.date) >= cutoffDate);
+}
+
 function getBiometricsData(state) {
-  const data = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const sortedData = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const data = filterDataByRange(sortedData, currentRangeFilter);
   const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
   
   const datasets = {};
-  const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number' && f.id !== 'basalMetabolism' && f.id !== 'bmi');
+  const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number');
 
   numericFields.forEach(field => {
       datasets[field.id] = {
@@ -141,11 +156,11 @@ function getBiometricsData(state) {
       };
   });
 
-  return { labels, datasets };
+  return { labels, datasets, filteredData: data };
 }
 
-function renderBiometricsChart(state) {
-  const { labels, datasets } = getBiometricsData(state);
+function renderBiometricsChart(state, data) {
+  const { labels, datasets } = data;
   const colors = getChartColors();
   const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
   
@@ -163,7 +178,7 @@ function renderBiometricsChart(state) {
 
   const ctx = document.getElementById('biometrics-chart-canvas').getContext('2d');
 
-  biometricsChartInstance = new Chart(ctx, {
+  chartInstances.biometrics = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
@@ -185,21 +200,33 @@ function renderBiometricsChart(state) {
       plugins: {
         legend: {
           display: true,
-          labels: { color: colors.textColor }
+          position: 'bottom',
+          labels: { color: colors.textColor },
+          onClick: (e, legendItem, legend) => {
+            const index = legendItem.datasetIndex;
+            const ci = legend.chart;
+            if (ci.isDatasetVisible(index)) {
+                ci.hide(index);
+                legendItem.hidden = true;
+            } else {
+                ci.show(index);
+                legendItem.hidden = false;
+            }
+          }
         }
       }
     }
   });
 }
 
-function renderCorrelationChart(state) {
-    const sortedBiometrics = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-    if (sortedBiometrics.length < 2) return;
+function renderCorrelationChart(state, data) {
+    const { filteredData } = data;
+    if (filteredData.length < 2) return;
 
-    const labels = sortedBiometrics.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-    const weightData = sortedBiometrics.map(entry => entry.weight || null);
+    const labels = filteredData.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+    const weightData = filteredData.map(entry => entry.weight || null);
 
-    const calorieData = sortedBiometrics.map(entry => {
+    const calorieData = filteredData.map(entry => {
         const isoDate = entry.date;
         let dailyMin = 0;
         MEAL_TYPES.forEach(type => {
@@ -213,7 +240,7 @@ function renderCorrelationChart(state) {
 
     const colors = getChartColors();
     const ctx = document.getElementById('correlation-chart-canvas').getContext('2d');
-    correlationChartInstance = new Chart(ctx, {
+    chartInstances.correlation = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -264,33 +291,134 @@ function renderCorrelationChart(state) {
     });
 }
 
-function handleChartTypeChange(event, state) {
+function renderVelocityChart(data) {
+  const { filteredData } = data;
+  if (filteredData.length < 2) return;
+
+  const weeklyChanges = [];
+  for (let i = 1; i < filteredData.length; i++) {
+      const prev = filteredData[i - 1];
+      const curr = filteredData[i];
+      const daysDiff = (new Date(curr.date) - new Date(prev.date)) / (1000 * 60 * 60 * 24);
+      if (daysDiff > 0) {
+          const weightChange = curr.weight - prev.weight;
+          const changePerWeek = (weightChange / daysDiff) * 7;
+          weeklyChanges.push({
+              date: curr.date,
+              change: changePerWeek.toFixed(2)
+          });
+      }
+  }
+
+  const labels = weeklyChanges.map(c => new Date(c.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
+  const changeData = weeklyChanges.map(c => c.change);
+  const colors = getChartColors();
+
+  const ctx = document.getElementById('velocity-chart-canvas').getContext('2d');
+  chartInstances.velocity = new Chart(ctx, {
+      type: 'bar',
+      data: {
+          labels,
+          datasets: [{
+              label: 'Variazione media settimanale (kg)',
+              data: changeData,
+              backgroundColor: changeData.map(v => v < 0 ? colors.success : colors.danger),
+          }]
+      },
+      options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+              y: {
+                  ticks: { color: colors.textColor },
+                  grid: { color: colors.borderColor }
+              },
+              x: {
+                  ticks: { color: colors.textColor },
+                  grid: { display: false }
+              }
+          },
+          plugins: {
+              legend: { display: false }
+          }
+      }
+  });
+}
+
+function renderSummaryStats(data) {
+  const { filteredData } = data;
+  const container = document.getElementById('charts-summary-stats');
+  if (filteredData.length < 2) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const first = filteredData[0];
+  const last = filteredData[filteredData.length - 1];
+  
+  const weightChange = (last.weight - first.weight).toFixed(1);
+  const daysDiff = (new Date(last.date) - new Date(first.date)) / (1000 * 60 * 60 * 24);
+  const avgWeeklyChange = daysDiff > 0 ? ((weightChange / daysDiff) * 7).toFixed(2) : 0;
+
+  container.innerHTML = `
+    <div class="stat-item">
+      <div class="stat-value">${weightChange} kg</div>
+      <div class="stat-label">Variazione Peso (${currentRangeFilter}gg)</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">${avgWeeklyChange} kg</div>
+      <div class="stat-label">Variazione media / settimana</div>
+    </div>
+  `;
+}
+
+export function handleChartTypeChange(event, state) {
     const type = event.target.dataset.type;
     if (type && type !== currentPlannerChartType) {
         currentPlannerChartType = type;
         document.querySelectorAll('.btn-chart-type').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.type === type);
         });
-        if (plannerChartInstance) {
-          plannerChartInstance.destroy();
+        if (chartInstances.planner) {
+          chartInstances.planner.destroy();
         }
         renderPlannerChart(state);
     }
 }
 
+export function handleRangeFilterChange(event, state) {
+  const range = event.target.dataset.range;
+  if (range && range !== currentRangeFilter) {
+    currentRangeFilter = range;
+    document.querySelectorAll('#charts-range-filter .btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.range === range);
+    });
+    renderCharts(state);
+  }
+}
+
 export function renderCharts(state) {
-    if (plannerChartInstance) plannerChartInstance.destroy();
-    if (biometricsChartInstance) biometricsChartInstance.destroy();
-    if (correlationChartInstance) correlationChartInstance.destroy();
+    destroyAllCharts();
+    document.getElementById('velocity-chart-title').textContent = "Andamento Variazione Peso";
 
-    renderPlannerChart(state);
-    renderBiometricsChart(state);
-    renderCorrelationChart(state);
+    const biometricsData = getBiometricsData(state);
+
+    const placeholder = document.getElementById('biometrics-chart-placeholder');
+    const canvas = document.getElementById('biometrics-chart-canvas');
+    if (biometricsData.filteredData.length < 2) {
+        placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+        placeholder.classList.remove('hidden');
+        canvas.classList.add('hidden');
+        document.getElementById('charts-summary-stats').innerHTML = '';
+        document.getElementById('velocity-chart-canvas').getContext('2d').clearRect(0,0,1,1); // Clear canvas
+    } else {
+        placeholder.classList.add('hidden');
+        canvas.classList.remove('hidden');
+        renderBiometricsChart(state, biometricsData);
+        renderCorrelationChart(state, biometricsData);
+        renderVelocityChart(biometricsData);
+        renderSummaryStats(biometricsData);
+    }
     
-    document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
-
-    const switcher = document.querySelector('.chart-type-switcher');
-    const boundHandler = (e) => handleChartTypeChange(e, state);
-    switcher.replaceWith(switcher.cloneNode(true));
-    document.querySelector('.chart-type-switcher').addEventListener('click', boundHandler);
+    renderPlannerChart(state);
 }

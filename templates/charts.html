@@ -1,6 +1,36 @@
 <div id="charts-page" class="page-view hidden">
     <h3 id="charts-title"></h3>
+
+    <div class="charts-controls">
+        <div id="charts-range-filter" class="range-filter">
+            <button class="btn btn-secondary" data-range="7">7G</button>
+            <button class="btn btn-secondary active" data-range="30">30G</button>
+            <button class="btn btn-secondary" data-range="90">90G</button>
+            <button class="btn btn-secondary" data-range="365">Anno</button>
+            <button class="btn btn-secondary" data-range="all">Sempre</button>
+        </div>
+    </div>
+
+    <div id="charts-summary-stats" class="charts-summary-stats"></div>
+
     <div class="charts-container">
+        <div class="chart-card">
+            <div class="chart-header">
+                <h4 id="biometrics-chart-title"></h4>
+            </div>
+            <div class="chart-canvas-container">
+              <canvas id="biometrics-chart-canvas"></canvas>
+              <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
+            </div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-header">
+                <h4 id="velocity-chart-title"></h4>
+            </div>
+            <div class="chart-canvas-container">
+              <canvas id="velocity-chart-canvas"></canvas>
+            </div>
+        </div>
         <div class="chart-card">
             <div class="chart-header">
                 <h4 id="planner-chart-title"></h4>
@@ -11,15 +41,6 @@
             </div>
             <div class="chart-canvas-container">
               <canvas id="planner-chart-canvas"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-header">
-                <h4 id="biometrics-chart-title"></h4>
-            </div>
-            <div class="chart-canvas-container">
-              <canvas id="biometrics-chart-canvas"></canvas>
-              <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
             </div>
         </div>
         <div class="chart-card">

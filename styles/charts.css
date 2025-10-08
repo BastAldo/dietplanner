@@ -4,6 +4,62 @@
     margin-bottom: 1.5rem;
 }
 
+.charts-controls {
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.range-filter {
+  display: flex;
+  gap: 0.5rem;
+  background-color: var(--card-color);
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.range-filter .btn {
+  padding: 0.5rem 1rem;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.range-filter .btn.active {
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+  border-color: var(--primary-color);
+}
+
+.charts-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: var(--primary-color);
+  font-family: 'Courier New', Courier, monospace;
+}
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--text-color-muted);
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+}
+
 .charts-container {
     display: grid;
     grid-template-columns: 1fr;
@@ -31,12 +87,12 @@
 .chart-header h4 {
     color: var(--primary-color);
     margin: 0;
+    text-align: center;
 }
 
-/* New container to constrain the chart's height */
 .chart-canvas-container {
     position: relative;
-    height: 400px; /* Essential fix for the resize loop */
+    height: 400px;
     width: 100%;
     flex-grow: 1;
 }
@@ -68,9 +124,8 @@
     color: var(--bg-color);
 }
 
-/* Rimuove il layout a due colonne per desktop per impilare i grafici */
-/* @media (min-width: 1024px) {
+@media (min-width: 1024px) {
     .charts-container {
         grid-template-columns: repeat(2, 1fr);
     }
-} */
+}
