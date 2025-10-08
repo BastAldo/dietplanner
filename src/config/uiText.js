@@ -166,7 +166,9 @@ const UI_TEXT_CONFIG = [
   { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
   { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' },
   { id: 'TERMINATE_WORKOUT_CONFIRM_TITLE', text: 'Termina Allenamento' },
-  { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' }
+  { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' },
+  { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
+  { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

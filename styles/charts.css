@@ -8,6 +8,8 @@
   margin-bottom: 1.5rem;
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .range-filter {
@@ -25,6 +27,17 @@
   font-size: 0.8rem;
 }
 
+#charts-prev-btn, #charts-next-btn {
+  padding: 0.5rem;
+  width: 40px;
+  height: 40px;
+}
+
+#charts-next-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .range-filter .btn.active {
   background-color: var(--primary-color);
   color: var(--bg-color);
@@ -33,7 +46,7 @@
 
 .charts-summary-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1.5rem;
   margin-bottom: 1.5rem;
   padding: 1.5rem;

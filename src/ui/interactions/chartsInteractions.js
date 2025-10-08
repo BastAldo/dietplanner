@@ -1,5 +1,5 @@
 import { getState } from '../../core/state.js';
-import { handleChartTypeChange, handleRangeFilterChange, openChartModal } from '../charts.js';
+import { handleChartTypeChange, handleRangeFilterChange, openChartModal, handleDateShift } from '../charts.js';
 import { log } from '../../utils/logger.js';
 
 export function initializeChartsListeners() {
@@ -10,6 +10,8 @@ export function initializeChartsListeners() {
     const btnChartType = e.target.closest('.btn-chart-type');
     const btnRangeFilter = e.target.closest('#charts-range-filter button');
     const btnExpand = e.target.closest('.btn-expand-chart');
+    const btnPrev = e.target.closest('#charts-prev-btn');
+    const btnNext = e.target.closest('#charts-next-btn');
 
     if (btnChartType) {
       handleChartTypeChange(e, state);
@@ -19,6 +21,10 @@ export function initializeChartsListeners() {
       const chartId = btnExpand.dataset.chartId;
       log('Interactions', 'Expand chart button clicked', { chartId });
       openChartModal(state, chartId);
+    } else if (btnPrev) {
+      handleDateShift(-1, state);
+    } else if (btnNext) {
+      handleDateShift(1, state);
     }
   });
 

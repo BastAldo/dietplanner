@@ -6,6 +6,7 @@ import { log } from '../utils/logger.js';
 let chartInstances = {};
 let currentPlannerChartType = 'bar';
 let currentRangeFilter = '30';
+let dateOffset = 0; // In weeks
 
 const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
@@ -136,17 +137,24 @@ function renderPlannerChart(state, canvasId = 'planner-chart-canvas', optionsOve
   return chart;
 }
 
-function filterDataByRange(data, rangeInDays) {
-  if (rangeInDays === 'all') return data;
-  const now = new Date();
-  const cutoffDate = new Date();
-  cutoffDate.setDate(now.getDate() - parseInt(rangeInDays, 10));
-  return data.filter(entry => new Date(entry.date) >= cutoffDate);
+function filterDataByRange(data, rangeInDays, offsetWeeks) {
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() - (offsetWeeks * 7));
+
+  if (rangeInDays === 'all') return data.filter(entry => new Date(entry.date) <= endDate);
+
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - parseInt(rangeInDays, 10));
+  
+  return data.filter(entry => {
+      const entryDate = new Date(entry.date);
+      return entryDate >= startDate && entryDate <= endDate;
+  });
 }
 
 function getBiometricsData(state) {
   const sortedData = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
-  const data = filterDataByRange(sortedData, currentRangeFilter);
+  const data = filterDataByRange(sortedData, currentRangeFilter, dateOffset);
   const labels = data.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
   
   const datasets = {};
@@ -369,30 +377,78 @@ function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOv
   return chart;
 }
 
-function renderSummaryStats(data) {
-  const { filteredData } = data;
+function linearRegression(data) {
+  const n = data.length;
+  if (n < 2) return 0;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  
+  data.forEach(p => {
+      sumX += p.x;
+      sumY += p.y;
+      sumXY += p.x * p.y;
+      sumXX += p.x * p.x;
+  });
+
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  return slope || 0;
+}
+
+function renderSummaryStats(state, data) {
   const container = document.getElementById('charts-summary-stats');
+  const { filteredData } = data;
+
   if (filteredData.length < 2) {
     container.innerHTML = `<p class="placeholder-text">Dati insufficienti per il riepilogo.</p>`;
     return;
   }
 
-  const first = filteredData[0];
-  const last = filteredData[filteredData.length - 1];
+  const trendData = filteredData.slice(-7).map(entry => ({
+      x: new Date(entry.date).getTime(),
+      y: entry.weight
+  }));
   
-  const weightChange = (last.weight - first.weight).toFixed(1);
-  const daysDiff = (new Date(last.date) - new Date(first.date)) / (1000 * 60 * 60 * 24);
-  const avgWeeklyChange = daysDiff > 0 ? ((weightChange / daysDiff) * 7).toFixed(2) : 0;
+  const dailyTrend = linearRegression(trendData);
+  const avgWeeklyChange = (dailyTrend * 7 * 24 * 60 * 60 * 1000).toFixed(2);
+  const lastWeight = filteredData[filteredData.length - 1].weight;
+  const targetWeight = state.userGoals.target_weight;
+  
+  let goalEstimateHTML = '';
+  if (targetWeight > 0) {
+      const weightToLose = lastWeight - targetWeight;
+      let weeksToGoal = 'N/A';
+
+      if (avgWeeklyChange < -0.01) { // Perdendo peso
+          weeksToGoal = (weightToLose / -avgWeeklyChange).toFixed(1);
+      } else if (avgWeeklyChange > 0.01 && weightToLose < 0) { // Guadagnando peso (bulk)
+          weeksToGoal = (weightToLose / -avgWeeklyChange).toFixed(1);
+      }
+      
+      goalEstimateHTML = `
+        <div class="stat-item">
+          <div class="stat-value">${weeksToGoal}</div>
+          <div class="stat-label">${UI_TEXT.CHARTS_GOAL_ESTIMATE_LABEL}</div>
+        </div>
+      `;
+  } else {
+      goalEstimateHTML = `
+        <div class="stat-item">
+          <div class="stat-value">--</div>
+          <div class="stat-label">${UI_TEXT.CHARTS_GOAL_ESTIMATE_NOT_SET}</div>
+        </div>
+      `;
+  }
+
 
   container.innerHTML = `
     <div class="stat-item">
-      <div class="stat-value">${weightChange > 0 ? '+' : ''}${weightChange} kg</div>
-      <div class="stat-label">Variazione Peso (ultimi ${currentRangeFilter}gg)</div>
+      <div class="stat-value">${lastWeight} kg</div>
+      <div class="stat-label">Peso Attuale</div>
     </div>
     <div class="stat-item">
       <div class="stat-value">${avgWeeklyChange > 0 ? '+' : ''}${avgWeeklyChange} kg</div>
       <div class="stat-label">Variazione media / settimana</div>
     </div>
+    ${goalEstimateHTML}
   `;
 }
 
@@ -416,11 +472,19 @@ export function handleRangeFilterChange(event, state) {
   log('Charts', 'Range filter changed', { range });
   if (range && range !== currentRangeFilter) {
     currentRangeFilter = range;
+    dateOffset = 0; // Reset offset when range changes
     document.querySelectorAll('#charts-range-filter .btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.range === range);
     });
     renderCharts(state);
   }
+}
+
+export function handleDateShift(direction, state) {
+    log('Charts', 'Date shift handled', { direction });
+    if (direction > 0 && dateOffset === 0) return;
+    dateOffset -= direction;
+    renderCharts(state);
 }
 
 export function openChartModal(state, chartId) {
@@ -460,6 +524,7 @@ export function renderCharts(state) {
     destroyAllCharts();
     document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
     document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
+    document.getElementById('charts-next-btn').disabled = dateOffset === 0;
 
     const biometricsData = getBiometricsData(state);
 
@@ -478,7 +543,7 @@ export function renderCharts(state) {
         chartInstances.biometrics = renderBiometricsChart(state, biometricsData);
         chartInstances.correlation = renderCorrelationChart(state, biometricsData);
         chartInstances.velocity = renderVelocityChart(biometricsData);
-        renderSummaryStats(biometricsData);
+        renderSummaryStats(state, biometricsData);
     }
     
     chartInstances.planner = renderPlannerChart(state);
