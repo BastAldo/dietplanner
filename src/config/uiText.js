@@ -131,7 +131,7 @@ const UI_TEXT_CONFIG = [
   { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
   { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti' },
   { id: 'PLANNER_SUMMARY_CALORIES_BURNED', text: 'Kcal Bruciate' },
-  { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Progresso Peso' },
+  { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Kg mancanti' },
   { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
   { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
   { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
