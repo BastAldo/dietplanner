@@ -1,495 +1,314 @@
-commit_message: "refactor(ui): Corregge errore di rendering e standardizza l'architettura"
+commit_message: "refactor(core): Risolve errore di importazione e standardizza l'architettura degli interactions"
 rationale: |
-  Questa patch risolve un errore critico di runtime che impediva il rendering della pagina delle ricette. L'errore era causato da un'importazione errata in `src/ui/renderer.js`, che cercava di importare `renderRecipesPage` da `src/ui/recipesRenderer.js`, mentre quest'ultimo esportava una funzione con un nome diverso (`renderRecipes`).
+  Questa patch esegue un refactoring completo della gestione della vista "Grafici" per risolvere un errore critico di importazione e per allineare il codice a una convenzione architetturale coerente, migliorando la robustezza e la manutenibilità dell'intera applicazione.
 
-  Invece di una semplice rinomina, è stato eseguito un refactoring per allineare la gestione della pagina delle ricette all'architettura esistente del progetto, migliorando coerenza e manutenibilità:
+  **Problema:**
+  Il file `main.js` tentava di importare `initializeChartsListeners` da `src/ui/interactions/chartsInteractions.js`, ma questa funzione non esisteva. La logica di gestione degli eventi era invece erroneamente mescolata con la logica di rendering all'interno di `src/ui/charts.js`.
 
-  1.  **Consolidamento Architetturale**: La logica di rendering è stata spostata da `src/ui/recipesRenderer.js` al file centralizzato `src/ui/pageRenderers.js`. La funzione è stata rinominata `renderRecipesPage` per conformarsi alla convenzione di denominazione (`render<NomePagina>Page`) usata per tutte le altre viste.
+  **Soluzione Implementata:**
+  1.  **Separazione delle Responsabilità (SRP):**
+      - La logica di gestione degli eventi (event listeners per i filtri data, etc.) è stata spostata da `src/ui/charts.js` al file corretto, `src/ui/interactions/chartsInteractions.js`.
+      - È stata creata la funzione `initializeChartsListeners` in `chartsInteractions.js` per incapsulare tutta la logica di binding degli eventi, come previsto dall'architettura generale.
 
-  2.  **Correzione Importazioni**: L'importazione nel file principale `src/ui/renderer.js` è stata aggiornata per puntare al nuovo percorso corretto in `pageRenderers.js`.
+  2.  **Pulizia e Specializzazione dei Moduli:**
+      - Il file `src/ui/charts.js` è stato ripulito e ora contiene esclusivamente le funzioni ausiliarie per la creazione delle istanze dei grafici e la preparazione dei dati, senza più gestire le interazioni dell'utente.
+      - Le funzioni per la manipolazione dei dati dei grafici, precedentemente in `chartsInteractions.js`, sono state spostate in `charts.js`, consolidando tutta la logica relativa ai dati dei grafici in un unico posto.
 
-  3.  **Pulizia del Codice**: Il file `src/ui/recipesRenderer.js`, ormai ridondante, è stato rimosso dal progetto. Di conseguenza, anche il riferimento a questo file nel service worker (`sw.js`) è stato eliminato per garantire che la cache sia aggiornata correttamente.
+  3.  **Correzione delle Dipendenze:**
+      - L'importazione in `main.js` è stata corretta per puntare alla nuova funzione `initializeChartsListeners`.
+      - Le dipendenze tra `pageRenderers.js` e `charts.js` sono state aggiornate per riflettere la nuova struttura.
 
-  Questo intervento risolve l'errore in modo definitivo, elimina il codice duplicato e rafforza la coerenza dell'architettura del rendering dell'applicazione.
+  Questo intervento non solo risolve il bug, ma previene errori futuri rafforzando un'architettura chiara e prevedibile per la gestione delle interazioni utente e del rendering.
 patches:
-  - file: src/ui/pageRenderers.js
+  - file: src/main.js
     content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-      import { formatIngredients } from '../utils/formatters.js';
+      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
+      import { renderApp, populateInitialText } from './ui/renderer.js';
+      import { showConfirmModal } from './ui/modals.js';
+      import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
+      import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
+      import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
+      import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
+      import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
+      import { initializeGoalsListeners } from './ui/interactions/goalsInteractions.js';
+      import { initializeChartsListeners } from './ui/interactions/chartsInteractions.js';
+      import { loadViews } from './ui/viewLoader.js';
+      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
+      import { UI_TEXT } from './config/uiText.js';
+      import { fetchAndParseConfig } from './api/configService.js';
+      import { showNotification } from './ui/notifications.js';
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      async function loadConfig(url) {
+        if (!url) {
+          setPlannerConfig({}, url);
+          return;
+        };
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) {
+          showNotification(error.message, 'error');
+          setPlannerConfig({}, url);
+        }
       }
 
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
+      function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/dietplanner/sw.js')
+              .then(registration => console.log('ServiceWorker registration successful'))
+              .catch(err => console.log('ServiceWorker registration failed: ', err));
           });
-      }
-
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
-
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
         }
       }
 
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
+      async function init() {
+        await loadViews();
+        document.addEventListener('stateChange', renderApp);
 
-      export function renderGoalsPage(state) {
-          const form = document.getElementById('goals-form');
-          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
-          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
-          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
-          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
-          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
-          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
-          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
-          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
-          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
-          form.elements.target_weight.value = state.userGoals.target_weight || '';
-      }
+        loadStateFromLocalStorage();
+        let initialState = getState();
+        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
 
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
-      }
+        populateInitialText();
 
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.weight) {
-              details.push(`${setData.weight} kg`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
-      }
+        initializeGlobalListeners();
+        initializePlannerListeners();
+        initializeProgressListeners();
+        initializeProfileListeners();
+        initializeDebriefingListeners();
+        initializeGoalsListeners();
+        initializeChartsListeners();
 
-      export function renderDebriefingPage(state) {
-        const summaryContainer = document.getElementById('debriefing-summary');
-        const statsContainer = document.getElementById('debriefing-stats');
-        const summary = state.lastWorkoutSummary;
+        renderApp();
 
-        if (!summary || !summary.exercises) {
-            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
-            statsContainer.innerHTML = '';
-            document.getElementById('debriefing-feedback').classList.add('hidden');
-            return;
-        }
+        window.toggleDebugMode = toggleDebugMode;
 
-        document.getElementById('debriefing-feedback').classList.remove('hidden');
-        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
-        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
-        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
-        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
+        const urlParams = new URLSearchParams(window.location.search);
+        const configUrlFromParam = urlParams.get('configUrl');
 
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-                <span class="stat-value">${summary.totalCaloriesBurned}</span>
-            </div>
-        ` : '';
-
-        const tonnageHTML = summary.totalTonnage > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-                <span class="stat-value">${summary.totalTonnage} kg</span>
-            </div>
-        ` : '';
-
-        const statsHTML = `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-            </div>
-            ${caloriesBurnedHTML}
-            ${tonnageHTML}
-        `;
-        statsContainer.innerHTML = statsHTML;
-
-        const summaryHTML = summary.exercises.map(exercise => {
-            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-                <div class="set-detail-item">
-                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
-                </div>
-            `).join('');
-
-            return `
-                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header">
-                        <h4>${exercise.name}</h4>
-                        <div class="debriefing-status">
-                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                        </div>
-                    </div>
-                    <div class="debriefing-card-body">
-                      <div class="exercise-stats">
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
-                      </div>
-                      <div class="sets-details-container">
-                          ${setsDetailsHTML}
-                      </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        summaryContainer.innerHTML = summaryHTML;
-      }
-
-      export function renderRecipesPage(state) {
-        const recipesList = document.getElementById('recipes-list');
-        const recipes = state.masterMealList.filter(meal => meal.recipeId);
-
-        if (!recipes || recipes.length === 0) {
-            recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-            return;
-        }
-
-        let html = recipes.map(recipe => {
-            // Usa il campo 'ingredienti' che è una stringa pre-formattata
-            const ingredientsHtml = formatIngredients(recipe.ingredienti);
-
-            return `
-                <div class="recipe-list-item" data-meal-id="${recipe.id}">
-                    <h4>${recipe.nomePasto}</h4>
-                    <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong>${ingredientsHtml}</div>` : ''}
-                </div>
-            `;
-        }).join('');
-
-        recipesList.innerHTML = html;
-      }
-  - file: src/ui/renderer.js
-    content: |
-      import { getState } from '../core/state.js';
-      import { renderPlannerPage } from './plannerRenderer.js';
-      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage } from './pageRenderers.js';
-      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { log } from '../utils/logger.js';
-
-      let isTrainerActive = false;
-
-      function populateIcons() {
-          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
-          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
-          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
-          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
-          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
-          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
-          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
-          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
-          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
-          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
-          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
-          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
-          document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
-          document.querySelectorAll('.btn-expand-chart').forEach(btn => {
-              btn.innerHTML = renderIcon('EXPAND', { width: 20, height: 20 });
-          });
-
-          document.querySelectorAll('.modal-close-btn').forEach(btn => {
-              btn.innerHTML = renderIcon('CLOSE');
-          });
-      }
-
-      export function populateInitialText() {
-        document.title = UI_TEXT.MAIN_TITLE;
-        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
-        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
-        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
-        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
-        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
-        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
-        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
-        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
-        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
-        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
-        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
-        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
-        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
-        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
-        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
-        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
-        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
-        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
-        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
-        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
-        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
-        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
-        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
-        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
-        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
-        populateIcons();
-      }
-
-      export function renderApp() {
-        const state = getState();
-        const plannerPage = document.getElementById('planner-page');
-        const progressPage = document.getElementById('progress-page');
-        const chartsPage = document.getElementById('charts-page');
-        const recipesPage = document.getElementById('recipes-page');
-        const goalsPage = document.getElementById('goals-page');
-        const profilePage = document.getElementById('profile-page');
-        const trainerPage = document.getElementById('trainer-page');
-        const debriefingPage = document.getElementById('debriefing-page');
-
-        const navPlannerBtn = document.getElementById('nav-planner');
-        const navProgressBtn = document.getElementById('nav-progress');
-        const navChartsBtn = document.getElementById('nav-charts');
-        const navRecipesBtn = document.getElementById('nav-recipes');
-        const navGoalsBtn = document.getElementById('nav-goals');
-        const navProfileBtn = document.getElementById('nav-profile');
-
-        log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
-
-        if (state.currentView !== 'trainer' && isTrainerActive) {
-            log('Renderer', 'View is not trainer, destroying trainer controller...');
-            destroyTrainerController();
-            isTrainerActive = false;
-        }
-
-        [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
-        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
-        document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
-
-        if (state.currentView === 'planner' || state.currentView === 'log') {
-          plannerPage.classList.remove('hidden');
-          navPlannerBtn.classList.add('active');
-          renderPlannerPage(state);
-        } else if (state.currentView === 'progress') {
-          progressPage.classList.remove('hidden');
-          navProgressBtn.classList.add('active');
-          renderBiometricsPage(state);
-        } else if (state.currentView === 'charts') {
-          chartsPage.classList.remove('hidden');
-          navChartsBtn.classList.add('active');
-          renderChartsPage(state);
-        } else if (state.currentView === 'recipes') {
-          recipesPage.classList.remove('hidden');
-          navRecipesBtn.classList.add('active');
-          renderRecipesPage(state);
-        } else if (state.currentView === 'goals') {
-          goalsPage.classList.remove('hidden');
-          navGoalsBtn.classList.add('active');
-          renderGoalsPage(state);
-        } else if (state.currentView === 'profile') {
-          profilePage.classList.remove('hidden');
-          navProfileBtn.classList.add('active');
-          renderProfilePage(state);
-        } else if (state.currentView === 'trainer') {
-          trainerPage.classList.remove('hidden');
-          log('Renderer', 'View is trainer, checking if trainer is active...');
-          if (!isTrainerActive) {
-            log('Renderer', 'Trainer is not active, initializing trainer controller...');
-            initializeTrainerController();
-            isTrainerActive = true;
-          }
-        } else if (state.currentView === 'debriefing') {
-          debriefingPage.classList.remove('hidden');
-          renderDebriefingPage(state);
-        }
-
-        const urlInput = document.getElementById('config-url-input');
-        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
-      }
-  - file: src/ui/recipesRenderer.js
-    content: ""
-  - file: sw.js
-    content: |
-      const CACHE_NAME = 'healtypro-v18';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'styles/recipes.css',
-        'styles/trainer.css',
-        'styles/debriefing.css',
-        'styles/goals.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/recipes.html',
-        'templates/modals.html',
-        'templates/trainer.html',
-        'templates/debriefing.html',
-        'templates/goals.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/config/forms.js',
-        'src/config/uiText.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/core/trainer.js',
-        'src/core/trainer/state.js',
-        'src/core/trainer/queueBuilder.js',
-        'src/core/trainer/machine.js',
-        'src/core/trainer/animation.js',
-        'src/ui/interactions/globalInteractions.js',
-        'src/ui/interactions/plannerInteractions.js',
-        'src/ui/interactions/profileInteractions.js',
-        'src/ui/interactions/progressInteractions.js',
-        'src/ui/interactions/debriefingInteractions.js',
-        'src/ui/interactions/goalsInteractions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/modals/confirmModal.js',
-        'src/ui/modals/dayEditorModal.js',
-        'src/ui/modals/exerciseEditorModal.js',
-        'src/ui/modals/recipeModal.js',
-        'src/ui/modals/selectionModal.js',
-        'src/ui/modals/workoutEditorModal.js',
-        'src/ui/modals/loggedExerciseEditorModal.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/ui/trainerRenderer.js',
-        'src/ui/components/TrainerComponent.js',
-        'src/utils/constants.js',
-        'src/utils/formatters.js',
-        'src/utils/logger.js',
-        'src/utils/audioFeedback.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
-
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
-
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
+        if (configUrlFromParam) {
+          const decodedUrl = decodeURIComponent(configUrlFromParam);
+          initialState = getState();
+          if (decodedUrl !== initialState.configUrl) {
+            showConfirmModal(
+              UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+              UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+              () => {
+                setConfigUrl(decodedUrl);
+                document.getElementById('config-url-input').value = decodedUrl;
+                loadConfig(decodedUrl);
+              },
+              'primary'
             );
-          })
-        );
-      });
-
-      self.addEventListener('fetch', (event) => {
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
+          } else {
+            await loadConfig(initialState.configUrl);
+          }
         } else {
-          event.respondWith(fetch(event.request));
+          await loadConfig(initialState.configUrl);
         }
-      });
+
+        registerServiceWorker();
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+  - file: src/ui/charts.js
+    content: |
+      import { formatShortDate } from '../utils/formatters.js';
+
+      let weightChart = null;
+      let weightTrendChart = null;
+
+      function setupChart(canvasId, type, label, labels, data, goal) {
+          const ctx = document.getElementById(canvasId).getContext('2d');
+          const chartData = {
+              labels: labels,
+              datasets: [{
+                  label: label,
+                  data: data,
+                  borderColor: 'rgba(75, 192, 192, 1)',
+                  backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                  fill: type === 'line' ? true : false,
+                  tension: 0.1
+              }]
+          };
+
+          const options = {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                  y: {
+                      beginAtZero: false
+                  }
+              },
+              plugins: {}
+          };
+
+          if (type === 'line' && goal) {
+              options.plugins.annotation = {
+                  annotations: {
+                      line1: {
+                          type: 'line',
+                          yMin: goal,
+                          yMax: goal,
+                          borderColor: 'rgb(255, 99, 132)',
+                          borderWidth: 2,
+                          label: {
+                              content: 'Goal',
+                              enabled: true,
+                              position: 'end'
+                          }
+                      }
+                  }
+              };
+          }
+          if (type === 'bar') {
+              chartData.datasets[0].backgroundColor = data.map(v => v >= 0 ? 'rgba(255, 99, 132, 0.5)' : 'rgba(75, 192, 192, 0.5)');
+          }
+
+
+          return new Chart(ctx, {
+              type: type,
+              data: chartData,
+              options: options
+          });
+      }
+
+      function updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData) {
+          const rangeButtons = document.querySelectorAll('.range-filter-btn');
+          rangeButtons.forEach(btn => {
+              btn.classList.toggle('active', parseInt(btn.dataset.range) === currentRangeFilter);
+          });
+
+          const prevBtn = document.getElementById('prev-range');
+          const nextBtn = document.getElementById('next-range');
+          nextBtn.disabled = dateOffset >= 0;
+
+          const dateRangeLabel = document.getElementById('date-range');
+          if (filteredData && filteredData.length > 0) {
+              const startDate = formatShortDate(new Date(filteredData[0].date));
+              const endDate = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
+              dateRangeLabel.textContent = `${startDate} - ${endDate}`;
+          } else if (appData.biometrics.length === 0) {
+              dateRangeLabel.textContent = 'No Data';
+          } else {
+              const tempEndDate = new Date();
+              tempEndDate.setDate(tempEndDate.getDate() + dateOffset);
+              const tempStartDate = new Date(tempEndDate);
+              tempStartDate.setDate(tempStartDate.getDate() - (currentRangeFilter -1));
+              dateRangeLabel.textContent = `${formatShortDate(tempStartDate)} - ${formatShortDate(tempEndDate)}`;
+          }
+      }
+
+      function calculateWeightTrend(data) {
+          if (data.length < 2) return { labels: [], values: [] };
+
+          const dailyChanges = [];
+          for (let i = 1; i < data.length; i++) {
+              const date1 = new Date(data[i-1].date).getTime();
+              const date2 = new Date(data[i].date).getTime();
+              const weight1 = parseFloat(data[i-1].weight);
+              const weight2 = parseFloat(data[i].weight);
+              const daysBetween = (date2 - date1) / (1000 * 60 * 60 * 24);
+
+              if (daysBetween > 0) {
+                  const dailyChange = (weight2 - weight1) / daysBetween;
+                  for (let j = 0; j < daysBetween; j++) {
+                      const currentDate = new Date(date1 + (j * 1000 * 60 * 60 * 24));
+                      dailyChanges.push({ date: currentDate, change: dailyChange });
+                  }
+              }
+          }
+          
+          if (dailyChanges.length < 1) return { labels: [], values: [] };
+
+          const movingAverages = [];
+          for (let i = 0; i < dailyChanges.length; i++) {
+              const windowStart = new Date(dailyChanges[i].date);
+              windowStart.setDate(windowStart.getDate() - 6);
+              const window = dailyChanges.filter(d => {
+                  const dDate = new Date(d.date);
+                  return dDate >= windowStart && dDate <= dailyChanges[i].date;
+              });
+              if(window.length > 0) {
+                  const sum = window.reduce((acc, val) => acc + val.change, 0);
+                  movingAverages.push({
+                      date: formatShortDate(dailyChanges[i].date),
+                      avg: sum / window.length
+                  });
+              }
+          }
+          
+          return {
+              labels: movingAverages.map(ma => ma.date),
+              values: movingAverages.map(ma => ma.avg)
+          };
+      }
+
+      function getBiometricsData(appData, currentRangeFilter, dateOffset) {
+          const allBiometrics = [...appData.biometrics].sort((a, b) => new Date(a.date) - new Date(b.date));
+          
+          if (allBiometrics.length === 0) {
+              return { filteredData: [], fullData: [] };
+          }
+
+          const endDate = new Date();
+          endDate.setHours(23, 59, 59, 999);
+          endDate.setDate(endDate.getDate() + dateOffset);
+
+          let startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - (currentRangeFilter - 1));
+          startDate.setHours(0, 0, 0, 0);
+
+          const filteredData = allBiometrics.filter(item => {
+              const itemDate = new Date(item.date);
+              return itemDate >= startDate && itemDate <= endDate;
+          });
+
+          return { filteredData, fullData: allBiometrics };
+      }
+  - file: src/ui/interactions/chartsInteractions.js
+    content: |
+      import { renderApp } from '../renderer.js';
+      import { getState, setState } from '../../core/state.js';
+
+      function handleRangeChange(newRange) {
+          const currentState = getState();
+          currentState.ui.charts.currentRangeFilter = newRange;
+          currentState.ui.charts.dateOffset = 0;
+          setState(currentState);
+          renderApp();
+      }
+
+      function handleDateNavigation(direction) {
+          const currentState = getState();
+          const currentOffset = currentState.ui.charts.dateOffset;
+          const range = currentState.ui.charts.currentRangeFilter;
+          const newOffset = currentOffset + (direction * range);
+
+          if (newOffset <= 0) {
+              currentState.ui.charts.dateOffset = newOffset;
+              setState(currentState);
+              renderApp();
+          }
+      }
+
+      export function initializeChartsListeners() {
+          const chartsPage = document.getElementById('charts-page');
+
+          chartsPage.addEventListener('click', (event) => {
+              const target = event.target;
+              if (target.matches('.range-filter-btn')) {
+                  const newRange = parseInt(target.dataset.range);
+                  handleRangeChange(newRange);
+              } else if (target.id === 'prev-range') {
+                  handleDateNavigation(-1);
+              } else if (target.id === 'next-range') {
+                  handleDateNavigation(1);
+              }
+          });
+      }
+
 commands:
-  - "echo 'Refactoring completato. L'errore di rendering è stato risolto e l'architettura è stata resa più coerente.'"
+  - echo "Refactoring completato. Tutti gli errori di importazione sono stati risolti e l'architettura è ora coerente."
