@@ -19,6 +19,12 @@ let state = {
   currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
   debugMode: false,
   lastWorkoutSummary: null,
+  ui: {
+    charts: {
+      currentRangeFilter: 30,
+      dateOffset: 0
+    }
+  }
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
@@ -32,6 +38,14 @@ const getWeekStartDate = (date) => {
 };
 
 export const getState = () => ({ ...state });
+export const setState = (newState) => {
+  state = { ...state, ...newState };
+  notify();
+}
+export const setUiState = (uiChanges) => {
+  state.ui = { ...state.ui, ...uiChanges };
+  notify();
+}
 
 export function getMealsForType(mealType) {
   return state.masterMealList.filter(meal => {

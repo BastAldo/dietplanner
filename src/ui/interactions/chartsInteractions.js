@@ -1,38 +1,49 @@
-import { renderApp } from '../renderer.js';
-import { getState, setState } from '../../core/state.js';
+import { getState, setUiState } from '../../core/state.js';
 
 function handleRangeChange(newRange) {
     const currentState = getState();
-    currentState.ui.charts.currentRangeFilter = newRange;
-    currentState.ui.charts.dateOffset = 0;
-    setState(currentState);
-    renderApp();
+    const newUiState = {
+        ...currentState.ui,
+        charts: {
+            ...currentState.ui.charts,
+            currentRangeFilter: newRange,
+            dateOffset: 0
+        }
+    };
+    setUiState(newUiState);
 }
 
 function handleDateNavigation(direction) {
     const currentState = getState();
-    const currentOffset = currentState.ui.charts.dateOffset;
-    const range = currentState.ui.charts.currentRangeFilter;
-    const newOffset = currentOffset + (direction * range);
+    const { dateOffset, currentRangeFilter } = currentState.ui.charts;
+    const newOffset = dateOffset + (direction * currentRangeFilter);
 
     if (newOffset <= 0) {
-        currentState.ui.charts.dateOffset = newOffset;
-        setState(currentState);
-        renderApp();
+        const newUiState = {
+            ...currentState.ui,
+            charts: {
+                ...currentState.ui.charts,
+                dateOffset: newOffset
+            }
+        };
+        setUiState(newUiState);
     }
 }
 
 export function initializeChartsListeners() {
     const chartsPage = document.getElementById('charts-page');
+    if (!chartsPage) return;
 
     chartsPage.addEventListener('click', (event) => {
-        const target = event.target;
+        const target = event.target.closest('button');
+        if (!target) return;
+        
         if (target.matches('.range-filter-btn')) {
-            const newRange = parseInt(target.dataset.range);
+            const newRange = target.dataset.range === 'all' ? 9999 : parseInt(target.dataset.range, 10);
             handleRangeChange(newRange);
-        } else if (target.id === 'prev-range') {
+        } else if (target.id === 'charts-prev-btn') {
             handleDateNavigation(-1);
-        } else if (target.id === 'next-range') {
+        } else if (target.id === 'charts-next-btn') {
             handleDateNavigation(1);
         }
     });
