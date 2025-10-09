@@ -1,7 +1,6 @@
 import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
-import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage } from './pageRenderers.js';
-import { renderRecipesPage } from './recipesRenderer.js';
+import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage } from './pageRenderers.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';

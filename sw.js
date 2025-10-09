@@ -50,7 +50,6 @@ const APP_SHELL_FILES = [
   'src/ui/modals/loggedExerciseEditorModal.js',
   'src/ui/plannerRenderer.js',
   'src/ui/pageRenderers.js',
-  'src/ui/recipesRenderer.js',
   'src/ui/charts.js',
   'src/ui/viewLoader.js',
   'src/ui/icons.js',

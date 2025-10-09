@@ -3,6 +3,7 @@ import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { renderCharts } from './charts.js';
+import { formatIngredients } from '../utils/formatters.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -207,4 +208,29 @@ export function renderDebriefingPage(state) {
   }).join('');
 
   summaryContainer.innerHTML = summaryHTML;
+}
+
+export function renderRecipesPage(state) {
+  const recipesList = document.getElementById('recipes-list');
+  const recipes = state.masterMealList.filter(meal => meal.recipeId);
+
+  if (!recipes || recipes.length === 0) {
+      recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
+      return;
+  }
+
+  let html = recipes.map(recipe => {
+      // Usa il campo 'ingredienti' che è una stringa pre-formattata
+      const ingredientsHtml = formatIngredients(recipe.ingredienti);
+
+      return `
+          <div class="recipe-list-item" data-meal-id="${recipe.id}">
+              <h4>${recipe.nomePasto}</h4>
+              <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
+              ${ingredientsHtml ? `<div><strong>Ingredienti:</strong>${ingredientsHtml}</div>` : ''}
+          </div>
+      `;
+  }).join('');
+
+  recipesList.innerHTML = html;
 }

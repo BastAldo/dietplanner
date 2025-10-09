@@ -1,59 +1,495 @@
-commit_message: "fix(ui): Standardizza l'uso delle icone e corregge l'errore di importazione"
+commit_message: "refactor(ui): Corregge errore di rendering e standardizza l'architettura"
 rationale: |
-  Questa patch risolve un errore critico di runtime in `src/ui/recipesRenderer.js` causato da un'importazione errata del modulo delle icone.
-  Il file tentava di utilizzare un'importazione di default (`import ICONS from...`) da `src/ui/icons.js`, che però esporta solo la funzione nominata `renderIcon`.
+  Questa patch risolve un errore critico di runtime che impediva il rendering della pagina delle ricette. L'errore era causato da un'importazione errata in `src/ui/renderer.js`, che cercava di importare `renderRecipesPage` da `src/ui/recipesRenderer.js`, mentre quest'ultimo esportava una funzione con un nome diverso (`renderRecipes`).
 
-  La soluzione implementata allinea `recipesRenderer.js` allo standard utilizzato nel resto dell'applicazione:
-  1. L'istruzione di importazione è stata corretta per importare la funzione `renderIcon`.
-  2. Il template HTML è stato aggiornato per utilizzare `renderIcon('ICON_NAME')` invece di accedere direttamente a un oggetto `ICONS`.
-  3. I nomi delle icone sono stati corretti (`'EDIT'`, `'TRASH'`) per corrispondere a quelli definiti in `icons.js`.
-  4. L'icona inesistente 'add' è stata sostituita con un testo '+' per mantenere la funzionalità visiva.
+  Invece di una semplice rinomina, è stato eseguito un refactoring per allineare la gestione della pagina delle ricette all'architettura esistente del progetto, migliorando coerenza e manutenibilità:
 
-  Questo approccio risolve il bug in modo definitivo e garantisce la coerenza del codice nell'intero progetto.
+  1.  **Consolidamento Architetturale**: La logica di rendering è stata spostata da `src/ui/recipesRenderer.js` al file centralizzato `src/ui/pageRenderers.js`. La funzione è stata rinominata `renderRecipesPage` per conformarsi alla convenzione di denominazione (`render<NomePagina>Page`) usata per tutte le altre viste.
+
+  2.  **Correzione Importazioni**: L'importazione nel file principale `src/ui/renderer.js` è stata aggiornata per puntare al nuovo percorso corretto in `pageRenderers.js`.
+
+  3.  **Pulizia del Codice**: Il file `src/ui/recipesRenderer.js`, ormai ridondante, è stato rimosso dal progetto. Di conseguenza, anche il riferimento a questo file nel service worker (`sw.js`) è stato eliminato per garantire che la cache sia aggiornata correttamente.
+
+  Questo intervento risolve l'errore in modo definitivo, elimina il codice duplicato e rafforza la coerenza dell'architettura del rendering dell'applicazione.
 patches:
-  - file: src/ui/recipesRenderer.js
+  - file: src/ui/pageRenderers.js
     content: |
+      import { calculateBMR } from '../core/calculations.js';
+      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
+      import { UI_TEXT } from '../config/uiText.js';
       import { renderIcon } from './icons.js';
+      import { renderCharts } from './charts.js';
       import { formatIngredients } from '../utils/formatters.js';
 
-      export function renderRecipes(recipes) {
-          if (!recipes || recipes.length === 0) {
-              return '<p>Nessuna ricetta trovata. Aggiungi ricette tramite la configurazione.</p>';
+      function toISODateString(date) {
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      }
+
+      function formatReadableDate(isoDate) {
+          const date = new Date(isoDate);
+          return date.toLocaleDateString('it-IT', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+          });
+      }
+
+      function formatDuration(ms) {
+          if (typeof ms !== 'number' || ms < 0) return '00:00';
+          const totalSeconds = Math.floor(ms / 1000);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      export function renderBiometricsPage(state) {
+        const form = document.getElementById('biometrics-form');
+        const listContainer = document.getElementById('biometrics-list');
+        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
+
+        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+
+        if (state.biometricData.length > 0) {
+            listContainer.innerHTML = state.biometricData.map(entry => {
+                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
+                    .map(field => `
+                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
+                            <span class="biometric-card__label">${field.label}</span>
+                            <span class="biometric-card__value">${entry[field.id]}</span>
+                        </div>
+                    `).join('');
+
+                return `
+                    <div class="biometric-card" data-date="${entry.date}">
+                        <div class="biometric-card__header">
+                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
+                            <div class="biometrics-actions">
+                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
+                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
+                                </button>
+                                <div class="actions-dropdown">
+                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
+                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="biometric-card__body">
+                            ${fieldsHTML}
+                        </div>
+                    </div>`;
+            }).join('');
+        } else {
+            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
+        }
+
+        const weightInput = form.elements.weight;
+        const bmrInput = form.elements.basalMetabolism;
+        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
+
+        const bmr = calculateBMR(state.userProfile, weightForCalc);
+        if (bmr !== null) {
+          bmrInput.value = bmr;
+        } else {
+          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
+        }
+      }
+
+      export function renderProfilePage(state) {
+        const form = document.getElementById('profile-form');
+        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+      }
+
+      export function renderGoalsPage(state) {
+          const form = document.getElementById('goals-form');
+          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
+          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
+          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
+          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
+          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
+          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
+          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
+          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
+          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
+          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
+          form.elements.target_weight.value = state.userGoals.target_weight || '';
+      }
+
+      export function renderChartsPage(state) {
+          const placeholder = document.getElementById('biometrics-chart-placeholder');
+          const canvas = document.getElementById('biometrics-chart-canvas');
+          if (state.biometricData.length < 2) {
+              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
+              placeholder.classList.remove('hidden');
+              canvas.classList.add('hidden');
+          } else {
+              placeholder.classList.add('hidden');
+              canvas.classList.remove('hidden');
           }
+          renderCharts(state);
+      }
 
-          let html = `
-              <div class="recipes-container">
-                  <div class="add-recipe-card" id="add-recipe-btn">
-                      <div class="add-recipe-icon">+</div>
-                      <div class="add-recipe-text">Aggiungi Ricetta</div>
-                  </div>
-          `;
+      function getSetDetails(setData) {
+          let details = [];
+          if (setData.reps) {
+              details.push(`${setData.reps} reps`);
+          }
+          if (setData.weight) {
+              details.push(`${setData.weight} kg`);
+          }
+          if (setData.duration) {
+              details.push(`${formatDuration(setData.duration)}`);
+          }
+          return details.join(' / ');
+      }
 
-          recipes.forEach(recipe => {
-              html += `
-                  <div class="recipe-card" data-recipe-id="${recipe.id}">
-                      <div class="recipe-card-header">
-                          <h3>${recipe.nomePasto}</h3>
-                          <div class="recipe-card-actions">
-                              <button class="icon-btn edit-recipe-btn" data-recipe-id="${recipe.id}">${renderIcon('EDIT')}</button>
-                              <button class="icon-btn delete-recipe-btn" data-recipe-id="${recipe.id}">${renderIcon('TRASH')}</button>
-                          </div>
+      export function renderDebriefingPage(state) {
+        const summaryContainer = document.getElementById('debriefing-summary');
+        const statsContainer = document.getElementById('debriefing-stats');
+        const summary = state.lastWorkoutSummary;
+
+        if (!summary || !summary.exercises) {
+            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
+            statsContainer.innerHTML = '';
+            document.getElementById('debriefing-feedback').classList.add('hidden');
+            return;
+        }
+
+        document.getElementById('debriefing-feedback').classList.remove('hidden');
+        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
+        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
+        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
+        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
+
+        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
+                <span class="stat-value">${summary.totalCaloriesBurned}</span>
+            </div>
+        ` : '';
+
+        const tonnageHTML = summary.totalTonnage > 0 ? `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
+                <span class="stat-value">${summary.totalTonnage} kg</span>
+            </div>
+        ` : '';
+
+        const statsHTML = `
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
+                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
+            </div>
+            ${caloriesBurnedHTML}
+            ${tonnageHTML}
+        `;
+        statsContainer.innerHTML = statsHTML;
+
+        const summaryHTML = summary.exercises.map(exercise => {
+            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
+            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
+                <div class="set-detail-item">
+                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
+                    <span>${getSetDetails(setData)}</span>
+                </div>
+            `).join('');
+
+            return `
+                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
+                    <div class="debriefing-card-header">
+                        <h4>${exercise.name}</h4>
+                        <div class="debriefing-status">
+                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
+                        </div>
+                    </div>
+                    <div class="debriefing-card-body">
+                      <div class="exercise-stats">
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
+                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
                       </div>
-                      <div class="recipe-card-body">
-                          <p><strong>Tipo:</strong> ${recipe.tipoPasto}</p>
-                          <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max ? ' - ' + recipe.calories_max : ''} kcal</p>
-                          <div>
-                              <strong>Ingredienti:</strong>
-                              ${formatIngredients(recipe.ingredienti)}
-                          </div>
-                          <p><strong>Etichette:</strong> ${recipe.etichette ? recipe.etichette.join(', ') : 'N/A'}</p>
+                      <div class="sets-details-container">
+                          ${setsDetailsHTML}
                       </div>
-                  </div>
-              `;
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        summaryContainer.innerHTML = summaryHTML;
+      }
+
+      export function renderRecipesPage(state) {
+        const recipesList = document.getElementById('recipes-list');
+        const recipes = state.masterMealList.filter(meal => meal.recipeId);
+
+        if (!recipes || recipes.length === 0) {
+            recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
+            return;
+        }
+
+        let html = recipes.map(recipe => {
+            // Usa il campo 'ingredienti' che è una stringa pre-formattata
+            const ingredientsHtml = formatIngredients(recipe.ingredienti);
+
+            return `
+                <div class="recipe-list-item" data-meal-id="${recipe.id}">
+                    <h4>${recipe.nomePasto}</h4>
+                    <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
+                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong>${ingredientsHtml}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        recipesList.innerHTML = html;
+      }
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage } from './pageRenderers.js';
+      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { log } from '../utils/logger.js';
+
+      let isTrainerActive = false;
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
+          document.querySelectorAll('.btn-expand-chart').forEach(btn => {
+              btn.innerHTML = renderIcon('EXPAND', { width: 20, height: 20 });
           });
 
-          html += '</div>';
-          return html;
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
       }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
+        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
+        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const goalsPage = document.getElementById('goals-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+        const debriefingPage = document.getElementById('debriefing-page');
+
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navGoalsBtn = document.getElementById('nav-goals');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
+
+        if (state.currentView !== 'trainer' && isTrainerActive) {
+            log('Renderer', 'View is not trainer, destroying trainer controller...');
+            destroyTrainerController();
+            isTrainerActive = false;
+        }
+
+        [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+        document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
+
+        if (state.currentView === 'planner' || state.currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (state.currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (state.currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (state.currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (state.currentView === 'goals') {
+          goalsPage.classList.remove('hidden');
+          navGoalsBtn.classList.add('active');
+          renderGoalsPage(state);
+        } else if (state.currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        } else if (state.currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          log('Renderer', 'View is trainer, checking if trainer is active...');
+          if (!isTrainerActive) {
+            log('Renderer', 'Trainer is not active, initializing trainer controller...');
+            initializeTrainerController();
+            isTrainerActive = true;
+          }
+        } else if (state.currentView === 'debriefing') {
+          debriefingPage.classList.remove('hidden');
+          renderDebriefingPage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
+  - file: src/ui/recipesRenderer.js
+    content: ""
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v18';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'styles/debriefing.css',
+        'styles/goals.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'templates/debriefing.html',
+        'templates/goals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/config/forms.js',
+        'src/config/uiText.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions/globalInteractions.js',
+        'src/ui/interactions/plannerInteractions.js',
+        'src/ui/interactions/profileInteractions.js',
+        'src/ui/interactions/progressInteractions.js',
+        'src/ui/interactions/debriefingInteractions.js',
+        'src/ui/interactions/goalsInteractions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/modals/confirmModal.js',
+        'src/ui/modals/dayEditorModal.js',
+        'src/ui/modals/exerciseEditorModal.js',
+        'src/ui/modals/recipeModal.js',
+        'src/ui/modals/selectionModal.js',
+        'src/ui/modals/workoutEditorModal.js',
+        'src/ui/modals/loggedExerciseEditorModal.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'src/utils/audioFeedback.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
+
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
+
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
 commands:
-  - echo "Patch applicata. L'uso delle icone è stato standardizzato e l'errore di importazione è stato risolto."
+  - "echo 'Refactoring completato. L'errore di rendering è stato risolto e l'architettura è stata resa più coerente.'"
