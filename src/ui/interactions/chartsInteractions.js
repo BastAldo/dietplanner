@@ -114,7 +114,6 @@ export function calculateWeightTrend(data) {
             return dDate >= windowStart && dDate <= dailyChanges[i].date;
         });
         if(window.length > 0) {
-            const sum = window.reduce((acc, val) => acc + val.change, 0);
             movingAverages.push({
                 date: formatShortDate(dailyChanges[i].date),
                 avg: sum / window.length
