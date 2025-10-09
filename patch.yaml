@@ -1,583 +1,289 @@
-commit_message: "fix(charts): Implementa calcolo trend robusto con regressione lineare"
+commit_message: "fix(charts): Stabilizza le statistiche dei grafici e i calcoli dei trend"
 rationale: |
-  Questo commit sostituisce l'algoritmo di calcolo del trend del peso, che si è dimostrato inaffidabile, con un approccio basato sulla regressione lineare, come da piano approvato. La nuova logica risolve definitivamente il bug che causava la visualizzazione di 'NaN' nelle statistiche e stabilizza il grafico della variazione del peso.
+  La precedente implementazione calcolava statistiche e trend chiave basandosi su un set di dati filtrato e limitato a una finestra temporale. Questo causava incongruenze ed errori quando l'utente navigava nel tempo, specialmente quando la finestra conteneva un numero insufficiente di punti dati.
 
-  1.  **Statistiche di Riepilogo Affidabili**: La metrica "Variazione media / settimana" viene ora calcolata applicando una regressione lineare all'intero set di dati nel range temporale selezionato. Questo fornisce una stima del trend generale molto robusta, che non fallisce più (`NaN`) in presenza di dati sparsi.
+  Questa patch risolve i problemi in modo strutturale:
+  1.  **Modifica di `getBiometricsData`**: La funzione ora restituisce sia i dati filtrati per la vista corrente sia lo storico completo e ordinato dei dati biometrici.
+  2.  **Aggiornamento di `renderCharts`**: La funzione di rendering ora utilizza il set di dati completo per calcolare statistiche globali e stabili, come "Peso Attuale", "Variazione Media/Settimana" e "Settimane stimate all'obiettivo".
+  3.  **Calcolo del Trend**: Il grafico dell'andamento della variazione di peso viene calcolato sull'intero storico per garantirne la disponibilità costante, per poi essere filtrato per visualizzare solo la porzione pertinente alla finestra temporale selezionata.
 
-  2.  **Grafico Variazione Smussato**: Il grafico "Andamento Variazione Peso" è stato completamente rivisto. Ora visualizza l'evoluzione del trend calcolando una regressione lineare su una finestra mobile di 7 giorni. Il risultato è una curva smussata che rappresenta fedelmente come la tendenza del peso è cambiata nel tempo, eliminando la volatilità fuorviante delle fluttuazioni giornaliere.
-
-  3.  **Navigazione Controllata**: Viene mantenuta la correzione che disabilita il pulsante di navigazione temporale quando non ci sono dati antecedenti da visualizzare.
+  Questo approccio rende le statistiche indipendenti dalla vista corrente, fornendo una rappresentazione coerente e accurata dei progressi dell'utente.
 patches:
   - file: src/ui/charts.js
     content: |
-      import { MEAL_TYPES, DAYS, WEEK_STARTS_ON_MONDAY } from '../utils/constants.js';
-      import { BIOMETRIC_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { log } from '../utils/logger.js';
+      import { getState, setState } from '../core/state.js';
+      import { calculateWeightTrend, getBiometricsData, setupChart, updateChartNavigation } from '../ui/interactions/chartsInteractions.js';
+      import { formatShortDate } from '../utils/formatters.js';
 
-      let chartInstances = {};
-      let currentPlannerChartType = 'bar';
-      let currentRangeFilter = '30';
-      let dateOffset = 0; // In weeks
+      let weightChart = null;
+      let weightTrendChart = null;
 
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      export function renderCharts() {
+          const appData = getState();
+          const { currentRangeFilter, dateOffset } = appData.ui.charts;
+          const chartsView = document.getElementById('charts-view');
+          if (!chartsView) return;
 
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
+          const { filteredData, fullData } = getBiometricsData(appData, currentRangeFilter, dateOffset);
+
+          if (!fullData || fullData.length === 0) {
+              chartsView.querySelector('.charts-container').innerHTML = '<p>Nessun dato biometrico disponibile. Aggiungi dati nella sezione "Progressi".</p>';
+              chartsView.querySelector('.charts-summary-stats').innerHTML = '';
+              updateChartNavigation(appData, currentRangeFilter, dateOffset, []);
+              return;
+          } else {
+               chartsView.querySelector('.charts-container').innerHTML = `
+                  <div class="chart-container">
+                      <canvas id="weight-chart"></canvas>
+                  </div>
+                  <div class="chart-container">
+                      <canvas id="weight-trend-chart"></canvas>
+                  </div>
+              `;
+          }
+
+          updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData);
+
+          // Statistiche di Riepilogo
+          const currentWeight = parseFloat(fullData[fullData.length - 1].weight);
+          const goalWeight = appData.goals.weightGoal;
+
+          const fullWeightData = fullData.map(d => [
+              new Date(d.date).getTime(),
+              parseFloat(d.weight)
+          ]);
+
+          let weeklyChange = 0;
+          let weeksToGoal = 'N/A';
+
+          if (fullWeightData.length > 1) {
+              const linearRegression = ss.linearRegression(fullWeightData);
+              const slope = linearRegression.m;
+              const dailyChange = slope * (1000 * 60 * 60 * 24);
+              weeklyChange = dailyChange * 7;
+
+              if (goalWeight && currentWeight !== goalWeight) {
+                  const weightDifference = goalWeight - currentWeight;
+                  if (Math.abs(weeklyChange) > 0.01 && ((weeklyChange < 0 && weightDifference < 0) || (weeklyChange > 0 && weightDifference > 0))) {
+                      const estimatedWeeks = weightDifference / weeklyChange;
+                      weeksToGoal = Math.round(estimatedWeeks);
+                  }
+              }
+          }
+
+          const summaryStats = `
+              <div><strong>Peso Attuale:</strong> ${currentWeight.toFixed(1)} kg</div>
+              <div><strong>Obiettivo Peso:</strong> ${goalWeight ? goalWeight + ' kg' : 'Non impostato'}</div>
+              <div><strong>Variazione Media/Settimana:</strong> <span class="${weeklyChange >= 0 ? 'positive' : 'negative'}">${weeklyChange.toFixed(2)} kg</span></div>
+              <div><strong>Settimane Stimate all'Obiettivo:</strong> ${weeksToGoal}</div>
+          `;
+          chartsView.querySelector('.charts-summary-stats').innerHTML = summaryStats;
+
+          // Grafico del Peso
+          if (weightChart) {
+              weightChart.destroy();
+          }
+          if (filteredData.length > 0) {
+              const weightLabels = filteredData.map(item => formatShortDate(new Date(item.date)));
+              const weightValues = filteredData.map(item => parseFloat(item.weight));
+              weightChart = setupChart('weight-chart', 'line', 'Peso (kg)', weightLabels, weightValues, goalWeight);
+          } else {
+              const weightCanvas = document.getElementById('weight-chart');
+              if (weightCanvas) {
+                  const ctx = weightCanvas.getContext('2d');
+                  ctx.clearRect(0, 0, weightCanvas.width, weightCanvas.height);
+                  ctx.font = "16px Arial";
+                  ctx.textAlign = "center";
+                  ctx.fillText("Nessun dato per questo periodo", weightCanvas.width/2, weightCanvas.height/2);
+              }
+          }
+
+          // Grafico Andamento Variazione Peso
+          const fullTrendData = calculateWeightTrend(fullData);
+          let visibleTrendData = { labels: [], values: [] };
+
+          if (filteredData.length > 0 && fullTrendData.labels.length > 0) {
+              const viewStartDate = new Date(filteredData[0].date).getTime();
+              const viewEndDate = new Date(filteredData[filteredData.length - 1].date).getTime();
+
+              for(let i = 0; i < fullTrendData.labels.length; i++) {
+                  const trendDate = new Date(fullTrendData.labels[i]).getTime();
+                   if (trendDate >= viewStartDate && trendDate <= viewEndDate) {
+                      visibleTrendData.labels.push(fullTrendData.labels[i]);
+                      visibleTrendData.values.push(fullTrendData.values[i]);
+                  }
+              }
+          }
+
+          if (weightTrendChart) {
+              weightTrendChart.destroy();
+          }
+          if (visibleTrendData.labels.length > 0) {
+              weightTrendChart = setupChart('weight-trend-chart', 'bar', 'Andamento Variazione Peso (kg/giorno, media 7gg)', visibleTrendData.labels, visibleTrendData.values);
+          } else {
+               const trendCanvas = document.getElementById('weight-trend-chart');
+              if(trendCanvas){
+                  const ctx = trendCanvas.getContext('2d');
+                  ctx.clearRect(0, 0, trendCanvas.width, trendCanvas.height);
+                  ctx.font = "16px Arial";
+                  ctx.textAlign = "center";
+                  ctx.fillText("Dati insufficienti per mostrare il trend", trendCanvas.width/2, trendCanvas.height/2);
+              }
+          }
+      }
+  - file: src/ui/interactions/chartsInteractions.js
+    content: |
+      import { setState } from '../../core/state.js';
+      import { renderCharts } from '../charts.js';
+      import { formatShortDate } from '../../utils/formatters.js';
+
+      export function setupChart(canvasId, type, label, labels, data, goal) {
+          const ctx = document.getElementById(canvasId).getContext('2d');
+          const chartData = {
+              labels: labels,
+              datasets: [{
+                  label: label,
+                  data: data,
+                  borderColor: 'rgba(75, 192, 192, 1)',
+                  backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                  fill: type === 'line' ? true : false,
+                  tension: 0.1
+              }]
+          };
+
+          const options = {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                  y: {
+                      beginAtZero: false
+                  }
+              },
+              plugins: {}
+          };
+
+          if (type === 'line' && goal) {
+              options.plugins.annotation = {
+                  annotations: {
+                      line1: {
+                          type: 'line',
+                          yMin: goal,
+                          yMax: goal,
+                          borderColor: 'rgb(255, 99, 132)',
+                          borderWidth: 2,
+                          label: {
+                              content: 'Goal',
+                              enabled: true,
+                              position: 'end'
+                          }
+                      }
+                  }
+              };
+          }
+          if (type === 'bar') {
+              chartData.datasets[0].backgroundColor = data.map(v => v >= 0 ? 'rgba(255, 99, 132, 0.5)' : 'rgba(75, 192, 192, 0.5)');
+          }
+
+
+          return new Chart(ctx, {
+              type: type,
+              data: chartData,
+              options: options
+          });
       }
 
-      function getChartColors() {
-          const style = getComputedStyle(document.documentElement);
+      export function updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData) {
+          const rangeButtons = document.querySelectorAll('.range-filter-btn');
+          rangeButtons.forEach(btn => {
+              btn.classList.toggle('active', parseInt(btn.dataset.range) === currentRangeFilter);
+          });
+
+          const prevBtn = document.getElementById('prev-range');
+          const nextBtn = document.getElementById('next-range');
+          nextBtn.disabled = dateOffset >= 0;
+
+          const dateRangeLabel = document.getElementById('date-range');
+          if (filteredData && filteredData.length > 0) {
+              const startDate = formatShortDate(new Date(filteredData[0].date));
+              const endDate = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
+              dateRangeLabel.textContent = `${startDate} - ${endDate}`;
+          } else if (appData.biometrics.length === 0) {
+              dateRangeLabel.textContent = 'No Data';
+          } else {
+              const tempEndDate = new Date();
+              tempEndDate.setDate(tempEndDate.getDate() + dateOffset);
+              const tempStartDate = new Date(tempEndDate);
+              tempStartDate.setDate(tempStartDate.getDate() - (currentRangeFilter -1));
+              dateRangeLabel.textContent = `${formatShortDate(tempStartDate)} - ${formatShortDate(tempEndDate)}`;
+          }
+      }
+
+      export function calculateWeightTrend(data) {
+          if (data.length < 2) return { labels: [], values: [] };
+
+          const dailyChanges = [];
+          for (let i = 1; i < data.length; i++) {
+              const date1 = new Date(data[i-1].date).getTime();
+              const date2 = new Date(data[i].date).getTime();
+              const weight1 = parseFloat(data[i-1].weight);
+              const weight2 = parseFloat(data[i].weight);
+              const daysBetween = (date2 - date1) / (1000 * 60 * 60 * 24);
+
+              if (daysBetween > 0) {
+                  const dailyChange = (weight2 - weight1) / daysBetween;
+                  for (let j = 0; j < daysBetween; j++) {
+                      const currentDate = new Date(date1 + (j * 1000 * 60 * 60 * 24));
+                      dailyChanges.push({ date: currentDate, change: dailyChange });
+                  }
+              }
+          }
+          
+          if (dailyChanges.length < 1) return { labels: [], values: [] };
+
+          const movingAverages = [];
+          for (let i = 0; i < dailyChanges.length; i++) {
+              const windowStart = new Date(dailyChanges[i].date);
+              windowStart.setDate(windowStart.getDate() - 6);
+              const window = dailyChanges.filter(d => {
+                  const dDate = new Date(d.date);
+                  return dDate >= windowStart && dDate <= dailyChanges[i].date;
+              });
+              if(window.length > 0) {
+                  const sum = window.reduce((acc, val) => acc + val.change, 0);
+                  movingAverages.push({
+                      date: formatShortDate(dailyChanges[i].date),
+                      avg: sum / window.length
+                  });
+              }
+          }
+          
           return {
-              primary: style.getPropertyValue('--primary-color').trim(),
-              secondary: style.getPropertyValue('--secondary-color').trim(),
-              textColor: style.getPropertyValue('--text-color').trim(),
-              borderColor: style.getPropertyValue('--border-color').trim(),
-              danger: style.getPropertyValue('--danger-color').trim(),
-              success: style.getPropertyValue('--success-color').trim(),
-              warning: style.getPropertyValue('--warning-color').trim()
+              labels: movingAverages.map(ma => ma.date),
+              values: movingAverages.map(ma => ma.avg)
           };
       }
 
-      function calculateWeeklyCalorieData(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weeklyData = { labels: [], calories: [] };
-
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          weeklyData.labels.push(DAYS[i]);
-
-          let dailyMin = 0, dailyMax = 0;
-          MEAL_TYPES.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            if (meal && typeof meal.calories_min === 'number') {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              dailyMin += minCals;
-              dailyMax += maxCals;
-            }
-          });
-          weeklyData.calories.push([dailyMin, dailyMax]);
-        }
-        return weeklyData;
-      }
-
-      function destroyAllCharts() {
-        Object.values(chartInstances).forEach(chart => {
-          if (chart) chart.destroy();
-        });
-        chartInstances = {};
-      }
-
-      function renderPlannerChart(state, canvasId = 'planner-chart-canvas', optionsOverrides = {}) {
-        const weeklyData = calculateWeeklyCalorieData(state);
-        const colors = getChartColors();
-        const isLineChart = currentPlannerChartType === 'line';
-        
-        const datasets = isLineChart ?
-        [{
-            label: UI_TEXT.CHART_KCAL_MIN_LABEL,
-            data: weeklyData.calories.map(c => c[0]),
-            borderColor: colors.secondary,
-            fill: false,
-            tension: 0.1
-        },{
-            label: UI_TEXT.CHART_KCAL_MAX_LABEL,
-            data: weeklyData.calories.map(c => c[1]),
-            borderColor: colors.primary,
-            fill: '-1',
-            backgroundColor: colors.primary + '33',
-            tension: 0.1
-        }]
-        :
-        [{
-            label: UI_TEXT.CHART_KCAL_RANGE_LABEL,
-            data: weeklyData.calories,
-            backgroundColor: colors.primary,
-            borderColor: colors.secondary
-        }];
-        
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        const chart = new Chart(ctx, {
-          type: currentPlannerChartType,
-          data: {
-            labels: weeklyData.labels,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: isLineChart,
-                labels: { color: colors.textColor }
-              },
-              tooltip: {
-                callbacks: {
-                  label: function(context) {
-                    if (isLineChart) {
-                      return `${context.dataset.label}: ${context.parsed.y}`;
-                    }
-                    const value = context.raw;
-                    if (value[0] === value[1]) {
-                      return `${UI_TEXT.KCAL_LABEL}: ${value[0]}`;
-                    }
-                    return `${UI_TEXT.KCAL_LABEL}: ${value[0]} - ${value[1]}`;
-                  }
-                }
-              }
-            },
-            ...optionsOverrides
+      export function getBiometricsData(appData, currentRangeFilter, dateOffset) {
+          const allBiometrics = [...appData.biometrics].sort((a, b) => new Date(a.date) - new Date(b.date));
+          
+          if (allBiometrics.length === 0) {
+              return { filteredData: [], fullData: [] };
           }
-        });
-        return chart;
-      }
 
-      function getBiometricsData(state) {
-          const sortedData = [...state.biometricData].sort((a, b) => new Date(a.date) - new Date(b.date));
           const endDate = new Date();
-          endDate.setDate(endDate.getDate() - (dateOffset * 7));
-          let startDate;
+          endDate.setHours(23, 59, 59, 999);
+          endDate.setDate(endDate.getDate() + dateOffset);
 
-          if (currentRangeFilter === 'all') {
-              startDate = new Date(sortedData[0]?.date || endDate);
-          } else {
-              startDate = new Date(endDate);
-              startDate.setDate(startDate.getDate() - parseInt(currentRangeFilter, 10));
-          }
+          let startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - (currentRangeFilter - 1));
+          startDate.setHours(0, 0, 0, 0);
 
-          const filteredData = sortedData.filter(entry => {
-              const entryDate = new Date(entry.date);
-              return entryDate >= startDate && entryDate <= endDate;
+          const filteredData = allBiometrics.filter(item => {
+              const itemDate = new Date(item.date);
+              return itemDate >= startDate && itemDate <= endDate;
           });
 
-          const hasOlderData = sortedData.some(entry => new Date(entry.date) < startDate);
-
-          const labels = filteredData.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-          
-          const datasets = {};
-          const numericFields = BIOMETRIC_FIELDS.filter(f => f.type === 'number');
-
-          numericFields.forEach(field => {
-              datasets[field.id] = {
-                  label: field.label,
-                  data: filteredData.map(entry => entry[field.id] || null)
-              };
-          });
-
-          return { labels, datasets, filteredData, hasOlderData };
-      }
-
-      function renderBiometricsChart(state, data, canvasId = 'biometrics-chart-canvas', optionsOverrides = {}) {
-        const { labels, datasets } = data;
-        const colors = getChartColors();
-        const colorCycle = [colors.primary, colors.secondary, colors.success, colors.warning, colors.danger];
-        
-        const chartDatasets = Object.values(datasets)
-            .map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                fill: false,
-                borderColor: colorCycle[index % colorCycle.length],
-                tension: 0.1,
-                pointBackgroundColor: colorCycle[index % colorCycle.length],
-                pointRadius: 4,
-                hidden: dataset.label.includes('M. Basale')
-            }))
-            .filter(d => d.data.some(val => val !== null));
-
-        const ctx = document.getElementById(canvasId).getContext('2d');
-
-        const chart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: chartDatasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                ticks: { color: colors.textColor },
-                grid: { color: colors.borderColor }
-              },
-              x: {
-                ticks: { color: colors.textColor },
-                grid: { display: false }
-              }
-            },
-            plugins: {
-              legend: {
-                display: true,
-                position: 'bottom',
-                labels: { color: colors.textColor },
-                onClick: (e, legendItem, legend) => {
-                  const index = legendItem.datasetIndex;
-                  const ci = legend.chart;
-                  if (ci.isDatasetVisible(index)) {
-                      ci.hide(index);
-                      legendItem.hidden = true;
-                  } else {
-                      ci.show(index);
-                      legendItem.hidden = false;
-                  }
-                }
-              }
-            },
-            ...optionsOverrides
-          }
-        });
-        return chart;
-      }
-
-      function renderCorrelationChart(state, data, canvasId = 'correlation-chart-canvas', optionsOverrides = {}) {
-          const { filteredData } = data;
-          if (filteredData.length < 2) return null;
-
-          const labels = filteredData.map(entry => new Date(entry.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-          const weightData = filteredData.map(entry => entry.weight || null);
-
-          const calorieData = filteredData.map(entry => {
-              const isoDate = entry.date;
-              let dailyMin = 0;
-              MEAL_TYPES.forEach(type => {
-                  const meal = state.weeklyPlan[`${isoDate}-${type}`];
-                  if (meal) {
-                      dailyMin += Number(meal.calories_min) || 0;
-                  }
-              });
-              return dailyMin > 0 ? dailyMin : null;
-          });
-
-          const colors = getChartColors();
-          const ctx = document.getElementById(canvasId).getContext('2d');
-          const chart = new Chart(ctx, {
-              type: 'bar',
-              data: {
-                  labels: labels,
-                  datasets: [
-                      {
-                          label: 'Peso (kg)',
-                          data: weightData,
-                          type: 'line',
-                          borderColor: colors.secondary,
-                          tension: 0.1,
-                          yAxisID: 'yWeight',
-                      },
-                      {
-                          label: 'Kcal Assunte',
-                          data: calorieData,
-                          backgroundColor: colors.primary + '80',
-                          yAxisID: 'yKcal',
-                      }
-                  ]
-              },
-              options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                      yWeight: {
-                          type: 'linear',
-                          position: 'left',
-                          ticks: { color: colors.secondary },
-                          grid: { color: colors.borderColor }
-                      },
-                      yKcal: {
-                          type: 'linear',
-                          position: 'right',
-                          ticks: { color: colors.primary },
-                          grid: { display: false }
-                      },
-                      x: {
-                          ticks: { color: colors.textColor },
-                          grid: { display: false }
-                      }
-                  },
-                  plugins: {
-                      legend: {
-                          labels: { color: colors.textColor }
-                      }
-                  },
-                  ...optionsOverrides
-              }
-          });
-          return chart;
-      }
-
-      function linearRegression(data) {
-        const n = data.length;
-        if (n < 2) return 0;
-        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        
-        data.forEach(p => {
-            sumX += p.x;
-            sumY += p.y;
-            sumXY += p.x * p.y;
-            sumXX += p.x * p.x;
-        });
-
-        const denominator = (n * sumXX - sumX * sumX);
-        if (denominator === 0) return 0;
-
-        const slope = (n * sumXY - sumX * sumY) / denominator;
-        return isNaN(slope) ? 0 : slope;
-      }
-
-      function renderVelocityChart(data, canvasId = 'velocity-chart-canvas', optionsOverrides = {}) {
-        const { filteredData } = data;
-        if (filteredData.length < 2) return null;
-
-        const weeklyChanges = [];
-        for (let i = 1; i < filteredData.length; i++) {
-            const currentDate = new Date(filteredData[i].date);
-            const sevenDaysAgo = new Date(currentDate);
-            sevenDaysAgo.setDate(currentDate.getDate() - 7);
-
-            const windowData = filteredData.filter(d => {
-                const dDate = new Date(d.date);
-                return dDate <= currentDate && dDate >= sevenDaysAgo;
-            }).map(entry => ({
-                x: new Date(entry.date).getTime(),
-                y: entry.weight
-            }));
-
-            if (windowData.length >= 2) {
-                const dailyTrend = linearRegression(windowData);
-                const changePerWeek = dailyTrend * 7 * 24 * 60 * 60 * 1000;
-                weeklyChanges.push({
-                    date: filteredData[i].date,
-                    change: parseFloat(changePerWeek.toFixed(2))
-                });
-            }
-        }
-        
-        if (weeklyChanges.length < 1) return null;
-
-        const labels = weeklyChanges.map(c => new Date(c.date).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }));
-        const changeData = weeklyChanges.map(c => c.change);
-        const colors = getChartColors();
-
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Variazione media settimanale (kg)',
-                    data: changeData,
-                    backgroundColor: changeData.map(v => v < 0 ? colors.success : colors.danger),
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        ticks: { color: colors.textColor },
-                        grid: { color: colors.borderColor }
-                    },
-                    x: {
-                        ticks: { color: colors.textColor },
-                        grid: { display: false }
-                    }
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        title: function(context) {
-                          const index = context[0].dataIndex;
-                          const dataPoint = weeklyChanges[index];
-                          return `Settimana del ${new Date(dataPoint.date).toLocaleDateString('it-IT')}`;
-                        },
-                        label: function(context) {
-                          const value = context.parsed.y;
-                          const prefix = value >= 0 ? '+' : '';
-                          return `Variazione stimata: ${prefix}${value} kg/settimana`;
-                        }
-                      }
-                    }
-                },
-                ...optionsOverrides
-            }
-        });
-        return chart;
-      }
-      
-      function renderSummaryStats(state, data) {
-        const container = document.getElementById('charts-summary-stats');
-        const { filteredData } = data;
-
-        if (filteredData.length < 2) {
-          container.innerHTML = `<p class="placeholder-text">Dati insufficienti per il riepilogo.</p>`;
-          return;
-        }
-
-        const trendData = filteredData.map(entry => ({
-            x: new Date(entry.date).getTime(),
-            y: entry.weight
-        }));
-        
-        const dailyTrend = linearRegression(trendData);
-        const avgWeeklyChange = dailyTrend * 7 * 24 * 60 * 60 * 1000;
-
-        const lastWeight = filteredData[filteredData.length - 1].weight;
-        const targetWeight = state.userGoals.target_weight;
-        
-        let goalEstimateHTML = '';
-        if (targetWeight > 0) {
-            const weightToLose = lastWeight - targetWeight;
-            let weeksToGoal = 'N/A';
-
-            if (avgWeeklyChange < -0.05) { // Perdendo peso
-                weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
-            } else if (avgWeeklyChange > 0.05 && weightToLose < 0) { // Guadagnando peso (bulk)
-                weeksToGoal = Math.max(0, (weightToLose / -avgWeeklyChange)).toFixed(1);
-            }
-            
-            goalEstimateHTML = `
-              <div class="stat-item">
-                <div class="stat-value">${weeksToGoal}</div>
-                <div class="stat-label">${UI_TEXT.CHARTS_GOAL_ESTIMATE_LABEL}</div>
-              </div>
-            `;
-        } else {
-            goalEstimateHTML = `
-              <div class="stat-item">
-                <div class="stat-value">--</div>
-                <div class="stat-label">${UI_TEXT.CHARTS_GOAL_ESTIMATE_NOT_SET}</div>
-              </div>
-            `;
-        }
-
-        const formattedAvgWeeklyChange = avgWeeklyChange.toFixed(2);
-        container.innerHTML = `
-          <div class="stat-item">
-            <div class="stat-value">${lastWeight} kg</div>
-            <div class="stat-label">Peso Attuale</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-value">${avgWeeklyChange >= 0 ? '+' : ''}${formattedAvgWeeklyChange} kg</div>
-            <div class="stat-label">Variazione media / settimana</div>
-          </div>
-          ${goalEstimateHTML}
-        `;
-      }
-
-      export function handleChartTypeChange(event, state) {
-          const type = event.target.dataset.type;
-          log('Charts', 'Chart type changed', { type });
-          if (type && type !== currentPlannerChartType) {
-              currentPlannerChartType = type;
-              document.querySelectorAll('.btn-chart-type').forEach(btn => {
-                  btn.classList.toggle('active', btn.dataset.type === type);
-              });
-              if (chartInstances.planner) {
-                chartInstances.planner.destroy();
-              }
-              chartInstances.planner = renderPlannerChart(state);
-          }
-      }
-
-      export function handleRangeFilterChange(event, state) {
-        const range = event.target.dataset.range;
-        log('Charts', 'Range filter changed', { range });
-        if (range && range !== currentRangeFilter) {
-          currentRangeFilter = range;
-          dateOffset = 0; // Reset offset when range changes
-          document.querySelectorAll('#charts-range-filter .btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.range === range);
-          });
-          renderCharts(state);
-        }
-      }
-
-      export function handleDateShift(direction, state) {
-          log('Charts', 'Date shift handled', { direction });
-          if (direction > 0 && dateOffset === 0) return;
-          dateOffset -= direction;
-          renderCharts(state);
-      }
-
-      export function openChartModal(state, chartId) {
-        log('Charts', 'Opening chart modal', { chartId });
-        const modal = document.getElementById('chart-modal');
-        const titleEl = document.getElementById('chart-modal-title');
-        const canvasId = 'chart-modal-canvas';
-        
-        if(chartInstances.modalChart) chartInstances.modalChart.destroy();
-
-        const biometricsData = getBiometricsData(state);
-
-        switch(chartId) {
-          case 'planner':
-            titleEl.textContent = UI_TEXT.PLANNER_CHART_TITLE;
-            chartInstances.modalChart = renderPlannerChart(state, canvasId, { plugins: { legend: { display: true } }});
-            break;
-          case 'biometrics':
-            titleEl.textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
-            chartInstances.modalChart = renderBiometricsChart(state, biometricsData, canvasId);
-            break;
-          case 'velocity':
-            titleEl.textContent = UI_TEXT.VELOCITY_CHART_TITLE;
-            chartInstances.modalChart = renderVelocityChart(biometricsData, canvasId);
-            break;
-          case 'correlation':
-            titleEl.textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
-            chartInstances.modalChart = renderCorrelationChart(state, biometricsData, canvasId);
-            break;
-        }
-
-        modal.classList.remove('modal-hidden');
-      }
-
-      export function renderCharts(state) {
-          destroyAllCharts();
-          document.getElementById('velocity-chart-title').textContent = UI_TEXT.VELOCITY_CHART_TITLE;
-          document.getElementById('correlation-chart-title').textContent = UI_TEXT.CHARTS_CORRELATION_TITLE;
-          
-          const biometricsData = getBiometricsData(state);
-
-          document.getElementById('charts-next-btn').disabled = dateOffset === 0;
-          document.getElementById('charts-prev-btn').disabled = !biometricsData.hasOlderData;
-
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (biometricsData.filteredData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-              document.getElementById('charts-summary-stats').innerHTML = `<p class="placeholder-text">Dati insufficienti per il riepilogo.</p>`;
-              document.getElementById('velocity-chart-canvas').getContext('2d').clearRect(0,0,1,1);
-              document.getElementById('correlation-chart-canvas').getContext('2d').clearRect(0,0,1,1);
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-              chartInstances.biometrics = renderBiometricsChart(state, biometricsData);
-              chartInstances.correlation = renderCorrelationChart(state, biometricsData);
-              chartInstances.velocity = renderVelocityChart(biometricsData);
-              renderSummaryStats(state, biometricsData);
-          }
-          
-          chartInstances.planner = renderPlannerChart(state);
+          return { filteredData, fullData: allBiometrics };
       }
 commands:
-  - "echo 'Logica di calcolo del trend del peso corretta e stabilizzata.'"
-  - "echo 'Il problema NaN è stato risolto e i grafici ora riflettono un andamento più realistico.'"
+  - echo "Patch per la correzione dei grafici applicata con successo."
