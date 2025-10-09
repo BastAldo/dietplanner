@@ -1,5 +1,5 @@
 <div id="charts-page" class="page-view hidden">
-    <h3 id="charts-title"></h3>
+    <h3 id="charts-title">Dashboard Grafici</h3>
 
     <div class="charts-controls">
         <button id="charts-prev-btn" class="btn btn-secondary" title="Periodo Precedente">&lt;</button>
@@ -16,14 +16,12 @@
 
     <div id="charts-summary-stats" class="charts-summary-stats"></div>
 
-    <div class="charts-container">
+    <div id="charts-container" class="charts-container">
         <div class="chart-card">
             <div class="chart-header">
-                <h4 id="biometrics-chart-title"></h4>
-                <div class="chart-header-controls">
-                  <button class="btn-expand-chart" data-chart-id="biometrics" title="Espandi Grafico"></button>
-                </div>
+                <h4 id="biometrics-chart-title">Andamento Dati Biometrici</h4>
             </div>
+            <div class="chart-header-controls" id="biometric-selector"></div>
             <div class="chart-canvas-container">
               <canvas id="biometrics-chart-canvas"></canvas>
               <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
@@ -31,10 +29,7 @@
         </div>
         <div class="chart-card">
             <div class="chart-header">
-                <h4 id="velocity-chart-title"></h4>
-                <div class="chart-header-controls">
-                  <button class="btn-expand-chart" data-chart-id="velocity" title="Espandi Grafico"></button>
-                </div>
+                <h4 id="velocity-chart-title">Trend del Peso</h4>
             </div>
             <div class="chart-canvas-container">
               <canvas id="velocity-chart-canvas"></canvas>
@@ -42,14 +37,7 @@
         </div>
         <div class="chart-card">
             <div class="chart-header">
-                <h4 id="planner-chart-title"></h4>
-                <div class="chart-header-controls">
-                    <div class="chart-type-switcher">
-                        <button class="btn-chart-type active" data-type="bar">Barre</button>
-                        <button class="btn-chart-type" data-type="line">Linee</button>
-                    </div>
-                    <button class="btn-expand-chart" data-chart-id="planner" title="Espandi Grafico"></button>
-                </div>
+                <h4 id="planner-chart-title">Riepilogo Calorie Settimanali</h4>
             </div>
             <div class="chart-canvas-container">
               <canvas id="planner-chart-canvas"></canvas>
@@ -57,10 +45,7 @@
         </div>
         <div class="chart-card">
             <div class="chart-header">
-                <h4 id="correlation-chart-title"></h4>
-                <div class="chart-header-controls">
-                  <button class="btn-expand-chart" data-chart-id="correlation" title="Espandi Grafico"></button>
-                </div>
+                <h4 id="correlation-chart-title">Correlazione Peso e Calorie</h4>
             </div>
             <div class="chart-canvas-container">
               <canvas id="correlation-chart-canvas"></canvas>

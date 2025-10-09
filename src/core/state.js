@@ -22,7 +22,8 @@ let state = {
   ui: {
     charts: {
       currentRangeFilter: 30,
-      dateOffset: 0
+      dateOffset: 0,
+      selectedBiometric: 'weight'
     }
   }
 };

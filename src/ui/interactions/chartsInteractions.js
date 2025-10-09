@@ -16,7 +16,8 @@ function handleRangeChange(newRange) {
 function handleDateNavigation(direction) {
     const currentState = getState();
     const { dateOffset, currentRangeFilter } = currentState.ui.charts;
-    const newOffset = dateOffset + (direction * currentRangeFilter);
+    const step = currentRangeFilter === 9999 ? 30 : currentRangeFilter;
+    const newOffset = dateOffset + (direction * step);
 
     if (newOffset <= 0) {
         const newUiState = {
@@ -28,6 +29,18 @@ function handleDateNavigation(direction) {
         };
         setUiState(newUiState);
     }
+}
+
+function handleBiometricChange(newKey) {
+    const currentState = getState();
+    const newUiState = {
+        ...currentState.ui,
+        charts: {
+            ...currentState.ui.charts,
+            selectedBiometric: newKey
+        }
+    };
+    setUiState(newUiState);
 }
 
 export function initializeChartsListeners() {
@@ -45,6 +58,8 @@ export function initializeChartsListeners() {
             handleDateNavigation(-1);
         } else if (target.id === 'charts-next-btn') {
             handleDateNavigation(1);
+        } else if (target.matches('.btn-chart-type') && target.dataset.key) {
+            handleBiometricChange(target.dataset.key);
         }
     });
 }
