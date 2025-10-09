@@ -1,9 +1,9 @@
 <div id="charts-page" class="page-view hidden">
     <h3 id="charts-title">Dashboard Grafici</h3>
+    <div id="date-range" class="charts-date-range-header"></div>
 
     <div class="charts-controls">
         <button id="charts-prev-btn" class="btn btn-secondary" title="Periodo Precedente">&lt;</button>
-        <div id="date-range" style="font-weight: bold; text-align: center; min-width: 150px;"></div>
         <div id="charts-range-filter" class="range-filter">
             <button class="btn btn-secondary range-filter-btn" data-range="7">7G</button>
             <button class="btn btn-secondary range-filter-btn active" data-range="30">30G</button>
@@ -43,7 +43,6 @@
                         <button class="btn-chart-type active" data-type="bar">Barre</button>
                         <button class="btn-chart-type" data-type="line">Linee</button>
                     </div>
-                    <button class="btn-expand-chart" data-chart-id="planner" title="Espandi Grafico"></button>
                 </div>
             </div>
             <div class="chart-canvas-container">

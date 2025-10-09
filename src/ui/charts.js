@@ -1,5 +1,5 @@
 import { getState } from '../core/state.js';
-import { formatShortDate } from '../utils/formatters.js';
+import { formatDateWithYear } from '../utils/formatters.js';
 import { BIOMETRIC_FIELDS } from '../config/forms.js';
 import { MEAL_TYPES } from '../utils/constants.js';
 
@@ -61,8 +61,8 @@ function updateChartNavigation(appData, currentRangeFilter, dateOffset, filtered
     document.getElementById('charts-next-btn').disabled = dateOffset >= 0;
     const dateRangeLabel = document.getElementById('date-range');
     if (filteredData.length > 0) {
-        const start = formatShortDate(new Date(filteredData[0].date));
-        const end = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
+        const start = formatDateWithYear(new Date(filteredData[0].date));
+        const end = formatDateWithYear(new Date(filteredData[filteredData.length - 1].date));
         dateRangeLabel.textContent = `${start} - ${end}`;
     } else {
         dateRangeLabel.textContent = 'Nessun dato';
@@ -158,7 +158,7 @@ export function renderCharts() {
     trendChart = setupChart('velocity-chart-canvas', {
       type: 'line',
       data: {
-          labels: filteredData.map(d => formatShortDate(d.date)),
+          labels: filteredData.map(d => new Date(d.date)),
           datasets: [{
               label: 'Trend del Peso (kg)',
               data: filteredData.map(d => trendData.m * new Date(d.date).getTime() + trendData.b),
@@ -173,7 +173,7 @@ export function renderCharts() {
               type: 'scatter',
           }]
       },
-      options: { responsive: true, maintainAspectRatio: false }
+      options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'day' } } } }
     });
     
     // Render Planner Chart
