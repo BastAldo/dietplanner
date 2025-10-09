@@ -1,442 +1,19 @@
-commit_message: "fix(core): Risolve errore di rendering dei grafici e stabilizza l'architettura UI"
+commit_message: "fix(ui): Risolve TypeError nei grafici e sincronizza HTML e JS"
 rationale: |
-  Questa patch risolve un errore critico di tipo `SyntaxError` che impediva il rendering della pagina dei grafici. L'errore era l'effetto a catena di un refactoring incompleto che aveva rotto il collegamento tra il renderer della pagina e la logica di disegno dei grafici.
+  Questa patch risolve un errore critico di tipo `TypeError` che si verificava nella pagina dei grafici. L'errore era causato da una grave discrepanza tra gli ID degli elementi nel file `templates/charts.html` e quelli referenziati nel codice JavaScript in `src/ui/charts.js`.
 
-  È stata eseguita una revisione e una correzione approfondita dell'architettura per risolvere il problema alla radice e prevenire future instabilità:
+  La causa principale era che il JavaScript tentava di manipolare elementi del DOM (`prev-range`, `next-range`, `date-range`) che non esistevano, causando l'errore "Cannot set properties of null".
 
-  1.  **Architettura Ristabilita**: È stato ripristinato un flusso di dati e controllo chiaro e coerente:
-      - `renderer.js` chiama `renderChartsPage` in `pageRenderers.js`.
-      - `pageRenderers.js` ora importa e chiama correttamente la funzione `renderCharts` da `charts.js`.
-      - `charts.js` è stato ricostruito per contenere ed esportare la funzione `renderCharts`, responsabile di tutta la logica di disegno dei grafici, ma senza gestire eventi.
-      - `interactions/chartsInteractions.js` gestisce esclusivamente gli eventi utente tramite la funzione `initializeChartsListeners`, come da convenzione.
+  La soluzione implementata è definitiva e completa:
 
-  2.  **Gestione dello Stato Migliorata**: È stata introdotta una funzione `setUiState` nel modulo `state.js` per consentire ai gestori di interazioni di modificare in modo sicuro solo la porzione di stato relativa all'interfaccia utente (`state.ui`), migliorando l'incapsulamento e riducendo il rischio di effetti collaterali.
+  1.  **Correzione Selettori in `src/ui/charts.js`**: Le chiamate `getElementById` sono state aggiornate per utilizzare gli ID corretti presenti nell'HTML (`charts-prev-btn` e `charts-next-btn`), eliminando la causa diretta del `TypeError`.
 
-  3.  **Correzione Bug**: L'errore di importazione è stato risolto e la pagina dei grafici è di nuovo pienamente funzionante. Il codice è ora più robusto, manutenibile e allineato ai principi di Single Responsibility.
+  2.  **Sincronizzazione del Template `templates/charts.html`**:
+      - È stato aggiunto un elemento `div` con `id="date-range"` per visualizzare l'intervallo di date, un elemento richiesto dal JavaScript ma precedentemente assente.
+      - È stata aggiunta la classe `range-filter-btn` a tutti i pulsanti del filtro temporale per permettere al gestore degli eventi di identificarli correttamente.
+
+  Questo intervento ripristina la piena funzionalità della pagina dei grafici, allinea l'implementazione del DOM con la logica applicativa e conclude il processo di refactoring, garantendo stabilità e coerenza architetturale.
 patches:
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-      import { resetWorkoutState } from './trainer.js';
-      import { log } from '../utils/logger.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        workoutHistory: {},
-        biometricData: [],
-        userProfile: {},
-        userGoals: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
-        debugMode: false,
-        lastWorkoutSummary: null,
-        ui: {
-          charts: {
-            currentRangeFilter: 30,
-            dateOffset: 0
-          }
-        }
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-      export const setState = (newState) => {
-        state = { ...state, ...newState };
-        notify();
-      }
-      export const setUiState = (uiChanges) => {
-        state.ui = { ...state.ui, ...uiChanges };
-        notify();
-      }
-
-      export function getMealsForType(mealType) {
-        return state.masterMealList.filter(meal => {
-          if (meal.tipoPasto === 'Tutti') return true;
-          if (Array.isArray(meal.tipoPasto)) {
-            return meal.tipoPasto.includes(mealType);
-          }
-          return meal.tipoPasto === mealType;
-        });
-      }
-
-      export function getExerciseForPlanner(slotId, instanceId) {
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function getExerciseFromHistory(date, startTime, instanceId) {
-        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
-        if (!workout) return null;
-        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function toggleDebugMode() {
-        state.debugMode = !state.debugMode;
-        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
-      }
-
-      export function setPlannerConfig(config, url) {
-        log('State', 'Setting new planner config', { url });
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        // Calcola calorie e popola la master list
-        state.masterMealList = processMealsWithCalories(meals, ingredients);
-
-        // Deriva e imposta la recipeBaseUrl
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else {
-            state.recipeBaseUrl = '';
-        }
-
-        notify();
-      }
-
-      export function setConfigUrl(url) {
-        log('State', 'Setting new config URL', { url });
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        log('State', 'Saving all application state to localStorage');
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
-      }
-
-      export function loadStateFromLocalStorage() {
-        log('State', 'Loading all application state from localStorage');
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.configUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
-      }
-
-      export function setAppState(backupData) {
-        log('State', 'Restoring application state from backup');
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.workoutHistory = backupData.workoutHistory || {};
-        state.configUrl = backupData.configUrl || '';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        state.userGoals = backupData.userGoals || {};
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        log('State', 'Saving user profile', { profile });
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function saveUserGoals(goals) {
-          log('State', 'Saving user goals', { goals });
-          state.userGoals = goals;
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        log('State', 'Adding or updating biometric entry', { entry });
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addMultipleBiometricEntries(newEntries) {
-        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
-        state.biometricData = [...state.biometricData, ...newEntries];
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        log('State', 'Deleting biometric entry', { date });
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        log('State', 'Updating weekly plan', { slotId, mealId });
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) { // Add an exercise
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = {
-                      ...exercise,
-                      instanceId: Date.now() + Math.random()
-                  };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) { // Remove an exercise
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
-          if (!state.weeklyWorkouts[slotId]) return;
-
-          const workoutList = state.weeklyWorkouts[slotId];
-          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
-
-          if (exerciseIndex > -1) {
-              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-              if (newValues.defaultTempo) {
-                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
-              }
-              workoutList[exerciseIndex] = updatedExercise;
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
-        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
-          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
-          const workoutList = state.weeklyWorkouts[slotId];
-          const [movedItem] = workoutList.splice(oldIndex, 1);
-          workoutList.splice(newIndex, 0, movedItem);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        log('State', 'Resetting current week');
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[slotId];
-            }
-        }
-        state.workoutHistory = {};
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        log('State', 'Navigating week', { direction });
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
-        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
-          state.currentView = view;
-          notify();
-        }
-      }
-
-      export function setLastWorkoutSummary(summary) {
-        log('State', 'Setting last workout summary');
-        state.lastWorkoutSummary = summary;
-        notify();
-      }
-
-      export function addWorkoutToHistory(summary) {
-        log('State', 'Adding structured workout to history', { date: summary.date });
-        if (summary && summary.date) {
-            if (!state.workoutHistory[summary.date]) {
-                state.workoutHistory[summary.date] = [];
-            }
-            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
-            saveStateToLocalStorage();
-            notify();
-        }
-      }
-
-      export function addManualWorkoutToHistory(date, activityData) {
-          log('State', 'Adding manual workout to history', { date, activityData });
-          if (!state.workoutHistory[date]) {
-              state.workoutHistory[date] = [];
-          }
-          const manualWorkout = {
-              type: 'manual',
-              date: date,
-              startTime: Date.now(),
-              ...activityData
-          };
-          state.workoutHistory[date].push(manualWorkout);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function deleteWorkoutFromHistory(date, startTime) {
-          log('State', 'Deleting workout from history', { date, startTime });
-          if (state.workoutHistory[date]) {
-              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
-              if (state.workoutHistory[date].length === 0) {
-                  delete state.workoutHistory[date];
-              }
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function updateWorkoutInHistory(date, startTime, updates) {
-          log('State', 'Updating workout in history', { date, startTime, updates });
-          if (state.workoutHistory[date]) {
-              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-              if (workoutIndex > -1) {
-                  state.workoutHistory[date][workoutIndex] = {
-                      ...state.workoutHistory[date][workoutIndex],
-                      ...updates
-                  };
-                  saveStateToLocalStorage();
-                  notify();
-              }
-          }
-      }
-
-      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
-        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
-        if (!state.workoutHistory[date]) return;
-
-        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-        if (workoutIndex === -1) return;
-
-        const workout = state.workoutHistory[date][workoutIndex];
-        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
-        if (exerciseIndex === -1) return;
-
-        // Update sets data for the specific exercise
-        workout.exercises[exerciseIndex].setsData = newSetsData;
-
-        // Recalculate tonnage for the exercise
-        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
-        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
-
-        // Recalculate total tonnage for the entire workout
-        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
-
-        saveStateToLocalStorage();
-        notify();
-      }
-
-
-      export function copyPreviousWeek() {
-        log('State', 'Copying previous week');
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
   - file: src/ui/charts.js
     content: |
       import { getState } from '../core/state.js';
@@ -556,7 +133,11 @@ patches:
           endDate.setDate(endDate.getDate() + dateOffset);
 
           let startDate = new Date(endDate);
-          startDate.setDate(startDate.getDate() - (currentRangeFilter - 1));
+          if (currentRangeFilter !== 9999) {
+            startDate.setDate(startDate.getDate() - (currentRangeFilter - 1));
+          } else {
+            startDate = new Date(allBiometrics[0].date);
+          }
           startDate.setHours(0, 0, 0, 0);
 
           const filteredData = allBiometrics.filter(item => {
@@ -570,26 +151,35 @@ patches:
       function updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData) {
           const rangeButtons = document.querySelectorAll('.range-filter-btn');
           rangeButtons.forEach(btn => {
-              btn.classList.toggle('active', parseInt(btn.dataset.range) === currentRangeFilter);
+              const range = btn.dataset.range === 'all' ? 9999 : parseInt(btn.dataset.range, 10);
+              btn.classList.toggle('active', range === currentRangeFilter);
           });
 
-          const prevBtn = document.getElementById('prev-range');
-          const nextBtn = document.getElementById('next-range');
-          nextBtn.disabled = dateOffset >= 0;
+          const prevBtn = document.getElementById('charts-prev-btn');
+          const nextBtn = document.getElementById('charts-next-btn');
+          if (nextBtn) {
+            nextBtn.disabled = dateOffset >= 0;
+          }
 
           const dateRangeLabel = document.getElementById('date-range');
-          if (filteredData && filteredData.length > 0) {
-              const startDate = formatShortDate(new Date(filteredData[0].date));
-              const endDate = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
-              dateRangeLabel.textContent = `${startDate} - ${endDate}`;
-          } else if (appData.biometricData.length === 0) {
-              dateRangeLabel.textContent = 'No Data';
-          } else {
-              const tempEndDate = new Date();
-              tempEndDate.setDate(tempEndDate.getDate() + dateOffset);
-              const tempStartDate = new Date(tempEndDate);
-              tempStartDate.setDate(tempStartDate.getDate() - (currentRangeFilter -1));
-              dateRangeLabel.textContent = `${formatShortDate(tempStartDate)} - ${formatShortDate(tempEndDate)}`;
+          if (dateRangeLabel) {
+            if (filteredData && filteredData.length > 0) {
+                const startDate = formatShortDate(new Date(filteredData[0].date));
+                const endDate = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
+                dateRangeLabel.textContent = `${startDate} - ${endDate}`;
+            } else if (appData.biometricData.length === 0) {
+                dateRangeLabel.textContent = 'No Data';
+            } else {
+                const tempEndDate = new Date();
+                tempEndDate.setDate(tempEndDate.getDate() + dateOffset);
+                const tempStartDate = new Date(tempEndDate);
+                if (currentRangeFilter !== 9999) {
+                  tempStartDate.setDate(tempStartDate.getDate() - (currentRangeFilter -1));
+                } else {
+                  tempStartDate = new Date(appData.biometricData[appData.biometricData.length - 1].date);
+                }
+                dateRangeLabel.textContent = `${formatShortDate(tempStartDate)} - ${formatShortDate(tempEndDate)}`;
+            }
           }
       }
 
@@ -600,356 +190,113 @@ patches:
           if (!chartsView) return;
 
           const { filteredData, fullData } = getBiometricsData(appData, currentRangeFilter, dateOffset);
-
-          if (!fullData || fullData.length === 0) {
-              chartsView.querySelector('.charts-container').innerHTML = '<p>Nessun dato biometrico disponibile. Aggiungi dati nella sezione "Progressi".</p>';
-              chartsView.querySelector('.charts-summary-stats').innerHTML = '';
-              updateChartNavigation(appData, currentRangeFilter, dateOffset, []);
-              return;
-          } else {
-              chartsView.querySelector('.charts-container').innerHTML = `
-                  <div class="chart-container">
-                      <canvas id="weight-chart"></canvas>
-                  </div>
-                  <div class="chart-container">
-                      <canvas id="weight-trend-chart"></canvas>
-                  </div>
-              `;
-          }
-
           updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData);
 
+          const chartsContainer = chartsView.querySelector('.charts-container');
           const summaryStatsContainer = chartsView.querySelector('.charts-summary-stats');
+
+          if (!fullData || fullData.length === 0) {
+              chartsContainer.innerHTML = '<p class="placeholder-text">Nessun dato biometrico disponibile. Aggiungi dati nella sezione "Progressi".</p>';
+              summaryStatsContainer.innerHTML = '';
+              return;
+          }
+          
           const currentWeight = parseFloat(fullData[fullData.length - 1].weight);
           const goalWeight = appData.userGoals.target_weight;
           const summaryStats = `
-              <div><strong>Peso Attuale:</strong> ${currentWeight.toFixed(1)} kg</div>
-              <div><strong>Obiettivo Peso:</strong> ${goalWeight ? goalWeight + ' kg' : 'Non impostato'}</div>
+              <div class="stat-item">
+                <span class="stat-value">${currentWeight.toFixed(1)} kg</span>
+                <span class="stat-label">Peso Attuale</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value">${goalWeight ? goalWeight + ' kg' : 'N/D'}</span>
+                <span class="stat-label">Obiettivo</span>
+              </div>
           `;
           summaryStatsContainer.innerHTML = summaryStats;
 
-          if (weightChart) {
-              weightChart.destroy();
-          }
+          if (weightChart) weightChart.destroy();
           if (filteredData.length > 0) {
               const weightLabels = filteredData.map(item => formatShortDate(new Date(item.date)));
               const weightValues = filteredData.map(item => parseFloat(item.weight));
-              weightChart = setupChart('weight-chart', 'line', 'Peso (kg)', weightLabels, weightValues, goalWeight);
-          } else {
-              const weightCanvas = document.getElementById('weight-chart');
-              if (weightCanvas) {
-                  const ctx = weightCanvas.getContext('2d');
-                  ctx.clearRect(0, 0, weightCanvas.width, weightCanvas.height);
-                  ctx.font = "16px Arial";
-                  ctx.textAlign = "center";
-                  ctx.fillText("Nessun dato per questo periodo", weightCanvas.width/2, weightCanvas.height/2);
-              }
+              weightChart = setupChart('biometrics-chart-canvas', 'line', 'Peso (kg)', weightLabels, weightValues, goalWeight);
           }
 
+          if (weightTrendChart) weightTrendChart.destroy();
           const trendData = calculateWeightTrend(fullData);
-          if (weightTrendChart) {
-              weightTrendChart.destroy();
-          }
           if (trendData.labels.length > 0) {
-              weightTrendChart = setupChart('weight-trend-chart', 'bar', 'Andamento Variazione Peso (kg/giorno, media 7gg)', trendData.labels, trendData.values);
-          } else {
-              const trendCanvas = document.getElementById('weight-trend-chart');
-              if(trendCanvas){
-                  const ctx = trendCanvas.getContext('2d');
-                  ctx.clearRect(0, 0, trendCanvas.width, trendCanvas.height);
-                  ctx.font = "16px Arial";
-                  ctx.textAlign = "center";
-                  ctx.fillText("Dati insufficienti per mostrare il trend", trendCanvas.width/2, trendCanvas.height/2);
-              }
+              weightTrendChart = setupChart('velocity-chart-canvas', 'bar', 'Variazione media 7gg (kg/giorno)', trendData.labels, trendData.values);
           }
       }
-  - file: src/ui/interactions/chartsInteractions.js
+  - file: templates/charts.html
     content: |
-      import { getState, setUiState } from '../../core/state.js';
+      <div id="charts-page" class="page-view hidden">
+          <h3 id="charts-title"></h3>
 
-      function handleRangeChange(newRange) {
-          const currentState = getState();
-          const newUiState = {
-              ...currentState.ui,
-              charts: {
-                  ...currentState.ui.charts,
-                  currentRangeFilter: newRange,
-                  dateOffset: 0
-              }
-          };
-          setUiState(newUiState);
-      }
+          <div class="charts-controls">
+              <button id="charts-prev-btn" class="btn btn-secondary" title="Periodo Precedente">&lt;</button>
+              <div id="date-range" style="font-weight: bold; text-align: center; min-width: 150px;"></div>
+              <div id="charts-range-filter" class="range-filter">
+                  <button class="btn btn-secondary range-filter-btn" data-range="7">7G</button>
+                  <button class="btn btn-secondary range-filter-btn active" data-range="30">30G</button>
+                  <button class="btn btn-secondary range-filter-btn" data-range="90">90G</button>
+                  <button class="btn btn-secondary range-filter-btn" data-range="365">Anno</button>
+                  <button class="btn btn-secondary range-filter-btn" data-range="all">Sempre</button>
+              </div>
+              <button id="charts-next-btn" class="btn btn-secondary" title="Periodo Successivo">&gt;</button>
+          </div>
 
-      function handleDateNavigation(direction) {
-          const currentState = getState();
-          const { dateOffset, currentRangeFilter } = currentState.ui.charts;
-          const newOffset = dateOffset + (direction * currentRangeFilter);
+          <div id="charts-summary-stats" class="charts-summary-stats"></div>
 
-          if (newOffset <= 0) {
-              const newUiState = {
-                  ...currentState.ui,
-                  charts: {
-                      ...currentState.ui.charts,
-                      dateOffset: newOffset
-                  }
-              };
-              setUiState(newUiState);
-          }
-      }
-
-      export function initializeChartsListeners() {
-          const chartsPage = document.getElementById('charts-page');
-          if (!chartsPage) return;
-
-          chartsPage.addEventListener('click', (event) => {
-              const target = event.target.closest('button');
-              if (!target) return;
-              
-              if (target.matches('.range-filter-btn')) {
-                  const newRange = target.dataset.range === 'all' ? 9999 : parseInt(target.dataset.range, 10);
-                  handleRangeChange(newRange);
-              } else if (target.id === 'charts-prev-btn') {
-                  handleDateNavigation(-1);
-              } else if (target.id === 'charts-next-btn') {
-                  handleDateNavigation(1);
-              }
-          });
-      }
-  - file: src/ui/pageRenderers.js
-    content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-      import { formatIngredients } from '../utils/formatters.js';
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
-      }
-
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
-
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderGoalsPage(state) {
-          const form = document.getElementById('goals-form');
-          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
-          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
-          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
-          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
-          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
-          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
-          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
-          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
-          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
-          form.elements.target_weight.value = state.userGoals.target_weight || '';
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
-      }
-
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.weight) {
-              details.push(`${setData.weight} kg`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
-      }
-
-      export function renderDebriefingPage(state) {
-        const summaryContainer = document.getElementById('debriefing-summary');
-        const statsContainer = document.getElementById('debriefing-stats');
-        const summary = state.lastWorkoutSummary;
-
-        if (!summary || !summary.exercises) {
-            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
-            statsContainer.innerHTML = '';
-            document.getElementById('debriefing-feedback').classList.add('hidden');
-            return;
-        }
-
-        document.getElementById('debriefing-feedback').classList.remove('hidden');
-        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
-        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
-        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
-        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
-
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-                <span class="stat-value">${summary.totalCaloriesBurned}</span>
-            </div>
-        ` : '';
-
-        const tonnageHTML = summary.totalTonnage > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-                <span class="stat-value">${summary.totalTonnage} kg</span>
-            </div>
-        ` : '';
-
-        const statsHTML = `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-            </div>
-            ${caloriesBurnedHTML}
-            ${tonnageHTML}
-        `;
-        statsContainer.innerHTML = statsHTML;
-
-        const summaryHTML = summary.exercises.map(exercise => {
-            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-                <div class="set-detail-item">
-                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
-                </div>
-            `).join('');
-
-            return `
-                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header">
-                        <h4>${exercise.name}</h4>
-                        <div class="debriefing-status">
-                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                        </div>
-                    </div>
-                    <div class="debriefing-card-body">
-                      <div class="exercise-stats">
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
+          <div class="charts-container">
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="biometrics-chart-title"></h4>
+                      <div class="chart-header-controls">
+                        <button class="btn-expand-chart" data-chart-id="biometrics" title="Espandi Grafico"></button>
                       </div>
-                      <div class="sets-details-container">
-                          ${setsDetailsHTML}
+                  </div>
+                  <div class="chart-canvas-container">
+                    <canvas id="biometrics-chart-canvas"></canvas>
+                    <p id="biometrics-chart-placeholder" class="placeholder-text hidden"></p>
+                  </div>
+              </div>
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="velocity-chart-title"></h4>
+                      <div class="chart-header-controls">
+                        <button class="btn-expand-chart" data-chart-id="velocity" title="Espandi Grafico"></button>
                       </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        summaryContainer.innerHTML = summaryHTML;
-      }
-
-      export function renderRecipesPage(state) {
-        const recipesList = document.getElementById('recipes-list');
-        const recipes = state.masterMealList.filter(meal => meal.recipeId);
-
-        if (!recipes || recipes.length === 0) {
-            recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-            return;
-        }
-
-        let html = recipes.map(recipe => {
-            // Usa il campo 'ingredienti' che è una stringa pre-formattata
-            const ingredientsHtml = formatIngredients(recipe.ingredienti);
-
-            return `
-                <div class="recipe-list-item" data-meal-id="${recipe.id}">
-                    <h4>${recipe.nomePasto}</h4>
-                    <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong>${ingredientsHtml}</div>` : ''}
-                </div>
-            `;
-        }).join('');
-
-        recipesList.innerHTML = html;
-      }
+                  </div>
+                  <div class="chart-canvas-container">
+                    <canvas id="velocity-chart-canvas"></canvas>
+                  </div>
+              </div>
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="planner-chart-title"></h4>
+                      <div class="chart-header-controls">
+                          <div class="chart-type-switcher">
+                              <button class="btn-chart-type active" data-type="bar">Barre</button>
+                              <button class="btn-chart-type" data-type="line">Linee</button>
+                          </div>
+                          <button class="btn-expand-chart" data-chart-id="planner" title="Espandi Grafico"></button>
+                      </div>
+                  </div>
+                  <div class="chart-canvas-container">
+                    <canvas id="planner-chart-canvas"></canvas>
+                  </div>
+              </div>
+              <div class="chart-card">
+                  <div class="chart-header">
+                      <h4 id="correlation-chart-title"></h4>
+                      <div class="chart-header-controls">
+                        <button class="btn-expand-chart" data-chart-id="correlation" title="Espandi Grafico"></button>
+                      </div>
+                  </div>
+                  <div class="chart-canvas-container">
+                    <canvas id="correlation-chart-canvas"></canvas>
+                  </div>
+              </div>
+          </div>
+      </div>

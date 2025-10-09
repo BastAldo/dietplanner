@@ -115,7 +115,11 @@ function getBiometricsData(appData, currentRangeFilter, dateOffset) {
     endDate.setDate(endDate.getDate() + dateOffset);
 
     let startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - (currentRangeFilter - 1));
+    if (currentRangeFilter !== 9999) {
+      startDate.setDate(startDate.getDate() - (currentRangeFilter - 1));
+    } else {
+      startDate = new Date(allBiometrics[0].date);
+    }
     startDate.setHours(0, 0, 0, 0);
 
     const filteredData = allBiometrics.filter(item => {
@@ -129,26 +133,35 @@ function getBiometricsData(appData, currentRangeFilter, dateOffset) {
 function updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData) {
     const rangeButtons = document.querySelectorAll('.range-filter-btn');
     rangeButtons.forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.range) === currentRangeFilter);
+        const range = btn.dataset.range === 'all' ? 9999 : parseInt(btn.dataset.range, 10);
+        btn.classList.toggle('active', range === currentRangeFilter);
     });
 
-    const prevBtn = document.getElementById('prev-range');
-    const nextBtn = document.getElementById('next-range');
-    nextBtn.disabled = dateOffset >= 0;
+    const prevBtn = document.getElementById('charts-prev-btn');
+    const nextBtn = document.getElementById('charts-next-btn');
+    if (nextBtn) {
+      nextBtn.disabled = dateOffset >= 0;
+    }
 
     const dateRangeLabel = document.getElementById('date-range');
-    if (filteredData && filteredData.length > 0) {
-        const startDate = formatShortDate(new Date(filteredData[0].date));
-        const endDate = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
-        dateRangeLabel.textContent = `${startDate} - ${endDate}`;
-    } else if (appData.biometricData.length === 0) {
-        dateRangeLabel.textContent = 'No Data';
-    } else {
-        const tempEndDate = new Date();
-        tempEndDate.setDate(tempEndDate.getDate() + dateOffset);
-        const tempStartDate = new Date(tempEndDate);
-        tempStartDate.setDate(tempStartDate.getDate() - (currentRangeFilter -1));
-        dateRangeLabel.textContent = `${formatShortDate(tempStartDate)} - ${formatShortDate(tempEndDate)}`;
+    if (dateRangeLabel) {
+      if (filteredData && filteredData.length > 0) {
+          const startDate = formatShortDate(new Date(filteredData[0].date));
+          const endDate = formatShortDate(new Date(filteredData[filteredData.length - 1].date));
+          dateRangeLabel.textContent = `${startDate} - ${endDate}`;
+      } else if (appData.biometricData.length === 0) {
+          dateRangeLabel.textContent = 'No Data';
+      } else {
+          const tempEndDate = new Date();
+          tempEndDate.setDate(tempEndDate.getDate() + dateOffset);
+          const tempStartDate = new Date(tempEndDate);
+          if (currentRangeFilter !== 9999) {
+            tempStartDate.setDate(tempStartDate.getDate() - (currentRangeFilter -1));
+          } else {
+            tempStartDate = new Date(appData.biometricData[appData.biometricData.length - 1].date);
+          }
+          dateRangeLabel.textContent = `${formatShortDate(tempStartDate)} - ${formatShortDate(tempEndDate)}`;
+      }
     }
 }
 
@@ -159,66 +172,41 @@ export function renderCharts() {
     if (!chartsView) return;
 
     const { filteredData, fullData } = getBiometricsData(appData, currentRangeFilter, dateOffset);
-
-    if (!fullData || fullData.length === 0) {
-        chartsView.querySelector('.charts-container').innerHTML = '<p>Nessun dato biometrico disponibile. Aggiungi dati nella sezione "Progressi".</p>';
-        chartsView.querySelector('.charts-summary-stats').innerHTML = '';
-        updateChartNavigation(appData, currentRangeFilter, dateOffset, []);
-        return;
-    } else {
-        chartsView.querySelector('.charts-container').innerHTML = `
-            <div class="chart-container">
-                <canvas id="weight-chart"></canvas>
-            </div>
-            <div class="chart-container">
-                <canvas id="weight-trend-chart"></canvas>
-            </div>
-        `;
-    }
-
     updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData);
 
+    const chartsContainer = chartsView.querySelector('.charts-container');
     const summaryStatsContainer = chartsView.querySelector('.charts-summary-stats');
+
+    if (!fullData || fullData.length === 0) {
+        chartsContainer.innerHTML = '<p class="placeholder-text">Nessun dato biometrico disponibile. Aggiungi dati nella sezione "Progressi".</p>';
+        summaryStatsContainer.innerHTML = '';
+        return;
+    }
+    
     const currentWeight = parseFloat(fullData[fullData.length - 1].weight);
     const goalWeight = appData.userGoals.target_weight;
     const summaryStats = `
-        <div><strong>Peso Attuale:</strong> ${currentWeight.toFixed(1)} kg</div>
-        <div><strong>Obiettivo Peso:</strong> ${goalWeight ? goalWeight + ' kg' : 'Non impostato'}</div>
+        <div class="stat-item">
+          <span class="stat-value">${currentWeight.toFixed(1)} kg</span>
+          <span class="stat-label">Peso Attuale</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">${goalWeight ? goalWeight + ' kg' : 'N/D'}</span>
+          <span class="stat-label">Obiettivo</span>
+        </div>
     `;
     summaryStatsContainer.innerHTML = summaryStats;
 
-    if (weightChart) {
-        weightChart.destroy();
-    }
+    if (weightChart) weightChart.destroy();
     if (filteredData.length > 0) {
         const weightLabels = filteredData.map(item => formatShortDate(new Date(item.date)));
         const weightValues = filteredData.map(item => parseFloat(item.weight));
-        weightChart = setupChart('weight-chart', 'line', 'Peso (kg)', weightLabels, weightValues, goalWeight);
-    } else {
-        const weightCanvas = document.getElementById('weight-chart');
-        if (weightCanvas) {
-            const ctx = weightCanvas.getContext('2d');
-            ctx.clearRect(0, 0, weightCanvas.width, weightCanvas.height);
-            ctx.font = "16px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("Nessun dato per questo periodo", weightCanvas.width/2, weightCanvas.height/2);
-        }
+        weightChart = setupChart('biometrics-chart-canvas', 'line', 'Peso (kg)', weightLabels, weightValues, goalWeight);
     }
 
+    if (weightTrendChart) weightTrendChart.destroy();
     const trendData = calculateWeightTrend(fullData);
-    if (weightTrendChart) {
-        weightTrendChart.destroy();
-    }
     if (trendData.labels.length > 0) {
-        weightTrendChart = setupChart('weight-trend-chart', 'bar', 'Andamento Variazione Peso (kg/giorno, media 7gg)', trendData.labels, trendData.values);
-    } else {
-        const trendCanvas = document.getElementById('weight-trend-chart');
-        if(trendCanvas){
-            const ctx = trendCanvas.getContext('2d');
-            ctx.clearRect(0, 0, trendCanvas.width, trendCanvas.height);
-            ctx.font = "16px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("Dati insufficienti per mostrare il trend", trendCanvas.width/2, trendCanvas.height/2);
-        }
+        weightTrendChart = setupChart('velocity-chart-canvas', 'bar', 'Variazione media 7gg (kg/giorno)', trendData.labels, trendData.values);
     }
 }
