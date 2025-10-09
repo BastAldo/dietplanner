@@ -1,4 +1,4 @@
-import { ICONS } from './icons.js';
+import ICONS from './icons.js';
 import { formatIngredients } from '../utils/formatters.js';
 
 export function renderRecipes(recipes) {
