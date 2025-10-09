@@ -1,16 +1,19 @@
-commit_message: "fix(app): Corregge la sintassi di importazione per il modulo ICONS"
+commit_message: "fix(ui): Standardizza l'uso delle icone e corregge l'errore di importazione"
 rationale: |
-  Questa patch risolve un errore critico di runtime che impediva il rendering della vista delle ricette. L'errore era causato da una sintassi di importazione errata nel file `src/ui/recipesRenderer.js`.
+  Questa patch risolve un errore critico di runtime in `src/ui/recipesRenderer.js` causato da un'importazione errata del modulo delle icone.
+  Il file tentava di utilizzare un'importazione di default (`import ICONS from...`) da `src/ui/icons.js`, che però esporta solo la funzione nominata `renderIcon`.
 
-  Il modulo `src/ui/icons.js` utilizza un'esportazione di default (`export default`), ma il modulo `recipesRenderer.js` tentava di importarlo utilizzando la sintassi per le esportazioni nominate (`import { ICONS }`). Questo disallineamento causava un `SyntaxError` che bloccava l'esecuzione del codice.
+  La soluzione implementata allinea `recipesRenderer.js` allo standard utilizzato nel resto dell'applicazione:
+  1. L'istruzione di importazione è stata corretta per importare la funzione `renderIcon`.
+  2. Il template HTML è stato aggiornato per utilizzare `renderIcon('ICON_NAME')` invece di accedere direttamente a un oggetto `ICONS`.
+  3. I nomi delle icone sono stati corretti (`'EDIT'`, `'TRASH'`) per corrispondere a quelli definiti in `icons.js`.
+  4. L'icona inesistente 'add' è stata sostituita con un testo '+' per mantenere la funzionalità visiva.
 
-  La correzione consiste nel modificare l'istruzione di importazione in `recipesRenderer.js` per utilizzare la sintassi corretta per le esportazioni di default: `import ICONS from './icons.js';`.
-
-  Questa modifica è stata verificata per essere l'unica necessaria e risolve l'errore in modo definitivo, ripristinando la piena funzionalità dell'applicazione.
+  Questo approccio risolve il bug in modo definitivo e garantisce la coerenza del codice nell'intero progetto.
 patches:
   - file: src/ui/recipesRenderer.js
     content: |
-      import ICONS from './icons.js';
+      import { renderIcon } from './icons.js';
       import { formatIngredients } from '../utils/formatters.js';
 
       export function renderRecipes(recipes) {
@@ -21,7 +24,7 @@ patches:
           let html = `
               <div class="recipes-container">
                   <div class="add-recipe-card" id="add-recipe-btn">
-                      <div class="add-recipe-icon">${ICONS.add}</div>
+                      <div class="add-recipe-icon">+</div>
                       <div class="add-recipe-text">Aggiungi Ricetta</div>
                   </div>
           `;
@@ -32,8 +35,8 @@ patches:
                       <div class="recipe-card-header">
                           <h3>${recipe.nomePasto}</h3>
                           <div class="recipe-card-actions">
-                              <button class="icon-btn edit-recipe-btn" data-recipe-id="${recipe.id}">${ICONS.edit}</button>
-                              <button class="icon-btn delete-recipe-btn" data-recipe-id="${recipe.id}">${ICONS.delete}</button>
+                              <button class="icon-btn edit-recipe-btn" data-recipe-id="${recipe.id}">${renderIcon('EDIT')}</button>
+                              <button class="icon-btn delete-recipe-btn" data-recipe-id="${recipe.id}">${renderIcon('TRASH')}</button>
                           </div>
                       </div>
                       <div class="recipe-card-body">
@@ -53,4 +56,4 @@ patches:
           return html;
       }
 commands:
-  - echo "Patch finale applicata. L'errore di importazione del modulo ICONS è stato corretto."
+  - echo "Patch applicata. L'uso delle icone è stato standardizzato e l'errore di importazione è stato risolto."

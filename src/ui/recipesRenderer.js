@@ -1,4 +1,4 @@
-import ICONS from './icons.js';
+import { renderIcon } from './icons.js';
 import { formatIngredients } from '../utils/formatters.js';
 
 export function renderRecipes(recipes) {
@@ -9,7 +9,7 @@ export function renderRecipes(recipes) {
     let html = `
         <div class="recipes-container">
             <div class="add-recipe-card" id="add-recipe-btn">
-                <div class="add-recipe-icon">${ICONS.add}</div>
+                <div class="add-recipe-icon">+</div>
                 <div class="add-recipe-text">Aggiungi Ricetta</div>
             </div>
     `;
@@ -20,8 +20,8 @@ export function renderRecipes(recipes) {
                 <div class="recipe-card-header">
                     <h3>${recipe.nomePasto}</h3>
                     <div class="recipe-card-actions">
-                        <button class="icon-btn edit-recipe-btn" data-recipe-id="${recipe.id}">${ICONS.edit}</button>
-                        <button class="icon-btn delete-recipe-btn" data-recipe-id="${recipe.id}">${ICONS.delete}</button>
+                        <button class="icon-btn edit-recipe-btn" data-recipe-id="${recipe.id}">${renderIcon('EDIT')}</button>
+                        <button class="icon-btn delete-recipe-btn" data-recipe-id="${recipe.id}">${renderIcon('TRASH')}</button>
                     </div>
                 </div>
                 <div class="recipe-card-body">
