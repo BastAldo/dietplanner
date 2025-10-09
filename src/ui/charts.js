@@ -1,4 +1,4 @@
-import { getState, setState } from '../core/state.js';
+import { getState } from '../core/state.js';
 import { calculateWeightTrend, getBiometricsData, setupChart, updateChartNavigation } from '../ui/interactions/chartsInteractions.js';
 import { formatShortDate } from '../utils/formatters.js';
 
