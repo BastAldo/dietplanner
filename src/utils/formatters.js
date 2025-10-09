@@ -24,3 +24,18 @@ export function formatShortDate(date) {
 
     return [day, month].join('/');
 }
+
+export function formatIngredients(ingredientsString) {
+    if (!ingredientsString || typeof ingredientsString !== 'string') {
+        return '';
+    }
+    const ingredients = ingredientsString.split(',').map(item => item.trim());
+    if (ingredients.length === 0) {
+        return '';
+    }
+    return `
+        <ul>
+            ${ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')}
+        </ul>
+    `;
+}
