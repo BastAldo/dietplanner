@@ -23,7 +23,8 @@ let state = {
     charts: {
       currentRangeFilter: 30,
       dateOffset: 0,
-      selectedBiometric: 'weight'
+      selectedBiometric: 'weight',
+      plannerChartType: 'bar'
     }
   }
 };

@@ -1,90 +1,446 @@
-commit_message: "fix(charts): Risolve errore di dipendenza e migliora l'UI della dashboard grafici"
+commit_message: "feat(charts): Implementa dashboard grafici avanzata e corregge bug"
 rationale: |
-  Questa patch è una soluzione completa e definitiva che corregge un errore critico di runtime e implementa significativi miglioramenti all'interfaccia utente della pagina dei grafici, come concordato nel piano d'azione.
+  Questa patch finale trasforma la pagina dei grafici in una dashboard di analisi dati completa e robusta, implementando tutte le funzionalità avanzate e le correzioni richieste dall'utente. Ogni punto sollevato è stato affrontato per migliorare l'usabilità, la leggibilità e la potenza analitica.
 
-  **Correzioni Tecniche:**
-  1.  **Risoluzione Errore `exports is not defined`**: La causa principale dell'instabilità dell'applicazione è stata risolta. Il tag `<script>` che caricava la libreria `date-fns` in `index.html` puntava a un file compilato per Node.js. È stato sostituito con il link al bundle UMD (`date-fns.umd.min.js`), la versione corretta per l'uso nel browser. Questo elimina l'errore `ReferenceError` alla radice.
+  **Miglioramenti Implementati:**
 
-  **Miglioramenti UI/UX:**
-  1.  **Riorganizzazione Estetica**: Accogliendo il feedback dell'utente, la visualizzazione dell'intervallo di date (`date-range`) è stata spostata da una posizione inline a una sezione di titolo dedicata, sopra i controlli del filtro. Questo migliora notevolmente la leggibilità e l'organizzazione visiva della pagina.
-  2.  **Stile Coerente**: Sono state aggiunte nuove regole CSS in `styles/charts.css` per formattare la nuova sezione del titolo, garantendo un'estetica pulita e allineata al design system del progetto.
-  3.  **Formattazione della Data Migliorata**: Per aumentare la chiarezza, specialmente su intervalli di tempo lunghi, il formato della data visualizzato ora include l'anno. Questo è stato ottenuto creando una nuova funzione `formatDateWithYear` in `src/utils/formatters.js` e aggiornando la logica di `src/ui/charts.js` per utilizzarla.
+  1.  **Navigazione Controllata**: È stato risolto il bug che permetteva di navigare all'indietro all'infinito. La logica in `updateChartNavigation` ora controlla se la prima misurazione disponibile è già visibile e disabilita il pulsante "Indietro" di conseguenza, migliorando l'esperienza utente.
 
-  Questo intervento combinato non solo rende l'applicazione stabile e funzionante, ma migliora anche l'esperienza utente in base a specifiche richieste di design, portando la pagina dei grafici a uno stato completo e rifinito.
+  2.  **Visione Globale dei Dati Biometrici**: Il grafico "Andamento Dati Biometrici" ora include un pulsante **"Tutti"**. Selezionandolo, vengono visualizzate simultaneamente le linee di tendenza di tutti i parametri biometrici, ciascuna con un colore distinto. Questo fornisce una visione d'insieme potente e immediata, mantenendo la possibilità di analizzare i singoli parametri.
+
+  3.  **Selettore Barre/Linee Funzionante**: Il selettore per il "Riepilogo Calorie Settimanali" è stato reso pienamente funzionale. Selezionando "Linee", il grafico ora mostra due linee distinte (calorie minime e massime), offrendo una visualizzazione alternativa e chiara del "corridoio" calorico pianificato.
+
+  4.  **Grafico di Correlazione Leggibile**: Il grafico "Correlazione Peso e Calorie" è stato trasformato da una nuvola di punti illeggibile a uno strumento di analisi efficace. Ora include una **linea di tendenza (trendline)** calcolata tramite regressione lineare, che visualizza immediatamente la correlazione media tra l'assunzione calorica e la variazione di peso.
+
+  5.  **Stato dell'UI Persistente**: Lo stato dei selettori (es. tipo di grafico per il planner, parametro biometrico selezionato) è ora gestito centralmente in `state.js`, garantendo che le preferenze dell'utente persistano durante la sessione.
+
+  Questo intervento conclude lo sviluppo della dashboard dei grafici, portandola a un livello professionale e risolvendo tutte le criticità funzionali ed estetiche emerse.
 patches:
-  - file: index.html
+  - file: src/core/state.js
     content: |
-      <!DOCTYPE html>
-      <html lang="it">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <meta name="theme-color" content="#1a1a1d">
-          <title>HealtyPro</title>
-          <link rel="stylesheet" href="styles/base.css">
-          <link rel="stylesheet" href="styles/planner.css">
-          <link rel="stylesheet" href="styles/progress.css">
-          <link rel="stylesheet" href="styles/modals.css">
-          <link rel="stylesheet" href="styles/charts.css">
-          <link rel="stylesheet" href="styles/recipes.css">
-          <link rel="stylesheet" href="styles/trainer.css">
-          <link rel="stylesheet" href="styles/debriefing.css">
-          <link rel="stylesheet" href="styles/goals.css">
-          <link rel="manifest" href="manifest.json">
-          <link rel="icon" href="favicon.ico" type="image/x-icon">
-          <link rel="apple-touch-icon" href="icon.svg">
-          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/dist/date-fns.umd.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.1/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-          <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-          <script src="src/main.js" type="module" defer></script>
-      </head>
-      <body>
-          <div id="toast-container" class="toast-container"></div>
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
 
-          <header class="app-header">
-              <div class="header-content">
-                  <div class="app-title">
-                      <h1 id="main-title"></h1>
-                  </div>
-                  <nav id="main-nav" class="main-nav">
-                      <button id="nav-planner" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-progress" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-charts" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-recipes" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-goals" class="btn-nav">
-                          <span></span>
-                      </button>
-                      <button id="nav-profile" class="btn-nav">
-                          <span></span>
-                      </button>
-                  </nav>
-                  <button id="hamburger-btn" class="hamburger-btn"></button>
-              </div>
-          </header>
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+        debugMode: false,
+        lastWorkoutSummary: null,
+        ui: {
+          charts: {
+            currentRangeFilter: 30,
+            dateOffset: 0,
+            selectedBiometric: 'weight',
+            plannerChartType: 'bar'
+          }
+        }
+      };
 
-          <main id="app-container">
-          </main>
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
-          <footer class="app-footer">
-              <button id="restore-btn" class="btn btn-secondary"></button>
-              <button id="backup-btn" class="btn btn-secondary"></button>
-          </footer>
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
 
-          <div id="modal-container">
-          </div>
-      </body>
-      </html>
+      export const getState = () => ({ ...state });
+      export const setState = (newState) => {
+        state = { ...state, ...newState };
+        notify();
+      }
+      export const setUiState = (uiChanges) => {
+        state.ui = { ...state.ui, ...uiChanges };
+        notify();
+      }
+
+      export function getMealsForType(mealType) {
+        return state.masterMealList.filter(meal => {
+          if (meal.tipoPasto === 'Tutti') return true;
+          if (Array.isArray(meal.tipoPasto)) {
+            return meal.tipoPasto.includes(mealType);
+          }
+          return meal.tipoPasto === mealType;
+        });
+      }
+
+      export function getExerciseForPlanner(slotId, instanceId) {
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function getExerciseFromHistory(date, startTime, instanceId) {
+        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+        if (!workout) return null;
+        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+      }
+
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addMultipleBiometricEntries(newEntries) {
+        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
+        state.biometricData = [...state.biometricData, ...newEntries];
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() + Math.random()
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[slotId];
+            }
+        }
+        state.workoutHistory = {};
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
+          state.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+
+      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
+        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
+        if (!state.workoutHistory[date]) return;
+
+        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+        if (workoutIndex === -1) return;
+
+        const workout = state.workoutHistory[date][workoutIndex];
+        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
+        if (exerciseIndex === -1) return;
+
+        // Update sets data for the specific exercise
+        workout.exercises[exerciseIndex].setsData = newSetsData;
+
+        // Recalculate tonnage for the exercise
+        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
+
+        // Recalculate total tonnage for the entire workout
+        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
+
+        saveStateToLocalStorage();
+        notify();
+      }
+
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/ui/charts.js
     content: |
       import { getState } from '../core/state.js';
@@ -97,6 +453,16 @@ patches:
       let plannerChart = null;
       let correlationChart = null;
 
+      const CHART_COLORS = [
+        'rgba(149, 117, 205, 1)', // primary
+        'rgba(77, 182, 172, 1)',  // secondary
+        'rgba(255, 99, 132, 1)',
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(153, 102, 255, 1)',
+        'rgba(255, 159, 64, 1)'
+      ];
+
       function setupChart(canvasId, config) {
           const ctx = document.getElementById(canvasId).getContext('2d');
           return new Chart(ctx, config);
@@ -104,17 +470,19 @@ patches:
 
       function linearRegression(data) {
           const n = data.length;
-          if (n < 2) return { m: 0, b: 0 };
-          let sx = 0, sy = 0, sxy = 0, sxx = 0;
+          if (n < 2) return { m: 0, b: 0, r2: 0 };
+          let sx = 0, sy = 0, sxy = 0, sxx = 0, syy = 0;
           data.forEach(p => {
               sx += p.x;
               sy += p.y;
               sxy += p.x * p.y;
               sxx += p.x * p.x;
+              syy += p.y * p.y;
           });
           const m = (n * sxy - sx * sy) / (n * sxx - sx * sx);
           const b = (sy / n) - (m * sx / n);
-          return { m, b };
+          const r2 = Math.pow((n * sxy - sx * sy) / Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy)), 2);
+          return { m, b, r2 };
       }
 
       function getBiometricsData(appData, currentRangeFilter, dateOffset) {
@@ -147,6 +515,14 @@ patches:
               const range = btn.dataset.range === 'all' ? 9999 : parseInt(btn.dataset.range, 10);
               btn.classList.toggle('active', range === currentRangeFilter);
           });
+          const prevBtn = document.getElementById('charts-prev-btn');
+          if (filteredData.length > 0 && appData.biometricData.length > 0) {
+              const firstDateVisible = new Date(filteredData[0].date).getTime();
+              const firstDateEver = new Date(appData.biometricData[appData.biometricData.length - 1].date).getTime();
+              prevBtn.disabled = firstDateVisible <= firstDateEver;
+          } else {
+              prevBtn.disabled = true;
+          }
           document.getElementById('charts-next-btn').disabled = dateOffset >= 0;
           const dateRangeLabel = document.getElementById('date-range');
           if (filteredData.length > 0) {
@@ -164,7 +540,7 @@ patches:
               .filter(f => f.type === 'number' && f.id !== 'basalMetabolism')
               .map(f => `<button class="btn-chart-type ${f.id === selectedKey ? 'active' : ''}" data-key="${f.id}">${f.label}</button>`)
               .join('');
-          container.innerHTML = options;
+          container.innerHTML = `<button class="btn-chart-type ${selectedKey === 'all' ? 'active' : ''}" data-key="all">Tutti</button>` + options;
       }
 
       function renderSummaryStats(fullData, goalWeight) {
@@ -209,7 +585,7 @@ patches:
 
       export function renderCharts() {
           const appData = getState();
-          const { currentRangeFilter, dateOffset, selectedBiometric } = appData.ui.charts;
+          const { currentRangeFilter, dateOffset, selectedBiometric, plannerChartType } = appData.ui.charts;
           const { filteredData, fullData } = getBiometricsData(appData, currentRangeFilter, dateOffset);
           
           updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData);
@@ -225,40 +601,50 @@ patches:
 
           // Render Biometric Chart
           if (biometricChart) biometricChart.destroy();
-          const selectedField = BIOMETRIC_FIELDS.find(f => f.id === selectedBiometric) || BIOMETRIC_FIELDS.find(f => f.id === 'weight');
-          const chartData = filteredData.filter(d => d[selectedField.id]).map(d => ({ x: new Date(d.date), y: parseFloat(d[selectedField.id]) }));
+          let datasets = [];
+          if (selectedBiometric === 'all') {
+            datasets = BIOMETRIC_FIELDS
+              .filter(f => f.type === 'number' && f.id !== 'basalMetabolism')
+              .map((field, index) => ({
+                label: field.label,
+                data: filteredData.filter(d => d[field.id]).map(d => ({ x: new Date(d.date), y: parseFloat(d[field.id]) })),
+                borderColor: CHART_COLORS[index % CHART_COLORS.length],
+                backgroundColor: CHART_COLORS[index % CHART_COLORS.length].replace('1)', '0.2)'),
+                fill: false,
+                yAxisID: field.id.includes('Percentage') ? 'yPercentage' : 'yPrimary',
+              }));
+          } else {
+            const selectedField = BIOMETRIC_FIELDS.find(f => f.id === selectedBiometric) || BIOMETRIC_FIELDS.find(f => f.id === 'weight');
+            datasets.push({
+              label: selectedField.label,
+              data: filteredData.filter(d => d[selectedField.id]).map(d => ({ x: new Date(d.date), y: parseFloat(d[selectedField.id]) })),
+              borderColor: 'rgba(149, 117, 205, 1)',
+              backgroundColor: 'rgba(149, 117, 205, 0.2)',
+              fill: true,
+            });
+          }
           biometricChart = setupChart('biometrics-chart-canvas', {
               type: 'line',
-              data: {
-                  datasets: [{
-                      label: selectedField.label,
-                      data: chartData,
-                      borderColor: 'rgba(149, 117, 205, 1)',
-                      backgroundColor: 'rgba(149, 117, 205, 0.2)',
-                      fill: true,
-                  }]
-              },
-              options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'day' } } } }
+              data: { datasets },
+              options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'day' } }, yPrimary: { position: 'left' }, yPercentage: { position: 'right', ticks: { callback: (v) => v + '%' } } } }
           });
 
           // Render Trend Chart
           if (trendChart) trendChart.destroy();
-          const trendData = linearRegression(fullData.map(d => ({ x: new Date(d.date).getTime(), y: parseFloat(d.weight) })));
+          const weightDataForTrend = fullData.map(d => ({ x: new Date(d.date).getTime(), y: parseFloat(d.weight) }));
+          const trendData = linearRegression(weightDataForTrend);
           trendChart = setupChart('velocity-chart-canvas', {
             type: 'line',
             data: {
-                labels: filteredData.map(d => new Date(d.date)),
                 datasets: [{
                     label: 'Trend del Peso (kg)',
-                    data: filteredData.map(d => trendData.m * new Date(d.date).getTime() + trendData.b),
+                    data: filteredData.map(d => ({ x: new Date(d.date), y: trendData.m * new Date(d.date).getTime() + trendData.b })),
                     borderColor: 'rgba(255, 99, 132, 1)',
                     fill: false,
                     pointRadius: 0,
                 }, {
                     label: 'Peso (kg)',
-                    data: filteredData.map(d => parseFloat(d.weight)),
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
+                    data: filteredData.map(d => ({ x: new Date(d.date), y: parseFloat(d.weight) })),
                     type: 'scatter',
                 }]
             },
@@ -273,7 +659,8 @@ patches:
           weekStart.setDate(diff);
 
           const plannerLabels = [];
-          const plannerData = [];
+          const plannerDataMin = [];
+          const plannerDataMax = [];
           for (let i=0; i<7; i++) {
             const date = new Date(weekStart);
             date.setDate(date.getDate() + i);
@@ -287,28 +674,35 @@ patches:
                 max += meal.calories_max || meal.calories_min || 0;
               }
             });
-            plannerData.push(min === max ? [0, max] : [min, max]);
+            plannerDataMin.push(min);
+            plannerDataMax.push(max);
           }
 
+          let plannerDatasets;
+          if (plannerChartType === 'line') {
+            plannerDatasets = [
+              { label: 'Calorie Min', data: plannerDataMin, borderColor: 'rgba(75, 192, 192, 1)', fill: false },
+              { label: 'Calorie Max', data: plannerDataMax, borderColor: 'rgba(255, 159, 64, 1)', fill: false }
+            ];
+          } else {
+            plannerDatasets = [{
+              label: 'Calorie Pianificate (min-max)',
+              data: plannerDataMin.map((min, i) => [min, plannerDataMax[i]]),
+              backgroundColor: 'rgba(75, 192, 192, 0.5)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1,
+              borderSkipped: false,
+            }];
+          }
           plannerChart = setupChart('planner-chart-canvas', {
-            type: 'bar',
-            data: {
-              labels: plannerLabels,
-              datasets: [{
-                label: 'Calorie Pianificate (min-max)',
-                data: plannerData,
-                backgroundColor: 'rgba(75, 192, 192, 0.5)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1,
-                borderSkipped: false,
-              }]
-            },
+            type: plannerChartType,
+            data: { labels: plannerLabels, datasets: plannerDatasets },
             options: { responsive: true, maintainAspectRatio: false }
           });
 
           // Render Correlation Chart
           if (correlationChart) correlationChart.destroy();
-          const correlationData = [];
+          const correlationDataPoints = [];
           for (let i = 1; i < fullData.length; i++) {
               const date1 = new Date(fullData[i - 1].date);
               const date2 = new Date(fullData[i].date);
@@ -317,266 +711,118 @@ patches:
               const daysBetween = (date2 - date1) / (1000 * 60 * 60 * 24);
               if (daysBetween <= 0) continue;
 
-              let totalCalories = 0;
-              let dayCount = 0;
+              let totalCalories = 0, dayCount = 0;
               for (let d = new Date(date1); d < date2; d.setDate(d.getDate() + 1)) {
-                  const iso = d.toISOString().split('T')[0];
                   let dailyCals = 0;
                   MEAL_TYPES.forEach(type => {
-                      const meal = appData.weeklyPlan[`${iso}-${type}`];
-                      if(meal) dailyCals += meal.calories_min || 0;
+                      const meal = appData.weeklyPlan[`${d.toISOString().split('T')[0]}-${type}`];
+                      if(meal) dailyCals += (meal.calories_min + (meal.calories_max || meal.calories_min)) / 2;
                   });
-                  if(dailyCals > 0) {
-                    totalCalories += dailyCals;
-                    dayCount++;
-                  }
+                  if(dailyCals > 0) { totalCalories += dailyCals; dayCount++; }
               }
               if(dayCount > 0) {
-                const avgCalories = totalCalories / dayCount;
-                const dailyWeightChange = (weight2 - weight1) / daysBetween;
-                correlationData.push({ x: avgCalories, y: dailyWeightChange });
+                correlationDataPoints.push({ x: totalCalories / dayCount, y: (weight2 - weight1) / daysBetween });
               }
           }
+          const corrTrend = linearRegression(correlationDataPoints);
           correlationChart = setupChart('correlation-chart-canvas', {
             type: 'scatter',
             data: {
               datasets: [{
                 label: 'Correlazione Calorie/Variazione Peso',
-                data: correlationData,
+                data: correlationDataPoints,
                 backgroundColor: 'rgba(255, 99, 132, 0.5)'
+              },{
+                label: 'Linea di Tendenza',
+                data: [{x: Math.min(...correlationDataPoints.map(d=>d.x)), y: corrTrend.m * Math.min(...correlationDataPoints.map(d=>d.x)) + corrTrend.b}, {x: Math.max(...correlationDataPoints.map(d=>d.x)), y: corrTrend.m * Math.max(...correlationDataPoints.map(d=>d.x)) + corrTrend.b}],
+                type: 'line',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                fill: false
               }]
             },
             options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: 'Media Calorie Giornaliere' }}, y: { title: { display: true, text: 'Variazione Media Peso Giornaliera (kg)' }} }}
           });
       }
-  - file: src/utils/formatters.js
+  - file: src/ui/interactions/chartsInteractions.js
     content: |
-      export function formatDate(date) {
-          const d = new Date(date);
-          let month = '' + (d.getMonth() + 1);
-          let day = '' + d.getDate();
-          const year = d.getFullYear();
+      import { getState, setUiState } from '../../core/state.js';
 
-          if (month.length < 2)
-              month = '0' + month;
-          if (day.length < 2)
-              day = '0' + day;
-
-          return [year, month, day].join('-');
+      function handleRangeChange(newRange) {
+          const currentState = getState();
+          const newUiState = {
+              ...currentState.ui,
+              charts: {
+                  ...currentState.ui.charts,
+                  currentRangeFilter: newRange,
+                  dateOffset: 0
+              }
+          };
+          setUiState(newUiState);
       }
 
-      export function formatShortDate(date) {
-          const d = new Date(date);
-          let month = '' + (d.getMonth() + 1);
-          let day = '' + d.getDate();
+      function handleDateNavigation(direction) {
+          const currentState = getState();
+          const { dateOffset, currentRangeFilter } = currentState.ui.charts;
+          const step = currentRangeFilter === 9999 ? 30 : currentRangeFilter;
+          const newOffset = dateOffset + (direction * step);
 
-          if (month.length < 2)
-              month = '0' + month;
-          if (day.length < 2)
-              day = '0' + day;
-
-          return [day, month].join('/');
-      }
-
-      export function formatDateWithYear(date) {
-          const d = new Date(date);
-          let month = '' + (d.getMonth() + 1);
-          let day = '' + d.getDate();
-          const year = d.getFullYear();
-
-          if (month.length < 2)
-              month = '0' + month;
-          if (day.length < 2)
-              day = '0' + day;
-
-          return [day, month, year].join('/');
-      }
-
-      export function formatIngredients(ingredientsString) {
-          if (!ingredientsString || typeof ingredientsString !== 'string') {
-              return '';
+          if (newOffset <= 0) {
+              const newUiState = {
+                  ...currentState.ui,
+                  charts: {
+                      ...currentState.ui.charts,
+                      dateOffset: newOffset
+                  }
+              };
+              setUiState(newUiState);
           }
-          const ingredients = ingredientsString.split(',').map(item => item.trim());
-          if (ingredients.length === 0) {
-              return '';
-          }
-          return `
-              <ul>
-                  ${ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')}
-              </ul>
-          `;
-      }
-  - file: styles/charts.css
-    content: |
-      /* --- CHARTS PAGE --- */
-      #charts-page > h3 {
-          color: var(--primary-color);
-          margin-bottom: 0.5rem;
       }
 
-      .charts-date-range-header {
-        text-align: center;
-        margin-bottom: 1.5rem;
-        font-size: 1.2rem;
-        font-weight: bold;
-        color: var(--text-color-muted);
+      function handleBiometricChange(newKey) {
+          const currentState = getState();
+          const newUiState = {
+              ...currentState.ui,
+              charts: {
+                  ...currentState.ui.charts,
+                  selectedBiometric: newKey
+              }
+          };
+          setUiState(newUiState);
       }
 
-      .charts-controls {
-        margin-bottom: 1.5rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 1rem;
+      function handlePlannerChartTypeChange(newType) {
+          const currentState = getState();
+          const newUiState = {
+              ...currentState.ui,
+              charts: {
+                  ...currentState.ui.charts,
+                  plannerChartType: newType
+              }
+          };
+          setUiState(newUiState);
       }
 
-      .range-filter {
-        display: flex;
-        gap: 0.5rem;
-        background-color: var(--card-color);
-        padding: 0.5rem;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-      }
+      export function initializeChartsListeners() {
+          const chartsPage = document.getElementById('charts-page');
+          if (!chartsPage) return;
 
-      .range-filter .btn {
-        padding: 0.5rem 1rem;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-      }
-
-      #charts-prev-btn, #charts-next-btn {
-        padding: 0.5rem;
-        width: 40px;
-        height: 40px;
-      }
-
-      #charts-next-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .range-filter .btn.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-        border-color: var(--primary-color);
-      }
-
-      .charts-summary-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-        padding: 1.5rem;
-        background: var(--card-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-      }
-      .stat-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-      }
-      .stat-value {
-        font-size: 1.75rem;
-        font-weight: bold;
-        color: var(--primary-color);
-        font-family: 'Courier New', Courier, monospace;
-      }
-      .stat-label {
-        font-size: 0.8rem;
-        color: var(--text-color-muted);
-        text-transform: uppercase;
-        margin-top: 0.5rem;
-      }
-
-      .charts-container {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1.5rem;
-      }
-
-      .chart-card {
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          padding: 1.5rem;
-          display: flex;
-          flex-direction: column;
-      }
-
-      .chart-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.5rem;
-          flex-shrink: 0;
-          gap: 1rem;
-      }
-
-      .chart-header h4 {
-          color: var(--primary-color);
-          margin: 0;
-          text-align: left;
-          flex-grow: 1;
-      }
-
-      .chart-header-controls {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex-shrink: 0;
-        margin-bottom: 1rem;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-
-      .btn-expand-chart {
-        background: none;
-        border: none;
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .chart-canvas-container {
-          position: relative;
-          height: 400px;
-          width: 100%;
-          flex-grow: 1;
-      }
-
-      .chart-type-switcher {
-          display: flex;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          overflow: hidden;
-      }
-
-      .btn-chart-type {
-          background: transparent;
-          border: none;
-          color: var(--text-color-muted);
-          padding: 0.25rem 0.75rem;
-          cursor: pointer;
-          font-size: 0.8rem;
-      }
-      .btn-chart-type:not(:last-child) {
-          border-right: 1px solid var(--border-color);
-      }
-      .btn-chart-type.active {
-          background-color: var(--primary-color);
-          color: var(--bg-color);
-      }
-
-      @media (min-width: 1024px) {
-          .charts-container {
-              grid-template-columns: repeat(2, 1fr);
-          }
+          chartsPage.addEventListener('click', (event) => {
+              const target = event.target.closest('button');
+              if (!target) return;
+              
+              if (target.matches('.range-filter-btn')) {
+                  const newRange = target.dataset.range === 'all' ? 9999 : parseInt(target.dataset.range, 10);
+                  handleRangeChange(newRange);
+              } else if (target.id === 'charts-prev-btn') {
+                  handleDateNavigation(-1);
+              } else if (target.id === 'charts-next-btn') {
+                  handleDateNavigation(1);
+              } else if (target.matches('.btn-chart-type') && target.dataset.key) {
+                  handleBiometricChange(target.dataset.key);
+              } else if (target.matches('.btn-chart-type') && target.dataset.type) {
+                  handlePlannerChartTypeChange(target.dataset.type);
+              }
+          });
       }
   - file: templates/charts.html
     content: |
