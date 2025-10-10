@@ -1,408 +1,257 @@
-commit_message: "refactor: Unify exercise editor modals into a single component"
+commit_message: "fix(trainer): Prevent workout duplication by correctly removing event listeners"
 rationale: |
-  In linea con il piano d'azione approvato, questa patch esegue un refactoring critico per eliminare la duplicazione del codice nella gestione dei modali di modifica degli esercizi.
+  This patch addresses a critical bug where completed workouts were being saved multiple times, resulting in duplicate entries in the log view. The user correctly identified that state was persisting incorrectly between workout sessions.
 
-  **Cambiamenti principali:**
+  **Root Cause Analysis:**
+  The `workoutFinished` event listener was being added with the `{ once: true }` option in `initializeWorkout`. However, the corresponding `removeEventListener` call in `resetWorkoutState` did not include this option, causing the removal to fail silently. This led to an accumulation of listeners every time a workout was started and then cancelled by navigating back. When a workout was finally completed, all accumulated listeners would fire simultaneously, each saving a copy of the workout summary.
 
-  1.  **Centralizzazione della Logica:** Tutta la funzionalità di modifica degli esercizi, sia dal planner (`planner` context) che dallo storico degli allenamenti (`history` context), è stata consolidata nel componente `exerciseEditorModal.js`. Questo file era già predisposto per gestire contesti multipli, rendendo gli altri modali ridondanti.
+  **Fix Implementation:**
 
-  2.  **Rimozione di Codice Obsoleto:** I file `workoutLogEditorModal.js` e `loggedExerciseEditorModal.js` sono stati eliminati. Di conseguenza, sono stati rimossi i loro riferimenti dal file di esportazione principale (`modals.js`), dal Service Worker (`sw.js`) e dal file dei template HTML (`modals.html`).
+  1.  **`src/core/trainer.js`**: The `removeEventListener` call within `resetWorkoutState` has been updated to include `{ once: true }`. This ensures that any lingering listener from a previously abandoned session is correctly removed before a new one is added.
 
-  3.  **Aggiornamento delle Interazioni:** Il gestore di eventi in `plannerInteractions.js` è stato aggiornato per chiamare `openExerciseEditorModal` con il contesto corretto (`history`) quando si modifica un esercizio registrato, garantendo che il flusso utente rimanga invariato ma utilizzi il nuovo componente unificato.
-
-  Questo refactoring riduce la complessità del codebase, migliora la manutenibilità e aderisce al principio DRY (Don't Repeat Yourself), come specificato nell'analisi iniziale.
+  2.  **`src/ui/trainerRenderer.js`**: A call to `resetWorkoutState` has been added to the `destroyTrainerController` function. This provides an additional layer of robustness, ensuring that both the workout state and its associated listeners are properly cleaned up whenever the user navigates away from the trainer view, effectively preventing any state leakage.
 patches:
-  - file: src/ui/interactions/plannerInteractions.js
+  - file: src/core/trainer.js
     content: |
-      import {
-        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
-        copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
-      } from '../../core/state.js';
-      import { initializeWorkout } from '../../core/trainer.js';
-      import { fetchAndParseConfig } from '../../api/configService.js';
-      import { showNotification } from '../notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { startAnimation, stopAnimation } from './trainer/animation.js';
+      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+      import { advanceToNextSet } from './trainer/machine.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+      import { speak, playStartCue } from '../utils/audioFeedback.js';
+      import { UI_TEXT } from '../config/uiText.js';
 
-      async function handleLoadConfig() {
-        log('Interactions', 'Handling config load button click');
-        const url = document.getElementById('config-url-input').value.trim();
-        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-        setConfigUrl(url);
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config, url);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) { showNotification(error.message, 'error'); }
+      export { getState as getWorkoutState };
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        document.removeEventListener('workoutFinished', handleWorkoutFinished, { once: true });
+        stopAnimation();
+        resetState();
       }
 
-      function handleCalendarClick(e) {
-        const startBtn = e.target.closest('.btn-start-workout-day');
-        if (startBtn) {
-            const isoDate = startBtn.dataset.date;
-            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
-            const globalState = getState();
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout, isoDate);
-            setView('trainer');
+      function handleWorkoutFinished() {
+        endWorkout();
+      }
+
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+          return;
+        }
+        resetWorkoutState();
+        const firstExercise = plannedExercises[0];
+        const initialState = {
+          workoutDate: isoDate,
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+          currentExerciseIndex: 0,
+          currentSet: 1,
+          currentRep: 1,
+          executionMode: firstExercise.execution_mode || 'tempo_guided',
+          startTime: Date.now(),
+          phaseStartTime: 0,
+          restStartTime: 0,
+          setsData: []
+        };
+        updateState(initialState);
+        document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function completeSet() {
+        const state = getState();
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const setData = {
+            exerciseId: currentExercise.instanceId,
+            set: state.currentSet,
+            duration: Date.now() - state.phaseStartTime,
+            rest: currentExercise.defaultRest,
+            weight: currentExercise.defaultWeight || 0
+        };
+
+        if (state.executionMode === 'manual_reps') {
+            setData.reps = state.manualRepCount;
+        } else if (state.executionMode === 'tempo_guided') {
+            setData.reps = currentExercise.defaultReps;
+        }
+
+        const newSetsData = [...state.setsData, setData];
+        updateState({
+            setsData: newSetsData,
+            status: 'resting',
+            restStartTime: Date.now(),
+            restTimeRemaining: currentExercise.defaultRest * 1000
+        });
+      }
+
+      export function startWorkout() {
+        const state = getState();
+        log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        let startState = { status: 'running', phaseStartTime: Date.now() };
+
+        if (state.isAudioEnabled) {
+          playStartCue();
+          const firstExerciseName = state.exerciseQueue[0].name;
+          speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+        }
+
+        if (state.executionMode === 'tempo_guided') {
+            startState.executionQueue = buildExecutionQueueForCurrentSet();
+            startState.currentPhaseIndex = 0;
+            startState.phaseTimeElapsed = 0;
+            startState.currentRep = 1;
+        } else if (state.executionMode === 'static_hold') {
+            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+        } else if (state.executionMode === 'manual_reps') {
+            startState.manualRepCount = 0;
+        }
+
+        updateState(startState);
+        startAnimation();
+        log('Trainer', 'Workout started. New state:', getState());
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running' || state.status === 'resting') {
+          updateState({
+            prePauseStatus: state.status,
+            status: 'paused',
+          });
+          stopAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+          const status = state.prePauseStatus;
+          const newState = { status, prePauseStatus: '' };
+          if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
+          if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
+
+          updateState(newState);
+          startAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
+      }
+
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status === 'running' && state.executionMode === 'manual_reps') {
+              const newRepCount = state.manualRepCount + 1;
+              updateState({ manualRepCount: newRepCount });
+
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+
+              if (targetReps && newRepCount >= targetReps) {
+                  completeSet();
+                  startAnimation();
+              }
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          }
+      }
+
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalTonnage = 0;
+
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+              totalTonnage += exerciseTonnage;
+
+              return {
+                  ...exercise,
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime,
+                  tonnage: exerciseTonnage
+              };
+          });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
+
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              totalTonnage,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
+
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+          }
+
+          return summary;
+      }
+
+      export function endWorkout() {
+        const finalState = getState();
+        if (finalState.startTime === 0 || finalState.status === 'finished') {
+            log('Trainer', 'Workout ended prematurely or already finished, not saving summary.');
+            if (finalState.status !== 'finished') setView('planner');
             return;
         }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
 
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
-          openDayEditorModal(dayCell.dataset.date);
-        }
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
       }
-
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleLogViewClick(e) {
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-          return;
-        }
-
-        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
-        if (btnDeleteWorkout) {
-          const { date, starttime } = btnDeleteWorkout.dataset;
-          log('Interactions', 'Delete workout button clicked', { date, starttime });
-          showConfirmModal(
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
-            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
-            () => {
-              deleteWorkoutFromHistory(date, parseInt(starttime));
-              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
-            },
-            'danger'
-          );
-          return;
-        }
-
-        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
-        if(btnEditExercise) {
-          const { date, starttime, instanceid } = btnEditExercise.dataset;
-          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
-          const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
-          if (exercise) {
-            openExerciseEditorModal({
-              context: 'history',
-              exercise,
-              date,
-              startTime: parseInt(starttime, 10)
-            });
-          }
-          return;
-        }
-      }
-
-      function handleCopyWeek() {
-        log('Interactions', 'Copy week button clicked');
-        showConfirmModal(
-          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-        );
-      }
-
-      function handleResetWeek() {
-        log('Interactions', 'Reset week button clicked');
-        showConfirmModal(
-          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-        );
-      }
-
-      export function initializePlannerListeners() {
-        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
-        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-      }
-  - file: src/ui/modals.js
+  - file: src/ui/trainerRenderer.js
     content: |
-      import { showConfirmModal } from './modals/confirmModal.js';
-      import { openDayEditorModal } from './modals/dayEditorModal.js';
-      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
-      import { showRecipeModal } from './modals/recipeModal.js';
-      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
-      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
-      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
+      import { getWorkoutState, resetWorkoutState } from '../core/trainer.js';
+      import { TrainerComponent } from './components/TrainerComponent.js';
+      import { log } from '../utils/logger.js';
 
-      export {
-        showConfirmModal,
-        openDayEditorModal,
-        openExerciseEditorModal,
-        showRecipeModal,
-        openSelectionModal,
-        openWorkoutSelectionModal,
-        openWorkoutEditorModal,
-        openManualWorkoutModal
-      };
-  - file: src/ui/modals/loggedExerciseEditorModal.js
-    content: ""
-  - file: src/ui/modals/workoutLogEditorModal.js
-    content: ""
-  - file: templates/modals.html
-    content: |
-      <div id="info-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="info-modal-title"></h3>
-                <button class="modal-close-btn" data-target="info-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <p id="info-modal-desc"></p>
-                  <pre><code id="info-modal-json-example"></code></pre>
-              </div>
-          </div>
-      </div>
-      <div id="selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="selection-modal"></button>
-              </div>
-              <div id="selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="workout-selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
-              </div>
-              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="day-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="day-editor-title"></h3>
-              <button class="modal-close-btn" data-target="day-editor-modal"></button>
-            </div>
-            <div id="day-editor-body" class="modal-body day-editor-list"></div>
-        </div>
-      </div>
-      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="workout-editor-title"></h3>
-              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
-            </div>
-            <div id="workout-editor-body" class="modal-body"></div>
-        </div>
-      </div>
-      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="exercise-editor-title"></h3>
-              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
-            </div>
-            <div id="exercise-editor-body" class="modal-body">
-            </div>
-            <div class="modal-footer">
-                <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
-            </div>
-        </div>
-      </div>
-      <div id="confirm-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="confirm-modal-title"></h3>
-            </div>
-            <div class="modal-body">
-              <p id="confirm-modal-message"></p>
-            </div>
-            <div class="modal-footer">
-              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
-              <button id="confirm-modal-confirm-btn" class="btn"></button>
-            </div>
-        </div>
-      </div>
-      <div id="recipe-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="recipe-modal-title"></h3>
-              <button class="modal-close-btn" data-target="recipe-modal"></button>
-            </div>
-            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-        </div>
-      </div>
-      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="manual-workout-modal-title"></h3>
-                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <form id="manual-workout-form" class="structured-form">
-                      <div class="form-group">
-                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
-                          <input type="text" id="manual-workout-name" name="name" required>
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
-                          <input type="text" id="manual-workout-duration" name="duration">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
-                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
-                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
-                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
-                      </div>
-                      <div class="form-group full-width">
-                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
-                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
-                      </div>
-                  </form>
-              </div>
-              <div class="modal-footer">
-                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
-              </div>
-          </div>
-      </div>
-      <div id="chart-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content modal-content-large">
-              <div class="modal-header">
-                <h3 id="chart-modal-title"></h3>
-                <button class="modal-close-btn" data-target="chart-modal"></button>
-              </div>
-              <div id="chart-modal-body" class="modal-body">
-                <canvas id="chart-modal-canvas"></canvas>
-              </div>
-          </div>
-      </div>
-  - file: sw.js
-    content: |
-      const CACHE_NAME = 'healtypro-v18';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'styles/recipes.css',
-        'styles/trainer.css',
-        'styles/debriefing.css',
-        'styles/goals.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/recipes.html',
-        'templates/modals.html',
-        'templates/trainer.html',
-        'templates/debriefing.html',
-        'templates/goals.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/config/forms.js',
-        'src/config/uiText.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/core/trainer.js',
-        'src/core/trainer/state.js',
-        'src/core/trainer/queueBuilder.js',
-        'src/core/trainer/machine.js',
-        'src/core/trainer/animation.js',
-        'src/ui/interactions/globalInteractions.js',
-        'src/ui/interactions/plannerInteractions.js',
-        'src/ui/interactions/profileInteractions.js',
-        'src/ui/interactions/progressInteractions.js',
-        'src/ui/interactions/debriefingInteractions.js',
-        'src/ui/interactions/goalsInteractions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/modals/confirmModal.js',
-        'src/ui/modals/dayEditorModal.js',
-        'src/ui/modals/exerciseEditorModal.js',
-        'src/ui/modals/recipeModal.js',
-        'src/ui/modals/selectionModal.js',
-        'src/ui/modals/workoutEditorModal.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/ui/trainerRenderer.js',
-        'src/ui/components/TrainerComponent.js',
-        'src/utils/constants.js',
-        'src/utils/formatters.js',
-        'src/utils/logger.js',
-        'src/utils/audioFeedback.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
+      let trainerComponent = null;
 
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
+      function handleWorkoutStateChange() {
+          if (trainerComponent) {
+              trainerComponent.render(getWorkoutState());
+          }
+      }
 
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
+      export function initializeTrainerController() {
+          log('TrainerRenderer', 'Initializing TrainerComponent...');
+          const container = document.getElementById('trainer-page');
+          if (container && !trainerComponent) {
+              trainerComponent = new TrainerComponent(container);
+              trainerComponent.mount();
+              document.addEventListener('workoutStateChange', handleWorkoutStateChange);
+              handleWorkoutStateChange();
+              log('TrainerRenderer', 'TrainerComponent initialized.');
+          }
+      }
 
-      self.addEventListener('fetch', (event) => {
-        if (event.request.url.startsWith(self.location.origin)) {
-          event.respondWith(
-            caches.match(event.request)
-              .then((response) => {
-                return response || fetch(event.request);
-              })
-          );
-        } else {
-          event.respondWith(fetch(event.request));
-        }
-      });
-commands: []
+      export function destroyTrainerController() {
+          log('TrainerRenderer', 'Destroying TrainerComponent...');
+          if (trainerComponent) {
+              trainerComponent.destroy();
+              trainerComponent = null;
+          }
+          document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
+          resetWorkoutState(); // <-- Ensure state is reset when leaving the view
+          log('TrainerRenderer', 'TrainerComponent destroyed.');
+      }

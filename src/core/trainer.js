@@ -12,20 +12,13 @@ export { getState as getWorkoutState };
 
 export function resetWorkoutState() {
   log('Trainer', 'Resetting workout state.');
-  document.removeEventListener('workoutFinished', handleWorkoutFinished);
+  document.removeEventListener('workoutFinished', handleWorkoutFinished, { once: true });
   stopAnimation();
   resetState();
 }
 
 function handleWorkoutFinished() {
-  const finalState = getState();
-  const summary = createWorkoutSummary(finalState);
-  setLastWorkoutSummary(summary);
-  addWorkoutToHistory(summary);
-
-  updateState({ status: 'finished' });
-  stopAnimation();
-  setView('debriefing');
+  endWorkout();
 }
 
 export function initializeWorkout(plannedExercises, isoDate) {
@@ -198,9 +191,9 @@ function createWorkoutSummary(finalState) {
 
 export function endWorkout() {
   const finalState = getState();
-  if (finalState.startTime === 0) {
-      log('Trainer', 'Workout ended prematurely, not saving summary.');
-      setView('planner');
+  if (finalState.startTime === 0 || finalState.status === 'finished') {
+      log('Trainer', 'Workout ended prematurely or already finished, not saving summary.');
+      if (finalState.status !== 'finished') setView('planner');
       return;
   }
   const summary = createWorkoutSummary(finalState);
