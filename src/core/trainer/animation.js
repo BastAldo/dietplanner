@@ -16,28 +16,41 @@ async function processQueue() {
 
   log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
 
-  if (currentPhase && currentPhase.type) {
-    if (isAudioEnabled) {
-      if (currentPhase.type === 'audio') {
-        if (currentPhase.cue === 'tick') playTick();
-        else if (currentPhase.cue === 'start') playStartCue();
-        else if (currentPhase.cue === 'stop') playStopCue();
-      } else if (currentPhase.type === 'speech') {
-        if (currentPhase.await) {
-          await speak(currentPhase.text);
-        } else {
-          speak(currentPhase.text);
-        }
+  if (!currentPhase) {
+    // End of the queue, the set is complete.
+    completeSet();
+    return;
+  }
+
+  // If the current phase is a movement, stop processing and let the 'tick' handle it.
+  if (currentPhase.type === 'movement') {
+    return;
+  }
+
+  // Process non-timed events like speech and audio cues
+  if (isAudioEnabled) {
+    if (currentPhase.type === 'audio') {
+      if (currentPhase.cue === 'tick') playTick();
+      else if (currentPhase.cue === 'start') playStartCue();
+      else if (currentPhase.cue === 'stop') playStopCue();
+    } else if (currentPhase.type === 'speech') {
+      // Awaiting speech can pause the queue progression until done
+      if (currentPhase.await) {
+        await speak(currentPhase.text);
+      } else {
+        speak(currentPhase.text);
       }
     }
+  }
 
-    const newPhaseIndex = currentPhaseIndex + 1;
-    if (newPhaseIndex < executionQueue.length) {
-      updateState({ currentPhaseIndex: newPhaseIndex });
-      await processQueue();
-    } else {
-      completeSet();
-    }
+  // Move to the next item in the queue and recursively process
+  const newPhaseIndex = currentPhaseIndex + 1;
+  if (newPhaseIndex < executionQueue.length) {
+    updateState({ currentPhaseIndex: newPhaseIndex });
+    await processQueue();
+  } else {
+    // This was the last non-timed event, set is done.
+    completeSet();
   }
 }
 
@@ -59,10 +72,12 @@ function tick(timestamp) {
       const { executionQueue, currentPhaseIndex } = state;
       const currentPhase = executionQueue[currentPhaseIndex];
 
-      if (currentPhase && currentPhase.duration_ms) {
+      // Only process timed 'movement' phases here
+      if (currentPhase && currentPhase.type === 'movement' && currentPhase.duration_ms) {
         const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
 
         if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
+          // Phase complete, advance to the next and trigger queue processing for any non-timed events
           const newPhaseIndex = currentPhaseIndex + 1;
           updateState({
             currentPhaseIndex: newPhaseIndex,
@@ -73,8 +88,6 @@ function tick(timestamp) {
         } else {
           updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
         }
-      } else if (!currentPhase) {
-        completeSet();
       }
     } else if (state.executionMode === 'static_hold') {
       const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
@@ -104,6 +117,7 @@ function tick(timestamp) {
 export function startAnimation() {
   if (animationFrameId) return;
   lastTickTimestamp = 0;
+  // Start processing the queue for any initial non-timed events
   processQueue();
   animationFrameId = requestAnimationFrame(tick);
 }
