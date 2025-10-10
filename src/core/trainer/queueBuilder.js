@@ -42,7 +42,7 @@ function interpretTemplate(template, exercise, loopContext) {
 export function buildExecutionQueueForCurrentSet() {
   const state = getWorkoutState();
   const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-  const { execution_mode } = currentExercise;
+  const execution_mode = currentExercise.execution_mode || 'tempo_guided';
 
   let queue = [];
   if (execution_mode === 'tempo_guided') {
