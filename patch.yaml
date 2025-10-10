@@ -1,147 +1,408 @@
-commit_message: "docs: Allinea la documentazione alle funzionalità recenti"
+commit_message: "refactor: Unify exercise editor modals into a single component"
 rationale: |
-  Questa patch aggiorna in modo completo la documentazione del progetto per riflettere le ultime modifiche implementate, garantendo che rimanga una fonte di verità affidabile.
+  In linea con il piano d'azione approvato, questa patch esegue un refactoring critico per eliminare la duplicazione del codice nella gestione dei modali di modifica degli esercizi.
 
-  **Aggiornamenti apportati:**
+  **Cambiamenti principali:**
 
-  1.  **`docs/01_FUNCTIONALITY.md`**: È stata aggiunta una nuova User Story (`US-33`) che descrive in dettaglio la nuova "Dashboard Grafici", includendo tutte le sue funzionalità avanzate come il filtro temporale, la visualizzazione multi-serie, le linee di tendenza e il selettore di tipo di grafico. È stato inoltre aggiornato il punto `US-30` per includere la navigazione verso la nuova sezione.
+  1.  **Centralizzazione della Logica:** Tutta la funzionalità di modifica degli esercizi, sia dal planner (`planner` context) che dallo storico degli allenamenti (`history` context), è stata consolidata nel componente `exerciseEditorModal.js`. Questo file era già predisposto per gestire contesti multipli, rendendo gli altri modali ridondanti.
 
-  2.  **`docs/02_ARCHITECTURE.md`**: La sezione sull'architettura è stata estesa per documentare la nuova strategia di gestione degli errori nel `configService.js`. Viene ora spiegato il meccanismo di parsing robusto e come la `debugMode` viene sfruttata per fornire log dettagliati in console senza impattare l'esperienza utente, che riceve solo notifiche pulite.
+  2.  **Rimozione di Codice Obsoleto:** I file `workoutLogEditorModal.js` e `loggedExerciseEditorModal.js` sono stati eliminati. Di conseguenza, sono stati rimossi i loro riferimenti dal file di esportazione principale (`modals.js`), dal Service Worker (`sw.js`) e dal file dei template HTML (`modals.html`).
 
-  Questi aggiornamenti assicurano che la documentazione sia di nuovo perfettamente sincronizzata con il codice.
+  3.  **Aggiornamento delle Interazioni:** Il gestore di eventi in `plannerInteractions.js` è stato aggiornato per chiamare `openExerciseEditorModal` con il contesto corretto (`history`) quando si modifica un esercizio registrato, garantendo che il flusso utente rimanga invariato ma utilizzi il nuovo componente unificato.
+
+  Questo refactoring riduce la complessità del codebase, migliora la manutenibilità e aderisce al principio DRY (Don't Repeat Yourself), come specificato nell'analisi iniziale.
 patches:
-  - file: docs/01_FUNCTIONALITY.md
+  - file: src/ui/interactions/plannerInteractions.js
     content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
+      import {
+        resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+        copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
+      } from '../../core/state.js';
+      import { initializeWorkout } from '../../core/trainer.js';
+      import { fetchAndParseConfig } from '../../api/configService.js';
+      import { showNotification } from '../notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
 
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico dinamico e regole di validazione personalizzate.
+      async function handleLoadConfig() {
+        log('Interactions', 'Handling config load button click');
+        const url = document.getElementById('config-url-input').value.trim();
+        if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
+        setConfigUrl(url);
+        try {
+          const config = await fetchAndParseConfig(url);
+          setPlannerConfig(config, url);
+          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
+        } catch (error) { showNotification(error.message, 'error'); }
+      }
 
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+      function handleCalendarClick(e) {
+        const startBtn = e.target.closest('.btn-start-workout-day');
+        if (startBtn) {
+            const isoDate = startBtn.dataset.date;
+            log('Interactions', 'Start workout button clicked from calendar', { date: isoDate });
+            const globalState = getState();
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout, isoDate);
+            setView('trainer');
+            return;
+        }
 
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati):** L'utente può caricare una configurazione da un file `pasti.json` remoto. L'applicazione si aspetta di trovare, nella stessa directory, un file complementare chiamato `ingredienti.json`.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel `pasti.json` (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno. Le calorie vengono calcolate dinamicamente dall'applicazione basandosi sui dati del file `ingredienti.json`. Il sistema è in grado di calcolare le calorie anche per ingredienti misurati in "pezzi" (es. `quantita_pezzi: 1`), a condizione che nel file `ingredienti.json` sia specificato il peso medio per pezzo tramite il campo opzionale `g_per_pezzo`.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
-      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
-      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile. L'URL della ricetta viene derivato automaticamente dal percorso del file di configurazione, cercando i file in una sottocartella `ricette/`.
-      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `pasti.json`. All'apertura del link, se la configurazione è diversa da quella in uso, l'app mi chiederà conferma prima di caricarla per evitare perdite di dati.
-      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`) utilizzando, dove supportato, la funzione di condivisione nativa del mio dispositivo.
-      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato per ripristinare il mio `configUrl` e il mio `weeklyPlan`, con una richiesta di conferma prima di sovrascrivere i dati esistenti.
-      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
-      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche come una lista di card.
-      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
-      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi, Grafici e Profilo tramite un menu principale nell'header.
-      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
-      * **US-32 (Galleria Ricette):** L'utente può accedere a una pagina che elenca tutti i pasti con ricette disponibili per una rapida consultazione.
-      * **US-33 (Dashboard Grafici):** Come utente, voglio poter accedere a una dashboard di grafici per analizzare i miei dati. La dashboard include:
-          * Un controllo per filtrare i dati su diversi intervalli di tempo (7, 30, 90, 365 giorni o sempre) e per navigare avanti e indietro nel tempo.
-          * Un grafico "Andamento Dati Biometrici" che permette di visualizzare la linea di tendenza di un singolo parametro (es. peso, massa grassa) o di tutti i parametri contemporaneamente.
-          * Un grafico "Trend del Peso" che mostra i dati del peso come nuvola di punti e sovrappone una linea di tendenza calcolata tramite regressione lineare.
-          * Un grafico "Riepilogo Calorie Settimanali" che visualizza le calorie minime e massime pianificate per la settimana corrente, con un selettore per alternare la vista tra grafico a barre e a linee.
-          * Un grafico "Correlazione Peso e Calorie" che mostra la relazione tra l'assunzione calorica media e la variazione di peso giornaliera, completo di linea di tendenza.
-  - file: docs/02_ARCHITECTURE.md
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+          openDayEditorModal(dayCell.dataset.date);
+        }
+      }
+
+      function handleRecipeClick(e) {
+        const recipeItem = e.target.closest('.recipe-list-item');
+        if (recipeItem) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleLogViewClick(e) {
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+          return;
+        }
+
+        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
+        if (btnDeleteWorkout) {
+          const { date, starttime } = btnDeleteWorkout.dataset;
+          log('Interactions', 'Delete workout button clicked', { date, starttime });
+          showConfirmModal(
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+            UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+            () => {
+              deleteWorkoutFromHistory(date, parseInt(starttime));
+              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
+            },
+            'danger'
+          );
+          return;
+        }
+
+        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
+        if(btnEditExercise) {
+          const { date, starttime, instanceid } = btnEditExercise.dataset;
+          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
+          const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
+          if (exercise) {
+            openExerciseEditorModal({
+              context: 'history',
+              exercise,
+              date,
+              startTime: parseInt(starttime, 10)
+            });
+          }
+          return;
+        }
+      }
+
+      function handleCopyWeek() {
+        log('Interactions', 'Copy week button clicked');
+        showConfirmModal(
+          UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
+        );
+      }
+
+      function handleResetWeek() {
+        log('Interactions', 'Reset week button clicked');
+        showConfirmModal(
+          UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
+        );
+      }
+
+      export function initializePlannerListeners() {
+        document.getElementById('load-config-btn').addEventListener('click', handleLoadConfig);
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('view-calendar-btn').addEventListener('click', () => setView('planner'));
+        document.getElementById('view-log-btn').addEventListener('click', () => setView('log'));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+      }
+  - file: src/ui/modals.js
     content: |
-      # Architettura: HealtyPro (ex NutriPlan)
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
+      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
 
-      ## 1. Principi Guida
-      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è essenziale e intuitiva, basata su Vanilla JS.
-      * **Data-Driven & Convention over Configuration:** La logica di business è definita in file di configurazione remoti. L'applicazione si basa su convenzioni di struttura: dato l'URL di `pasti.json`, deduce automaticamente i percorsi per `ingredienti.json` (stessa directory), `esercizi.json` (stessa directory) e per le ricette (sottodirectory `ricette/`).
-      * **Maintainability (SRP):** Ogni modulo ha una singola, chiara responsabilità.
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutEditorModal,
+        openManualWorkoutModal
+      };
+  - file: src/ui/modals/loggedExerciseEditorModal.js
+    content: ""
+  - file: src/ui/modals/workoutLogEditorModal.js
+    content: ""
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div id="exercise-editor-body" class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              <button id="confirm-modal-cancel-btn" class="btn btn-secondary"></button>
+              <button id="confirm-modal-confirm-btn" class="btn"></button>
+            </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+      <div id="chart-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content modal-content-large">
+              <div class="modal-header">
+                <h3 id="chart-modal-title"></h3>
+                <button class="modal-close-btn" data-target="chart-modal"></button>
+              </div>
+              <div id="chart-modal-body" class="modal-body">
+                <canvas id="chart-modal-canvas"></canvas>
+              </div>
+          </div>
+      </div>
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v18';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'styles/debriefing.css',
+        'styles/goals.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'templates/debriefing.html',
+        'templates/goals.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/config/forms.js',
+        'src/config/uiText.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions/globalInteractions.js',
+        'src/ui/interactions/plannerInteractions.js',
+        'src/ui/interactions/profileInteractions.js',
+        'src/ui/interactions/progressInteractions.js',
+        'src/ui/interactions/debriefingInteractions.js',
+        'src/ui/interactions/goalsInteractions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/modals/confirmModal.js',
+        'src/ui/modals/dayEditorModal.js',
+        'src/ui/modals/exerciseEditorModal.js',
+        'src/ui/modals/recipeModal.js',
+        'src/ui/modals/selectionModal.js',
+        'src/ui/modals/workoutEditorModal.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'src/utils/audioFeedback.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
 
-      ## 2. Architettura SPA Multi-Vista
-      L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce quale vista mostrare in base allo stato.
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
+        );
+      });
 
-      ## 3. Architettura PWA
-      * **`manifest.json`**: Fornisce i metadati per l'installazione.
-      * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
 
-      ## 4. Logica di Business
-      ### 4.1. Workout Builder Composizionale
-      A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
-
-      ### 4.2. Modalità di Esecuzione e Ciclo di Ripetizione (Vista Trainer)
-      La Vista Trainer opera in diverse modalità a seconda delle proprietà dell'esercizio caricato. Questo garantisce un'esperienza utente flessibile e adatta a diversi tipi di allenamento. La modalità viene scelta in base a un campo `execution_mode` nell'oggetto dell'esercizio.
-
-      #### Modalità 1: `tempo_guided` (Default)
-      Per garantire un'esperienza utente guidata e prevenire movimenti affrettati, il modulo Trainer implementa un ciclo di esecuzione dettagliato per ogni singola ripetizione di un esercizio basato sul `tempo`. Questo ciclo è "pre-compilato" in una coda di esecuzione prima dell'inizio di ogni serie.
-
-      Ogni ripetizione è suddivisa in 6 fasi:
-      1.  **`pre-up`**: Una fase di preparazione di durata fissa (es. 0.7s). L'UI (es. "time ring") lampeggia e mostra il nome della fase successiva ("UP").
-      2.  **`up`**: La fase concentrica (salita). La sua durata è letta da `tempo.up`. L'UI mostra un'animazione fluida.
-      3.  **`pre-hold`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "HOLD".
-      4.  **`hold`**: La fase isometrica (pausa). La sua durata è letta da `tempo.hold`.
-      5.  **`pre-down`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "DOWN".
-      6.  **`down`**: La fase eccentrica (discesa). La sua durata è letta da `tempo.down`.
-
-      #### Modalità 2: `static_hold`
-      Utilizzata per esercizi isometrici come il Plank. L'interfaccia mostra un unico timer centrale che esegue un countdown per la durata totale della serie. Se l'esercizio è configurato per essere eseguito "a sfinimento", il timer diventa un cronometro che conta in avanti.
-
-      #### Modalità 3: `manual_reps`
-      Utilizzata per serie "a sfinimento" o con un range di ripetizioni (min/max). L'interfaccia non mostra un timer, ma un contatore e un pulsante principale per permettere all'utente di registrare manualmente ogni ripetizione completata.
-
-      ### 4.3. Calcolo del BMR (`src/core/calculations.js`)
-      Logiche complesse come il calcolo del Metabolismo Basale (BMR) sono isolate in questo modulo dedicato.
-
-      ### 4.4. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
-      Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti, ricevendo la lista dei pasti e degli ingredienti e arricchendo ogni pasto con `calories_min` e `calories_max`.
-
-      ## 5. Gestione dei Dati
-      ### 5.1. Caricamento Dati (`src/api/configService.js`)
-      Il servizio orchestra un caricamento multi-fase per `pasti.json`, `ingredienti.json` e `esercizi.json`.
-
-      ### 5.2. Strutture Dati Chiave
-      * **Configurazione Remota**:
-          * **`pasti.json`**: Array di oggetti `meals`.
-          * **`ingredienti.json`**: Array di `ingredienti`.
-          * **`esercizi.json`**: Un array di `esercizi`. Ogni esercizio è un oggetto che definisce le sue proprietà di base (ID, nome, descrizione) e i valori di default per serie, ripetizioni, durata, riposo, `tempo` (un oggetto con `up`, `hold`, `down`) e il nuovo campo opzionale `execution_mode`.
-
-      * **Dati Utente Locali (`localStorage`)**:
-          * **`userProfile`**: Dati anagrafici dell'utente.
-          * **`weeklyPlan`**: Oggetto che mappa gli slot giornalieri (`YYYY-MM-DD-MealType`) ai pasti pianificati.
-          * **`weeklyWorkouts`**: Oggetto che mappa uno slot giornaliero (`YYYY-MM-DD-Allenamento`) a un **array di oggetti esercizio**. Ogni oggetto in questo array è una copia dell'esercizio dalla libreria, arricchito con un `instanceId` univoco per permetterne la gestione individuale.
-          * **`biometricData`**: Array con lo storico delle misurazioni biometriche.
-
-      ## 6. Dipendenze di Terze Parti
-      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette.
-      * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
-      * **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
-
-      ## 7. Strategia di Sviluppo e Debug
-      Per garantire la manutenibilità e facilitare il troubleshooting, l'applicazione integra un sistema di logging sistematico.
-
-      ### 7.1. Modalità Debug (`debugMode`)
-      * Lo stato globale in `src/core/state.js` contiene un flag `debugMode`, impostato di default su `false`.
-      * Questo flag può essere attivato o disattivato in qualsiasi momento tramite la console del browser, eseguendo la funzione globale `toggleDebugMode()`. Questo permette di attivare i log solo quando necessario, senza impattare le performance in produzione.
-
-      ### 7.2. Logger Centralizzato (`src/utils/logger.js`)
-      * Tutta la logica di logging è centralizzata in un unico modulo. La sua funzione `log()` è l'unico punto di accesso per scrivere messaggi in console.
-      * Questa funzione controlla internamente lo stato di `debugMode` e scrive in console solo se è attivo.
-
-      ### 7.3. Convenzioni di Logging
-      Per garantire coerenza e leggibilità, tutti i messaggi di log seguono una convenzione standard:
-      ```javascript
-      log('NomeComponente', 'Azione che sta avvenendo', { datiRilevanti });
-      ```
-      * **`NomeComponente`**: Indica il modulo di origine (es. 'State', 'Modals', 'Trainer', 'API_SERVICE').
-      * **`Azione`**: Descrive l'operazione in corso (es. 'Setting new view', 'Opening modal').
-      * **`datiRilevanti`**: Un oggetto opzionale che mostra il contesto e i dati relativi all'azione.
-
-      ### 7.4. Gestione Errori Robusta nel Caricamento Dati
-      Il `configService` adotta una strategia di parsing in due fasi per migliorare il debug degli errori di caricamento dei file di configurazione (`pasti.json`, `ingredienti.json`, etc.).
-      1.  La risposta della `fetch` viene prima letta come testo (`response.text()`).
-      2.  Il testo viene poi esplicitamente parsato all'interno di un blocco `try...catch`.
-
-      Questo approccio permette di:
-      * **Notificare l'utente** con un messaggio di errore generico e pulito (es. "Errore nel formato di un file di configurazione") senza esporre dettagli tecnici.
-      * **Fornire allo sviluppatore**, se `debugMode` è attiva, un log dettagliato in console che include l'URL del file che ha causato l'errore e un estratto del contenuto non valido, semplificando enormemente il processo di troubleshooting.
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
+        } else {
+          event.respondWith(fetch(event.request));
+        }
+      });
 commands: []
