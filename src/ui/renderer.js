@@ -64,6 +64,7 @@ export function populateInitialText() {
 
 export function renderApp() {
   const state = getState();
+  const { currentView } = state.ui;
   const plannerPage = document.getElementById('planner-page');
   const progressPage = document.getElementById('progress-page');
   const chartsPage = document.getElementById('charts-page');
@@ -80,9 +81,9 @@ export function renderApp() {
   const navGoalsBtn = document.getElementById('nav-goals');
   const navProfileBtn = document.getElementById('nav-profile');
 
-  log('Renderer', 'Render triggered. Current view:', state.currentView, 'isTrainerActive:', isTrainerActive);
+  log('Renderer', 'Render triggered. Current view:', currentView, 'isTrainerActive:', isTrainerActive);
 
-  if (state.currentView !== 'trainer' && isTrainerActive) {
+  if (currentView !== 'trainer' && isTrainerActive) {
       log('Renderer', 'View is not trainer, destroying trainer controller...');
       destroyTrainerController();
       isTrainerActive = false;
@@ -92,31 +93,31 @@ export function renderApp() {
   [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
   document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
 
-  if (state.currentView === 'planner' || state.currentView === 'log') {
+  if (currentView === 'planner' || currentView === 'log') {
     plannerPage.classList.remove('hidden');
     navPlannerBtn.classList.add('active');
     renderPlannerPage(state);
-  } else if (state.currentView === 'progress') {
+  } else if (currentView === 'progress') {
     progressPage.classList.remove('hidden');
     navProgressBtn.classList.add('active');
     renderBiometricsPage(state);
-  } else if (state.currentView === 'charts') {
+  } else if (currentView === 'charts') {
     chartsPage.classList.remove('hidden');
     navChartsBtn.classList.add('active');
     renderChartsPage(state);
-  } else if (state.currentView === 'recipes') {
+  } else if (currentView === 'recipes') {
     recipesPage.classList.remove('hidden');
     navRecipesBtn.classList.add('active');
     renderRecipesPage(state);
-  } else if (state.currentView === 'goals') {
+  } else if (currentView === 'goals') {
     goalsPage.classList.remove('hidden');
     navGoalsBtn.classList.add('active');
     renderGoalsPage(state);
-  } else if (state.currentView === 'profile') {
+  } else if (currentView === 'profile') {
     profilePage.classList.remove('hidden');
     navProfileBtn.classList.add('active');
     renderProfilePage(state);
-  } else if (state.currentView === 'trainer') {
+  } else if (currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
     log('Renderer', 'View is trainer, checking if trainer is active...');
     if (!isTrainerActive) {
@@ -124,7 +125,7 @@ export function renderApp() {
       initializeTrainerController();
       isTrainerActive = true;
     }
-  } else if (state.currentView === 'debriefing') {
+  } else if (currentView === 'debriefing') {
     debriefingPage.classList.remove('hidden');
     renderDebriefingPage(state);
   }

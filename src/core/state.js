@@ -16,10 +16,10 @@ let state = {
   configUrl: '',
   recipeBaseUrl: '',
   focusedDate: new Date(),
-  currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
   debugMode: false,
-  lastWorkoutSummary: null,
   ui: {
+    currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+    lastWorkoutSummary: null,
     charts: {
       currentRangeFilter: 30,
       dateOffset: 0,
@@ -288,16 +288,16 @@ export function navigateWeek(direction) {
 }
 
 export function setView(view) {
-  log('State', 'Setting new view', { newView: view, oldView: state.currentView });
+  log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
   if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
-    state.currentView = view;
+    state.ui.currentView = view;
     notify();
   }
 }
 
 export function setLastWorkoutSummary(summary) {
   log('State', 'Setting last workout summary');
-  state.lastWorkoutSummary = summary;
+  state.ui.lastWorkoutSummary = summary;
   notify();
 }
 

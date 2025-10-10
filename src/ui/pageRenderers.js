@@ -130,7 +130,7 @@ function getSetDetails(setData) {
 export function renderDebriefingPage(state) {
   const summaryContainer = document.getElementById('debriefing-summary');
   const statsContainer = document.getElementById('debriefing-stats');
-  const summary = state.lastWorkoutSummary;
+  const summary = state.ui.lastWorkoutSummary;
 
   if (!summary || !summary.exercises) {
       summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;

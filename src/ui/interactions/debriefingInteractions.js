@@ -24,7 +24,8 @@ function handleSaveRPE() {
   const rpeInput = document.getElementById('rpe-input');
   const rpeValue = parseInt(rpeInput.value, 10);
   if (rpeValue >= 1 && rpeValue <= 10) {
-    const { lastWorkoutSummary } = getState();
+    const { ui } = getState();
+    const { lastWorkoutSummary } = ui;
     if (lastWorkoutSummary) {
       updateWorkoutInHistory(lastWorkoutSummary.date, lastWorkoutSummary.startTime, { rpe: rpeValue });
       showNotification('RPE salvato!', 'success');
@@ -37,7 +38,8 @@ function handleSaveRPE() {
 }
 
 function handlePlaySummaryAudio() {
-  const { lastWorkoutSummary } = getState();
+  const { ui } = getState();
+  const { lastWorkoutSummary } = ui;
   if (!lastWorkoutSummary) return;
 
   log('Interactions', 'Play debriefing summary audio');
