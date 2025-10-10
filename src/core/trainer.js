@@ -62,6 +62,11 @@ export function completeSet() {
   }
 
   const newSetsData = [...state.setsData, setData];
+
+  if (state.isAudioEnabled) {
+    speak(UI_TEXT.VOICE_GUIDE_REST_START);
+  }
+
   updateState({
       setsData: newSetsData,
       status: 'resting',
@@ -81,8 +86,6 @@ export async function startWorkout() {
     await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
   }
   
-  // This check is crucial: if the user navigated away while the announcement was playing,
-  // the workout should not proceed.
   if (getState().status !== 'idle') {
     log('Trainer', 'Workout start aborted, status changed during announcement.');
     return;
@@ -94,7 +97,7 @@ export async function startWorkout() {
       startState.executionQueue = buildExecutionQueueForCurrentSet();
       startState.currentPhaseIndex = 0;
       startState.phaseTimeElapsed = 0;
-      startState.currentRep = 1;
+      startState.currentRep = 0; // Start at 0, will be updated by queue
   } else if (state.executionMode === 'static_hold') {
       const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
       startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
