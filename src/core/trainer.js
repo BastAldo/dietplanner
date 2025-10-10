@@ -80,6 +80,13 @@ export async function startWorkout() {
     const firstExerciseName = state.exerciseQueue[0].name;
     await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
   }
+  
+  // This check is crucial: if the user navigated away while the announcement was playing,
+  // the workout should not proceed.
+  if (getState().status !== 'idle') {
+    log('Trainer', 'Workout start aborted, status changed during announcement.');
+    return;
+  }
 
   let startState = { status: 'running', phaseStartTime: Date.now() };
 

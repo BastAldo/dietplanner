@@ -55,7 +55,14 @@ export class TrainerComponent {
         const targetId = target.id;
         log('TrainerComponent', `Control button clicked: ${targetId}`);
         switch (targetId) {
-            case 'trainer-start-btn': await startWorkout(); break;
+            case 'trainer-start-btn':
+                // Disable button to prevent double clicks during async announcement
+                target.disabled = true;
+                await startWorkout();
+                if(this.elements.btnStart) { // Check if component is still mounted
+                  this.elements.btnStart.disabled = false;
+                }
+                break;
             case 'trainer-pause-btn': pauseWorkout(); break;
             case 'trainer-resume-btn': resumeWorkout(); break;
             case 'trainer-end-btn':
@@ -163,7 +170,7 @@ export class TrainerComponent {
         this.elements.exerciseName.textContent = currentExercise.name;
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
 
-        if (status === 'running' && executionMode === 'tempo_guided') {
+        if (status === 'running' && executionMode === 'tempo_guided' && state.currentRep > 0) {
           this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
           this.elements.repDisplay.classList.remove('hidden-rep');
         } else {
@@ -202,7 +209,7 @@ export class TrainerComponent {
     renderPhase(state) {
         const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
         const phase = executionQueue[currentPhaseIndex];
-        if (!phase || !phase.phase) return;
+        if (!phase || phase.type !== 'movement') return;
 
         const phaseNameDisplay = phase.phase.replace('pre-', '').toUpperCase();
         const isPrePhase = phase.phase.startsWith('pre-');

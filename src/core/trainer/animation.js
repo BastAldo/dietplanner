@@ -6,52 +6,39 @@ import { log } from '../../utils/logger.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
+let isPhaseProcessing = false; // A lock to prevent re-entrancy
 
-async function processQueue() {
-  const state = getWorkoutState();
-  if (state.status !== 'running') return;
+async function handlePhase(phase) {
+  const { isAudioEnabled } = getWorkoutState();
+  if (!phase || isPhaseProcessing) return;
 
-  const { executionQueue, currentPhaseIndex, isAudioEnabled } = state;
-  const currentPhase = executionQueue[currentPhaseIndex];
+  isPhaseProcessing = true;
+  log('Trainer-Animation', `Handling phase:`, phase);
 
-  log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
-
-  if (!currentPhase) {
-    // End of the queue, the set is complete.
-    completeSet();
-    return;
-  }
-
-  // If the current phase is a movement, stop processing and let the 'tick' handle it.
-  if (currentPhase.type === 'movement') {
-    return;
-  }
-
-  // Process non-timed events like speech and audio cues
   if (isAudioEnabled) {
-    if (currentPhase.type === 'audio') {
-      if (currentPhase.cue === 'tick') playTick();
-      else if (currentPhase.cue === 'start') playStartCue();
-      else if (currentPhase.cue === 'stop') playStopCue();
-    } else if (currentPhase.type === 'speech') {
-      // Awaiting speech can pause the queue progression until done
-      if (currentPhase.await) {
-        await speak(currentPhase.text);
+    if (phase.type === 'audio') {
+      if (phase.cue === 'tick') playTick();
+      else if (phase.cue === 'start') playStartCue();
+      else if (phase.cue === 'stop') playStopCue();
+    } else if (phase.type === 'speech') {
+      if (phase.await) {
+        await speak(phase.text);
       } else {
-        speak(currentPhase.text);
+        speak(phase.text);
       }
     }
   }
 
-  // Move to the next item in the queue and recursively process
-  const newPhaseIndex = currentPhaseIndex + 1;
-  if (newPhaseIndex < executionQueue.length) {
-    updateState({ currentPhaseIndex: newPhaseIndex });
-    await processQueue();
-  } else {
-    // This was the last non-timed event, set is done.
-    completeSet();
+  // Only advance the queue if the workout hasn't been paused/stopped during speech
+  const currentState = getWorkoutState();
+  if (currentState.status === 'running') {
+      const newPhaseIndex = currentState.currentPhaseIndex + 1;
+      updateState({
+          currentPhaseIndex: newPhaseIndex,
+          currentRep: currentState.executionQueue[newPhaseIndex]?.rep || currentState.currentRep,
+      });
   }
+  isPhaseProcessing = false;
 }
 
 function tick(timestamp) {
@@ -62,7 +49,7 @@ function tick(timestamp) {
   lastTickTimestamp = timestamp;
 
   const state = getWorkoutState();
-  if (state.status === 'finished' || state.status === 'paused' || state.status === 'idle') {
+  if (state.status !== 'running' && state.status !== 'resting') {
     stopAnimation();
     return;
   }
@@ -72,23 +59,24 @@ function tick(timestamp) {
       const { executionQueue, currentPhaseIndex } = state;
       const currentPhase = executionQueue[currentPhaseIndex];
 
-      // Only process timed 'movement' phases here
-      if (currentPhase && currentPhase.type === 'movement' && currentPhase.duration_ms) {
-        const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+      if (!currentPhase) {
+        completeSet();
+        stopAnimation();
+        return;
+      }
 
+      if (currentPhase.type === 'movement') {
+        const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
         if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
-          // Phase complete, advance to the next and trigger queue processing for any non-timed events
-          const newPhaseIndex = currentPhaseIndex + 1;
-          updateState({
-            currentPhaseIndex: newPhaseIndex,
-            phaseTimeElapsed: 0,
-            currentRep: executionQueue[newPhaseIndex]?.rep || state.currentRep,
-          });
-          processQueue();
+          updateState({ currentPhaseIndex: currentPhaseIndex + 1, phaseTimeElapsed: 0 });
         } else {
           updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
         }
+      } else {
+        // Handle non-timed events immediately and loop
+        handlePhase(currentPhase);
       }
+
     } else if (state.executionMode === 'static_hold') {
       const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
       if (newSetTimeRemaining <= 0) {
@@ -108,17 +96,13 @@ function tick(timestamp) {
   }
 
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
-
-  if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
-    animationFrameId = requestAnimationFrame(tick);
-  }
+  animationFrameId = requestAnimationFrame(tick);
 }
+
 
 export function startAnimation() {
   if (animationFrameId) return;
   lastTickTimestamp = 0;
-  // Start processing the queue for any initial non-timed events
-  processQueue();
   animationFrameId = requestAnimationFrame(tick);
 }
 
