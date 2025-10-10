@@ -1,9 +1,18 @@
 import { UI_TEXT } from '../config/uiText.js';
 
 async function fetchJson(url) {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
-    return response.json();
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
+  }
+  const textContent = await response.text();
+  try {
+    return JSON.parse(textContent);
+  } catch (e) {
+    const errorMessage = `Errore nel parsing del JSON da ${url}. Contenuto ricevuto: "${textContent.substring(0, 100)}..."`;
+    console.error(errorMessage, e);
+    throw new Error(errorMessage);
+  }
 }
 
 export async function fetchAndParseConfig(mealsUrl) {
@@ -32,7 +41,7 @@ export async function fetchAndParseConfig(mealsUrl) {
                 exercises = exercisesConfig.esercizi;
             }
         } catch (e) {
-            console.warn(UI_TEXT.API_EXERCISES_FILE_WARN);
+            console.warn(UI_TEXT.API_EXERCISES_FILE_WARN, e.message);
         }
 
         return {
@@ -43,7 +52,8 @@ export async function fetchAndParseConfig(mealsUrl) {
         };
 
     } catch (error) {
-        console.error("Fallimento nel caricamento della configurazione:", error);
-        throw new Error(UI_TEXT.API_CONFIG_LOAD_FAIL);
+        console.error("Fallimento nel caricamento della configurazione completa:", error);
+        // Mostra l'errore specifico invece di uno generico
+        throw new Error(error.message || UI_TEXT.API_CONFIG_LOAD_FAIL);
     }
 }
