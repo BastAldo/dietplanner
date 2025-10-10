@@ -1,228 +1,232 @@
-commit_message: "feat(trainer): Implement configurable and awaitable execution flows"
+commit_message: "fix(trainer): Critical bug fixes for execution engine and termination logic"
 rationale: |
-  This patch implements a major architectural refactoring of the Trainer module based on user specifications for a more powerful and flexible execution engine.
+  Questa patch risolve una serie di bug critici nel modulo Allenamento che ne impedivano il corretto funzionamento, come segnalato dall'utente. L'analisi dei log ha rivelato una catena di errori che sono stati risolti alla radice.
 
-  **1. Configurable Execution Flows:**
-  The hardcoded logic for building the exercise sequence has been completely replaced by a new data-driven system. A new configuration file, `src/config/trainerFlows.js`, now defines global templates for different execution modes (e.g., `TEMPO_GUIDED_FLOW`). The `queueBuilder.js` module has been rewritten to act as an interpreter for these templates. It dynamically builds the final `executionQueue` by taking an exercise's properties and compiling them against the appropriate global template. This makes the trainer a "stupid executor" as requested, with its behavior defined entirely by configurable data, not code.
+  **1. Correzione del Compilatore della Coda di Esecuzione (`queueBuilder.js`):**
+  * **Problema:** La logica che interpretava i template di flusso non riusciva a risolvere correttamente i percorsi delle proprietà dell'esercizio (es. `defaultTempo.up`). Questo portava alla creazione di una coda di comandi di movimento privi di durata, causando l'immediata e involontaria conclusione dell'esercizio.
+  * **Soluzione:** La funzione `interpretTemplate` è stata riscritta per gestire correttamente la ricorsione e la risoluzione delle proprietà annidate. Ora legge i valori specifici dell'esercizio (come la durata delle fasi del tempo) e li compila correttamente nella coda di esecuzione finale, garantendo che ogni fase di movimento abbia una durata valida.
 
-  **2. Awaitable (Synchronous) Speech:**
-  To solve the synchronization issue between audio cues and timers, the `speak` function in `audioFeedback.js` has been refactored to return a `Promise`. The trainer's animation engine (`animation.js`) has been upgraded to be `async` and now respects a new `await: true` flag in the execution queue commands. When the engine encounters a speech command with this flag, it will `await` the completion of the speech synthesis before processing the next command in the queue, ensuring perfect synchronization.
+  **2. Correzione del Rendering del Timer (`TrainerComponent.js`):**
+  * **Problema:** A seguito del refactoring precedente, il componente UI del timer stava cercando di leggere una proprietà `duration` che non veniva più popolata.
+  * **Soluzione:** Il componente è stato aggiornato per leggere la nuova proprietà `duration_ms`, che viene ora correttamente calcolata e inserita nella coda dal `queueBuilder` corretto. Questo riallinea la visualizzazione grafica con la logica del motore.
 
-  These changes make the Trainer module significantly more robust, maintainable, and configurable, aligning it with the data-driven philosophy of the overall project.
+  **3. Correzione della Logica di Termine Allenamento (`trainer.js`):**
+  * **Problema:** La funzione `endWorkout`, se chiamata quando un allenamento era già terminato (a causa del bug precedente), lo interpretava erroneamente come un "termine prematuro" e reindirizzava l'utente alla pagina del planner invece che a quella di debriefing.
+  * **Soluzione:** La condizione all'interno di `endWorkout` è stata modificata. Ora, se la funzione viene chiamata su un allenamento già nello stato `'finished'`, non eseguirà alcuna azione, impedendo il reindirizzamento errato e garantendo che l'utente possa visualizzare la pagina di debriefing come previsto.
+
+  Queste tre correzioni, insieme, ripristinano la piena funzionalità del modulo Allenamento, risolvendo i problemi di salto dell'esercizio, mancata sincronizzazione audio e errata gestione del termine manuale.
 patches:
-  - file: src/api/configService.js
+  - file: src/core/trainer.js
     content: |
-      import { UI_TEXT } from '../config/uiText.js';
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from '../state.js';
       import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { startAnimation, stopAnimation } from './trainer/animation.js';
+      import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
+      import { advanceToNextSet } from './trainer/machine.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+      import { speak, playStartCue } from '../utils/audioFeedback.js';
+      import { UI_TEXT } from '../config/uiText.js';
 
-      async function fetchJson(url) {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
-        }
-        const textContent = await response.text();
-        try {
-          return JSON.parse(textContent);
-        } catch (e) {
-          log('API_SERVICE', `Errore nel parsing del JSON da ${url}`, {
-            error: e.message,
-            content: textContent.substring(0, 150)
-          });
-          throw new Error(UI_TEXT.API_INVALID_JSON);
-        }
+      export { getState as getWorkoutState };
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        document.removeEventListener('workoutFinished', handleWorkoutFinished, { once: true });
+        stopAnimation();
+        resetState();
       }
 
-      export async function fetchAndParseConfig(mealsUrl) {
-          if (!mealsUrl) throw new Error(UI_TEXT.CONFIG_URL_EMPTY_ERROR);
-
-          try {
-              const mealsConfig = await fetchJson(mealsUrl);
-              if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
-                  throw new Error(UI_TEXT.API_INVALID_MEALS_FILE);
-              }
-
-              const baseUrl = new URL(mealsUrl);
-              const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/'));
-
-              const ingredientsUrl = `${baseUrl.origin}${basePath}/ingredienti.json`;
-              const ingredientsConfig = await fetchJson(ingredientsUrl);
-              if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
-                  throw new Error(UI_TEXT.API_INVALID_INGREDIENTS_FILE);
-              }
-
-              let exercises = [];
-              try {
-                  const exercisesUrl = `${baseUrl.origin}${basePath}/esercizi.json`;
-                  const exercisesConfig = await fetchJson(exercisesUrl);
-                  if (exercisesConfig.esercizi && Array.isArray(exercisesConfig.esercizi)) {
-                      exercises = exercisesConfig.esercizi;
-                  }
-              } catch (e) {
-                  log('API_SERVICE', UI_TEXT.API_EXERCISES_FILE_WARN, e.message);
-              }
-
-              return {
-                  rules: mealsConfig.rules || [],
-                  meals: mealsConfig.meals,
-                  ingredienti: ingredientsConfig.ingredienti,
-                  esercizi: exercises
-              };
-
-          } catch (error) {
-              console.error("Fallimento nel caricamento della configurazione completa:", error.message);
-              // Lancia l'errore specifico (che ora è pulito) invece di uno generico
-              throw new Error(error.message || UI_TEXT.API_CONFIG_LOAD_FAIL);
-          }
-      }
-  - file: src/config/trainerFlows.js
-    content: |
-      import { UI_TEXT } from './uiText.js';
-
-      export const TEMPO_GUIDED_FLOW = [
-        { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
-        {
-          "type": "loop",
-          "target": "reps",
-          "actions": [
-            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_UP" },
-            { "type": "movement", "phase": "pre-up", "duration_ms": 700 },
-            { "type": "movement", "phase": "up", "duration_from": "tempo.up" },
-            { "type": "audio", "cue": "tick" },
-            {
-              "type": "conditional",
-              "condition": "tempo.hold > 0",
-              "actions": [
-                { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_HOLD" },
-                { "type": "movement", "phase": "pre-hold", "duration_ms": 700 },
-                { "type": "movement", "phase": "hold", "duration_from": "tempo.hold" },
-                { "type": "audio", "cue": "tick" }
-              ]
-            },
-            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_DOWN" },
-            { "type": "movement", "phase": "pre-down", "duration_ms": 700 },
-            { "type": "movement", "phase": "down", "duration_from": "tempo.down" },
-            { "type": "audio", "cue": "tick" }
-          ]
-        },
-        { "type": "audio", "cue": "stop" }
-      ];
-  - file: src/core/trainer/animation.js
-    content: |
-      import { getWorkoutState, updateState } from './state.js';
-      import { advanceToNextSet } from './machine.js';
-      import { completeSet } from '../trainer.js';
-      import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
-      import { log } from '../../utils/logger.js';
-
-      let animationFrameId = null;
-      let lastTickTimestamp = 0;
-
-      async function processQueue() {
-        const state = getWorkoutState();
-        if (state.status !== 'running') return;
-
-        const { executionQueue, currentPhaseIndex, isAudioEnabled } = state;
-        const currentPhase = executionQueue[currentPhaseIndex];
-
-        log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
-
-        if (currentPhase && currentPhase.type) {
-          if (isAudioEnabled) {
-            if (currentPhase.type === 'audio') {
-              if (currentPhase.cue === 'tick') playTick();
-              else if (currentPhase.cue === 'start') playStartCue();
-              else if (currentPhase.cue === 'stop') playStopCue();
-            } else if (currentPhase.type === 'speech') {
-              if (currentPhase.await) {
-                await speak(currentPhase.text);
-              } else {
-                speak(currentPhase.text);
-              }
-            }
-          }
-
-          const newPhaseIndex = currentPhaseIndex + 1;
-          if (newPhaseIndex < executionQueue.length) {
-            updateState({ currentPhaseIndex: newPhaseIndex });
-            await processQueue();
-          } else {
-            completeSet();
-          }
-        }
+      function handleWorkoutFinished() {
+        endWorkout();
       }
 
-      function tick(timestamp) {
-        if (lastTickTimestamp === 0) {
-          lastTickTimestamp = timestamp;
-        }
-        const deltaTime = timestamp - lastTickTimestamp;
-        lastTickTimestamp = timestamp;
-
-        const state = getWorkoutState();
-        if (state.status === 'finished' || state.status === 'paused' || state.status === 'idle') {
-          stopAnimation();
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
           return;
         }
-
-        if (state.status === 'running') {
-          if (state.executionMode === 'tempo_guided') {
-            const { executionQueue, currentPhaseIndex } = state;
-            const currentPhase = executionQueue[currentPhaseIndex];
-
-            if (currentPhase && currentPhase.duration_ms) {
-              const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-
-              if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
-                const newPhaseIndex = currentPhaseIndex + 1;
-                updateState({
-                  currentPhaseIndex: newPhaseIndex,
-                  phaseTimeElapsed: 0,
-                  currentRep: executionQueue[newPhaseIndex]?.rep || state.currentRep,
-                });
-                processQueue();
-              } else {
-                updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-              }
-            } else if (!currentPhase) {
-              completeSet();
-            }
-          } else if (state.executionMode === 'static_hold') {
-            const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
-            if (newSetTimeRemaining <= 0) {
-              if (state.isAudioEnabled) playStopCue();
-              completeSet();
-            } else {
-              updateState({ setTimeRemaining: newSetTimeRemaining });
-            }
-          }
-        } else if (state.status === 'resting') {
-          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
-          if (newRestTimeRemaining <= 0) {
-            advanceToNextSet();
-          } else {
-            updateState({ restTimeRemaining: newRestTimeRemaining });
-          }
-        }
-
+        resetWorkoutState();
+        const firstExercise = plannedExercises[0];
+        const initialState = {
+          workoutDate: isoDate,
+          exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+          currentExerciseIndex: 0,
+          currentSet: 1,
+          currentRep: 1,
+          executionMode: firstExercise.execution_mode || 'tempo_guided',
+          startTime: Date.now(),
+          phaseStartTime: 0,
+          restStartTime: 0,
+          setsData: []
+        };
+        updateState(initialState);
+        document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
 
-        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
-          animationFrameId = requestAnimationFrame(tick);
+      export function completeSet() {
+        const state = getState();
+        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+        const setData = {
+            exerciseId: currentExercise.instanceId,
+            set: state.currentSet,
+            duration: Date.now() - state.phaseStartTime,
+            rest: currentExercise.defaultRest,
+            weight: currentExercise.defaultWeight || 0
+        };
+
+        if (state.executionMode === 'manual_reps') {
+            setData.reps = state.manualRepCount;
+        } else if (state.executionMode === 'tempo_guided') {
+            setData.reps = currentExercise.defaultReps;
+        }
+
+        const newSetsData = [...state.setsData, setData];
+        updateState({
+            setsData: newSetsData,
+            status: 'resting',
+            restStartTime: Date.now(),
+            restTimeRemaining: currentExercise.defaultRest * 1000
+        });
+      }
+
+      export function startWorkout() {
+        const state = getState();
+        log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        let startState = { status: 'running', phaseStartTime: Date.now() };
+
+        if (state.isAudioEnabled) {
+          playStartCue();
+          const firstExerciseName = state.exerciseQueue[0].name;
+          speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+        }
+
+        if (state.executionMode === 'tempo_guided') {
+            startState.executionQueue = buildExecutionQueueForCurrentSet();
+            startState.currentPhaseIndex = 0;
+            startState.phaseTimeElapsed = 0;
+            startState.currentRep = 1;
+        } else if (state.executionMode === 'static_hold') {
+            const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+            startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
+        } else if (state.executionMode === 'manual_reps') {
+            startState.manualRepCount = 0;
+        }
+
+        updateState(startState);
+        startAnimation();
+        log('Trainer', 'Workout started. New state:', getState());
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running' || state.status === 'resting') {
+          updateState({
+            prePauseStatus: state.status,
+            status: 'paused',
+          });
+          stopAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
         }
       }
 
-      export function startAnimation() {
-        if (animationFrameId) return;
-        lastTickTimestamp = 0;
-        processQueue();
-        animationFrameId = requestAnimationFrame(tick);
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+          const status = state.prePauseStatus;
+          const newState = { status, prePauseStatus: '' };
+          if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
+          if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
+
+          updateState(newState);
+          startAnimation();
+          document.dispatchEvent(new CustomEvent('workoutStateChange'));
+        }
       }
 
-      export function stopAnimation() {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status === 'running' && state.executionMode === 'manual_reps') {
+              const newRepCount = state.manualRepCount + 1;
+              updateState({ manualRepCount: newRepCount });
+
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+
+              if (targetReps && newRepCount >= targetReps) {
+                  completeSet();
+                  startAnimation();
+              }
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          }
+      }
+
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalTonnage = 0;
+
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+              totalTonnage += exerciseTonnage;
+
+              return {
+                  ...exercise,
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime,
+                  tonnage: exerciseTonnage
+              };
+          });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
+
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              totalTonnage,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
+
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+          }
+
+          return summary;
+      }
+
+      export function endWorkout() {
+        const finalState = getState();
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
         }
+        if (finalState.status === 'finished') {
+            log('Trainer', 'Workout already finished, not saving again.');
+            return;
+        }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        updateState({ status: 'finished' });
+        stopAnimation();
+        setView('debriefing');
       }
   - file: src/core/trainer/queueBuilder.js
     content: |
@@ -235,23 +239,20 @@ patches:
         return path.split('.').reduce((acc, part) => acc && acc[part], obj);
       }
 
-      function interpretTemplate(template, exercise, reps, currentSet) {
+      function interpretTemplate(template, exercise, loopContext) {
         const queue = [];
         for (const command of template) {
           if (command.type === 'loop') {
-            const loopCount = command.target === 'reps' ? reps : 1;
+            const loopCount = getNestedProperty(exercise, command.target);
             for (let i = 0; i < loopCount; i++) {
-              const repNumber = i + 1;
-              const subQueue = interpretTemplate(command.actions, exercise, repNumber, currentSet);
-              subQueue.forEach(subCmd => {
-                if (subCmd.rep) subCmd.rep = repNumber; // Ensure rep number is correctly assigned
-              });
-              queue.push(...subQueue);
+              const newLoopContext = { ...loopContext, rep: i + 1 };
+              queue.push(...interpretTemplate(command.actions, exercise, newLoopContext));
             }
           } else if (command.type === 'conditional') {
-            const conditionValue = getNestedProperty(exercise.defaultTempo, command.condition.split(' > ')[0]);
-            if (conditionValue > 0) {
-              queue.push(...interpretTemplate(command.actions, exercise, reps, currentSet));
+            const [prop, value] = command.condition.split(' > ');
+            const propValue = getNestedProperty(exercise, prop);
+            if (propValue > parseInt(value, 10)) {
+              queue.push(...interpretTemplate(command.actions, exercise, loopContext));
             }
           } else {
             const newCommand = { ...command };
@@ -259,10 +260,10 @@ patches:
               newCommand.text = UI_TEXT[newCommand.text_key] || '';
             }
             if (newCommand.duration_from) {
-              newCommand.duration_ms = getNestedProperty(exercise.defaultTempo, newCommand.duration_from) * 1000;
+              newCommand.duration_ms = getNestedProperty(exercise, newCommand.duration_from) * 1000;
             }
             if (newCommand.phase) {
-              newCommand.rep = reps; // Assign current rep number to movement phases
+              newCommand.rep = loopContext.rep;
             }
             queue.push(newCommand);
           }
@@ -273,11 +274,11 @@ patches:
       export function buildExecutionQueueForCurrentSet() {
         const state = getWorkoutState();
         const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-        const { execution_mode, defaultReps, defaultTempo } = currentExercise;
+        const { execution_mode } = currentExercise;
 
         let queue = [];
         if (execution_mode === 'tempo_guided') {
-          queue = interpretTemplate(TEMPO_GUIDED_FLOW, { defaultTempo }, defaultReps, state.currentSet);
+          queue = interpretTemplate(TEMPO_GUIDED_FLOW, currentExercise, { set: state.currentSet });
         }
 
         const { debugMode } = getGlobalState();
@@ -289,93 +290,331 @@ patches:
 
         return queue;
       }
-  - file: src/utils/audioFeedback.js
+  - file: src/config/trainerFlows.js
     content: |
-      let audioContext = null;
-      const synth = window.speechSynthesis;
-      let voices = [];
+      import { UI_TEXT } from './uiText.js';
 
-      function getAudioContext() {
-          if (!audioContext) {
-              try {
-                  audioContext = new (window.AudioContext || window.webkitAudioContext)();
-              } catch (e) {
-                  console.error("Web Audio API is not supported in this browser");
+      export const TEMPO_GUIDED_FLOW = [
+        { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
+        {
+          "type": "loop",
+          "target": "defaultReps",
+          "actions": [
+            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_UP" },
+            { "type": "movement", "phase": "pre-up", "duration_ms": 700 },
+            { "type": "movement", "phase": "up", "duration_from": "defaultTempo.up" },
+            { "type": "audio", "cue": "tick" },
+            {
+              "type": "conditional",
+              "condition": "defaultTempo.hold > 0",
+              "actions": [
+                { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_HOLD" },
+                { "type": "movement", "phase": "pre-hold", "duration_ms": 700 },
+                { "type": "movement", "phase": "hold", "duration_from": "defaultTempo.hold" },
+                { "type": "audio", "cue": "tick" }
+              ]
+            },
+            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_DOWN" },
+            { "type": "movement", "phase": "pre-down", "duration_ms": 700 },
+            { "type": "movement", "phase": "down", "duration_from": "defaultTempo.down" },
+            { "type": "audio", "cue": "tick" }
+          ]
+        },
+        { "type": "audio", "cue": "stop" }
+      ];
+  - file: src/ui/components/TrainerComponent.js
+    content: |
+      import { getWorkoutState, updateState } from '../../core/trainer/state.js';
+      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
+      import { setView } from '../../core/state.js';
+      import { log } from '../../utils/logger.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+      import { showConfirmModal } from '../modals.js';
+
+      const RING_RADIUS = 128;
+      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+      export class TrainerComponent {
+          constructor(containerElement) {
+              this.container = containerElement;
+
+              this.elements = {
+                  exerciseName: this.container.querySelector('#current-exercise-name'),
+                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
+                  repDisplay: this.container.querySelector('#current-rep-display'),
+                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
+
+                  btnStart: this.container.querySelector('#trainer-start-btn'),
+                  btnPause: this.container.querySelector('#trainer-pause-btn'),
+                  btnResume: this.container.querySelector('#trainer-resume-btn'),
+                  btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
+                  btnAudio: this.container.querySelector('#audio-toggle-btn'),
+
+                  ringContainer: this.container.querySelector('#timer-ring-container'),
+              };
+
+              this.ringProgress = null;
+              this.ringText = null;
+          }
+
+          mount() {
+              this.createTimerRing();
+              this.container.addEventListener('click', this.handleControls.bind(this));
+              this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
+              this.updateAudioButton(getWorkoutState().isAudioEnabled);
+          }
+
+          destroy() {
+              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
+              this.container.removeEventListener('click', this.handleControls.bind(this));
+              if (this.elements.ringContainer) {
+                  this.elements.ringContainer.innerHTML = '';
+              }
+              log('TrainerComponent', 'Component destroyed.');
+          }
+
+          handleControls(e) {
+              const target = e.target.closest('button');
+              if (!target) return;
+
+              const targetId = target.id;
+              log('TrainerComponent', `Control button clicked: ${targetId}`);
+              switch (targetId) {
+                  case 'trainer-start-btn': startWorkout(); break;
+                  case 'trainer-pause-btn': pauseWorkout(); break;
+                  case 'trainer-resume-btn': resumeWorkout(); break;
+                  case 'trainer-end-btn':
+                      showConfirmModal(
+                          UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
+                          UI_TEXT.TERMINATE_WORKOUT_CONFIRM_MSG,
+                          () => endWorkout(),
+                          'danger'
+                      );
+                      break;
+                  case 'trainer-back-btn': setView('planner'); break;
+                  case 'trainer-manual-rep-btn': incrementManualRep(); break;
+                  case 'audio-toggle-btn': this.toggleAudio(); break;
               }
           }
-          return audioContext;
-      }
 
-      function loadVoices() {
-        voices = synth.getVoices().filter(v => v.lang.startsWith('it'));
-      }
-      loadVoices();
-      if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = loadVoices;
-      }
-
-
-      function playSound(type) {
-          const ctx = getAudioContext();
-          if (!ctx) return;
-
-          if (ctx.state === 'suspended') {
-              ctx.resume();
+          toggleAudio() {
+              const currentState = getWorkoutState();
+              const newState = !currentState.isAudioEnabled;
+              updateState({ isAudioEnabled: newState });
+              this.updateAudioButton(newState);
           }
 
-          const oscillator = ctx.createOscillator();
-          const gainNode = ctx.createGain();
-          const now = ctx.currentTime;
-
-          oscillator.connect(gainNode);
-          gainNode.connect(ctx.destination);
-          gainNode.gain.setValueAtTime(0, now);
-
-          if (type === 'start') {
-              oscillator.type = 'sawtooth';
-              oscillator.frequency.setValueAtTime(523.25, now); // C5
-              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-          } else if (type === 'stop') {
-              oscillator.type = 'square';
-              oscillator.frequency.setValueAtTime(261.63, now); // C4
-              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-          } else if (type === 'tick') {
-              oscillator.type = 'triangle';
-              oscillator.frequency.setValueAtTime(1046.50, now); // C6
-              gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
-              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+          updateAudioButton(isAudioEnabled) {
+              this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
+              this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
           }
 
-          oscillator.start(now);
-          oscillator.stop(now + 1); // Stop after 1 second max
-      }
+          createTimerRing() {
+              if (this.elements.ringContainer.querySelector('svg')) {
+                log('TrainerComponent', 'Timer ring SVG already exists. Skipping creation.');
+                return;
+              }
+              log('TrainerComponent', 'Creating timer ring SVG...');
+              this.elements.ringContainer.innerHTML = '';
+              const svgNS = 'http://www.w3.org/2000/svg';
+              const svg = document.createElementNS(svgNS, 'svg');
+              const svgSize = (RING_RADIUS + 12) * 2;
+              svg.setAttribute('width', svgSize);
+              svg.setAttribute('height', svgSize);
+              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
 
-      export function speak(text) {
-        return new Promise((resolve) => {
-          if (synth.speaking) {
-            synth.cancel();
+              const center = svgSize / 2;
+
+              const backgroundCircle = document.createElementNS(svgNS, 'circle');
+              backgroundCircle.setAttribute('cx', center);
+              backgroundCircle.setAttribute('cy', center);
+              backgroundCircle.setAttribute('r', RING_RADIUS);
+              backgroundCircle.setAttribute('class', 'timer-ring-bg');
+
+              const progressCircle = document.createElementNS(svgNS, 'circle');
+              progressCircle.setAttribute('cx', center);
+              progressCircle.setAttribute('cy', center);
+              progressCircle.setAttribute('r', RING_RADIUS);
+              progressCircle.setAttribute('class', 'timer-ring-progress');
+              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
+
+              const text = document.createElementNS(svgNS, 'text');
+              text.setAttribute('x', '50%');
+              text.setAttribute('y', '50%');
+              text.setAttribute('dy', '.3em');
+              text.setAttribute('class', 'timer-ring-display');
+
+              svg.appendChild(backgroundCircle);
+              svg.appendChild(progressCircle);
+              svg.appendChild(text);
+              this.elements.ringContainer.prepend(svg);
+              this.ringProgress = progressCircle;
+              this.ringText = text;
+              log('TrainerComponent', 'Timer ring SVG created and references set.');
           }
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.voice = voices[0] || synth.getVoices().find(v => v.default && v.lang.startsWith('it'));
-          utterance.lang = 'it-IT';
-          utterance.rate = 1.0;
-          utterance.onend = resolve;
-          utterance.onerror = resolve; // Resolve even on error to not block the queue
-          synth.speak(utterance);
-        });
-      }
 
-      export function playStartCue() {
-          playSound('start');
-      }
+          updateTimerRing(percent) {
+              if (!this.ringProgress) return;
+              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
+              this.ringProgress.style.strokeDashoffset = offset;
+          }
 
-      export function playStopCue() {
-          playSound('stop');
-      }
+          formatTime(ms) {
+              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+              return `${minutes}:${seconds}`;
+          }
 
-      export function playTick() {
-          playSound('tick');
+          render(state) {
+              if (!this.ringText) return; // Guard against rendering before mount
+              const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
+
+              if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
+                  this.elements.exerciseName.textContent = '';
+                  this.elements.exerciseDetails.textContent = '';
+                  this.elements.repDisplay.classList.add('hidden-rep');
+                  this.elements.upcomingDisplay.innerHTML = '';
+                  this.elements.btnStart.classList.add('hidden');
+                  this.elements.btnPause.classList.add('hidden');
+                  this.elements.btnResume.classList.add('hidden');
+                  this.elements.btnManualRep.classList.add('hidden');
+                  this.ringText.textContent = '';
+                  this.updateTimerRing(0);
+                  return;
+              };
+
+              const currentExercise = exerciseQueue[currentExerciseIndex];
+              this.elements.exerciseName.textContent = currentExercise.name;
+              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(state);
+
+              if (status === 'running' && executionMode === 'tempo_guided') {
+                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${state.currentRep}`;
+                this.elements.repDisplay.classList.remove('hidden-rep');
+              } else {
+                this.elements.repDisplay.classList.add('hidden-rep');
+              }
+
+              const upcomingExercises = exerciseQueue.slice(currentExerciseIndex + 1, currentExerciseIndex + 3).map(ex => ex.name).join(', ');
+              if (upcomingExercises) {
+                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${upcomingExercises}`;
+              } else {
+                this.elements.upcomingDisplay.innerHTML = '';
+              }
+
+              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
+              this.elements.btnPause.classList.toggle('hidden', status !== 'running' && status !== 'resting');
+              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
+              this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && executionMode === 'manual_reps'));
+
+              // --- Main Render Logic ---
+              if (status === 'running') {
+                  this.ringText.classList.remove('flashing');
+                  if (executionMode === 'tempo_guided') this.renderPhase(state);
+                  else if (executionMode === 'static_hold') this.renderStaticHold(state);
+                  else if (executionMode === 'manual_reps') this.renderManualReps(state);
+              } else if (status === 'resting') {
+                  this.renderRest(state);
+              } else if (status === 'paused') {
+                  this.renderPaused(state);
+              } else if (status === 'idle') {
+                  this.ringText.textContent = '';
+                  this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count', 'is-phase');
+                  this.updateTimerRing(0);
+              }
+          }
+
+          renderPhase(state) {
+              const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
+              const phase = executionQueue[currentPhaseIndex];
+              if (!phase || !phase.phase) return;
+
+              const phaseNameDisplay = phase.phase.replace('pre-', '').toUpperCase();
+              const isPrePhase = phase.phase.startsWith('pre-');
+
+              this.ringText.textContent = phaseNameDisplay;
+              this.ringText.classList.add('is-phase');
+              this.ringText.classList.toggle('flashing', isPrePhase);
+              this.ringText.classList.remove('is-timer', 'is-rep-count');
+
+              if (isPrePhase) {
+                  this.updateTimerRing(100);
+              } else {
+                  const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration_ms) * 100);
+                  this.updateTimerRing(progressPercent);
+              }
+          }
+
+          renderStaticHold(state) {
+              const { setTimeRemaining } = state;
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const totalDuration = currentExercise.defaultDuration * 1000;
+              const progressPercent = (totalDuration > 0) ? ((totalDuration - setTimeRemaining) / totalDuration) * 100 : 100;
+
+              this.ringText.textContent = this.formatTime(setTimeRemaining);
+              this.ringText.classList.add('is-timer');
+              this.ringText.classList.remove('is-rep-count', 'is-phase');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderManualReps(state) {
+              const { manualRepCount } = state;
+              const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
+              const targetReps = currentExercise.defaultReps;
+              let progressPercent = 0;
+              if (targetReps > 0) {
+                  progressPercent = (manualRepCount / targetReps) * 100;
+              }
+
+              this.ringText.textContent = manualRepCount;
+              this.ringText.classList.add('is-rep-count');
+              this.ringText.classList.remove('is-timer', 'is-phase');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderRest(state) {
+              const { restTimeRemaining } = state;
+              const totalRest = state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000;
+              const progressPercent = (totalRest > 0) ? ((totalRest - restTimeRemaining) / totalRest) * 100 : 100;
+
+              this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
+              this.ringText.classList.add('is-phase');
+              this.ringText.classList.remove('flashing', 'is-timer', 'is-rep-count');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderPaused(state) {
+              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+              this.ringText.classList.add('is-phase');
+              this.ringText.classList.remove('flashing');
+              // Mantieni la classe di stile precedente per coerenza
+              if(state.executionMode === 'static_hold') this.ringText.classList.add('is-timer');
+              if(state.executionMode === 'manual_reps') this.ringText.classList.add('is-rep-count');
+          }
+
+          formatExerciseDetails(state) {
+              const { exerciseQueue, currentExerciseIndex, currentSet, executionMode } = state;
+              const exercise = exerciseQueue[currentExerciseIndex];
+              if (!exercise) return '';
+              const sets = exercise.defaultSets;
+              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${currentSet} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${sets}`;
+              if (executionMode === 'tempo_guided' || executionMode === 'manual_reps') {
+                  const reps = exercise.defaultReps;
+                  details += ` | ${reps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
+              } else if (executionMode === 'static_hold') {
+                  const duration = exercise.defaultDuration;
+                  details += ` | ${duration}s`;
+              }
+              if (exercise.defaultWeight) {
+                  details += ` @ ${exercise.defaultWeight}kg`;
+              }
+              return details;
+          }
       }
-commands: []
+commands:
+  - file: src/config/trainerFlows.js
+  - file: src/core/trainer.js
+  - file: src/core/trainer/animation.js
+  - file: src/core/trainer/queueBuilder.js
+  - file: src/ui/components/TrainerComponent.js

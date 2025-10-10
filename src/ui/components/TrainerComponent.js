@@ -202,10 +202,10 @@ export class TrainerComponent {
     renderPhase(state) {
         const { executionQueue, currentPhaseIndex, phaseTimeElapsed } = state;
         const phase = executionQueue[currentPhaseIndex];
-        if (!phase || !phase.name) return;
+        if (!phase || !phase.phase) return;
 
-        const phaseNameDisplay = phase.name.replace('pre-', '').toUpperCase();
-        const isPrePhase = phase.name.startsWith('pre-');
+        const phaseNameDisplay = phase.phase.replace('pre-', '').toUpperCase();
+        const isPrePhase = phase.phase.startsWith('pre-');
 
         this.ringText.textContent = phaseNameDisplay;
         this.ringText.classList.add('is-phase');
@@ -215,7 +215,7 @@ export class TrainerComponent {
         if (isPrePhase) {
             this.updateTimerRing(100);
         } else {
-            const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration) * 100);
+            const progressPercent = Math.min(100, (phaseTimeElapsed / phase.duration_ms) * 100);
             this.updateTimerRing(progressPercent);
         }
     }

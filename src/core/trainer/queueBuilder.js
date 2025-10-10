@@ -7,23 +7,20 @@ function getNestedProperty(obj, path) {
   return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 }
 
-function interpretTemplate(template, exercise, reps, currentSet) {
+function interpretTemplate(template, exercise, loopContext) {
   const queue = [];
   for (const command of template) {
     if (command.type === 'loop') {
-      const loopCount = command.target === 'reps' ? reps : 1;
+      const loopCount = getNestedProperty(exercise, command.target);
       for (let i = 0; i < loopCount; i++) {
-        const repNumber = i + 1;
-        const subQueue = interpretTemplate(command.actions, exercise, repNumber, currentSet);
-        subQueue.forEach(subCmd => {
-          if (subCmd.rep) subCmd.rep = repNumber; // Ensure rep number is correctly assigned
-        });
-        queue.push(...subQueue);
+        const newLoopContext = { ...loopContext, rep: i + 1 };
+        queue.push(...interpretTemplate(command.actions, exercise, newLoopContext));
       }
     } else if (command.type === 'conditional') {
-      const conditionValue = getNestedProperty(exercise.defaultTempo, command.condition.split(' > ')[0]);
-      if (conditionValue > 0) {
-        queue.push(...interpretTemplate(command.actions, exercise, reps, currentSet));
+      const [prop, value] = command.condition.split(' > ');
+      const propValue = getNestedProperty(exercise, prop);
+      if (propValue > parseInt(value, 10)) {
+        queue.push(...interpretTemplate(command.actions, exercise, loopContext));
       }
     } else {
       const newCommand = { ...command };
@@ -31,10 +28,10 @@ function interpretTemplate(template, exercise, reps, currentSet) {
         newCommand.text = UI_TEXT[newCommand.text_key] || '';
       }
       if (newCommand.duration_from) {
-        newCommand.duration_ms = getNestedProperty(exercise.defaultTempo, newCommand.duration_from) * 1000;
+        newCommand.duration_ms = getNestedProperty(exercise, newCommand.duration_from) * 1000;
       }
       if (newCommand.phase) {
-        newCommand.rep = reps; // Assign current rep number to movement phases
+        newCommand.rep = loopContext.rep;
       }
       queue.push(newCommand);
     }
@@ -45,11 +42,11 @@ function interpretTemplate(template, exercise, reps, currentSet) {
 export function buildExecutionQueueForCurrentSet() {
   const state = getWorkoutState();
   const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-  const { execution_mode, defaultReps, defaultTempo } = currentExercise;
+  const { execution_mode } = currentExercise;
 
   let queue = [];
   if (execution_mode === 'tempo_guided') {
-    queue = interpretTemplate(TEMPO_GUIDED_FLOW, { defaultTempo }, defaultReps, state.currentSet);
+    queue = interpretTemplate(TEMPO_GUIDED_FLOW, currentExercise, { set: state.currentSet });
   }
 
   const { debugMode } = getGlobalState();
