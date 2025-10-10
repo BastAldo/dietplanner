@@ -37,12 +37,12 @@ const viewBoxes = {
   BOOK: '0 0 576 576',
   EDIT: '0 0 640 640',
   DRAG_HANDLE: '0 0 640 640',
-  GOAL: '0 0 448 512',
+  GOAL: '0 0 640 640',
   AUDIO_ON: '0 0 640 640',
   AUDIO_OFF: '0 0 640 640',
   HAMBURGER: '0 0 448 512',
   SPEAKER: '0 0 640 640',
-  EXPAND: '0 0 512 512'
+  EXPAND: '0 0 640 640',
 };
 
 export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
