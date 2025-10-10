@@ -1,42 +1,56 @@
 import { getWorkoutState } from './state.js';
 import { getState as getGlobalState } from '../state.js';
 import { UI_TEXT } from '../../config/uiText.js';
+import { TEMPO_GUIDED_FLOW } from '../../config/trainerFlows.js';
+
+function getNestedProperty(obj, path) {
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}
+
+function interpretTemplate(template, exercise, reps, currentSet) {
+  const queue = [];
+  for (const command of template) {
+    if (command.type === 'loop') {
+      const loopCount = command.target === 'reps' ? reps : 1;
+      for (let i = 0; i < loopCount; i++) {
+        const repNumber = i + 1;
+        const subQueue = interpretTemplate(command.actions, exercise, repNumber, currentSet);
+        subQueue.forEach(subCmd => {
+          if (subCmd.rep) subCmd.rep = repNumber; // Ensure rep number is correctly assigned
+        });
+        queue.push(...subQueue);
+      }
+    } else if (command.type === 'conditional') {
+      const conditionValue = getNestedProperty(exercise.defaultTempo, command.condition.split(' > ')[0]);
+      if (conditionValue > 0) {
+        queue.push(...interpretTemplate(command.actions, exercise, reps, currentSet));
+      }
+    } else {
+      const newCommand = { ...command };
+      if (newCommand.text_key) {
+        newCommand.text = UI_TEXT[newCommand.text_key] || '';
+      }
+      if (newCommand.duration_from) {
+        newCommand.duration_ms = getNestedProperty(exercise.defaultTempo, newCommand.duration_from) * 1000;
+      }
+      if (newCommand.phase) {
+        newCommand.rep = reps; // Assign current rep number to movement phases
+      }
+      queue.push(newCommand);
+    }
+  }
+  return queue;
+}
 
 export function buildExecutionQueueForCurrentSet() {
   const state = getWorkoutState();
   const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-  if (!currentExercise || currentExercise.type !== 'reps') return [];
+  const { execution_mode, defaultReps, defaultTempo } = currentExercise;
 
-  const queue = [];
-  const reps = currentExercise.defaultReps;
-  const tempo = currentExercise.defaultTempo;
-
-  queue.push({ type: 'speech', text: `${UI_TEXT.VOICE_GUIDE_SET_START}` });
-
-  for (let i = 0; i < reps; i++) {
-    if (tempo) {
-      // UP
-      queue.push({ type: 'speech', text: UI_TEXT.VOICE_GUIDE_PHASE_UP });
-      queue.push({ name: 'pre-up', rep: i + 1, duration: 700 });
-      queue.push({ name: 'up', rep: i + 1, duration: tempo.up * 1000 });
-      queue.push({ type: 'audio', cue: 'tick' });
-
-      // HOLD
-      if (tempo.hold > 0) {
-        queue.push({ type: 'speech', text: UI_TEXT.VOICE_GUIDE_PHASE_HOLD });
-        queue.push({ name: 'pre-hold', rep: i + 1, duration: 700 });
-        queue.push({ name: 'hold', rep: i + 1, duration: tempo.hold * 1000 });
-        queue.push({ type: 'audio', cue: 'tick' });
-      }
-
-      // DOWN
-      queue.push({ type: 'speech', text: UI_TEXT.VOICE_GUIDE_PHASE_DOWN });
-      queue.push({ name: 'pre-down', rep: i + 1, duration: 700 });
-      queue.push({ name: 'down', rep: i + 1, duration: tempo.down * 1000 });
-      queue.push({ type: 'audio', cue: 'tick' });
-    }
+  let queue = [];
+  if (execution_mode === 'tempo_guided') {
+    queue = interpretTemplate(TEMPO_GUIDED_FLOW, { defaultTempo }, defaultReps, state.currentSet);
   }
-  queue.push({ type: 'audio', cue: 'stop' });
 
   const { debugMode } = getGlobalState();
   if (debugMode) {

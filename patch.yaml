@@ -1,58 +1,284 @@
-commit_message: "fix(trainer): Correct module imports to resolve crash"
+commit_message: "feat(trainer): Implement configurable and awaitable execution flows"
 rationale: |
-  Questa patch risolve un errore critico (`Uncaught SyntaxError`) che impediva l'avvio del modulo Allenamento.
+  This patch implements a major architectural refactoring of the Trainer module based on user specifications for a more powerful and flexible execution engine.
 
-  **Causa del Problema:**
-  L'errore era causato da un'istruzione di importazione errata nel file `src/core/trainer/queueBuilder.js`. Il codice tentava di importare la funzione `getWorkoutState` (specifica per lo stato interno del trainer) dal file dello stato globale (`../state.js`), il quale non la esporta. Questo conflitto architetturale bloccava l'esecuzione del modulo.
+  **1. Configurable Execution Flows:**
+  The hardcoded logic for building the exercise sequence has been completely replaced by a new data-driven system. A new configuration file, `src/config/trainerFlows.js`, now defines global templates for different execution modes (e.g., `TEMPO_GUIDED_FLOW`). The `queueBuilder.js` module has been rewritten to act as an interpreter for these templates. It dynamically builds the final `executionQueue` by taking an exercise's properties and compiling them against the appropriate global template. This makes the trainer a "stupid executor" as requested, with its behavior defined entirely by configurable data, not code.
 
-  **Soluzione Implementata:**
-  Le importazioni in `queueBuilder.js` sono state corrette per rispettare la separazione tra lo stato globale e lo stato locale del trainer:
-  1.  `getWorkoutState` viene ora importato correttamente dal suo modulo di stato locale (`./state.js`).
-  2.  `getState` continua ad essere importato dal modulo di stato globale (`../state.js`), ma è stato rinominato in `getGlobalState` per migliorare la leggibilità e prevenire ambiguità.
+  **2. Awaitable (Synchronous) Speech:**
+  To solve the synchronization issue between audio cues and timers, the `speak` function in `audioFeedback.js` has been refactored to return a `Promise`. The trainer's animation engine (`animation.js`) has been upgraded to be `async` and now respects a new `await: true` flag in the execution queue commands. When the engine encounters a speech command with this flag, it will `await` the completion of the speech synthesis before processing the next command in the queue, ensuring perfect synchronization.
 
-  Questa correzione riallinea il codice all'architettura a stati separati, risolve il crash e ripristina la piena funzionalità del modulo Allenamento.
+  These changes make the Trainer module significantly more robust, maintainable, and configurable, aligning it with the data-driven philosophy of the overall project.
 patches:
+  - file: src/api/configService.js
+    content: |
+      import { UI_TEXT } from '../config/uiText.js';
+      import { log } from '../utils/logger.js';
+
+      async function fetchJson(url) {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
+        }
+        const textContent = await response.text();
+        try {
+          return JSON.parse(textContent);
+        } catch (e) {
+          log('API_SERVICE', `Errore nel parsing del JSON da ${url}`, {
+            error: e.message,
+            content: textContent.substring(0, 150)
+          });
+          throw new Error(UI_TEXT.API_INVALID_JSON);
+        }
+      }
+
+      export async function fetchAndParseConfig(mealsUrl) {
+          if (!mealsUrl) throw new Error(UI_TEXT.CONFIG_URL_EMPTY_ERROR);
+
+          try {
+              const mealsConfig = await fetchJson(mealsUrl);
+              if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
+                  throw new Error(UI_TEXT.API_INVALID_MEALS_FILE);
+              }
+
+              const baseUrl = new URL(mealsUrl);
+              const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/'));
+
+              const ingredientsUrl = `${baseUrl.origin}${basePath}/ingredienti.json`;
+              const ingredientsConfig = await fetchJson(ingredientsUrl);
+              if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
+                  throw new Error(UI_TEXT.API_INVALID_INGREDIENTS_FILE);
+              }
+
+              let exercises = [];
+              try {
+                  const exercisesUrl = `${baseUrl.origin}${basePath}/esercizi.json`;
+                  const exercisesConfig = await fetchJson(exercisesUrl);
+                  if (exercisesConfig.esercizi && Array.isArray(exercisesConfig.esercizi)) {
+                      exercises = exercisesConfig.esercizi;
+                  }
+              } catch (e) {
+                  log('API_SERVICE', UI_TEXT.API_EXERCISES_FILE_WARN, e.message);
+              }
+
+              return {
+                  rules: mealsConfig.rules || [],
+                  meals: mealsConfig.meals,
+                  ingredienti: ingredientsConfig.ingredienti,
+                  esercizi: exercises
+              };
+
+          } catch (error) {
+              console.error("Fallimento nel caricamento della configurazione completa:", error.message);
+              // Lancia l'errore specifico (che ora è pulito) invece di uno generico
+              throw new Error(error.message || UI_TEXT.API_CONFIG_LOAD_FAIL);
+          }
+      }
+  - file: src/config/trainerFlows.js
+    content: |
+      import { UI_TEXT } from './uiText.js';
+
+      export const TEMPO_GUIDED_FLOW = [
+        { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
+        {
+          "type": "loop",
+          "target": "reps",
+          "actions": [
+            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_UP" },
+            { "type": "movement", "phase": "pre-up", "duration_ms": 700 },
+            { "type": "movement", "phase": "up", "duration_from": "tempo.up" },
+            { "type": "audio", "cue": "tick" },
+            {
+              "type": "conditional",
+              "condition": "tempo.hold > 0",
+              "actions": [
+                { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_HOLD" },
+                { "type": "movement", "phase": "pre-hold", "duration_ms": 700 },
+                { "type": "movement", "phase": "hold", "duration_from": "tempo.hold" },
+                { "type": "audio", "cue": "tick" }
+              ]
+            },
+            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_DOWN" },
+            { "type": "movement", "phase": "pre-down", "duration_ms": 700 },
+            { "type": "movement", "phase": "down", "duration_from": "tempo.down" },
+            { "type": "audio", "cue": "tick" }
+          ]
+        },
+        { "type": "audio", "cue": "stop" }
+      ];
+  - file: src/core/trainer/animation.js
+    content: |
+      import { getWorkoutState, updateState } from './state.js';
+      import { advanceToNextSet } from './machine.js';
+      import { completeSet } from '../trainer.js';
+      import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
+      import { log } from '../../utils/logger.js';
+
+      let animationFrameId = null;
+      let lastTickTimestamp = 0;
+
+      async function processQueue() {
+        const state = getWorkoutState();
+        if (state.status !== 'running') return;
+
+        const { executionQueue, currentPhaseIndex, isAudioEnabled } = state;
+        const currentPhase = executionQueue[currentPhaseIndex];
+
+        log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
+
+        if (currentPhase && currentPhase.type) {
+          if (isAudioEnabled) {
+            if (currentPhase.type === 'audio') {
+              if (currentPhase.cue === 'tick') playTick();
+              else if (currentPhase.cue === 'start') playStartCue();
+              else if (currentPhase.cue === 'stop') playStopCue();
+            } else if (currentPhase.type === 'speech') {
+              if (currentPhase.await) {
+                await speak(currentPhase.text);
+              } else {
+                speak(currentPhase.text);
+              }
+            }
+          }
+
+          const newPhaseIndex = currentPhaseIndex + 1;
+          if (newPhaseIndex < executionQueue.length) {
+            updateState({ currentPhaseIndex: newPhaseIndex });
+            await processQueue();
+          } else {
+            completeSet();
+          }
+        }
+      }
+
+      function tick(timestamp) {
+        if (lastTickTimestamp === 0) {
+          lastTickTimestamp = timestamp;
+        }
+        const deltaTime = timestamp - lastTickTimestamp;
+        lastTickTimestamp = timestamp;
+
+        const state = getWorkoutState();
+        if (state.status === 'finished' || state.status === 'paused' || state.status === 'idle') {
+          stopAnimation();
+          return;
+        }
+
+        if (state.status === 'running') {
+          if (state.executionMode === 'tempo_guided') {
+            const { executionQueue, currentPhaseIndex } = state;
+            const currentPhase = executionQueue[currentPhaseIndex];
+
+            if (currentPhase && currentPhase.duration_ms) {
+              const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+
+              if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
+                const newPhaseIndex = currentPhaseIndex + 1;
+                updateState({
+                  currentPhaseIndex: newPhaseIndex,
+                  phaseTimeElapsed: 0,
+                  currentRep: executionQueue[newPhaseIndex]?.rep || state.currentRep,
+                });
+                processQueue();
+              } else {
+                updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
+              }
+            } else if (!currentPhase) {
+              completeSet();
+            }
+          } else if (state.executionMode === 'static_hold') {
+            const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
+            if (newSetTimeRemaining <= 0) {
+              if (state.isAudioEnabled) playStopCue();
+              completeSet();
+            } else {
+              updateState({ setTimeRemaining: newSetTimeRemaining });
+            }
+          }
+        } else if (state.status === 'resting') {
+          const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
+          if (newRestTimeRemaining <= 0) {
+            advanceToNextSet();
+          } else {
+            updateState({ restTimeRemaining: newRestTimeRemaining });
+          }
+        }
+
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+
+        if (getWorkoutState().status !== 'paused' && getWorkoutState().status !== 'idle') {
+          animationFrameId = requestAnimationFrame(tick);
+        }
+      }
+
+      export function startAnimation() {
+        if (animationFrameId) return;
+        lastTickTimestamp = 0;
+        processQueue();
+        animationFrameId = requestAnimationFrame(tick);
+      }
+
+      export function stopAnimation() {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+        }
+      }
   - file: src/core/trainer/queueBuilder.js
     content: |
       import { getWorkoutState } from './state.js';
       import { getState as getGlobalState } from '../state.js';
       import { UI_TEXT } from '../../config/uiText.js';
+      import { TEMPO_GUIDED_FLOW } from '../../config/trainerFlows.js';
+
+      function getNestedProperty(obj, path) {
+        return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+      }
+
+      function interpretTemplate(template, exercise, reps, currentSet) {
+        const queue = [];
+        for (const command of template) {
+          if (command.type === 'loop') {
+            const loopCount = command.target === 'reps' ? reps : 1;
+            for (let i = 0; i < loopCount; i++) {
+              const repNumber = i + 1;
+              const subQueue = interpretTemplate(command.actions, exercise, repNumber, currentSet);
+              subQueue.forEach(subCmd => {
+                if (subCmd.rep) subCmd.rep = repNumber; // Ensure rep number is correctly assigned
+              });
+              queue.push(...subQueue);
+            }
+          } else if (command.type === 'conditional') {
+            const conditionValue = getNestedProperty(exercise.defaultTempo, command.condition.split(' > ')[0]);
+            if (conditionValue > 0) {
+              queue.push(...interpretTemplate(command.actions, exercise, reps, currentSet));
+            }
+          } else {
+            const newCommand = { ...command };
+            if (newCommand.text_key) {
+              newCommand.text = UI_TEXT[newCommand.text_key] || '';
+            }
+            if (newCommand.duration_from) {
+              newCommand.duration_ms = getNestedProperty(exercise.defaultTempo, newCommand.duration_from) * 1000;
+            }
+            if (newCommand.phase) {
+              newCommand.rep = reps; // Assign current rep number to movement phases
+            }
+            queue.push(newCommand);
+          }
+        }
+        return queue;
+      }
 
       export function buildExecutionQueueForCurrentSet() {
         const state = getWorkoutState();
         const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-        if (!currentExercise || currentExercise.type !== 'reps') return [];
+        const { execution_mode, defaultReps, defaultTempo } = currentExercise;
 
-        const queue = [];
-        const reps = currentExercise.defaultReps;
-        const tempo = currentExercise.defaultTempo;
-
-        queue.push({ type: 'speech', text: `${UI_TEXT.VOICE_GUIDE_SET_START}` });
-
-        for (let i = 0; i < reps; i++) {
-          if (tempo) {
-            // UP
-            queue.push({ type: 'speech', text: UI_TEXT.VOICE_GUIDE_PHASE_UP });
-            queue.push({ name: 'pre-up', rep: i + 1, duration: 700 });
-            queue.push({ name: 'up', rep: i + 1, duration: tempo.up * 1000 });
-            queue.push({ type: 'audio', cue: 'tick' });
-
-            // HOLD
-            if (tempo.hold > 0) {
-              queue.push({ type: 'speech', text: UI_TEXT.VOICE_GUIDE_PHASE_HOLD });
-              queue.push({ name: 'pre-hold', rep: i + 1, duration: 700 });
-              queue.push({ name: 'hold', rep: i + 1, duration: tempo.hold * 1000 });
-              queue.push({ type: 'audio', cue: 'tick' });
-            }
-
-            // DOWN
-            queue.push({ type: 'speech', text: UI_TEXT.VOICE_GUIDE_PHASE_DOWN });
-            queue.push({ name: 'pre-down', rep: i + 1, duration: 700 });
-            queue.push({ name: 'down', rep: i + 1, duration: tempo.down * 1000 });
-            queue.push({ type: 'audio', cue: 'tick' });
-          }
+        let queue = [];
+        if (execution_mode === 'tempo_guided') {
+          queue = interpretTemplate(TEMPO_GUIDED_FLOW, { defaultTempo }, defaultReps, state.currentSet);
         }
-        queue.push({ type: 'audio', cue: 'stop' });
 
         const { debugMode } = getGlobalState();
         if (debugMode) {
@@ -62,5 +288,94 @@ patches:
         }
 
         return queue;
+      }
+  - file: src/utils/audioFeedback.js
+    content: |
+      let audioContext = null;
+      const synth = window.speechSynthesis;
+      let voices = [];
+
+      function getAudioContext() {
+          if (!audioContext) {
+              try {
+                  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              } catch (e) {
+                  console.error("Web Audio API is not supported in this browser");
+              }
+          }
+          return audioContext;
+      }
+
+      function loadVoices() {
+        voices = synth.getVoices().filter(v => v.lang.startsWith('it'));
+      }
+      loadVoices();
+      if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = loadVoices;
+      }
+
+
+      function playSound(type) {
+          const ctx = getAudioContext();
+          if (!ctx) return;
+
+          if (ctx.state === 'suspended') {
+              ctx.resume();
+          }
+
+          const oscillator = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          const now = ctx.currentTime;
+
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          gainNode.gain.setValueAtTime(0, now);
+
+          if (type === 'start') {
+              oscillator.type = 'sawtooth';
+              oscillator.frequency.setValueAtTime(523.25, now); // C5
+              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+          } else if (type === 'stop') {
+              oscillator.type = 'square';
+              oscillator.frequency.setValueAtTime(261.63, now); // C4
+              gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+          } else if (type === 'tick') {
+              oscillator.type = 'triangle';
+              oscillator.frequency.setValueAtTime(1046.50, now); // C6
+              gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+          }
+
+          oscillator.start(now);
+          oscillator.stop(now + 1); // Stop after 1 second max
+      }
+
+      export function speak(text) {
+        return new Promise((resolve) => {
+          if (synth.speaking) {
+            synth.cancel();
+          }
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.voice = voices[0] || synth.getVoices().find(v => v.default && v.lang.startsWith('it'));
+          utterance.lang = 'it-IT';
+          utterance.rate = 1.0;
+          utterance.onend = resolve;
+          utterance.onerror = resolve; // Resolve even on error to not block the queue
+          synth.speak(utterance);
+        });
+      }
+
+      export function playStartCue() {
+          playSound('start');
+      }
+
+      export function playStopCue() {
+          playSound('stop');
+      }
+
+      export function playTick() {
+          playSound('tick');
       }
 commands: []

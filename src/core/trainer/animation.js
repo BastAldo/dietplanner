@@ -7,7 +7,7 @@ import { log } from '../../utils/logger.js';
 let animationFrameId = null;
 let lastTickTimestamp = 0;
 
-function processQueue() {
+async function processQueue() {
   const state = getWorkoutState();
   if (state.status !== 'running') return;
 
@@ -16,7 +16,6 @@ function processQueue() {
 
   log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
 
-  // If it's an instantaneous command (like audio), execute and advance
   if (currentPhase && currentPhase.type) {
     if (isAudioEnabled) {
       if (currentPhase.type === 'audio') {
@@ -24,13 +23,18 @@ function processQueue() {
         else if (currentPhase.cue === 'start') playStartCue();
         else if (currentPhase.cue === 'stop') playStopCue();
       } else if (currentPhase.type === 'speech') {
-        speak(currentPhase.text);
+        if (currentPhase.await) {
+          await speak(currentPhase.text);
+        } else {
+          speak(currentPhase.text);
+        }
       }
     }
+
     const newPhaseIndex = currentPhaseIndex + 1;
     if (newPhaseIndex < executionQueue.length) {
       updateState({ currentPhaseIndex: newPhaseIndex });
-      processQueue(); // Process next item immediately
+      await processQueue();
     } else {
       completeSet();
     }
@@ -51,37 +55,36 @@ function tick(timestamp) {
   }
 
   if (state.status === 'running') {
+    if (state.executionMode === 'tempo_guided') {
       const { executionQueue, currentPhaseIndex } = state;
       const currentPhase = executionQueue[currentPhaseIndex];
 
-      // It must be a timed phase (movement)
-      if (currentPhase && currentPhase.duration) {
+      if (currentPhase && currentPhase.duration_ms) {
         const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
 
-        if (newPhaseTimeElapsed >= currentPhase.duration) {
+        if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
           const newPhaseIndex = currentPhaseIndex + 1;
           updateState({
             currentPhaseIndex: newPhaseIndex,
             phaseTimeElapsed: 0,
             currentRep: executionQueue[newPhaseIndex]?.rep || state.currentRep,
           });
-          processQueue(); // Check if the next item is a command
+          processQueue();
         } else {
           updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
         }
       } else if (!currentPhase) {
-          // End of queue
-          completeSet();
+        completeSet();
       }
-
-  } else if (state.executionMode === 'static_hold') {
+    } else if (state.executionMode === 'static_hold') {
       const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
       if (newSetTimeRemaining <= 0) {
-          if (state.isAudioEnabled) playStopCue();
-          completeSet();
+        if (state.isAudioEnabled) playStopCue();
+        completeSet();
       } else {
-          updateState({ setTimeRemaining: newSetTimeRemaining });
+        updateState({ setTimeRemaining: newSetTimeRemaining });
       }
+    }
   } else if (state.status === 'resting') {
     const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
     if (newRestTimeRemaining <= 0) {
@@ -101,7 +104,7 @@ function tick(timestamp) {
 export function startAnimation() {
   if (animationFrameId) return;
   lastTickTimestamp = 0;
-  processQueue(); // Initial check for commands at the start
+  processQueue();
   animationFrameId = requestAnimationFrame(tick);
 }
 

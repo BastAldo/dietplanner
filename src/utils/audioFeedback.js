@@ -60,14 +60,18 @@ function playSound(type) {
 }
 
 export function speak(text) {
+  return new Promise((resolve) => {
     if (synth.speaking) {
-        synth.cancel();
+      synth.cancel();
     }
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.voice = voices[0] || synth.getVoices().find(v => v.default && v.lang.startsWith('it'));
     utterance.lang = 'it-IT';
     utterance.rate = 1.0;
+    utterance.onend = resolve;
+    utterance.onerror = resolve; // Resolve even on error to not block the queue
     synth.speak(utterance);
+  });
 }
 
 export function playStartCue() {
