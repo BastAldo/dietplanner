@@ -48,14 +48,14 @@ export class TrainerComponent {
         log('TrainerComponent', 'Component destroyed.');
     }
 
-    handleControls(e) {
+    async handleControls(e) {
         const target = e.target.closest('button');
         if (!target) return;
 
         const targetId = target.id;
         log('TrainerComponent', `Control button clicked: ${targetId}`);
         switch (targetId) {
-            case 'trainer-start-btn': startWorkout(); break;
+            case 'trainer-start-btn': await startWorkout(); break;
             case 'trainer-pause-btn': pauseWorkout(); break;
             case 'trainer-resume-btn': resumeWorkout(); break;
             case 'trainer-end-btn':

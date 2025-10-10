@@ -70,18 +70,18 @@ export function completeSet() {
   });
 }
 
-export function startWorkout() {
+export async function startWorkout() {
   const state = getState();
   log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
   if (state.status !== 'idle') return;
 
-  let startState = { status: 'running', phaseStartTime: Date.now() };
-
   if (state.isAudioEnabled) {
     playStartCue();
     const firstExerciseName = state.exerciseQueue[0].name;
-    speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+    await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
   }
+
+  let startState = { status: 'running', phaseStartTime: Date.now() };
 
   if (state.executionMode === 'tempo_guided') {
       startState.executionQueue = buildExecutionQueueForCurrentSet();
