@@ -1,4 +1,5 @@
-import { getWorkoutState, getState as getGlobalState } from '../state.js';
+import { getWorkoutState } from './state.js';
+import { getState as getGlobalState } from '../state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 
 export function buildExecutionQueueForCurrentSet() {
