@@ -5,7 +5,7 @@ import { startAnimation, stopAnimation } from './trainer/animation.js';
 import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
 import { advanceToNextSet } from './trainer/machine.js';
 import { calculateWorkoutCalories } from './calculations.js';
-import { speak, playStartCue } from '../../utils/audioFeedback.js';
+import { speak, playStartCue } from '../utils/audioFeedback.js';
 import { UI_TEXT } from '../config/uiText.js';
 
 export { getState as getWorkoutState };
