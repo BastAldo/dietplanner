@@ -1,4 +1,4 @@
-import { getWorkoutState } from './state.js';
+import { getWorkoutState, getState as getGlobalState } from '../state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 
 export function buildExecutionQueueForCurrentSet() {
@@ -36,5 +36,13 @@ export function buildExecutionQueueForCurrentSet() {
     }
   }
   queue.push({ type: 'audio', cue: 'stop' });
+
+  const { debugMode } = getGlobalState();
+  if (debugMode) {
+    console.groupCollapsed(`[Trainer-Queue] Execution Queue for: ${currentExercise.name} - Set ${state.currentSet}`);
+    console.table(queue);
+    console.groupEnd();
+  }
+
   return queue;
 }

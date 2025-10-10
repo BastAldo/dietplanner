@@ -1,6 +1,6 @@
 import { getWorkoutState, updateState } from '../../core/trainer/state.js';
 import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
-import { setView, getState as getGlobalState } from '../../core/state.js';
+import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
@@ -26,8 +26,6 @@ export class TrainerComponent {
             btnAudio: this.container.querySelector('#audio-toggle-btn'),
 
             ringContainer: this.container.querySelector('#timer-ring-container'),
-            debugView: this.container.querySelector('#debug-queue-view'),
-            debugOutput: this.container.querySelector('#debug-queue-output')
         };
 
         this.ringProgress = null;
@@ -146,8 +144,6 @@ export class TrainerComponent {
     render(state) {
         if (!this.ringText) return; // Guard against rendering before mount
         const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
-
-        this.renderDebugView(state);
 
         if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
             this.elements.exerciseName.textContent = '';
@@ -288,18 +284,5 @@ export class TrainerComponent {
             details += ` @ ${exercise.defaultWeight}kg`;
         }
         return details;
-    }
-
-    renderDebugView(state) {
-        const { debugMode } = getGlobalState();
-        this.elements.debugView.classList.toggle('hidden', !debugMode);
-        if (debugMode) {
-            const { executionQueue, currentPhaseIndex } = state;
-            const queueWithHighlight = executionQueue.map((item, index) => {
-                const prefix = index === currentPhaseIndex ? '>> ' : '   ';
-                return `${prefix}${JSON.stringify(item)}`;
-            }).join('\n');
-            this.elements.debugOutput.textContent = queueWithHighlight;
-        }
     }
 }

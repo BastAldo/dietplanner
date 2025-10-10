@@ -2,6 +2,7 @@ import { getWorkoutState, updateState } from './state.js';
 import { advanceToNextSet } from './machine.js';
 import { completeSet } from '../trainer.js';
 import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
+import { log } from '../../utils/logger.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
@@ -12,6 +13,8 @@ function processQueue() {
 
   const { executionQueue, currentPhaseIndex, isAudioEnabled } = state;
   const currentPhase = executionQueue[currentPhaseIndex];
+
+  log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
 
   // If it's an instantaneous command (like audio), execute and advance
   if (currentPhase && currentPhase.type) {

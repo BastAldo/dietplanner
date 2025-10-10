@@ -1,14 +1,19 @@
-commit_message: "feat(trainer): Refactor audio logic and add debug view"
+commit_message: "refactor(trainer): Replace UI debug view with structured console logging"
 rationale: |
-  In accordance with the approved plan, this patch implements a significant architectural improvement to the Trainer module and adds a powerful new debugging tool.
+  In response to user feedback, this patch removes the in-app debug view for the trainer's execution queue and replaces it with a more powerful and less intrusive console-based logging system.
 
-  **1. Trainer Audio Refactoring:**
-  The core logic for triggering audio feedback (beeps and spoken cues) has been decoupled from the animation loop and moved into the `queueBuilder`. Previously, the animation's `tick` function was responsible for deciding *when* to play a sound based on timers and state transitions. This mixed responsibilities and made the code harder to maintain.
+  **Rationale for Change:**
+  The previous implementation displayed the debug information directly within the user interface. This approach cluttered the UI and was less effective for debugging complex objects compared to the browser's native developer console. The new approach addresses these issues directly.
 
-  Now, the `queueBuilder` pre-compiles an `executionQueue` that includes not only movement phases but also explicit audio commands (e.g., `{ type: 'speech', ... }`, `{ type: 'audio', ... }`). The animation `tick` function has been simplified into a "stupid executor" that merely processes this queue sequentially. This change makes the trainer's behavior more predictable, easier to debug, and aligns with the Single Responsibility Principle.
+  **Implementation Details:**
 
-  **2. Execution Queue Debug View:**
-  To enhance transparency and debugging capabilities, a new UI component has been added to the trainer view. When the application's `debugMode` is activated, this component displays the entire pre-compiled `executionQueue` in real-time. It highlights the currently executing command, providing an exact, step-by-step view of the trainer's internal state and upcoming actions. This is invaluable for fine-tuning exercise tempos and verifying the sequence of events.
+  1.  **UI Cleanup:** All HTML elements (`#debug-queue-view`), CSS styles (`.debug-view`), and JavaScript logic (`renderDebugView` in `TrainerComponent.js`) related to the on-screen debug view have been completely removed. This restores the clean, focused interface intended by the style guide.
+
+  2.  **Structured Console Logging (`queueBuilder.js`):** When a new execution queue is built at the start of a set, and if `debugMode` is active, the entire queue is now logged to the console as a clean, expandable table using `console.table()`. This provides a complete, upfront overview of the planned sequence.
+
+  3.  **Real-time Step Logging (`animation.js`):** The core animation loop now logs each step of the execution queue as it is processed. If `debugMode` is active, a message indicating the index and content of the current command is printed to the console. This allows for real-time tracking of the trainer's progress through the sequence.
+
+  This new system provides superior debugging capabilities without compromising the user interface, aligning with best practices for development and maintenance.
 patches:
   - file: src/core/trainer/animation.js
     content: |
@@ -16,6 +21,7 @@ patches:
       import { advanceToNextSet } from './machine.js';
       import { completeSet } from '../trainer.js';
       import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
+      import { log } from '../../utils/logger.js';
 
       let animationFrameId = null;
       let lastTickTimestamp = 0;
@@ -26,6 +32,8 @@ patches:
 
         const { executionQueue, currentPhaseIndex, isAudioEnabled } = state;
         const currentPhase = executionQueue[currentPhaseIndex];
+
+        log('Trainer-Animation', `Processing queue index: ${currentPhaseIndex}`, currentPhase);
 
         // If it's an instantaneous command (like audio), execute and advance
         if (currentPhase && currentPhase.type) {
@@ -122,90 +130,9 @@ patches:
           animationFrameId = null;
         }
       }
-  - file: src/core/trainer/machine.js
-    content: |
-      import { getWorkoutState, updateState, resetState } from './state.js';
-      import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
-      import { speak, playStartCue } from '../../utils/audioFeedback.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-
-      function startNextExercise() {
-          const state = getWorkoutState();
-          const nextExercise = state.exerciseQueue[state.currentExerciseIndex];
-          const executionMode = nextExercise.execution_mode || 'tempo_guided';
-          
-          let nextState = {
-              status: 'running',
-              currentSet: 1,
-              currentRep: 1,
-              manualRepCount: 0,
-              executionMode: executionMode,
-              phaseStartTime: Date.now(),
-          };
-
-          if (executionMode === 'tempo_guided') {
-              nextState.executionQueue = buildExecutionQueueForCurrentSet();
-              nextState.currentPhaseIndex = 0;
-              nextState.phaseTimeElapsed = 0;
-          } else if (executionMode === 'static_hold') {
-              nextState.setTimeRemaining = nextExercise.defaultDuration * 1000;
-          }
-          
-          updateState(nextState);
-      }
-
-      export function advanceToNextSet() {
-        const state = getWorkoutState();
-        const newSet = state.currentSet + 1;
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-
-        if (state.isAudioEnabled) {
-          playStartCue();
-        }
-
-        if (newSet > currentExercise.defaultSets) {
-          advanceToNextExercise();
-        } else {
-          let nextState = {
-            status: 'running',
-            currentSet: newSet,
-            phaseTimeElapsed: 0,
-            currentRep: 1,
-            manualRepCount: 0,
-            phaseStartTime: Date.now()
-          };
-          if (state.executionMode === 'tempo_guided') {
-            nextState.executionQueue = buildExecutionQueueForCurrentSet();
-            nextState.currentPhaseIndex = 0;
-          } else if (state.executionMode === 'static_hold') {
-            nextState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-          }
-          updateState(nextState);
-        }
-      }
-
-      export function advanceToNextExercise() {
-        const state = getWorkoutState();
-        const newIndex = state.currentExerciseIndex + 1;
-
-        if (newIndex >= state.exerciseQueue.length) {
-          document.dispatchEvent(new CustomEvent('workoutFinished'));
-        } else {
-          if (state.isAudioEnabled) {
-            const nextExercise = state.exerciseQueue[newIndex];
-            if (nextExercise) {
-                speak(`${UI_TEXT.VOICE_GUIDE_NEXT_EXERCISE}: ${nextExercise.name}`);
-            }
-          }
-          updateState({
-            currentExerciseIndex: newIndex
-          });
-          startNextExercise();
-        }
-      }
   - file: src/core/trainer/queueBuilder.js
     content: |
-      import { getWorkoutState } from './state.js';
+      import { getWorkoutState, getState as getGlobalState } from '../state.js';
       import { UI_TEXT } from '../../config/uiText.js';
 
       export function buildExecutionQueueForCurrentSet() {
@@ -243,13 +170,21 @@ patches:
           }
         }
         queue.push({ type: 'audio', cue: 'stop' });
+
+        const { debugMode } = getGlobalState();
+        if (debugMode) {
+          console.groupCollapsed(`[Trainer-Queue] Execution Queue for: ${currentExercise.name} - Set ${state.currentSet}`);
+          console.table(queue);
+          console.groupEnd();
+        }
+
         return queue;
       }
   - file: src/ui/components/TrainerComponent.js
     content: |
       import { getWorkoutState, updateState } from '../../core/trainer/state.js';
       import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
-      import { setView, getState as getGlobalState } from '../../core/state.js';
+      import { setView } from '../../core/state.js';
       import { log } from '../../utils/logger.js';
       import { UI_TEXT } from '../../config/uiText.js';
       import { renderIcon } from '../icons.js';
@@ -275,8 +210,6 @@ patches:
                   btnAudio: this.container.querySelector('#audio-toggle-btn'),
 
                   ringContainer: this.container.querySelector('#timer-ring-container'),
-                  debugView: this.container.querySelector('#debug-queue-view'),
-                  debugOutput: this.container.querySelector('#debug-queue-output')
               };
 
               this.ringProgress = null;
@@ -395,8 +328,6 @@ patches:
           render(state) {
               if (!this.ringText) return; // Guard against rendering before mount
               const { exerciseQueue, currentExerciseIndex, status, executionMode } = state;
-
-              this.renderDebugView(state);
 
               if (currentExerciseIndex < 0 || currentExerciseIndex >= exerciseQueue.length) {
                   this.elements.exerciseName.textContent = '';
@@ -537,19 +468,6 @@ patches:
                   details += ` @ ${exercise.defaultWeight}kg`;
               }
               return details;
-          }
-
-          renderDebugView(state) {
-              const { debugMode } = getGlobalState();
-              this.elements.debugView.classList.toggle('hidden', !debugMode);
-              if (debugMode) {
-                  const { executionQueue, currentPhaseIndex } = state;
-                  const queueWithHighlight = executionQueue.map((item, index) => {
-                      const prefix = index === currentPhaseIndex ? '>> ' : '   ';
-                      return `${prefix}${JSON.stringify(item)}`;
-                  }).join('\n');
-                  this.elements.debugOutput.textContent = queueWithHighlight;
-              }
           }
       }
   - file: styles/trainer.css
@@ -729,26 +647,6 @@ patches:
           padding: 1rem 2rem;
           font-size: 1.25rem;
       }
-
-      .debug-view {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        max-height: 40%;
-        background-color: rgba(0,0,0,0.8);
-        overflow-y: auto;
-        border-top: 1px solid var(--border-color);
-        z-index: 100;
-      }
-      .debug-view pre {
-        font-family: 'Courier New', Courier, monospace;
-        font-size: 0.75rem;
-        color: var(--success-color);
-        text-align: left;
-        padding: 0.5rem;
-        white-space: pre-wrap;
-      }
   - file: templates/trainer.html
     content: |
       <div id="trainer-page" class="page-view hidden">
@@ -778,10 +676,6 @@ patches:
                   <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
                   <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
                   <button id="trainer-manual-rep-btn" class="btn btn-primary btn-large hidden"></button>
-              </div>
-
-              <div id="debug-queue-view" class="debug-view hidden">
-                <pre id="debug-queue-output"></pre>
               </div>
           </div>
       </div>
