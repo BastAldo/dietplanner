@@ -263,18 +263,26 @@ export function resetCurrentWeek() {
       const date = new Date(weekStart);
       date.setDate(date.getDate() + i);
       const isoDate = toISODateString(date);
+
+      // Clear meals for the day
       MEAL_TYPES.forEach(mealType => {
           const slotId = `${isoDate}-${mealType}`;
           if (state.weeklyPlan[slotId]) {
               delete state.weeklyPlan[slotId];
           }
       });
+
+      // Clear planned workouts for the day
       const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
       if (state.weeklyWorkouts[workoutSlotId]) {
-          delete state.weeklyWorkouts[slotId];
+          delete state.weeklyWorkouts[workoutSlotId];
+      }
+
+      // Clear workout history for the day
+      if (state.workoutHistory[isoDate]) {
+          delete state.workoutHistory[isoDate];
       }
   }
-  state.workoutHistory = {};
   saveStateToLocalStorage();
   notify();
 }

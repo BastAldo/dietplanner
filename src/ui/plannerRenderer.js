@@ -134,14 +134,14 @@ function renderPlannerSummaryWidget(state, weekStart) {
           <div class="planner-summary-stat">
               <div class="stat-icon">${renderIcon('PLANNER', {width: 20, height: 20})}</div>
               <div>
-                  <span class="stat-value">${avgCalories} ${calGoal > 0 ? ` / ${calGoal}`: ''}</span>
+                  <span class="stat-value">${avgCalories} ${calGoal > 0 ? `/ ${calGoal}`: ''}</span>
                   <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
               </div>
           </div>
           <div class="planner-summary-stat">
               <div class="stat-icon">${renderIcon('WEIGHT_SCALE', {width: 20, height: 20})}</div>
               <div>
-                  <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? ` / ${workoutGoal}`: ''}</span>
+                  <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
                   <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
               </div>
           </div>
@@ -295,17 +295,18 @@ export function renderPlannerPage(state) {
   const logView = document.getElementById('log-view');
   const viewCalendarBtn = document.getElementById('view-calendar-btn');
   const viewLogBtn = document.getElementById('view-log-btn');
+  const { currentView } = state.ui;
 
-  if (state.currentView === 'planner' || state.currentView === 'log') {
+  if (currentView === 'planner' || currentView === 'log') {
       renderPlannerSummaryWidget(state, weekStart);
   }
 
-  if (state.currentView === 'planner') {
+  if (currentView === 'planner') {
       calendarGrid.classList.remove('hidden');
       logView.classList.add('hidden');
       viewCalendarBtn.classList.add('active');
       viewLogBtn.classList.remove('active');
-  } else if (state.currentView === 'log') {
+  } else if (currentView === 'log') {
       calendarGrid.classList.add('hidden');
       logView.classList.remove('hidden');
       viewCalendarBtn.classList.remove('active');
