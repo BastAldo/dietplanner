@@ -1,5 +1,7 @@
 import { getWorkoutState, updateState, resetState } from './state.js';
 import { buildExecutionQueueForCurrentSet } from './queueBuilder.js';
+import { speak, playStartCue } from '../../utils/audioFeedback.js';
+import { UI_TEXT } from '../../config/uiText.js';
 
 function startNextExercise() {
     const state = getWorkoutState();
@@ -31,6 +33,10 @@ export function advanceToNextSet() {
   const newSet = state.currentSet + 1;
   const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
 
+  if (state.isAudioEnabled) {
+    playStartCue();
+  }
+
   if (newSet > currentExercise.defaultSets) {
     advanceToNextExercise();
   } else {
@@ -59,6 +65,12 @@ export function advanceToNextExercise() {
   if (newIndex >= state.exerciseQueue.length) {
     document.dispatchEvent(new CustomEvent('workoutFinished'));
   } else {
+    if (state.isAudioEnabled) {
+      const nextExercise = state.exerciseQueue[newIndex];
+      if (nextExercise) {
+          speak(`${UI_TEXT.VOICE_GUIDE_NEXT_EXERCISE}: ${nextExercise.name}`);
+      }
+    }
     updateState({
       currentExerciseIndex: newIndex
     });

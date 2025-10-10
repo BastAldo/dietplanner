@@ -173,3 +173,23 @@
     padding: 1rem 2rem;
     font-size: 1.25rem;
 }
+
+.debug-view {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-height: 40%;
+  background-color: rgba(0,0,0,0.8);
+  overflow-y: auto;
+  border-top: 1px solid var(--border-color);
+  z-index: 100;
+}
+.debug-view pre {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.75rem;
+  color: var(--success-color);
+  text-align: left;
+  padding: 0.5rem;
+  white-space: pre-wrap;
+}

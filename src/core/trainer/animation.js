@@ -1,12 +1,38 @@
 import { getWorkoutState, updateState } from './state.js';
 import { advanceToNextSet } from './machine.js';
-import { setView } from '../state.js';
 import { completeSet } from '../trainer.js';
 import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
-import { UI_TEXT } from '../../config/uiText.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
+
+function processQueue() {
+  const state = getWorkoutState();
+  if (state.status !== 'running') return;
+
+  const { executionQueue, currentPhaseIndex, isAudioEnabled } = state;
+  const currentPhase = executionQueue[currentPhaseIndex];
+
+  // If it's an instantaneous command (like audio), execute and advance
+  if (currentPhase && currentPhase.type) {
+    if (isAudioEnabled) {
+      if (currentPhase.type === 'audio') {
+        if (currentPhase.cue === 'tick') playTick();
+        else if (currentPhase.cue === 'start') playStartCue();
+        else if (currentPhase.cue === 'stop') playStopCue();
+      } else if (currentPhase.type === 'speech') {
+        speak(currentPhase.text);
+      }
+    }
+    const newPhaseIndex = currentPhaseIndex + 1;
+    if (newPhaseIndex < executionQueue.length) {
+      updateState({ currentPhaseIndex: newPhaseIndex });
+      processQueue(); // Process next item immediately
+    } else {
+      completeSet();
+    }
+  }
+}
 
 function tick(timestamp) {
   if (lastTickTimestamp === 0) {
@@ -16,72 +42,46 @@ function tick(timestamp) {
   lastTickTimestamp = timestamp;
 
   const state = getWorkoutState();
-  const { isAudioEnabled } = state;
-
-  if (state.status === 'finished') {
+  if (state.status === 'finished' || state.status === 'paused' || state.status === 'idle') {
     stopAnimation();
     return;
   }
 
   if (state.status === 'running') {
-      if (state.executionMode === 'tempo_guided') {
-          const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-          const currentPhase = state.executionQueue[state.currentPhaseIndex];
+      const { executionQueue, currentPhaseIndex } = state;
+      const currentPhase = executionQueue[currentPhaseIndex];
 
-          if (newPhaseTimeElapsed >= currentPhase.duration) {
-            const newPhaseIndex = state.currentPhaseIndex + 1;
-            const nextPhase = state.executionQueue[newPhaseIndex];
+      // It must be a timed phase (movement)
+      if (currentPhase && currentPhase.duration) {
+        const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
 
-            if (isAudioEnabled) {
-              playTick();
-              if(nextPhase && nextPhase.name.startsWith('pre-')) {
-                const phaseName = nextPhase.name.replace('pre-', '');
-                let speechText = '';
-                if (phaseName === 'up') speechText = UI_TEXT.VOICE_GUIDE_PHASE_UP;
-                else if (phaseName === 'hold') speechText = UI_TEXT.VOICE_GUIDE_PHASE_HOLD;
-                else if (phaseName === 'down') speechText = UI_TEXT.VOICE_GUIDE_PHASE_DOWN;
-                if(speechText) speak(speechText);
-              }
-            }
+        if (newPhaseTimeElapsed >= currentPhase.duration) {
+          const newPhaseIndex = currentPhaseIndex + 1;
+          updateState({
+            currentPhaseIndex: newPhaseIndex,
+            phaseTimeElapsed: 0,
+            currentRep: executionQueue[newPhaseIndex]?.rep || state.currentRep,
+          });
+          processQueue(); // Check if the next item is a command
+        } else {
+          updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
+        }
+      } else if (!currentPhase) {
+          // End of queue
+          completeSet();
+      }
 
-            if (nextPhase) {
-              updateState({
-                currentPhaseIndex: newPhaseIndex,
-                phaseTimeElapsed: 0,
-                currentRep: nextPhase.rep,
-              });
-            } else {
-              if (isAudioEnabled) playStopCue();
-              completeSet();
-            }
-          } else {
-            updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-          }
-      } else if (state.executionMode === 'static_hold') {
-          const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
-          if (newSetTimeRemaining <= 0) {
-              if (isAudioEnabled) playStopCue();
-              completeSet();
-          } else {
-              updateState({ setTimeRemaining: newSetTimeRemaining });
-          }
+  } else if (state.executionMode === 'static_hold') {
+      const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
+      if (newSetTimeRemaining <= 0) {
+          if (state.isAudioEnabled) playStopCue();
+          completeSet();
+      } else {
+          updateState({ setTimeRemaining: newSetTimeRemaining });
       }
   } else if (state.status === 'resting') {
     const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
     if (newRestTimeRemaining <= 0) {
-      const { exerciseQueue, currentExerciseIndex, currentSet } = state;
-      const currentExercise = exerciseQueue[currentExerciseIndex];
-      const isLastSet = currentSet >= currentExercise.defaultSets;
-
-      if (isAudioEnabled) {
-          playStartCue();
-          if (isLastSet) {
-              const nextExercise = exerciseQueue[currentExerciseIndex + 1];
-              if (nextExercise) {
-                  speak(`${UI_TEXT.VOICE_GUIDE_NEXT_EXERCISE}: ${nextExercise.name}`);
-              }
-          }
-      }
       advanceToNextSet();
     } else {
       updateState({ restTimeRemaining: newRestTimeRemaining });
@@ -98,6 +98,7 @@ function tick(timestamp) {
 export function startAnimation() {
   if (animationFrameId) return;
   lastTickTimestamp = 0;
+  processQueue(); // Initial check for commands at the start
   animationFrameId = requestAnimationFrame(tick);
 }
 
