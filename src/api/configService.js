@@ -1,4 +1,5 @@
 import { UI_TEXT } from '../config/uiText.js';
+import { log } from '../utils/logger.js';
 
 async function fetchJson(url) {
   const response = await fetch(url);
@@ -9,9 +10,11 @@ async function fetchJson(url) {
   try {
     return JSON.parse(textContent);
   } catch (e) {
-    const errorMessage = `Errore nel parsing del JSON da ${url}. Contenuto ricevuto: "${textContent.substring(0, 100)}..."`;
-    console.error(errorMessage, e);
-    throw new Error(errorMessage);
+    log('API_SERVICE', `Errore nel parsing del JSON da ${url}`, {
+      error: e.message,
+      content: textContent.substring(0, 150)
+    });
+    throw new Error(UI_TEXT.API_INVALID_JSON);
   }
 }
 
@@ -41,7 +44,7 @@ export async function fetchAndParseConfig(mealsUrl) {
                 exercises = exercisesConfig.esercizi;
             }
         } catch (e) {
-            console.warn(UI_TEXT.API_EXERCISES_FILE_WARN, e.message);
+            log('API_SERVICE', UI_TEXT.API_EXERCISES_FILE_WARN, e.message);
         }
 
         return {
@@ -52,8 +55,8 @@ export async function fetchAndParseConfig(mealsUrl) {
         };
 
     } catch (error) {
-        console.error("Fallimento nel caricamento della configurazione completa:", error);
-        // Mostra l'errore specifico invece di uno generico
+        console.error("Fallimento nel caricamento della configurazione completa:", error.message);
+        // Lancia l'errore specifico (che ora è pulito) invece di uno generico
         throw new Error(error.message || UI_TEXT.API_CONFIG_LOAD_FAIL);
     }
 }

@@ -86,6 +86,7 @@ const UI_TEXT_CONFIG = [
   { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
   { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
   { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
+  { id: 'API_INVALID_JSON', text: 'Errore nel formato di un file di configurazione. Controlla la console se il debug è attivo.' },
   { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
   { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
   { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
