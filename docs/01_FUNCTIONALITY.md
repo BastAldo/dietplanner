@@ -25,6 +25,12 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche (peso, massa grassa, etc.) per una data specifica tramite un form dedicato.
 * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche come una lista di card.
 * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali (nome, data di nascita, altezza, sesso) in una pagina dedicata.
-* **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi e Profilo tramite un menu principale nell'header.
+* **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni Planner, Progressi, Grafici e Profilo tramite un menu principale nell'header.
 * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente utilizzando la formula Mifflin-St Jeor, basandosi sui dati del profilo e sull'ultimo peso inserito.
 * **US-32 (Galleria Ricette):** L'utente può accedere a una pagina che elenca tutti i pasti con ricette disponibili per una rapida consultazione.
+* **US-33 (Dashboard Grafici):** Come utente, voglio poter accedere a una dashboard di grafici per analizzare i miei dati. La dashboard include:
+    * Un controllo per filtrare i dati su diversi intervalli di tempo (7, 30, 90, 365 giorni o sempre) e per navigare avanti e indietro nel tempo.
+    * Un grafico "Andamento Dati Biometrici" che permette di visualizzare la linea di tendenza di un singolo parametro (es. peso, massa grassa) o di tutti i parametri contemporaneamente.
+    * Un grafico "Trend del Peso" che mostra i dati del peso come nuvola di punti e sovrappone una linea di tendenza calcolata tramite regressione lineare.
+    * Un grafico "Riepilogo Calorie Settimanali" che visualizza le calorie minime e massime pianificate per la settimana corrente, con un selettore per alternare la vista tra grafico a barre e a linee.
+    * Un grafico "Correlazione Peso e Calorie" che mostra la relazione tra l'assunzione calorica media e la variazione di peso giornaliera, completo di linea di tendenza.

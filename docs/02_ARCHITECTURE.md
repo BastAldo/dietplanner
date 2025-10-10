@@ -80,6 +80,15 @@ Per garantire coerenza e leggibilità, tutti i messaggi di log seguono una conve
 ```javascript
 log('NomeComponente', 'Azione che sta avvenendo', { datiRilevanti });
 ```
-* **`NomeComponente`**: Indica il modulo di origine (es. 'State', 'Modals', 'Trainer').
+* **`NomeComponente`**: Indica il modulo di origine (es. 'State', 'Modals', 'Trainer', 'API_SERVICE').
 * **`Azione`**: Descrive l'operazione in corso (es. 'Setting new view', 'Opening modal').
 * **`datiRilevanti`**: Un oggetto opzionale che mostra il contesto e i dati relativi all'azione.
+
+### 7.4. Gestione Errori Robusta nel Caricamento Dati
+Il `configService` adotta una strategia di parsing in due fasi per migliorare il debug degli errori di caricamento dei file di configurazione (`pasti.json`, `ingredienti.json`, etc.).
+1.  La risposta della `fetch` viene prima letta come testo (`response.text()`).
+2.  Il testo viene poi esplicitamente parsato all'interno di un blocco `try...catch`.
+
+Questo approccio permette di:
+* **Notificare l'utente** con un messaggio di errore generico e pulito (es. "Errore nel formato di un file di configurazione") senza esporre dettagli tecnici.
+* **Fornire allo sviluppatore**, se `debugMode` è attiva, un log dettagliato in console che include l'URL del file che ha causato l'errore e un estratto del contenuto non valido, semplificando enormemente il processo di troubleshooting.
