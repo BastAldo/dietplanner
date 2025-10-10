@@ -1,5 +1,3 @@
-import { UI_TEXT } from './uiText.js';
-
 export const TEMPO_GUIDED_FLOW = [
   { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
   {

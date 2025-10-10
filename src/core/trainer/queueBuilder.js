@@ -11,7 +11,7 @@ function interpretTemplate(template, exercise, loopContext) {
   const queue = [];
   for (const command of template) {
     if (command.type === 'loop') {
-      const loopCount = getNestedProperty(exercise, command.target);
+      const loopCount = getNestedProperty(exercise, command.target) || 0;
       for (let i = 0; i < loopCount; i++) {
         const newLoopContext = { ...loopContext, rep: i + 1 };
         queue.push(...interpretTemplate(command.actions, exercise, newLoopContext));
@@ -28,7 +28,7 @@ function interpretTemplate(template, exercise, loopContext) {
         newCommand.text = UI_TEXT[newCommand.text_key] || '';
       }
       if (newCommand.duration_from) {
-        newCommand.duration_ms = getNestedProperty(exercise, newCommand.duration_from) * 1000;
+        newCommand.duration_ms = (getNestedProperty(exercise, newCommand.duration_from) || 0) * 1000;
       }
       if (newCommand.phase) {
         newCommand.rep = loopContext.rep;

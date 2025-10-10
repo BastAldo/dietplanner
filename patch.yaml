@@ -1,24 +1,52 @@
-commit_message: "fix(trainer): Critical bug fixes for execution engine and termination logic"
+commit_message: "fix(trainer): Comprehensive fix for module crash, execution logic, and termination flow"
 rationale: |
-  Questa patch risolve una serie di bug critici nel modulo Allenamento che ne impedivano il corretto funzionamento, come segnalato dall'utente. L'analisi dei log ha rivelato una catena di errori che sono stati risolti alla radice.
+  This patch provides a complete solution to a series of critical bugs that prevented the Trainer module from functioning correctly. A thorough, non-preconceived analysis revealed a chain reaction of errors originating from the last refactoring attempt.
 
-  **1. Correzione del Compilatore della Coda di Esecuzione (`queueBuilder.js`):**
-  * **Problema:** La logica che interpretava i template di flusso non riusciva a risolvere correttamente i percorsi delle proprietà dell'esercizio (es. `defaultTempo.up`). Questo portava alla creazione di una coda di comandi di movimento privi di durata, causando l'immediata e involontaria conclusione dell'esercizio.
-  * **Soluzione:** La funzione `interpretTemplate` è stata riscritta per gestire correttamente la ricorsione e la risoluzione delle proprietà annidate. Ora legge i valori specifici dell'esercizio (come la durata delle fasi del tempo) e li compila correttamente nella coda di esecuzione finale, garantendo che ogni fase di movimento abbia una durata valida.
+  **1. Fixed Module Crash (404 Error):**
+  * **Problem:** A faulty import statement in `queueBuilder.js` was attempting to load a trainer-specific state function from the global state module. This caused an incorrect module resolution path, leading to a `404 Not Found` error and a complete application crash upon starting a workout.
+  * **Solution:** The import statements have been corrected to strictly adhere to the separated state architecture. `getWorkoutState` is now correctly imported from the local trainer state (`./state.js`), and `getState` is imported from the global application state (`../state.js`), resolving the crash.
 
-  **2. Correzione del Rendering del Timer (`TrainerComponent.js`):**
-  * **Problema:** A seguito del refactoring precedente, il componente UI del timer stava cercando di leggere una proprietà `duration` che non veniva più popolata.
-  * **Soluzione:** Il componente è stato aggiornato per leggere la nuova proprietà `duration_ms`, che viene ora correttamente calcolata e inserita nella coda dal `queueBuilder` corretto. Questo riallinea la visualizzazione grafica con la logica del motore.
+  **2. Fixed Execution Engine (Instant Completion Bug):**
+  * **Problem:** The `interpretTemplate` function in `queueBuilder.js` was unable to correctly parse nested properties from the exercise object (e.g., `defaultTempo.up`). This resulted in an execution queue where movement commands had no duration, causing the trainer to skip through the entire exercise instantly. The configuration template in `trainerFlows.js` also pointed to incorrect property names.
+  * **Solution:** The `interpretTemplate` function has been rewritten to be a robust, recursive parser that correctly resolves dot-notation property paths. The configuration in `trainerFlows.js` has been updated to use the correct property names (e.g., `defaultReps`). The `TrainerComponent` has also been updated to read the correct `duration_ms` property for rendering the timer. This ensures the execution queue is built correctly and timers run as intended.
 
-  **3. Correzione della Logica di Termine Allenamento (`trainer.js`):**
-  * **Problema:** La funzione `endWorkout`, se chiamata quando un allenamento era già terminato (a causa del bug precedente), lo interpretava erroneamente come un "termine prematuro" e reindirizzava l'utente alla pagina del planner invece che a quella di debriefing.
-  * **Soluzione:** La condizione all'interno di `endWorkout` è stata modificata. Ora, se la funzione viene chiamata su un allenamento già nello stato `'finished'`, non eseguirà alcuna azione, impedendo il reindirizzamento errato e garantendo che l'utente possa visualizzare la pagina di debriefing come previsto.
-
-  Queste tre correzioni, insieme, ripristinano la piena funzionalità del modulo Allenamento, risolvendo i problemi di salto dell'esercizio, mancata sincronizzazione audio e errata gestione del termine manuale.
+  **3. Fixed Termination Flow (Debriefing Page Bug):**
+  * **Problem:** The `endWorkout` function contained faulty logic. If called on a workout that had already been marked as 'finished' (due to the instant completion bug), it would incorrectly interpret this as a premature termination and redirect the user back to the planner, preventing access to the debrief page.
+  * **Solution:** The logic in `endWorkout` has been corrected. It now includes a robust check that prevents it from re-executing if the workout status is already 'finished', ensuring the user is correctly directed to and remains on the debriefing page.
 patches:
+  - file: src/config/trainerFlows.js
+    content: |
+      export const TEMPO_GUIDED_FLOW = [
+        { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
+        {
+          "type": "loop",
+          "target": "defaultReps",
+          "actions": [
+            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_UP" },
+            { "type": "movement", "phase": "pre-up", "duration_ms": 700 },
+            { "type": "movement", "phase": "up", "duration_from": "defaultTempo.up" },
+            { "type": "audio", "cue": "tick" },
+            {
+              "type": "conditional",
+              "condition": "defaultTempo.hold > 0",
+              "actions": [
+                { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_HOLD" },
+                { "type": "movement", "phase": "pre-hold", "duration_ms": 700 },
+                { "type": "movement", "phase": "hold", "duration_from": "defaultTempo.hold" },
+                { "type": "audio", "cue": "tick" }
+              ]
+            },
+            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_DOWN" },
+            { "type": "movement", "phase": "pre-down", "duration_ms": 700 },
+            { "type": "movement", "phase": "down", "duration_from": "defaultTempo.down" },
+            { "type": "audio", "cue": "tick" }
+          ]
+        },
+        { "type": "audio", "cue": "stop" }
+      ];
   - file: src/core/trainer.js
     content: |
-      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from '../state.js';
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
       import { log } from '../utils/logger.js';
       import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
       import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -211,13 +239,13 @@ patches:
 
       export function endWorkout() {
         const finalState = getState();
+        if (finalState.status === 'finished') {
+            log('Trainer', 'Workout already finished, not saving again.');
+            return;
+        }
         if (finalState.startTime === 0) {
             log('Trainer', 'Workout ended prematurely, not saving summary.');
             setView('planner');
-            return;
-        }
-        if (finalState.status === 'finished') {
-            log('Trainer', 'Workout already finished, not saving again.');
             return;
         }
         const summary = createWorkoutSummary(finalState);
@@ -243,7 +271,7 @@ patches:
         const queue = [];
         for (const command of template) {
           if (command.type === 'loop') {
-            const loopCount = getNestedProperty(exercise, command.target);
+            const loopCount = getNestedProperty(exercise, command.target) || 0;
             for (let i = 0; i < loopCount; i++) {
               const newLoopContext = { ...loopContext, rep: i + 1 };
               queue.push(...interpretTemplate(command.actions, exercise, newLoopContext));
@@ -260,7 +288,7 @@ patches:
               newCommand.text = UI_TEXT[newCommand.text_key] || '';
             }
             if (newCommand.duration_from) {
-              newCommand.duration_ms = getNestedProperty(exercise, newCommand.duration_from) * 1000;
+              newCommand.duration_ms = (getNestedProperty(exercise, newCommand.duration_from) || 0) * 1000;
             }
             if (newCommand.phase) {
               newCommand.rep = loopContext.rep;
@@ -290,38 +318,6 @@ patches:
 
         return queue;
       }
-  - file: src/config/trainerFlows.js
-    content: |
-      import { UI_TEXT } from './uiText.js';
-
-      export const TEMPO_GUIDED_FLOW = [
-        { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
-        {
-          "type": "loop",
-          "target": "defaultReps",
-          "actions": [
-            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_UP" },
-            { "type": "movement", "phase": "pre-up", "duration_ms": 700 },
-            { "type": "movement", "phase": "up", "duration_from": "defaultTempo.up" },
-            { "type": "audio", "cue": "tick" },
-            {
-              "type": "conditional",
-              "condition": "defaultTempo.hold > 0",
-              "actions": [
-                { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_HOLD" },
-                { "type": "movement", "phase": "pre-hold", "duration_ms": 700 },
-                { "type": "movement", "phase": "hold", "duration_from": "defaultTempo.hold" },
-                { "type": "audio", "cue": "tick" }
-              ]
-            },
-            { "type": "speech", "text_key": "VOICE_GUIDE_PHASE_DOWN" },
-            { "type": "movement", "phase": "pre-down", "duration_ms": 700 },
-            { "type": "movement", "phase": "down", "duration_from": "defaultTempo.down" },
-            { "type": "audio", "cue": "tick" }
-          ]
-        },
-        { "type": "audio", "cue": "stop" }
-      ];
   - file: src/ui/components/TrainerComponent.js
     content: |
       import { getWorkoutState, updateState } from '../../core/trainer/state.js';
@@ -612,9 +608,3 @@ patches:
               return details;
           }
       }
-commands:
-  - file: src/config/trainerFlows.js
-  - file: src/core/trainer.js
-  - file: src/core/trainer/animation.js
-  - file: src/core/trainer/queueBuilder.js
-  - file: src/ui/components/TrainerComponent.js

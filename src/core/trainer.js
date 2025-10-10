@@ -1,4 +1,4 @@
-import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from '../state.js';
+import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
@@ -191,13 +191,13 @@ function createWorkoutSummary(finalState) {
 
 export function endWorkout() {
   const finalState = getState();
+  if (finalState.status === 'finished') {
+      log('Trainer', 'Workout already finished, not saving again.');
+      return;
+  }
   if (finalState.startTime === 0) {
       log('Trainer', 'Workout ended prematurely, not saving summary.');
       setView('planner');
-      return;
-  }
-  if (finalState.status === 'finished') {
-      log('Trainer', 'Workout already finished, not saving again.');
       return;
   }
   const summary = createWorkoutSummary(finalState);
