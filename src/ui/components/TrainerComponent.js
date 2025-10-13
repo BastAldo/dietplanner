@@ -188,8 +188,10 @@ export class TrainerComponent {
         this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && currentPhase.type === 'manual_rep'));
 
         // --- Main Render Logic ---
+        // ** FIX: Reset all dynamic classes before applying new ones **
+        this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
+
         if (status === 'running') {
-            this.ringText.classList.remove('flashing');
             if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
             else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
             else if (currentPhase.type === 'manual_rep') this.renderManualReps(state, currentPhase);
