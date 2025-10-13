@@ -27,11 +27,6 @@ async function runWorkoutLoop() {
 
       log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
 
-      // Resolve text_key to text if needed
-      if (phase.text_key && !phase.text) {
-          phase.text = UI_TEXT[phase.text_key] || '';
-      }
-
       switch (phase.type) {
           case 'speech':
               if (state.isAudioEnabled && phase.text) {
@@ -128,11 +123,12 @@ export async function startWorkout() {
   log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
   if (state.status !== 'idle') return;
 
-  const firstExerciseName = state.exerciseQueue[0].name;
+  // The queue now has the text resolved from the builder
+  const firstExercisePhase = state.fullExecutionQueue.find(p => p.text_key === 'VOICE_GUIDE_NOW_STARTING');
 
-  if (state.isAudioEnabled) {
+  if (state.isAudioEnabled && firstExercisePhase && firstExercisePhase.text) {
       playStartCue();
-      await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+      await speak(firstExercisePhase.text);
   }
   
   if (getState().status !== 'idle') {

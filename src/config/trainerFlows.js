@@ -1,3 +1,7 @@
+export const INTRO_FLOW = [
+  { "type": "speech", "text_key": "VOICE_GUIDE_NOW_STARTING", "text_value": "name", "await": true }
+];
+
 export const TEMPO_GUIDED_FLOW = [
   { "type": "speech", "text_key": "VOICE_GUIDE_SET_START", "await": true },
   {
@@ -25,4 +29,8 @@ export const TEMPO_GUIDED_FLOW = [
     ]
   },
   { "type": "set_completed" }
+];
+
+export const FINAL_FLOW = [
+  { "type": "speech", "text_key": "VOICE_GUIDE_WORKOUT_COMPLETED", "await": true }
 ];
