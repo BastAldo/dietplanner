@@ -1,475 +1,85 @@
-commit_message: "style(trainer): Align timer ring colors with official style guide"
+commit_message: "fix(trainer): Ensure animation promise resolves on workout termination"
 rationale: |
-  This patch refines the Trainer's UI to ensure visual consistency with the rest of the application by adhering to the official color palette defined in the project's style guide.
+  This patch fixes a critical bug where terminating a workout during a timed animation phase would cause the main execution loop to hang indefinitely, preventing the application from navigating to the debriefing screen.
 
-  **Problem:**
-  The timer ring in the trainer view used a "traffic light" color scheme (green, yellow, red) for different work phases, which was inconsistent with the project's primary color palette (`--primary-color` for main actions, `--secondary-color` for alternate states). This created a visual disconnect between the trainer and other application views.
+  **Problem Analysis:**
+
+  1.  **The "Broken Promise":** The main workout loop (`runWorkoutLoop` in `trainer.js`) `await`s a `Promise` returned by `runTimerAnimation` (`animation.js`). When the user terminates the workout, the `endWorkout` function calls `stopAllAnimations`, which uses `cancelAnimationFrame` to halt the animation's `tick` loop.
+  2.  **Root Cause:** The `cancelAnimationFrame` call stopped the animation, but it did not resolve the `Promise` that `runWorkoutLoop` was still waiting for. As a result, the "Director" loop would get stuck in a pending state forever, and subsequent UI updates (like `setView('debriefing')`) would fail to render correctly because the application's core logic was frozen.
+  3.  **Inconsistent Behavior:** This explains why the bug sometimes occurred on the first run but consistently on the second. It depended on whether the termination happened during a timed animation (bug occurs) or a non-timed phase like speech (bug does not occur).
 
   **Implemented Solution:**
-  The styling has been simplified and brought into alignment with `docs/03_STYLE_GUIDE.md`:
 
-  1.  **CSS Refactoring (`styles/trainer.css`):**
-      * The specific color rules for `.phase-up`, `.phase-hold`, and `.phase-down` have been removed. The timer ring now defaults to `--primary-color` (purple) for all work-related phases, reinforcing a consistent "active state" color.
-      * A new class, `.is-rest`, has been introduced. This class applies `stroke: var(--secondary-color);` (teal) to the timer ring, providing a clear, on-brand visual distinction for rest periods.
+  A robust mechanism has been implemented to ensure the animation's `Promise` is always resolved upon termination:
 
-  2.  **Component Logic Update (`src/ui/components/TrainerComponent.js`):**
-      * The `render` function has been updated to conditionally apply the new `.is-rest` class to the timer ring element (`this.ringProgress`) only when the current phase type is 'rest'.
-      * The logic for adding the old `phase-*` classes has been removed.
+  1.  **Shared Promise Resolver (`animation.js`):** A new module-level variable, `currentAnimationPromiseResolver`, has been introduced.
+  2.  **Storing the Resolver:** When `runTimerAnimation` creates its `Promise`, it now stores the `resolve` function in this shared variable.
+  3.  **Graceful Stoppage (`stopAllAnimations`):** The `stopAllAnimations` function has been updated. It now first cancels the animation frame and then immediately checks for and calls the stored `currentAnimationPromiseResolver`. This action manually resolves the pending `Promise`, instantly "un-sticking" the `runWorkoutLoop`.
+  4.  **State Cleanup:** Both the normal completion path (timer finishing) and the forced termination path now ensure `currentAnimationPromiseResolver` is reset to `null`, preventing state leakage between animations.
 
-  This change results in a more polished and professional user interface, where the trainer view feels fully integrated with the application's established design system.
+  This architectural fix guarantees that the workout termination process is clean and reliable, regardless of when it is initiated, ensuring the application always proceeds to the debriefing view as expected.
 patches:
-  - file: styles/trainer.css
+  - file: src/core/trainer/animation.js
     content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          gap: 1rem;
-      }
-
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-      }
-
-      .trainer-header-controls {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-      }
-
-      #audio-toggle-btn {
-          background: none;
-          border: none;
-          color: var(--text-color-muted);
-          cursor: pointer;
-          padding: 0.5rem;
-      }
-
-      #audio-toggle-btn.active {
-          color: var(--primary-color);
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-          overflow-y: auto;
-      }
-
-      .exercise-info-container {
-          margin-top: 1rem;
-          margin-bottom: 1rem;
-      }
-
-      #current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-      }
-
-      #current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-      }
-
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-        min-height: 1.2em;
-      }
-
-      #current-rep-display.hidden-rep {
-        visibility: hidden;
-      }
-
-      #upcoming-exercise-display {
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        margin-top: 0.75rem;
-        font-style: italic;
-      }
-
-      #upcoming-exercise-display strong {
-        color: var(--text-color);
-        font-style: normal;
-      }
-
-      #trainer-display-modes {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          flex-grow: 1;
-          min-height: 280px;
-      }
-
-      .timer-ring-container {
-          width: 280px;
-          height: 280px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-display {
-          font-size: 3rem;
-          font-weight: bold;
-          fill: var(--text-color);
-          text-anchor: middle;
-      }
-
-      .timer-ring-display.is-timer,
-      .timer-ring-display.is-rep-count {
-          font-family: 'Courier New', Courier, monospace;
-      }
-
-      .timer-ring-display.is-phase {
-          font-size: 2.5rem;
-          text-transform: uppercase;
-      }
-
-
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 12;
-      }
-
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 12;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
-      }
-
-      .timer-ring-progress.is-rest {
-          stroke: var(--secondary-color);
-      }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .flashing {
-        animation: flash 1.4s infinite;
-        fill: var(--secondary-color);
-      }
-
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px;
-          width: 100%;
-          padding-bottom: 1rem;
-      }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
-  - file: src/ui/components/TrainerComponent.js
-    content: |
-      import { getWorkoutState, updateState } from '../../core/trainer/state.js';
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
+      import { getWorkoutState, updateState } from './state.js';
       import { log } from '../../utils/logger.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
-      import { showConfirmModal } from '../modals.js';
 
-      const RING_RADIUS = 128;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+      let animationFrameId = null;
+      let currentAnimationPromiseResolver = null; // Shared resolver
 
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
+      /**
+       * The specialized "Animator" function.
+       * Its only job is to run a timer for a given duration and update the UI.
+       * It returns a Promise that resolves when the timer is complete.
+       * @param {number} durationMs - The total duration of the animation.
+       * @returns {Promise<void>}
+       */
+      export function runTimerAnimation(durationMs) {
+        return new Promise(resolve => {
+          // Store the resolver so it can be called externally to stop the animation
+          currentAnimationPromiseResolver = resolve;
+          let startTime = 0;
 
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
+          function tick(timestamp) {
+            if (startTime === 0) {
+              startTime = timestamp;
+            }
 
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-                  btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
-                  btnAudio: this.container.querySelector('#audio-toggle-btn'),
+            const elapsed = timestamp - startTime;
 
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-              };
-
-              this.ringProgress = null;
-              this.ringText = null;
-          }
-
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
-              this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
-              this.updateAudioButton(getWorkoutState().isAudioEnabled);
-          }
-
-          destroy() {
-              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.handleControls.bind(this));
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
+            if (elapsed >= durationMs) {
+              updateState({ phaseTimeElapsed: durationMs, lastTimerDuration: durationMs });
+              animationFrameId = null;
+              if (currentAnimationPromiseResolver) {
+                currentAnimationPromiseResolver();
+                currentAnimationPromiseResolver = null;
               }
-              log('TrainerComponent', 'Component destroyed.');
+            } else {
+              updateState({ phaseTimeElapsed: elapsed, lastTimerDuration: elapsed });
+              // Dispatch event for UI to update timer rings
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+              animationFrameId = requestAnimationFrame(tick);
+            }
           }
 
-          async handleControls(e) {
-              const target = e.target.closest('button');
-              if (!target) return;
+          animationFrameId = requestAnimationFrame(tick);
+          log('Trainer-Animation', `Animation started for ${durationMs}ms.`);
+        });
+      }
 
-              const targetId = target.id;
-              log('TrainerComponent', `Control button clicked: ${targetId}`);
-              switch (targetId) {
-                  case 'trainer-start-btn':
-                      target.disabled = true;
-                      await startWorkout();
-                      if(this.elements.btnStart) {
-                        this.elements.btnStart.disabled = false;
-                      }
-                      break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn':
-                      showConfirmModal(
-                          UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
-                          UI_TEXT.TERMINATE_WORKOUT_CONFIRM_MSG,
-                          () => endWorkout(),
-                          'danger'
-                      );
-                      break;
-                  case 'trainer-back-btn': setView('planner'); break;
-                  case 'trainer-manual-rep-btn': incrementManualRep(); break;
-                  case 'audio-toggle-btn': this.toggleAudio(); break;
-              }
-          }
-
-          toggleAudio() {
-              const currentState = getWorkoutState();
-              const newState = !currentState.isAudioEnabled;
-              updateState({ isAudioEnabled: newState });
-              this.updateAudioButton(newState);
-          }
-
-          updateAudioButton(isAudioEnabled) {
-              this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
-              this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
-          }
-
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) return;
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              const svgSize = (RING_RADIUS + 12) * 2;
-              svg.setAttribute('width', svgSize);
-              svg.setAttribute('height', svgSize);
-              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
-              const center = svgSize / 2;
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', center);
-              backgroundCircle.setAttribute('cy', center);
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', center);
-              progressCircle.setAttribute('cy', center);
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-          }
-
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
-
-          formatTime(ms) {
-              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-              return `${minutes}:${seconds}`;
-          }
-
-          render(state) {
-              if (!this.ringText || !state.fullExecutionQueue || state.fullExecutionQueue.length === 0) {
-                  // Handle pre-start or empty state
-                  this.elements.exerciseName.textContent = state.exerciseQueue[0]?.name || 'Pronto per iniziare';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.updateTimerRing(0);
-                  this.ringText.textContent = '';
-                  this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  this.elements.btnManualRep.classList.add('hidden');
-                  return;
-              };
-
-              const { fullExecutionQueue, currentQueueIndex, status } = state;
-              const currentPhase = fullExecutionQueue[currentQueueIndex];
-
-              if (!currentPhase || !currentPhase.context || !currentPhase.context.exercise) {
-                  this.elements.exerciseName.textContent = 'Allenamento Completato';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.elements.btnStart.classList.add('hidden');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  return;
-              }
-
-              const { exercise } = currentPhase.context;
-              this.elements.exerciseName.textContent = exercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentPhase.context);
-
-              if ((currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'manual_rep') && currentPhase.context.rep) {
-                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${currentPhase.context.rep}`;
-                this.elements.repDisplay.classList.remove('hidden-rep');
-              } else {
-                this.elements.repDisplay.classList.add('hidden-rep');
-              }
-
-              const nextExercisePhase = fullExecutionQueue.find((phase, index) => {
-                  return index > currentQueueIndex && phase.context && phase.context.exercise && phase.context.exercise.instanceId !== exercise.instanceId;
-              });
-
-              if (nextExercisePhase && nextExercisePhase.context && nextExercisePhase.context.exercise) {
-                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${nextExercisePhase.context.exercise.name}`;
-              } else {
-                this.elements.upcomingDisplay.innerHTML = '';
-              }
-
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnPause.classList.toggle('hidden', status !== 'running');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-              this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && currentPhase.type === 'manual_rep'));
-
-              // --- Main Render Logic ---
-              this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
-              this.ringProgress.classList.remove('is-rest');
-
-
-              if (status === 'running' || status === 'paused') {
-                  if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
-                  else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
-                  else if (currentPhase.type === 'manual_rep') this.renderManualReps(state, currentPhase);
-                  else if (currentPhase.type === 'rest') this.renderRest(state, currentPhase);
-                  else this.ringText.textContent = ''; // For audio/speech phases
-              }
-
-              if(status === 'paused') {
-                this.renderPaused();
-              }
-          }
-
-          renderPhase(state, phase) {
-              const { phaseTimeElapsed } = state;
-              const phaseNameDisplay = phase.phase.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.phase.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.add('is-phase');
-              this.ringText.classList.toggle('flashing', isPrePhase);
-
-              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
-              this.updateTimerRing(isPrePhase ? 100 : progressPercent);
-          }
-
-          renderStaticHold(state, phase) {
-              const { phaseTimeElapsed } = state;
-              const timeRemaining = phase.duration_ms - phaseTimeElapsed;
-              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
-              this.ringText.textContent = this.formatTime(timeRemaining);
-              this.ringText.classList.add('is-timer');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderManualReps(state, phase) {
-              const repsCompleted = phase.repsCompleted || 0;
-              const targetReps = phase.context.reps;
-              const progressPercent = (targetReps > 0) ? (repsCompleted / targetReps) * 100 : 0;
-              this.ringText.textContent = repsCompleted;
-              this.ringText.classList.add('is-rep-count');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderRest(state, phase) {
-              const { phaseTimeElapsed } = state;
-              const timeRemaining = phase.duration_ms - phaseTimeElapsed;
-              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
-
-              this.ringText.textContent = this.formatTime(timeRemaining);
-              this.ringText.classList.add('is-timer');
-              this.ringProgress.classList.add('is-rest');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderPaused() {
-              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-              this.ringText.classList.add('is-phase', 'flashing');
-          }
-
-          formatExerciseDetails(context) {
-              const { exercise, set } = context;
-              if (!exercise || !set) return '';
-              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${set} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${exercise.defaultSets}`;
-              if (exercise.execution_mode === 'tempo_guided' || exercise.execution_mode === 'manual_reps') {
-                  details += ` | ${exercise.defaultReps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-              } else if (exercise.execution_mode === 'static_hold') {
-                  details += ` | ${exercise.defaultDuration}s`;
-              }
-              if (exercise.defaultWeight) {
-                  details += ` @ ${exercise.defaultWeight}kg`;
-              }
-              return details;
-          }
+      /**
+       * Stops any currently active animation frame loop and resolves its promise.
+       */
+      export function stopAllAnimations() {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+          log('Trainer-Animation', 'Animation frame cancelled.');
+        }
+        // If there's a pending promise from an animation, resolve it now.
+        if (currentAnimationPromiseResolver) {
+          log('Trainer-Animation', 'Resolving pending animation promise.');
+          currentAnimationPromiseResolver();
+          currentAnimationPromiseResolver = null;
+        }
       }

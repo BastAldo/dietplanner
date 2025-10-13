@@ -2,6 +2,7 @@ import { getWorkoutState, updateState } from './state.js';
 import { log } from '../../utils/logger.js';
 
 let animationFrameId = null;
+let currentAnimationPromiseResolver = null; // Shared resolver
 
 /**
  * The specialized "Animator" function.
@@ -12,29 +13,24 @@ let animationFrameId = null;
  */
 export function runTimerAnimation(durationMs) {
   return new Promise(resolve => {
+    // Store the resolver so it can be called externally to stop the animation
+    currentAnimationPromiseResolver = resolve;
     let startTime = 0;
-    let lastTickTimestamp = 0;
 
     function tick(timestamp) {
-      if (getWorkoutState().status !== 'running') {
-        stopAllAnimations();
-        resolve(); // Resolve promise if workout is paused/ended
-        return;
-      }
-
       if (startTime === 0) {
         startTime = timestamp;
-        lastTickTimestamp = timestamp;
       }
 
       const elapsed = timestamp - startTime;
-      const deltaTime = timestamp - lastTickTimestamp;
-      lastTickTimestamp = timestamp;
 
       if (elapsed >= durationMs) {
         updateState({ phaseTimeElapsed: durationMs, lastTimerDuration: durationMs });
         animationFrameId = null;
-        resolve();
+        if (currentAnimationPromiseResolver) {
+          currentAnimationPromiseResolver();
+          currentAnimationPromiseResolver = null;
+        }
       } else {
         updateState({ phaseTimeElapsed: elapsed, lastTimerDuration: elapsed });
         // Dispatch event for UI to update timer rings
@@ -49,12 +45,18 @@ export function runTimerAnimation(durationMs) {
 }
 
 /**
- * Stops any currently active animation frame loop.
+ * Stops any currently active animation frame loop and resolves its promise.
  */
 export function stopAllAnimations() {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
-    log('Trainer-Animation', 'All animations stopped.');
+    log('Trainer-Animation', 'Animation frame cancelled.');
+  }
+  // If there's a pending promise from an animation, resolve it now.
+  if (currentAnimationPromiseResolver) {
+    log('Trainer-Animation', 'Resolving pending animation promise.');
+    currentAnimationPromiseResolver();
+    currentAnimationPromiseResolver = null;
   }
 }
