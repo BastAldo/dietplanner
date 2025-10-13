@@ -2,27 +2,50 @@ import { getWorkoutState, updateState } from './state.js';
 import { log } from '../../utils/logger.js';
 
 let animationFrameId = null;
-let currentAnimationPromiseResolver = null; // Shared resolver
+let currentAnimationPromiseResolver = null;
 
 /**
  * The specialized "Animator" function.
- * Its only job is to run a timer for a given duration and update the UI.
- * It returns a Promise that resolves when the timer is complete.
+ * Its only job is to run a timer for a given duration and update the UI,
+ * while correctly handling pause and resume.
  * @param {number} durationMs - The total duration of the animation.
  * @returns {Promise<void>}
  */
 export function runTimerAnimation(durationMs) {
   return new Promise(resolve => {
-    // Store the resolver so it can be called externally to stop the animation
     currentAnimationPromiseResolver = resolve;
     let startTime = 0;
+    let timePaused = 0;
+    let pauseStartTime = 0;
 
     function tick(timestamp) {
+      // Hard stop for termination
+      if (getWorkoutState().status === 'finished') {
+        stopAllAnimations();
+        return;
+      }
+
       if (startTime === 0) {
         startTime = timestamp;
       }
 
-      const elapsed = timestamp - startTime;
+      // Handle Pause State
+      if (getWorkoutState().status === 'paused') {
+        if (pauseStartTime === 0) {
+          pauseStartTime = timestamp; // Record when pause began
+        }
+        // Keep ticking but do nothing else
+        animationFrameId = requestAnimationFrame(tick);
+        return;
+      }
+
+      // Handle Resuming from Pause
+      if (pauseStartTime > 0) {
+        timePaused += (timestamp - pauseStartTime); // Add paused duration
+        pauseStartTime = 0; // Reset pause marker
+      }
+
+      const elapsed = timestamp - startTime - timePaused;
 
       if (elapsed >= durationMs) {
         updateState({ phaseTimeElapsed: durationMs, lastTimerDuration: durationMs });
@@ -33,7 +56,6 @@ export function runTimerAnimation(durationMs) {
         }
       } else {
         updateState({ phaseTimeElapsed: elapsed, lastTimerDuration: elapsed });
-        // Dispatch event for UI to update timer rings
         document.dispatchEvent(new CustomEvent('workoutStateChange'));
         animationFrameId = requestAnimationFrame(tick);
       }
@@ -46,6 +68,7 @@ export function runTimerAnimation(durationMs) {
 
 /**
  * Stops any currently active animation frame loop and resolves its promise.
+ * This is a hard stop, used for workout termination.
  */
 export function stopAllAnimations() {
   if (animationFrameId) {
@@ -53,9 +76,8 @@ export function stopAllAnimations() {
     animationFrameId = null;
     log('Trainer-Animation', 'Animation frame cancelled.');
   }
-  // If there's a pending promise from an animation, resolve it now.
   if (currentAnimationPromiseResolver) {
-    log('Trainer-Animation', 'Resolving pending animation promise.');
+    log('Trainer-Animation', 'Resolving pending animation promise for termination.');
     currentAnimationPromiseResolver();
     currentAnimationPromiseResolver = null;
   }

@@ -15,11 +15,8 @@ async function runWorkoutLoop() {
   if (state.status !== 'running') return;
 
   for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
-      // Check for pause at the beginning of each step
-      while (getState().status === 'paused') {
-          await new Promise(resolve => setTimeout(resolve, 250)); // Poll every 250ms
-      }
-      // Check if workout was ended while paused
+      // The pause is now handled inside runTimerAnimation, so this top-level check is no longer needed
+      // a while loop here would also block the main thread.
       if (getState().status !== 'running') {
           log('Trainer', 'Workout loop terminated.');
           return;
@@ -29,6 +26,11 @@ async function runWorkoutLoop() {
       const phase = state.fullExecutionQueue[i];
 
       log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
+
+      // Resolve text_key to text if needed
+      if (phase.text_key && !phase.text) {
+          phase.text = UI_TEXT[phase.text_key] || '';
+      }
 
       switch (phase.type) {
           case 'speech':
@@ -57,7 +59,7 @@ async function runWorkoutLoop() {
                   const checkReps = () => {
                       const currentState = getState();
                       const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
-                      if (currentPhase.repsCompleted >= currentPhase.context.reps) {
+                      if (!currentPhase || currentPhase.repsCompleted >= currentPhase.context.reps) {
                           document.removeEventListener('workoutStateChange', checkReps);
                           resolve();
                       }
@@ -146,7 +148,6 @@ export async function startWorkout() {
 export function pauseWorkout() {
   const state = getState();
   if (state.status === 'running') {
-      stopAllAnimations(); // Stop any ongoing timer animations
       updateState({ status: 'paused' });
       log('Trainer', 'Workout paused.');
   }
@@ -157,7 +158,6 @@ export function resumeWorkout() {
   if (state.status === 'paused') {
       updateState({ status: 'running' });
       log('Trainer', 'Workout resumed.');
-      // The workout loop will automatically resume itself
   }
 }
 

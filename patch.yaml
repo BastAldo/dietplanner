@@ -1,51 +1,317 @@
-commit_message: "fix(trainer): Ensure animation promise resolves on workout termination"
+commit_message: "fix(trainer): Implement robust pause/resume and restore rest announcement"
 rationale: |
-  This patch fixes a critical bug where terminating a workout during a timed animation phase would cause the main execution loop to hang indefinitely, preventing the application from navigating to the debriefing screen.
+  This patch addresses two critical bugs introduced during the last refactoring of the trainer engine: the pause/resume functionality was broken, and the audio cue for rest periods was no longer being announced.
 
-  **Problem Analysis:**
+  **Problem Analysis & Implemented Solution:**
 
-  1.  **The "Broken Promise":** The main workout loop (`runWorkoutLoop` in `trainer.js`) `await`s a `Promise` returned by `runTimerAnimation` (`animation.js`). When the user terminates the workout, the `endWorkout` function calls `stopAllAnimations`, which uses `cancelAnimationFrame` to halt the animation's `tick` loop.
-  2.  **Root Cause:** The `cancelAnimationFrame` call stopped the animation, but it did not resolve the `Promise` that `runWorkoutLoop` was still waiting for. As a result, the "Director" loop would get stuck in a pending state forever, and subsequent UI updates (like `setView('debriefing')`) would fail to render correctly because the application's core logic was frozen.
-  3.  **Inconsistent Behavior:** This explains why the bug sometimes occurred on the first run but consistently on the second. It depended on whether the termination happened during a timed animation (bug occurs) or a non-timed phase like speech (bug does not occur).
+  1.  **Missing Rest Announcement:**
+      * **Problem:** The logic to resolve a `text_key` (e.g., 'VOICE_GUIDE_REST_START') into actual text (e.g., 'Recupero') was not transferred to the new `runWorkoutLoop` in `trainer.js`. The loop was looking for a `phase.text` property that didn't exist for these commands.
+      * **Solution:** The `case 'speech'` block within `runWorkoutLoop` in `src/core/trainer.js` has been updated. It now checks for `phase.text_key` and resolves it using `UI_TEXT` before calling `speak()`, restoring all audio announcements.
 
-  **Implemented Solution:**
+  2.  **Broken Pause/Resume Functionality:**
+      * **Problem:** The previous implementation incorrectly handled the pause state. When pausing, it would resolve the animation's `Promise`, causing the main loop to skip the remaining time of the current phase upon resuming.
+      * **Solution:** The architecture has been refined to correctly manage the pause state within the animation loop itself, which is the only component aware of time progression.
+          * **In `trainer.js`:** The `pauseWorkout` and `resumeWorkout` functions have been simplified to *only* update the global state (`status: 'paused'` or `'running'`). They no longer interfere with the animation directly.
+          * **In `animation.js`:** The core `tick` function within `runTimerAnimation` has been made more intelligent. It now continuously checks the global workout status.
+              * If the status is `'paused'`, it stops incrementing the elapsed time but continues the `requestAnimationFrame` loop, effectively freezing the timer.
+              * When the status returns to `'running'`, it detects the change and adjusts its internal start time to account for the pause duration, ensuring the timer resumes perfectly from where it left off.
+          * `stopAllAnimations` is now correctly reserved only for the hard stop action (terminating the workout).
 
-  A robust mechanism has been implemented to ensure the animation's `Promise` is always resolved upon termination:
-
-  1.  **Shared Promise Resolver (`animation.js`):** A new module-level variable, `currentAnimationPromiseResolver`, has been introduced.
-  2.  **Storing the Resolver:** When `runTimerAnimation` creates its `Promise`, it now stores the `resolve` function in this shared variable.
-  3.  **Graceful Stoppage (`stopAllAnimations`):** The `stopAllAnimations` function has been updated. It now first cancels the animation frame and then immediately checks for and calls the stored `currentAnimationPromiseResolver`. This action manually resolves the pending `Promise`, instantly "un-sticking" the `runWorkoutLoop`.
-  4.  **State Cleanup:** Both the normal completion path (timer finishing) and the forced termination path now ensure `currentAnimationPromiseResolver` is reset to `null`, preventing state leakage between animations.
-
-  This architectural fix guarantees that the workout termination process is clean and reliable, regardless of when it is initiated, ensuring the application always proceeds to the debriefing view as expected.
+  These fixes create a stable, predictable, and fully functional trainer engine, aligning its behavior with user expectations for all core functionalities.
 patches:
+  - file: src/core/trainer.js
+    content: |
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
+      import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+      import { speak, playStartCue, playTick } from '../utils/audioFeedback.js';
+      import { UI_TEXT } from '../config/uiText.js';
+
+      export { getState as getWorkoutState };
+
+      // This is the "Director d'Orchestra"
+      async function runWorkoutLoop() {
+        const state = getState();
+        if (state.status !== 'running') return;
+
+        for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
+            // The pause is now handled inside runTimerAnimation, so this top-level check is no longer needed
+            // a while loop here would also block the main thread.
+            if (getState().status !== 'running') {
+                log('Trainer', 'Workout loop terminated.');
+                return;
+            }
+
+            updateState({ currentQueueIndex: i });
+            const phase = state.fullExecutionQueue[i];
+
+            log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
+
+            // Resolve text_key to text if needed
+            if (phase.text_key && !phase.text) {
+                phase.text = UI_TEXT[phase.text_key] || '';
+            }
+
+            switch (phase.type) {
+                case 'speech':
+                    if (state.isAudioEnabled && phase.text) {
+                        if(phase.await) await speak(phase.text);
+                        else speak(phase.text);
+                    }
+                    break;
+                case 'audio':
+                     if (state.isAudioEnabled) {
+                        if (phase.cue === 'tick') playTick();
+                     }
+                    break;
+                case 'movement':
+                case 'rest':
+                case 'static_hold':
+                    await runTimerAnimation(phase.duration_ms);
+                    break;
+                case 'set_completed':
+                    collectSetData();
+                    break;
+                case 'manual_rep':
+                    // This phase is handled by user interaction via incrementManualRep
+                    // We wait here until the rep count is met
+                    await new Promise(resolve => {
+                        const checkReps = () => {
+                            const currentState = getState();
+                            const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
+                            if (!currentPhase || currentPhase.repsCompleted >= currentPhase.context.reps) {
+                                document.removeEventListener('workoutStateChange', checkReps);
+                                resolve();
+                            }
+                        };
+                        document.addEventListener('workoutStateChange', checkReps);
+                    });
+                    break;
+            }
+        }
+        // If the loop completes naturally, end the workout
+        if (getState().status === 'running') {
+            endWorkout();
+        }
+      }
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        stopAllAnimations();
+        resetState();
+      }
+
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+            return;
+        }
+        resetWorkoutState();
+
+        const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
+
+        const initialState = {
+            workoutDate: isoDate,
+            exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+            fullExecutionQueue: fullExecutionQueue,
+            currentQueueIndex: 0,
+            status: 'idle',
+            startTime: 0,
+            setsData: []
+        };
+        updateState(initialState);
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function collectSetData() {
+          const state = getState();
+          const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
+          if (!currentPhase || !currentPhase.context) return;
+
+          const { exercise, set, reps, weight } = currentPhase.context;
+
+          const setData = {
+              exerciseId: exercise.instanceId,
+              set: set,
+              reps: reps,
+              duration: state.lastTimerDuration || 0, // Duration from animation engine
+              rest: exercise.defaultRest,
+              weight: weight || 0
+          };
+
+          const newSetsData = [...state.setsData, setData];
+          updateState({ setsData: newSetsData });
+          log('Trainer', 'Set data collected', { setData });
+      }
+
+      export async function startWorkout() {
+        const state = getState();
+        log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        const firstExerciseName = state.exerciseQueue[0].name;
+
+        if (state.isAudioEnabled) {
+            playStartCue();
+            await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+        }
+        
+        if (getState().status !== 'idle') {
+            log('Trainer', 'Workout start aborted, status changed during announcement.');
+            return;
+        }
+
+        updateState({ status: 'running', startTime: Date.now() });
+        runWorkoutLoop(); // Start the master loop
+        log('Trainer', 'Workout started.');
+      }
+
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running') {
+            updateState({ status: 'paused' });
+            log('Trainer', 'Workout paused.');
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+            updateState({ status: 'running' });
+            log('Trainer', 'Workout resumed.');
+        }
+      }
+
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status !== 'running') return;
+
+          const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
+          if (currentPhase && currentPhase.type === 'manual_rep') {
+              const newRepCount = (currentPhase.repsCompleted || 0) + 1;
+              currentPhase.repsCompleted = newRepCount;
+              // Dispatch change to notify the waiting promise in the loop
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          }
+      }
+
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalTonnage = 0;
+
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+              totalTonnage += exerciseTonnage;
+
+              return {
+                  ...exercise,
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime,
+                  tonnage: exerciseTonnage
+              };
+          });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
+
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              totalTonnage,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
+
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+          }
+
+          return summary;
+      }
+
+      export function endWorkout() {
+        const finalState = getState();
+        if (finalState.status === 'finished') {
+            log('Trainer', 'Workout already finished, not saving again.');
+            return;
+        }
+        stopAllAnimations();
+        updateState({ status: 'finished' });
+
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
+        }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        setView('debriefing');
+      }
   - file: src/core/trainer/animation.js
     content: |
       import { getWorkoutState, updateState } from './state.js';
       import { log } from '../../utils/logger.js';
 
       let animationFrameId = null;
-      let currentAnimationPromiseResolver = null; // Shared resolver
+      let currentAnimationPromiseResolver = null;
 
       /**
        * The specialized "Animator" function.
-       * Its only job is to run a timer for a given duration and update the UI.
-       * It returns a Promise that resolves when the timer is complete.
+       * Its only job is to run a timer for a given duration and update the UI,
+       * while correctly handling pause and resume.
        * @param {number} durationMs - The total duration of the animation.
        * @returns {Promise<void>}
        */
       export function runTimerAnimation(durationMs) {
         return new Promise(resolve => {
-          // Store the resolver so it can be called externally to stop the animation
           currentAnimationPromiseResolver = resolve;
           let startTime = 0;
+          let timePaused = 0;
+          let pauseStartTime = 0;
 
           function tick(timestamp) {
+            // Hard stop for termination
+            if (getWorkoutState().status === 'finished') {
+              stopAllAnimations();
+              return;
+            }
+
             if (startTime === 0) {
               startTime = timestamp;
             }
 
-            const elapsed = timestamp - startTime;
+            // Handle Pause State
+            if (getWorkoutState().status === 'paused') {
+              if (pauseStartTime === 0) {
+                pauseStartTime = timestamp; // Record when pause began
+              }
+              // Keep ticking but do nothing else
+              animationFrameId = requestAnimationFrame(tick);
+              return;
+            }
+
+            // Handle Resuming from Pause
+            if (pauseStartTime > 0) {
+              timePaused += (timestamp - pauseStartTime); // Add paused duration
+              pauseStartTime = 0; // Reset pause marker
+            }
+
+            const elapsed = timestamp - startTime - timePaused;
 
             if (elapsed >= durationMs) {
               updateState({ phaseTimeElapsed: durationMs, lastTimerDuration: durationMs });
@@ -56,7 +322,6 @@ patches:
               }
             } else {
               updateState({ phaseTimeElapsed: elapsed, lastTimerDuration: elapsed });
-              // Dispatch event for UI to update timer rings
               document.dispatchEvent(new CustomEvent('workoutStateChange'));
               animationFrameId = requestAnimationFrame(tick);
             }
@@ -69,6 +334,7 @@ patches:
 
       /**
        * Stops any currently active animation frame loop and resolves its promise.
+       * This is a hard stop, used for workout termination.
        */
       export function stopAllAnimations() {
         if (animationFrameId) {
@@ -76,9 +342,8 @@ patches:
           animationFrameId = null;
           log('Trainer-Animation', 'Animation frame cancelled.');
         }
-        // If there's a pending promise from an animation, resolve it now.
         if (currentAnimationPromiseResolver) {
-          log('Trainer-Animation', 'Resolving pending animation promise.');
+          log('Trainer-Animation', 'Resolving pending animation promise for termination.');
           currentAnimationPromiseResolver();
           currentAnimationPromiseResolver = null;
         }
