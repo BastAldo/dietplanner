@@ -23,5 +23,10 @@ export function updateState(newState) {
 }
 
 export function resetState() {
-  workoutState = { ...initialWorkoutState };
+  // Mutate the existing object to ensure all references are updated,
+  // and explicitly clear arrays/objects to prevent old data from persisting.
+  Object.assign(workoutState, initialWorkoutState);
+  workoutState.exerciseQueue = [];
+  workoutState.fullExecutionQueue = [];
+  workoutState.setsData = [];
 }

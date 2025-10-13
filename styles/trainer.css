@@ -155,7 +155,7 @@
 
 .flashing {
   animation: flash 1.4s infinite;
-  fill: var(--secondary-color);
+  fill: var(--primary-color);
 }
 
 .trainer-controls {

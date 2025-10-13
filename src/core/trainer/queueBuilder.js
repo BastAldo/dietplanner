@@ -7,15 +7,18 @@ function getNestedProperty(obj, path) {
 }
 
 function interpretTemplate(template, exercise, context) {
+  // Use a deep copy of the template to prevent mutation of the original object
+  const deepCopiedTemplate = JSON.parse(JSON.stringify(template));
   const queue = [];
-  for (const command of template) {
-    // Create a shallow copy to avoid modifying the template, but ensure context is fresh
+
+  for (const command of deepCopiedTemplate) {
     const newCommand = { ...command, context: { ...context, exercise } };
 
     if (newCommand.type === 'loop') {
       const loopCount = getNestedProperty(exercise, newCommand.target) || 0;
       for (let i = 0; i < loopCount; i++) {
         const loopContext = { ...context, rep: i + 1 };
+        // Recursively call with the actions part of the command
         queue.push(...interpretTemplate(command.actions, exercise, loopContext));
       }
     } else if (newCommand.type === 'conditional') {
