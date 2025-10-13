@@ -1,7 +1,7 @@
 import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
-import { startAnimation, stopAnimation } from './trainer/animation.js';
+import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
 import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
 import { calculateWorkoutCalories } from './calculations.js';
 import { speak, playStartCue } from '../utils/audioFeedback.js';
@@ -9,38 +9,94 @@ import { UI_TEXT } from '../config/uiText.js';
 
 export { getState as getWorkoutState };
 
-export function resetWorkoutState() {
-  log('Trainer', 'Resetting workout state.');
-  document.removeEventListener('workoutFinished', handleWorkoutFinished, { once: true });
-  stopAnimation();
-  resetState();
+// This is the "Director d'Orchestra"
+async function runWorkoutLoop() {
+  const state = getState();
+  if (state.status !== 'running') return;
+
+  for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
+      // Check for pause at the beginning of each step
+      while (getState().status === 'paused') {
+          await new Promise(resolve => setTimeout(resolve, 250)); // Poll every 250ms
+      }
+      // Check if workout was ended while paused
+      if (getState().status !== 'running') {
+          log('Trainer', 'Workout loop terminated.');
+          return;
+      }
+
+      updateState({ currentQueueIndex: i });
+      const phase = state.fullExecutionQueue[i];
+
+      log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
+
+      switch (phase.type) {
+          case 'speech':
+              if (state.isAudioEnabled && phase.text) {
+                  if(phase.await) await speak(phase.text);
+                  else speak(phase.text);
+              }
+              break;
+          case 'audio':
+               if (state.isAudioEnabled) {
+                  if (phase.cue === 'tick') playTick();
+               }
+              break;
+          case 'movement':
+          case 'rest':
+          case 'static_hold':
+              await runTimerAnimation(phase.duration_ms);
+              break;
+          case 'set_completed':
+              collectSetData();
+              break;
+          case 'manual_rep':
+              // This phase is handled by user interaction via incrementManualRep
+              // We wait here until the rep count is met
+              await new Promise(resolve => {
+                  const checkReps = () => {
+                      const currentState = getState();
+                      const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
+                      if (currentPhase.repsCompleted >= currentPhase.context.reps) {
+                          document.removeEventListener('workoutStateChange', checkReps);
+                          resolve();
+                      }
+                  };
+                  document.addEventListener('workoutStateChange', checkReps);
+              });
+              break;
+      }
+  }
+  // If the loop completes naturally, end the workout
+  if (getState().status === 'running') {
+      endWorkout();
+  }
 }
 
-function handleWorkoutFinished() {
-  endWorkout();
+export function resetWorkoutState() {
+  log('Trainer', 'Resetting workout state.');
+  stopAllAnimations();
+  resetState();
 }
 
 export function initializeWorkout(plannedExercises, isoDate) {
   if (!plannedExercises || plannedExercises.length === 0) {
-    return;
+      return;
   }
   resetWorkoutState();
 
   const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
 
   const initialState = {
-    workoutDate: isoDate,
-    exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)), // Keep original for reference
-    fullExecutionQueue: fullExecutionQueue,
-    currentQueueIndex: 0,
-    status: 'idle',
-    startTime: 0,
-    phaseStartTime: 0,
-    phaseTimeElapsed: 0,
-    setsData: []
+      workoutDate: isoDate,
+      exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+      fullExecutionQueue: fullExecutionQueue,
+      currentQueueIndex: 0,
+      status: 'idle',
+      startTime: 0,
+      setsData: []
   };
   updateState(initialState);
-  document.addEventListener('workoutFinished', handleWorkoutFinished, { once: true });
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
@@ -55,7 +111,7 @@ export function collectSetData() {
         exerciseId: exercise.instanceId,
         set: set,
         reps: reps,
-        duration: Date.now() - state.phaseStartTime,
+        duration: state.lastTimerDuration || 0, // Duration from animation engine
         rest: exercise.defaultRest,
         weight: weight || 0
     };
@@ -65,7 +121,6 @@ export function collectSetData() {
     log('Trainer', 'Set data collected', { setData });
 }
 
-
 export async function startWorkout() {
   const state = getState();
   log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
@@ -74,47 +129,35 @@ export async function startWorkout() {
   const firstExerciseName = state.exerciseQueue[0].name;
 
   if (state.isAudioEnabled) {
-    playStartCue();
-    await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+      playStartCue();
+      await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
   }
   
-  // Re-check state in case user navigated away during announcement
   if (getState().status !== 'idle') {
-    log('Trainer', 'Workout start aborted, status changed during announcement.');
-    return;
+      log('Trainer', 'Workout start aborted, status changed during announcement.');
+      return;
   }
 
-  const startState = {
-    status: 'running',
-    startTime: Date.now(),
-    phaseStartTime: Date.now(),
-    phaseTimeElapsed: 0,
-    currentQueueIndex: 0
-  };
-
-  updateState(startState);
-  startAnimation();
-  log('Trainer', 'Workout started. New state:', getState());
+  updateState({ status: 'running', startTime: Date.now() });
+  runWorkoutLoop(); // Start the master loop
+  log('Trainer', 'Workout started.');
 }
 
 export function pauseWorkout() {
   const state = getState();
   if (state.status === 'running') {
-    updateState({
-      status: 'paused',
-    });
-    stopAnimation();
+      stopAllAnimations(); // Stop any ongoing timer animations
+      updateState({ status: 'paused' });
+      log('Trainer', 'Workout paused.');
   }
 }
 
 export function resumeWorkout() {
   const state = getState();
   if (state.status === 'paused') {
-    updateState({
-      status: 'running',
-      phaseStartTime: Date.now() - state.phaseTimeElapsed,
-     });
-    startAnimation();
+      updateState({ status: 'running' });
+      log('Trainer', 'Workout resumed.');
+      // The workout loop will automatically resume itself
   }
 }
 
@@ -126,14 +169,8 @@ export function incrementManualRep() {
     if (currentPhase && currentPhase.type === 'manual_rep') {
         const newRepCount = (currentPhase.repsCompleted || 0) + 1;
         currentPhase.repsCompleted = newRepCount;
-
-        if (newRepCount >= currentPhase.context.reps) {
-            // Advance to next phase
-            updateState({ currentQueueIndex: state.currentQueueIndex + 1, phaseStartTime: Date.now(), phaseTimeElapsed: 0 });
-        } else {
-            // Just update UI
-            document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
+        // Dispatch change to notify the waiting promise in the loop
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
     }
 }
 
@@ -188,6 +225,9 @@ export function endWorkout() {
       log('Trainer', 'Workout already finished, not saving again.');
       return;
   }
+  stopAllAnimations();
+  updateState({ status: 'finished' });
+
   if (finalState.startTime === 0) {
       log('Trainer', 'Workout ended prematurely, not saving summary.');
       setView('planner');
@@ -197,7 +237,5 @@ export function endWorkout() {
   setLastWorkoutSummary(summary);
   addWorkoutToHistory(summary);
 
-  updateState({ status: 'finished' });
-  stopAnimation();
   setView('debriefing');
 }

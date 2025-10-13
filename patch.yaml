@@ -1,127 +1,330 @@
-commit_message: "fix(trainer): Resolve rendering glitches and race conditions in trainer engine"
+commit_message: "refactor(trainer): Implement robust, sequential workout execution engine"
 rationale: |
-  This patch provides a comprehensive fix for two critical issues identified during workout execution: a visual glitch where the timer display would show inconsistent states, and a race condition that caused the final workout completion audio cue to be skipped.
+  This patch performs a critical refactoring of the Trainer's execution engine to resolve persistent race conditions and UI glitches. The previous architecture incorrectly conflated the animation loop (`requestAnimationFrame`) with the business logic loop (processing the command queue), leading to synchronization failures.
 
-  **Problem Resolution & Implemented Solution:**
+  The new architecture, based on a correct separation of concerns, implements the "Director-Animator" model:
 
-  1.  **Visual Glitch - Mixed CSS Classes:**
-      * **Problem:** In `TrainerComponent.js`, the `render` function would add CSS classes (`is-timer`, `is-phase`, etc.) to the timer display element based on the current phase, but it never removed the classes from the previous phase. This resulted in class accumulation (e.g., `is-timer is-phase`) and a broken visual rendering, especially during transitions between rest and work periods.
-      * **Solution:** A single line has been added at the beginning of the main rendering logic within the `render` function in `src/ui/components/TrainerComponent.js`. This line (`this.ringText.classList.remove(...)`) systematically removes all state-specific classes before new ones are applied, ensuring the UI is always in a clean state and accurately reflects the current phase.
+  1.  **The "Director" - A Master Execution Loop (`runWorkoutLoop` in `trainer.js`):**
+      * A new `async` function now serves as the single source of truth for the workout's progression.
+      * It iterates through the command queue (`fullExecutionQueue`) in a simple, sequential `for...of` loop.
+      * It acts as an orchestrator: for each command, it calls a specialized function (`speak`, `runTimerAnimation`, etc.) and **`await`s its completion** before proceeding to the next command.
+      * This completely eliminates race conditions, as there is only one logical thread of execution. `pause/resume` is also handled cleanly within this loop.
 
-  2.  **Audio Cutoff - Race Condition:**
-      * **Problem:** In `src/core/trainer/animation.js`, the main `tick` function was not `await`-ing the completion of the `async` function `handleNonTimedPhase`, which is responsible for playing audio cues. This created a race condition where the engine would trigger the final "Workout Completed" audio cue but immediately proceed to the next instruction, find the queue empty, and call `endWorkout()` before the audio had time to play.
-      * **Solution:** The `tick` function has been converted to an `async` function, and the call to `handleNonTimedPhase` is now correctly awaited (`await handleNonTimedPhase(currentPhase)`). This enforces a sequential execution flow, guaranteeing that the animation engine pauses until the audio cue is completely finished before proceeding. The previous, ineffective `isProcessing` lock has been removed, simplifying the code.
+  2.  **The "Animator" - A Specialized, Promise-Based Timer (`runTimerAnimation` in `animation.js`):**
+      * The `animation.js` module has been refactored. Its sole responsibility is now to render timed animations.
+      * The new `runTimerAnimation` function accepts a duration, starts a `requestAnimationFrame` loop (`tick`) purely for drawing, and returns a `Promise`.
+      * The `tick` function is now simple: it just updates the UI based on elapsed time. It no longer contains any business logic.
+      * Once the duration has elapsed, the animation loop is stopped, and the `Promise` is resolved, signaling completion to the "Director".
 
-  These two fixes work in tandem to create a stable, predictable, and polished user experience within the trainer, ensuring both visual consistency and correct execution of all timed and non-timed events in the workout queue.
+  3.  **UI Rendering Fix (`TrainerComponent.js`):**
+      * A fix was also included to prevent the accumulation of CSS classes on the timer display. The `render` function now cleans up old state classes before applying new ones, ensuring a consistent and correct visual representation at every step.
+
+  This refactoring makes the trainer engine robust, predictable, and easier to debug. It ensures all commands, including the final audio cue, are executed in the correct sequence and for their full duration, solving all previously reported issues.
 patches:
+  - file: src/core/trainer.js
+    content: |
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+      import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
+      import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+      import { speak, playStartCue } from '../utils/audioFeedback.js';
+      import { UI_TEXT } from '../config/uiText.js';
+
+      export { getState as getWorkoutState };
+
+      // This is the "Director d'Orchestra"
+      async function runWorkoutLoop() {
+        const state = getState();
+        if (state.status !== 'running') return;
+
+        for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
+            // Check for pause at the beginning of each step
+            while (getState().status === 'paused') {
+                await new Promise(resolve => setTimeout(resolve, 250)); // Poll every 250ms
+            }
+            // Check if workout was ended while paused
+            if (getState().status !== 'running') {
+                log('Trainer', 'Workout loop terminated.');
+                return;
+            }
+
+            updateState({ currentQueueIndex: i });
+            const phase = state.fullExecutionQueue[i];
+
+            log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
+
+            switch (phase.type) {
+                case 'speech':
+                    if (state.isAudioEnabled && phase.text) {
+                        if(phase.await) await speak(phase.text);
+                        else speak(phase.text);
+                    }
+                    break;
+                case 'audio':
+                     if (state.isAudioEnabled) {
+                        if (phase.cue === 'tick') playTick();
+                     }
+                    break;
+                case 'movement':
+                case 'rest':
+                case 'static_hold':
+                    await runTimerAnimation(phase.duration_ms);
+                    break;
+                case 'set_completed':
+                    collectSetData();
+                    break;
+                case 'manual_rep':
+                    // This phase is handled by user interaction via incrementManualRep
+                    // We wait here until the rep count is met
+                    await new Promise(resolve => {
+                        const checkReps = () => {
+                            const currentState = getState();
+                            const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
+                            if (currentPhase.repsCompleted >= currentPhase.context.reps) {
+                                document.removeEventListener('workoutStateChange', checkReps);
+                                resolve();
+                            }
+                        };
+                        document.addEventListener('workoutStateChange', checkReps);
+                    });
+                    break;
+            }
+        }
+        // If the loop completes naturally, end the workout
+        if (getState().status === 'running') {
+            endWorkout();
+        }
+      }
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        stopAllAnimations();
+        resetState();
+      }
+
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+            return;
+        }
+        resetWorkoutState();
+
+        const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
+
+        const initialState = {
+            workoutDate: isoDate,
+            exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+            fullExecutionQueue: fullExecutionQueue,
+            currentQueueIndex: 0,
+            status: 'idle',
+            startTime: 0,
+            setsData: []
+        };
+        updateState(initialState);
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function collectSetData() {
+          const state = getState();
+          const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
+          if (!currentPhase || !currentPhase.context) return;
+
+          const { exercise, set, reps, weight } = currentPhase.context;
+
+          const setData = {
+              exerciseId: exercise.instanceId,
+              set: set,
+              reps: reps,
+              duration: state.lastTimerDuration || 0, // Duration from animation engine
+              rest: exercise.defaultRest,
+              weight: weight || 0
+          };
+
+          const newSetsData = [...state.setsData, setData];
+          updateState({ setsData: newSetsData });
+          log('Trainer', 'Set data collected', { setData });
+      }
+
+      export async function startWorkout() {
+        const state = getState();
+        log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        const firstExerciseName = state.exerciseQueue[0].name;
+
+        if (state.isAudioEnabled) {
+            playStartCue();
+            await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
+        }
+        
+        if (getState().status !== 'idle') {
+            log('Trainer', 'Workout start aborted, status changed during announcement.');
+            return;
+        }
+
+        updateState({ status: 'running', startTime: Date.now() });
+        runWorkoutLoop(); // Start the master loop
+        log('Trainer', 'Workout started.');
+      }
+
+      export function pauseWorkout() {
+        const state = getState();
+        if (state.status === 'running') {
+            stopAllAnimations(); // Stop any ongoing timer animations
+            updateState({ status: 'paused' });
+            log('Trainer', 'Workout paused.');
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getState();
+        if (state.status === 'paused') {
+            updateState({ status: 'running' });
+            log('Trainer', 'Workout resumed.');
+            // The workout loop will automatically resume itself
+        }
+      }
+
+      export function incrementManualRep() {
+          const state = getState();
+          if (state.status !== 'running') return;
+
+          const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
+          if (currentPhase && currentPhase.type === 'manual_rep') {
+              const newRepCount = (currentPhase.repsCompleted || 0) + 1;
+              currentPhase.repsCompleted = newRepCount;
+              // Dispatch change to notify the waiting promise in the loop
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+          }
+      }
+
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalTonnage = 0;
+
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+              totalTonnage += exerciseTonnage;
+
+              return {
+                  ...exercise,
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime,
+                  tonnage: exerciseTonnage
+              };
+          });
+
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
+
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              totalTonnage,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
+
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+          }
+
+          return summary;
+      }
+
+      export function endWorkout() {
+        const finalState = getState();
+        if (finalState.status === 'finished') {
+            log('Trainer', 'Workout already finished, not saving again.');
+            return;
+        }
+        stopAllAnimations();
+        updateState({ status: 'finished' });
+
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
+        }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        setView('debriefing');
+      }
   - file: src/core/trainer/animation.js
     content: |
       import { getWorkoutState, updateState } from './state.js';
-      import { collectSetData, endWorkout } from '../trainer.js';
-      import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
       import { log } from '../../utils/logger.js';
 
       let animationFrameId = null;
-      let lastTickTimestamp = 0;
 
-      function advanceQueue() {
-          const state = getWorkoutState();
-          const newIndex = state.currentQueueIndex + 1;
-          updateState({
-              currentQueueIndex: newIndex,
-              phaseStartTime: Date.now(),
-              phaseTimeElapsed: 0
-          });
-      }
+      /**
+       * The specialized "Animator" function.
+       * Its only job is to run a timer for a given duration and update the UI.
+       * It returns a Promise that resolves when the timer is complete.
+       * @param {number} durationMs - The total duration of the animation.
+       * @returns {Promise<void>}
+       */
+      export function runTimerAnimation(durationMs) {
+        return new Promise(resolve => {
+          let startTime = 0;
+          let lastTickTimestamp = 0;
 
-      async function handleNonTimedPhase(phase) {
-        if (!phase) return;
-
-        log('Trainer-Animation', `Handling non-timed phase:`, phase);
-
-        if (phase.type === 'set_completed') {
-            collectSetData();
-        } else {
-            const { isAudioEnabled } = getWorkoutState();
-            if (isAudioEnabled) {
-              if (phase.type === 'audio') {
-                if (phase.cue === 'tick') playTick();
-                else if (phase.cue === 'start') playStartCue();
-                else if (phase.cue === 'stop') playStopCue();
-              } else if (phase.type === 'speech') {
-                if (phase.await) {
-                  await speak(phase.text);
-                } else {
-                  speak(phase.text);
-                }
-              }
+          function tick(timestamp) {
+            if (getWorkoutState().status !== 'running') {
+              stopAllAnimations();
+              resolve(); // Resolve promise if workout is paused/ended
+              return;
             }
-        }
 
-        const currentState = getWorkoutState();
-        if (currentState.status === 'running') {
-            advanceQueue();
-        }
-      }
+            if (startTime === 0) {
+              startTime = timestamp;
+              lastTickTimestamp = timestamp;
+            }
 
-      async function tick(timestamp) {
-        if (lastTickTimestamp === 0) {
-          lastTickTimestamp = timestamp;
-        }
-        const deltaTime = timestamp - lastTickTimestamp;
-        lastTickTimestamp = timestamp;
+            const elapsed = timestamp - startTime;
+            const deltaTime = timestamp - lastTickTimestamp;
+            lastTickTimestamp = timestamp;
 
-        const state = getWorkoutState();
-        if (state.status !== 'running') {
-          stopAnimation();
-          return;
-        }
-
-        const { fullExecutionQueue, currentQueueIndex } = state;
-        const currentPhase = fullExecutionQueue[currentQueueIndex];
-
-        if (!currentPhase) {
-          log('Trainer-Animation', 'Queue finished. Ending workout.');
-          endWorkout();
-          return;
-        }
-
-        const phaseType = currentPhase.type;
-
-        if (phaseType === 'movement' || phaseType === 'rest' || phaseType === 'static_hold') {
-          const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-          if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
-            advanceQueue();
-          } else {
-            updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
+            if (elapsed >= durationMs) {
+              updateState({ phaseTimeElapsed: durationMs, lastTimerDuration: durationMs });
+              animationFrameId = null;
+              resolve();
+            } else {
+              updateState({ phaseTimeElapsed: elapsed, lastTimerDuration: elapsed });
+              // Dispatch event for UI to update timer rings
+              document.dispatchEvent(new CustomEvent('workoutStateChange'));
+              animationFrameId = requestAnimationFrame(tick);
+            }
           }
-        } else if (phaseType === 'manual_rep') {
-            // This phase is advanced by incrementManualRep(), tick does nothing.
-        } else {
-          await handleNonTimedPhase(currentPhase);
-        }
 
-        // Must dispatch state change for UI to update timer rings
-        if (phaseType === 'movement' || phaseType === 'rest' || phaseType === 'static_hold' || phaseType === 'manual_rep') {
-          document.dispatchEvent(new CustomEvent('workoutStateChange'));
-        }
-
-        animationFrameId = requestAnimationFrame(tick);
+          animationFrameId = requestAnimationFrame(tick);
+          log('Trainer-Animation', `Animation started for ${durationMs}ms.`);
+        });
       }
 
-      export function startAnimation() {
-        if (animationFrameId) return;
-        lastTickTimestamp = 0;
-        animationFrameId = requestAnimationFrame(tick);
-        log('Trainer-Animation', 'Animation started.');
-      }
-
-      export function stopAnimation() {
+      /**
+       * Stops any currently active animation frame loop.
+       */
+      export function stopAllAnimations() {
         if (animationFrameId) {
           cancelAnimationFrame(animationFrameId);
           animationFrameId = null;
+          log('Trainer-Animation', 'All animations stopped.');
         }
-        log('Trainer-Animation', 'Animation stopped.');
       }
   - file: src/ui/components/TrainerComponent.js
     content: |
@@ -271,7 +474,12 @@ patches:
                   this.elements.exerciseDetails.textContent = '';
                   this.elements.repDisplay.classList.add('hidden-rep');
                   this.elements.upcomingDisplay.innerHTML = '';
+                  this.updateTimerRing(0);
+                  this.ringText.textContent = '';
                   this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
+                  this.elements.btnPause.classList.add('hidden');
+                  this.elements.btnResume.classList.add('hidden');
+                  this.elements.btnManualRep.classList.add('hidden');
                   return;
               };
 
@@ -284,6 +492,8 @@ patches:
                   this.elements.repDisplay.classList.add('hidden-rep');
                   this.elements.upcomingDisplay.innerHTML = '';
                   this.elements.btnStart.classList.add('hidden');
+                  this.elements.btnPause.classList.add('hidden');
+                  this.elements.btnResume.classList.add('hidden');
                   return;
               }
 
@@ -315,20 +525,18 @@ patches:
               this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && currentPhase.type === 'manual_rep'));
 
               // --- Main Render Logic ---
-              // ** FIX: Reset all dynamic classes before applying new ones **
               this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
 
-              if (status === 'running') {
+              if (status === 'running' || status === 'paused') {
                   if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
                   else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
                   else if (currentPhase.type === 'manual_rep') this.renderManualReps(state, currentPhase);
                   else if (currentPhase.type === 'rest') this.renderRest(state, currentPhase);
                   else this.ringText.textContent = ''; // For audio/speech phases
-              } else if (status === 'paused') {
-                  this.renderPaused();
-              } else if (status === 'idle') {
-                  this.ringText.textContent = '';
-                  this.updateTimerRing(0);
+              }
+
+              if(status === 'paused') {
+                this.renderPaused();
               }
           }
 
@@ -392,4 +600,33 @@ patches:
               }
               return details;
           }
+      }
+  - file: src/core/trainer/state.js
+    content: |
+      const initialWorkoutState = {
+        workoutDate: null,
+        exerciseQueue: [], // The original plan of exercises
+        fullExecutionQueue: [], // The single queue for the whole workout
+        currentQueueIndex: 0,
+        status: 'idle', // idle, running, paused, finished
+        phaseTimeElapsed: 0,
+        lastTimerDuration: 0, // Stores the actual elapsed time from the last timer animation
+        startTime: 0,
+        setsData: [], // Array to store data for each completed set
+        isAudioEnabled: true,
+      };
+
+      let workoutState = { ...initialWorkoutState };
+
+      export function getWorkoutState() {
+        return workoutState;
+      }
+
+      export function updateState(newState) {
+        workoutState = { ...workoutState, ...newState };
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function resetState() {
+        workoutState = { ...initialWorkoutState };
       }

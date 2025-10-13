@@ -144,7 +144,12 @@ export class TrainerComponent {
             this.elements.exerciseDetails.textContent = '';
             this.elements.repDisplay.classList.add('hidden-rep');
             this.elements.upcomingDisplay.innerHTML = '';
+            this.updateTimerRing(0);
+            this.ringText.textContent = '';
             this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
+            this.elements.btnPause.classList.add('hidden');
+            this.elements.btnResume.classList.add('hidden');
+            this.elements.btnManualRep.classList.add('hidden');
             return;
         };
 
@@ -157,6 +162,8 @@ export class TrainerComponent {
             this.elements.repDisplay.classList.add('hidden-rep');
             this.elements.upcomingDisplay.innerHTML = '';
             this.elements.btnStart.classList.add('hidden');
+            this.elements.btnPause.classList.add('hidden');
+            this.elements.btnResume.classList.add('hidden');
             return;
         }
 
@@ -188,20 +195,18 @@ export class TrainerComponent {
         this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && currentPhase.type === 'manual_rep'));
 
         // --- Main Render Logic ---
-        // ** FIX: Reset all dynamic classes before applying new ones **
         this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
 
-        if (status === 'running') {
+        if (status === 'running' || status === 'paused') {
             if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
             else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
             else if (currentPhase.type === 'manual_rep') this.renderManualReps(state, currentPhase);
             else if (currentPhase.type === 'rest') this.renderRest(state, currentPhase);
             else this.ringText.textContent = ''; // For audio/speech phases
-        } else if (status === 'paused') {
-            this.renderPaused();
-        } else if (status === 'idle') {
-            this.ringText.textContent = '';
-            this.updateTimerRing(0);
+        }
+
+        if(status === 'paused') {
+          this.renderPaused();
         }
     }
 
