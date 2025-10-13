@@ -14,22 +14,16 @@ L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html`
 * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
 
 ## 4. Logica di Business
-### 4.1. Workout Builder Composizionale
-A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria. Questo offre massima flessibilità e allinea l'esperienza utente a quella della pianificazione pasti.
+### 4.1. Workout Builder Composizionale e Dichiarativo
+A differenza di un approccio a piani fissi, HealtyPro adotta un modello composizionale. L'utente costruisce la propria sessione di allenamento giorno per giorno aggiungendo esercizi individuali da una libreria.
+
+L'architettura del trainer si basa su un principio **dichiarativo**: l'intero flusso di un allenamento, inclusi esercizi, serie, ripetizioni, annunci vocali e periodi di riposo, viene pre-compilato in una singola coda di comandi immutabile (`fullExecutionQueue`) prima dell'inizio della sessione. Il modulo `queueBuilder` agisce come un assemblatore, utilizzando dei "flussi" template (`trainerFlows.js`) per ogni parte dell'allenamento. Questo garantisce che l'esecutore (`runWorkoutLoop`) sia un semplice interprete, aumentando la robustezza e la prevedibilità del sistema.
 
 ### 4.2. Modalità di Esecuzione e Ciclo di Ripetizione (Vista Trainer)
 La Vista Trainer opera in diverse modalità a seconda delle proprietà dell'esercizio caricato. Questo garantisce un'esperienza utente flessibile e adatta a diversi tipi di allenamento. La modalità viene scelta in base a un campo `execution_mode` nell'oggetto dell'esercizio.
 
 #### Modalità 1: `tempo_guided` (Default)
-Per garantire un'esperienza utente guidata e prevenire movimenti affrettati, il modulo Trainer implementa un ciclo di esecuzione dettagliato per ogni singola ripetizione di un esercizio basato sul `tempo`. Questo ciclo è "pre-compilato" in una coda di esecuzione prima dell'inizio di ogni serie.
-
-Ogni ripetizione è suddivisa in 6 fasi:
-1.  **`pre-up`**: Una fase di preparazione di durata fissa (es. 0.7s). L'UI (es. "time ring") lampeggia e mostra il nome della fase successiva ("UP").
-2.  **`up`**: La fase concentrica (salita). La sua durata è letta da `tempo.up`. L'UI mostra un'animazione fluida.
-3.  **`pre-hold`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "HOLD".
-4.  **`hold`**: La fase isometrica (pausa). La sua durata è letta da `tempo.hold`.
-5.  **`pre-down`**: Fase di preparazione (0.7s). L'UI lampeggia e mostra "DOWN".
-6.  **`down`**: La fase eccentrica (discesa). La sua durata è letta da `tempo.down`.
+Per garantire un'esperienza utente guidata e prevenire movimenti affrettati, il modulo Trainer implementa un ciclo di esecuzione dettagliato per ogni singola ripetizione di un esercizio basato sul `tempo`. Questo ciclo viene "compilato" nella coda di esecuzione usando un template specifico (`TEMPO_GUIDED_FLOW`). Ogni ripetizione è suddivisa in fasi, come la fase concentrica (`up`), isometrica (`hold`) ed eccentrica (`down`), intervallate da annunci vocali e piccoli intervalli per la preparazione.
 
 #### Modalità 2: `static_hold`
 Utilizzata per esercizi isometrici come il Plank. L'interfaccia mostra un unico timer centrale che esegue un countdown per la durata totale della serie. Se l'esercizio è configurato per essere eseguito "a sfinimento", il timer diventa un cronometro che conta in avanti.

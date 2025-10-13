@@ -31,6 +31,15 @@ export const TEMPO_GUIDED_FLOW = [
   { "type": "set_completed" }
 ];
 
+export const REST_FLOW = [
+    { "type": "speech", "text_key": "VOICE_GUIDE_REST_START", "await": true },
+    { "type": "rest", "duration_from": "defaultRest" }
+];
+
+export const NEXT_EXERCISE_ANNOUNCEMENT_FLOW = [
+  { "type": "speech", "text_key": "VOICE_GUIDE_NEXT_EXERCISE", "text_value": "name", "await": true }
+];
+
 export const FINAL_FLOW = [
   { "type": "speech", "text_key": "VOICE_GUIDE_WORKOUT_COMPLETED", "await": true }
 ];

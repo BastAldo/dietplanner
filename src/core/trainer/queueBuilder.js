@@ -1,6 +1,6 @@
 import { getState as getGlobalState } from '../state.js';
 import { UI_TEXT } from '../../config/uiText.js';
-import { TEMPO_GUIDED_FLOW, INTRO_FLOW, FINAL_FLOW } from '../../config/trainerFlows.js';
+import { TEMPO_GUIDED_FLOW, INTRO_FLOW, FINAL_FLOW, REST_FLOW, NEXT_EXERCISE_ANNOUNCEMENT_FLOW } from '../../config/trainerFlows.js';
 
 function getNestedProperty(obj, path) {
   return path.split('.').reduce((acc, part) => acc && acc[part], obj);
@@ -83,15 +83,14 @@ export function buildFullWorkoutQueue(exercisePlan) {
 
       if (!isLastSetOfExercise || !isLastExercise) {
           if (exercise.defaultRest > 0) {
-              fullQueue.push({ type: 'speech', text_key: 'VOICE_GUIDE_REST_START', await: true, context });
-              fullQueue.push({ type: 'rest', duration_ms: exercise.defaultRest * 1000, context });
+              fullQueue.push(...interpretTemplate(REST_FLOW, exercise, context));
           }
       }
 
       // Announce next exercise on the last rest before a new one starts
       if (isLastSetOfExercise && !isLastExercise) {
           const nextExercise = exercisePlan[exerciseIndex + 1];
-          fullQueue.push({ type: 'speech', text_key: 'VOICE_GUIDE_NEXT_EXERCISE', text_value: 'name', await: true, context: { exercise: nextExercise } });
+          fullQueue.push(...interpretTemplate(NEXT_EXERCISE_ANNOUNCEMENT_FLOW, nextExercise, {}));
       }
     }
   });

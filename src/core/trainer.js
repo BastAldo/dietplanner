@@ -123,16 +123,15 @@ export async function startWorkout() {
   log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
   if (state.status !== 'idle') return;
 
-  // The queue now has the text resolved from the builder
-  const firstExercisePhase = state.fullExecutionQueue.find(p => p.text_key === 'VOICE_GUIDE_NOW_STARTING');
-
-  if (state.isAudioEnabled && firstExercisePhase && firstExercisePhase.text) {
+  if (state.isAudioEnabled) {
       playStartCue();
-      await speak(firstExercisePhase.text);
   }
+
+  // Small delay to allow the sound cue to play before any potential UI lag
+  await new Promise(resolve => setTimeout(resolve, 50));
   
   if (getState().status !== 'idle') {
-      log('Trainer', 'Workout start aborted, status changed during announcement.');
+      log('Trainer', 'Workout start aborted, status changed during start cue.');
       return;
   }
 
