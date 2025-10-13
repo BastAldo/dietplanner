@@ -23,20 +23,25 @@ async function handleNonTimedPhase(phase) {
   isProcessing = true;
   log('Trainer-Animation', `Handling non-timed phase:`, phase);
 
-  const { isAudioEnabled } = getWorkoutState();
-  if (isAudioEnabled) {
-    if (phase.type === 'audio') {
-      if (phase.cue === 'tick') playTick();
-      else if (phase.cue === 'start') playStartCue();
-      else if (phase.cue === 'stop') playStopCue();
-    } else if (phase.type === 'speech') {
-      if (phase.await) {
-        await speak(phase.text);
-      } else {
-        speak(phase.text);
+  if (phase.type === 'set_completed') {
+      collectSetData();
+  } else {
+      const { isAudioEnabled } = getWorkoutState();
+      if (isAudioEnabled) {
+        if (phase.type === 'audio') {
+          if (phase.cue === 'tick') playTick();
+          else if (phase.cue === 'start') playStartCue();
+          else if (phase.cue === 'stop') playStopCue();
+        } else if (phase.type === 'speech') {
+          if (phase.await) {
+            await speak(phase.text);
+          } else {
+            speak(phase.text);
+          }
+        }
       }
-    }
   }
+
 
   const currentState = getWorkoutState();
   if (currentState.status === 'running') {
@@ -77,9 +82,6 @@ function tick(timestamp) {
   if (phaseType === 'movement' || phaseType === 'rest' || phaseType === 'static_hold') {
     const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
     if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
-      if (phaseType === 'rest') {
-        collectSetData();
-      }
       advanceQueue();
     } else {
       updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
@@ -91,7 +93,11 @@ function tick(timestamp) {
     handleNonTimedPhase(currentPhase);
   }
 
-  document.dispatchEvent(new CustomEvent('workoutStateChange'));
+  // Must dispatch state change for UI to update timer rings
+  if (phaseType === 'movement' || phaseType === 'rest' || phaseType === 'static_hold' || phaseType === 'manual_rep') {
+    document.dispatchEvent(new CustomEvent('workoutStateChange'));
+  }
+
   animationFrameId = requestAnimationFrame(tick);
 }
 

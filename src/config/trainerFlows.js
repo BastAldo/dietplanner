@@ -24,5 +24,5 @@ export const TEMPO_GUIDED_FLOW = [
       { "type": "audio", "cue": "tick" }
     ]
   },
-  { "type": "audio", "cue": "stop" }
+  { "type": "set_completed" }
 ];

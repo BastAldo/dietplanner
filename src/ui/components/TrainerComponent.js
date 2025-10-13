@@ -138,7 +138,12 @@ export class TrainerComponent {
     }
 
     render(state) {
-        if (!this.ringText || !state.fullExecutionQueue.length) {
+        if (!this.ringText || !state.fullExecutionQueue || state.fullExecutionQueue.length === 0) {
+            // Handle pre-start or empty state
+            this.elements.exerciseName.textContent = state.exerciseQueue[0]?.name || 'Pronto per iniziare';
+            this.elements.exerciseDetails.textContent = '';
+            this.elements.repDisplay.classList.add('hidden-rep');
+            this.elements.upcomingDisplay.innerHTML = '';
             this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
             return;
         };
@@ -146,11 +151,12 @@ export class TrainerComponent {
         const { fullExecutionQueue, currentQueueIndex, status } = state;
         const currentPhase = fullExecutionQueue[currentQueueIndex];
 
-        if (!currentPhase || !currentPhase.context) {
+        if (!currentPhase || !currentPhase.context || !currentPhase.context.exercise) {
             this.elements.exerciseName.textContent = 'Allenamento Completato';
             this.elements.exerciseDetails.textContent = '';
             this.elements.repDisplay.classList.add('hidden-rep');
             this.elements.upcomingDisplay.innerHTML = '';
+            this.elements.btnStart.classList.add('hidden');
             return;
         }
 
@@ -165,12 +171,16 @@ export class TrainerComponent {
           this.elements.repDisplay.classList.add('hidden-rep');
         }
 
-        const nextExercisePhase = fullExecutionQueue.find((phase, index) => index > currentQueueIndex && phase.context.exercise.instanceId !== exercise.instanceId);
-        if (nextExercisePhase) {
+        const nextExercisePhase = fullExecutionQueue.find((phase, index) => {
+            return index > currentQueueIndex && phase.context && phase.context.exercise && phase.context.exercise.instanceId !== exercise.instanceId;
+        });
+
+        if (nextExercisePhase && nextExercisePhase.context && nextExercisePhase.context.exercise) {
           this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${nextExercisePhase.context.exercise.name}`;
         } else {
           this.elements.upcomingDisplay.innerHTML = '';
         }
+
 
         this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
         this.elements.btnPause.classList.toggle('hidden', status !== 'running');
@@ -229,8 +239,8 @@ export class TrainerComponent {
         const timeRemaining = phase.duration_ms - phaseTimeElapsed;
         const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
 
-        this.ringText.textContent = UI_TEXT.TRAINER_REST_LABEL;
-        this.ringText.classList.add('is-phase');
+        this.ringText.textContent = this.formatTime(timeRemaining);
+        this.ringText.classList.add('is-timer');
         this.updateTimerRing(progressPercent);
     }
 
@@ -241,6 +251,7 @@ export class TrainerComponent {
 
     formatExerciseDetails(context) {
         const { exercise, set } = context;
+        if (!exercise || !set) return '';
         let details = `${UI_TEXT.TRAINER_SET_LABEL} ${set} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${exercise.defaultSets}`;
         if (exercise.execution_mode === 'tempo_guided' || exercise.execution_mode === 'manual_reps') {
             details += ` | ${exercise.defaultReps} ${UI_TEXT.TRAINER_REPS_LABEL}`;

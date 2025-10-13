@@ -9,6 +9,7 @@ function getNestedProperty(obj, path) {
 function interpretTemplate(template, exercise, context) {
   const queue = [];
   for (const command of template) {
+    // Create a shallow copy to avoid modifying the template, but ensure context is fresh
     const newCommand = { ...command, context: { ...context, exercise } };
 
     if (newCommand.type === 'loop') {
@@ -57,27 +58,33 @@ export function buildFullWorkoutQueue(exercisePlan) {
           fullQueue.push(...interpretTemplate(TEMPO_GUIDED_FLOW, exercise, context));
       } else if (execution_mode === 'static_hold') {
           fullQueue.push({ type: 'static_hold', duration_ms: exercise.defaultDuration * 1000, context });
+          fullQueue.push({ type: 'set_completed', context });
       } else if (execution_mode === 'manual_reps') {
           fullQueue.push({ type: 'manual_rep', context });
+          fullQueue.push({ type: 'set_completed', context });
       }
 
       // Add rest period if it's not the last set of the exercise
       if (set < exercise.defaultSets && exercise.defaultRest > 0) {
+        fullQueue.push({ type: 'speech', text_key: 'VOICE_GUIDE_REST_START', await: true, context });
         fullQueue.push({ type: 'rest', duration_ms: exercise.defaultRest * 1000, context });
+
         const nextExercise = exercisePlan[exerciseIndex + 1];
-        if (set === exercise.defaultSets -1 && nextExercise) {
+        // Announce next exercise only on the last rest before a new exercise starts
+        if (set === exercise.defaultSets && nextExercise) {
             fullQueue.push({ type: 'speech', text_key: 'VOICE_GUIDE_NEXT_EXERCISE', text_value: 'name', await: true, context: { exercise: nextExercise } });
         }
       }
     }
   });
 
-  fullQueue.push({ type: 'speech', text_key: 'VOICE_GUIDE_WORKOUT_COMPLETED', await: true });
+  const finalContext = exercisePlan.length > 0 ? { exercise: exercisePlan[exercisePlan.length - 1] } : {};
+  fullQueue.push({ type: 'speech', text_key: 'VOICE_GUIDE_WORKOUT_COMPLETED', await: true, context: finalContext });
 
   const { debugMode } = getGlobalState();
   if (debugMode) {
     console.groupCollapsed(`[Trainer-Queue] Full Workout Execution Queue Built`);
-    console.table(fullQueue.map(item => ({...item, context: `Ex: ${item.context?.exercise.name} | Set: ${item.context?.set} | Rep: ${item.context?.rep || '-'}`})));
+    console.table(fullQueue.map(item => ({...item, context: `Ex: ${item.context?.exercise?.name || 'N/A'} | Set: ${item.context?.set || '-'} | Rep: ${item.context?.rep || '-'}`})));
     console.groupEnd();
   }
 
