@@ -5,7 +5,6 @@ import { log } from '../../utils/logger.js';
 
 let animationFrameId = null;
 let lastTickTimestamp = 0;
-let isProcessing = false; // Lock to prevent re-entrant processing
 
 function advanceQueue() {
     const state = getWorkoutState();
@@ -18,9 +17,8 @@ function advanceQueue() {
 }
 
 async function handleNonTimedPhase(phase) {
-  if (!phase || isProcessing) return;
+  if (!phase) return;
 
-  isProcessing = true;
   log('Trainer-Animation', `Handling non-timed phase:`, phase);
 
   if (phase.type === 'set_completed') {
@@ -42,15 +40,13 @@ async function handleNonTimedPhase(phase) {
       }
   }
 
-
   const currentState = getWorkoutState();
   if (currentState.status === 'running') {
       advanceQueue();
   }
-  isProcessing = false;
 }
 
-function tick(timestamp) {
+async function tick(timestamp) {
   if (lastTickTimestamp === 0) {
     lastTickTimestamp = timestamp;
   }
@@ -61,11 +57,6 @@ function tick(timestamp) {
   if (state.status !== 'running') {
     stopAnimation();
     return;
-  }
-
-  if (isProcessing) {
-    animationFrameId = requestAnimationFrame(tick);
-    return; // Wait for async operation to complete
   }
 
   const { fullExecutionQueue, currentQueueIndex } = state;
@@ -88,9 +79,8 @@ function tick(timestamp) {
     }
   } else if (phaseType === 'manual_rep') {
       // This phase is advanced by incrementManualRep(), tick does nothing.
-  }
-  else {
-    handleNonTimedPhase(currentPhase);
+  } else {
+    await handleNonTimedPhase(currentPhase);
   }
 
   // Must dispatch state change for UI to update timer rings
@@ -113,6 +103,5 @@ export function stopAnimation() {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
-  isProcessing = false; // Ensure lock is released on stop
   log('Trainer-Animation', 'Animation stopped.');
 }
