@@ -4,7 +4,7 @@ import { getWorkoutState as getState, resetState, updateState } from './trainer/
 import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
 import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
 import { calculateWorkoutCalories } from './calculations.js';
-import { speak, playStartCue } from '../utils/audioFeedback.js';
+import { speak, playStartCue, playTick } from '../utils/audioFeedback.js';
 import { UI_TEXT } from '../config/uiText.js';
 
 export { getState as getWorkoutState };
