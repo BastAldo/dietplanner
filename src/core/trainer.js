@@ -2,8 +2,7 @@ import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlo
 import { log } from '../utils/logger.js';
 import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
 import { startAnimation, stopAnimation } from './trainer/animation.js';
-import { buildExecutionQueueForCurrentSet } from './trainer/queueBuilder.js';
-import { advanceToNextSet } from './trainer/machine.js';
+import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
 import { calculateWorkoutCalories } from './calculations.js';
 import { speak, playStartCue } from '../utils/audioFeedback.js';
 import { UI_TEXT } from '../config/uiText.js';
@@ -26,17 +25,18 @@ export function initializeWorkout(plannedExercises, isoDate) {
     return;
   }
   resetWorkoutState();
-  const firstExercise = plannedExercises[0];
+
+  const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
+
   const initialState = {
     workoutDate: isoDate,
-    exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
-    currentExerciseIndex: 0,
-    currentSet: 1,
-    currentRep: 1,
-    executionMode: firstExercise.execution_mode || 'tempo_guided',
-    startTime: Date.now(),
+    exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)), // Keep original for reference
+    fullExecutionQueue: fullExecutionQueue,
+    currentQueueIndex: 0,
+    status: 'idle',
+    startTime: 0,
     phaseStartTime: 0,
-    restStartTime: 0,
+    phaseTimeElapsed: 0,
     setsData: []
   };
   updateState(initialState);
@@ -44,113 +44,96 @@ export function initializeWorkout(plannedExercises, isoDate) {
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
-export function completeSet() {
-  const state = getState();
-  const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-  const setData = {
-      exerciseId: currentExercise.instanceId,
-      set: state.currentSet,
-      duration: Date.now() - state.phaseStartTime,
-      rest: currentExercise.defaultRest,
-      weight: currentExercise.defaultWeight || 0
-  };
+export function collectSetData() {
+    const state = getState();
+    const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
+    if (!currentPhase || !currentPhase.context) return;
 
-  if (state.executionMode === 'manual_reps') {
-      setData.reps = state.manualRepCount;
-  } else if (state.executionMode === 'tempo_guided') {
-      setData.reps = currentExercise.defaultReps;
-  }
+    const { exercise, set, reps, weight } = currentPhase.context;
 
-  const newSetsData = [...state.setsData, setData];
+    const setData = {
+        exerciseId: exercise.instanceId,
+        set: set,
+        reps: reps,
+        duration: Date.now() - state.phaseStartTime,
+        rest: exercise.defaultRest,
+        weight: weight || 0
+    };
 
-  if (state.isAudioEnabled) {
-    speak(UI_TEXT.VOICE_GUIDE_REST_START);
-  }
-
-  updateState({
-      setsData: newSetsData,
-      status: 'resting',
-      restStartTime: Date.now(),
-      restTimeRemaining: currentExercise.defaultRest * 1000
-  });
+    const newSetsData = [...state.setsData, setData];
+    updateState({ setsData: newSetsData });
+    log('Trainer', 'Set data collected', { setData });
 }
+
 
 export async function startWorkout() {
   const state = getState();
-  log('Interactions', 'Start workout button clicked from calendar', { date: state.workoutDate });
+  log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
   if (state.status !== 'idle') return;
+
+  const firstExerciseName = state.exerciseQueue[0].name;
 
   if (state.isAudioEnabled) {
     playStartCue();
-    const firstExerciseName = state.exerciseQueue[0].name;
     await speak(`${UI_TEXT.VOICE_GUIDE_NOW_STARTING} ${firstExerciseName}`);
   }
   
+  // Re-check state in case user navigated away during announcement
   if (getState().status !== 'idle') {
     log('Trainer', 'Workout start aborted, status changed during announcement.');
     return;
   }
 
-  let startState = { status: 'running', phaseStartTime: Date.now() };
-
-  if (state.executionMode === 'tempo_guided') {
-      startState.executionQueue = buildExecutionQueueForCurrentSet();
-      startState.currentPhaseIndex = 0;
-      startState.phaseTimeElapsed = 0;
-      startState.currentRep = 0; // Start at 0, will be updated by queue
-  } else if (state.executionMode === 'static_hold') {
-      const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-      startState.setTimeRemaining = currentExercise.defaultDuration * 1000;
-  } else if (state.executionMode === 'manual_reps') {
-      startState.manualRepCount = 0;
-  }
+  const startState = {
+    status: 'running',
+    startTime: Date.now(),
+    phaseStartTime: Date.now(),
+    phaseTimeElapsed: 0,
+    currentQueueIndex: 0
+  };
 
   updateState(startState);
   startAnimation();
   log('Trainer', 'Workout started. New state:', getState());
-  document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
 export function pauseWorkout() {
   const state = getState();
-  if (state.status === 'running' || state.status === 'resting') {
+  if (state.status === 'running') {
     updateState({
-      prePauseStatus: state.status,
       status: 'paused',
     });
     stopAnimation();
-    document.dispatchEvent(new CustomEvent('workoutStateChange'));
   }
 }
 
 export function resumeWorkout() {
   const state = getState();
   if (state.status === 'paused') {
-    const status = state.prePauseStatus;
-    const newState = { status, prePauseStatus: '' };
-    if (status === 'running') newState.phaseStartTime = Date.now() - state.phaseTimeElapsed;
-    if (status === 'resting') newState.restStartTime = Date.now() - (state.exerciseQueue[state.currentExerciseIndex].defaultRest * 1000 - state.restTimeRemaining);
-
-    updateState(newState);
+    updateState({
+      status: 'running',
+      phaseStartTime: Date.now() - state.phaseTimeElapsed,
+     });
     startAnimation();
-    document.dispatchEvent(new CustomEvent('workoutStateChange'));
   }
 }
 
 export function incrementManualRep() {
     const state = getState();
-    if (state.status === 'running' && state.executionMode === 'manual_reps') {
-        const newRepCount = state.manualRepCount + 1;
-        updateState({ manualRepCount: newRepCount });
+    if (state.status !== 'running') return;
 
-        const currentExercise = state.exerciseQueue[state.currentExerciseIndex];
-        const targetReps = currentExercise.defaultReps;
+    const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
+    if (currentPhase && currentPhase.type === 'manual_rep') {
+        const newRepCount = (currentPhase.repsCompleted || 0) + 1;
+        currentPhase.repsCompleted = newRepCount;
 
-        if (targetReps && newRepCount >= targetReps) {
-            completeSet();
-            startAnimation();
+        if (newRepCount >= currentPhase.context.reps) {
+            // Advance to next phase
+            updateState({ currentQueueIndex: state.currentQueueIndex + 1, phaseStartTime: Date.now(), phaseTimeElapsed: 0 });
+        } else {
+            // Just update UI
+            document.dispatchEvent(new CustomEvent('workoutStateChange'));
         }
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
     }
 }
 

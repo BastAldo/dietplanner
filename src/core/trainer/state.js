@@ -1,23 +1,14 @@
 const initialWorkoutState = {
   workoutDate: null,
-  exerciseQueue: [],
-  currentExerciseIndex: -1,
-  status: 'idle', // idle, running, paused, resting, finished
-  executionMode: 'tempo_guided', // tempo_guided, static_hold, manual_reps
-  prePauseStatus: '',
-  currentSet: 0,
-  currentRep: 0,
-  manualRepCount: 0,
-  executionQueue: [],
-  currentPhaseIndex: -1,
+  exerciseQueue: [], // The original plan of exercises
+  fullExecutionQueue: [], // The single queue for the whole workout
+  currentQueueIndex: -1,
+  status: 'idle', // idle, running, paused, finished
   phaseTimeElapsed: 0,
-  restTimeRemaining: 0,
-  setTimeRemaining: 0,
   startTime: 0,
-  phaseStartTime: 0, // Timestamp for start of exercise/set phase
-  restStartTime: 0, // Timestamp for start of rest phase
+  phaseStartTime: 0,
   setsData: [], // Array to store data for each completed set
-  isAudioEnabled: true // Audio feedback state
+  isAudioEnabled: true,
 };
 
 let workoutState = { ...initialWorkoutState };
@@ -28,6 +19,7 @@ export function getWorkoutState() {
 
 export function updateState(newState) {
   workoutState = { ...workoutState, ...newState };
+  document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
 export function resetState() {

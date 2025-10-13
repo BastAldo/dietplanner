@@ -1,6 +1,5 @@
 import { getWorkoutState, updateState } from './state.js';
-import { advanceToNextSet } from './machine.js';
-import { completeSet } from '../trainer.js';
+import { collectSetData, endWorkout } from '../trainer.js';
 import { playTick, playStartCue, playStopCue, speak } from '../../utils/audioFeedback.js';
 import { log } from '../../utils/logger.js';
 
@@ -8,11 +7,21 @@ let animationFrameId = null;
 let lastTickTimestamp = 0;
 let isProcessing = false; // Lock to prevent re-entrant processing
 
+function advanceQueue() {
+    const state = getWorkoutState();
+    const newIndex = state.currentQueueIndex + 1;
+    updateState({
+        currentQueueIndex: newIndex,
+        phaseStartTime: Date.now(),
+        phaseTimeElapsed: 0
+    });
+}
+
 async function handleNonTimedPhase(phase) {
   if (!phase || isProcessing) return;
 
   isProcessing = true;
-  log('Trainer-Animation', `Handling phase:`, phase);
+  log('Trainer-Animation', `Handling non-timed phase:`, phase);
 
   const { isAudioEnabled } = getWorkoutState();
   if (isAudioEnabled) {
@@ -31,11 +40,7 @@ async function handleNonTimedPhase(phase) {
 
   const currentState = getWorkoutState();
   if (currentState.status === 'running') {
-      const newIndex = currentState.currentPhaseIndex + 1;
-      updateState({ 
-        currentPhaseIndex: newIndex,
-        currentRep: currentState.executionQueue[newIndex]?.rep || currentState.currentRep 
-      });
+      advanceQueue();
   }
   isProcessing = false;
 }
@@ -48,53 +53,42 @@ function tick(timestamp) {
   lastTickTimestamp = timestamp;
 
   const state = getWorkoutState();
-  if (state.status !== 'running' && state.status !== 'resting') {
+  if (state.status !== 'running') {
     stopAnimation();
     return;
   }
 
-  if (state.status === 'running') {
-    if (state.executionMode === 'tempo_guided') {
-      if (isProcessing) {
-        animationFrameId = requestAnimationFrame(tick);
-        return; // Wait for async operation to complete
-      }
+  if (isProcessing) {
+    animationFrameId = requestAnimationFrame(tick);
+    return; // Wait for async operation to complete
+  }
 
-      const { executionQueue, currentPhaseIndex } = state;
-      const currentPhase = executionQueue[currentPhaseIndex];
+  const { fullExecutionQueue, currentQueueIndex } = state;
+  const currentPhase = fullExecutionQueue[currentQueueIndex];
 
-      if (!currentPhase) {
-        completeSet();
-        return; // Stop this tick, state will change to 'resting'
-      }
+  if (!currentPhase) {
+    log('Trainer-Animation', 'Queue finished. Ending workout.');
+    endWorkout();
+    return;
+  }
 
-      if (currentPhase.type === 'movement') {
-        const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
-        if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
-          updateState({ currentPhaseIndex: currentPhaseIndex + 1, phaseTimeElapsed: 0 });
-        } else {
-          updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
-        }
-      } else {
-        handleNonTimedPhase(currentPhase);
-      }
+  const phaseType = currentPhase.type;
 
-    } else if (state.executionMode === 'static_hold') {
-      const newSetTimeRemaining = state.setTimeRemaining - deltaTime;
-      if (newSetTimeRemaining <= 0) {
-        if (state.isAudioEnabled) playStopCue();
-        completeSet();
-      } else {
-        updateState({ setTimeRemaining: newSetTimeRemaining });
+  if (phaseType === 'movement' || phaseType === 'rest' || phaseType === 'static_hold') {
+    const newPhaseTimeElapsed = state.phaseTimeElapsed + deltaTime;
+    if (newPhaseTimeElapsed >= currentPhase.duration_ms) {
+      if (phaseType === 'rest') {
+        collectSetData();
       }
-    }
-  } else if (state.status === 'resting') {
-    const newRestTimeRemaining = state.restTimeRemaining - deltaTime;
-    if (newRestTimeRemaining <= 0) {
-      advanceToNextSet();
+      advanceQueue();
     } else {
-      updateState({ restTimeRemaining: newRestTimeRemaining });
+      updateState({ phaseTimeElapsed: newPhaseTimeElapsed });
     }
+  } else if (phaseType === 'manual_rep') {
+      // This phase is advanced by incrementManualRep(), tick does nothing.
+  }
+  else {
+    handleNonTimedPhase(currentPhase);
   }
 
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
@@ -105,6 +99,7 @@ export function startAnimation() {
   if (animationFrameId) return;
   lastTickTimestamp = 0;
   animationFrameId = requestAnimationFrame(tick);
+  log('Trainer-Animation', 'Animation started.');
 }
 
 export function stopAnimation() {
@@ -112,5 +107,6 @@ export function stopAnimation() {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
-  isProcessing = false;
+  isProcessing = false; // Ensure lock is released on stop
+  log('Trainer-Animation', 'Animation stopped.');
 }
