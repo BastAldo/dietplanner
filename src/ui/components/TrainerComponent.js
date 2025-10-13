@@ -196,6 +196,8 @@ export class TrainerComponent {
 
         // --- Main Render Logic ---
         this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
+        this.ringProgress.classList.remove('is-rest');
+
 
         if (status === 'running' || status === 'paused') {
             if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
@@ -248,6 +250,7 @@ export class TrainerComponent {
 
         this.ringText.textContent = this.formatTime(timeRemaining);
         this.ringText.classList.add('is-timer');
+        this.ringProgress.classList.add('is-rest');
         this.updateTimerRing(progressPercent);
     }
 
