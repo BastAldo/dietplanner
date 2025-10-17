@@ -1,7 +1,7 @@
 const UI_TEXT_CONFIG = [
   { id: 'MAIN_TITLE', text: 'HealtyPro' },
   { id: 'NAV_PLANNER', text: 'Planner' },
-  { id: 'NAV_PROGRESS', text: 'Progressi' },
+  { id: 'NAV_PROGRESS', text: 'Biometria' },
   { id: 'NAV_CHARTS', text: 'Grafici' },
   { id: 'NAV_RECIPES', text: 'Ricette' },
   { id: 'NAV_PROFILE', text: 'Profilo' },

@@ -1,3 +1,13 @@
+function formatMealCalories(meal) {
+  if (!meal || typeof meal.calories_min !== 'number') return '';
+  const minCals = Number(meal.calories_min) || 0;
+  const maxCals = Number(meal.calories_max) || minCals;
+  if (minCals === 0 && maxCals === 0) return '';
+  const kcalLabel = 'Kcal';
+  if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
+  return `${minCals} - ${maxCals} ${kcalLabel}`;
+}
+
 export function formatDate(date) {
     const d = new Date(date);
     let month = '' + (d.getMonth() + 1);
@@ -39,7 +49,8 @@ export function formatDateWithYear(date) {
     return [day, month, year].join('/');
 }
 
-export function formatIngredients(ingredientsString) {
+export function formatIngredients(meal) {
+    const ingredientsString = meal.ingredienti;
     if (!ingredientsString || typeof ingredientsString !== 'string') {
         return '';
     }
@@ -47,9 +58,14 @@ export function formatIngredients(ingredientsString) {
     if (ingredients.length === 0) {
         return '';
     }
-    return `
-        <ul>
-            ${ingredients.map(ingredient => `<li>${ingredient}</li>`).join('')}
-        </ul>
-    `;
+    const details = `<div class="meal-item-details">${formatIngredientsSummary(meal)} | ${formatMealCalories(meal)}</div>`;
+    return details;
+}
+
+export function formatIngredientsSummary(meal) {
+  const ingredientsString = meal.ingredienti;
+  if (!ingredientsString || typeof ingredientsString !== 'string') {
+    return '';
+  }
+  return ingredientsString;
 }

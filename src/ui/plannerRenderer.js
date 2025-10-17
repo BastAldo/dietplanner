@@ -1,6 +1,7 @@
 import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
+import { formatIngredientsSummary } from '../utils/formatters.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -139,7 +140,7 @@ function renderPlannerSummaryWidget(state, weekStart) {
               </div>
           </div>
           <div class="planner-summary-stat">
-              <div class="stat-icon">${renderIcon('WEIGHT_SCALE', {width: 20, height: 20})}</div>
+              <div class="stat-icon">${renderIcon('DUMBBELL', {width: 20, height: 20})}</div>
               <div>
                   <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
                   <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
@@ -175,7 +176,7 @@ function renderCalendarView(state, weekStart) {
     if (workoutList && workoutList.length > 0) {
         const exerciseCount = workoutList.length;
         const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
-        summaryHTML += `<div class="daily-summary-item">${renderIcon('WEIGHT_SCALE', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
+        summaryHTML += `<div class="daily-summary-item">${renderIcon('DUMBBELL', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
         workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
     }
 
@@ -211,7 +212,18 @@ function renderLogView(state, weekStart) {
       dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
 
       if (dayMeals.length > 0) {
-        dayLogHTML += dayMeals.map(item => `<div class="log-item"><div class="log-item__name"><strong>${item.type}:</strong><span>${item.meal.nomePasto}</span>${getRecipeButtonHTML(item.meal, state)}</div><span class="log-item__calories">${formatMealCalories(item.meal)}</span></div>`).join('');
+        dayLogHTML += dayMeals.map(item => `
+          <div class="log-item">
+            <div class="log-item__name">
+              <div>
+                <strong>${item.type}:</strong>
+                <span>${item.meal.nomePasto}</span>
+                <div class="log-item-details">${formatIngredientsSummary(item.meal)}</div>
+              </div>
+              ${getRecipeButtonHTML(item.meal, state)}
+            </div>
+            <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
+          </div>`).join('');
       }
 
       if (completedWorkouts.length > 0) {

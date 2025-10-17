@@ -64,12 +64,14 @@
 #current-exercise-name {
     font-size: 2rem;
     font-weight: bold;
+    min-height: 1.2em;
 }
 
 #current-exercise-details {
     font-size: 1.25rem;
     color: var(--text-color-muted);
     margin-bottom: 0.5rem;
+    min-height: 1.2em;
 }
 
 #current-rep-display {

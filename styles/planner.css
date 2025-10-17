@@ -102,6 +102,7 @@
 .log-item__name { display: flex; align-items: center; gap: 0.5rem; }
 .log-item strong { color: var(--text-color-muted); }
 .log-item__calories { font-weight: bold; color: var(--secondary-color); flex-shrink: 0; }
+.log-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
 
 .log-workout-summary { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px dashed var(--border-color); }
 .log-workout-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
