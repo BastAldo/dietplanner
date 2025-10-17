@@ -1,16 +1,16 @@
-commit_message: "refactor(UI): Ridisegna l'editor dei pasti con layout verticale e corregge stili"
+commit_message: "refactor(UI): Ridisegna l'editor modale con un layout unificato e corregge gli stili"
 rationale: |
-  Questa patch implementa un refactoring significativo del modale "Editor del Giorno" in base al feedback dell'utente, risolvendo bug di layout e migliorando la coerenza dell'interfaccia.
+  Questa patch implementa un refactoring completo del modale "Editor del Giorno" e corregge le regressioni di layout nell' "Editor Allenamento", basandosi sul feedback diretto e sugli screenshot forniti. L'obiettivo è creare un'interfaccia più pulita, coerente e visivamente stabile, come richiesto.
 
-  **1. Refactoring dell'Editor dei Pasti (Layout Verticale):**
-  * **Problema:** Il precedente layout orizzontale per i pasti nel modale causava problemi di wrapping (es. il pulsante di rimozione andava a capo) e instabilità dimensionale, peggiorando l'esperienza utente. Inoltre, le regole CSS generiche avevano causato una regressione nel layout dell'editor degli allenamenti.
-  * **Soluzione:**
-      * Il rendering in `src/ui/modals/dayEditorModal.js` è stato completamente riscritto. Ora ogni tipo di pasto (Colazione, Pranzo, ecc.) viene visualizzato come una "sezione" verticale con una propria intestazione. Questo design, suggerito dall'utente, offre più spazio orizzontale, previene i problemi di wrapping e si allinea stilisticamente all'editor degli allenamenti.
-      * In `styles/modals.css`, sono state create nuove classi CSS dedicate (`.meal-editor-section`, `.meal-editor-header`, ecc.) per questo nuovo layout. Questo garantisce l'isolamento degli stili, impedendo che possano influenzare altri componenti come l'editor degli allenamenti.
+  **1. Refactoring del Layout dell'Editor (Visione Unificata):**
+  * **Problema:** Il precedente design dell'editor dei pasti era esteticamente sgradevole, con l'header all'interno del box, spaziature eccessive e altezze inconsistenti. Le regole CSS avevano inoltre causato una regressione nel layout dell'editor degli allenamenti.
+  * **Soluzione:** È stato adottato un nuovo pattern di design unificato, ispirato al layout originale dell'editor degli allenamenti.
+    * In `styles/modals.css`, è stato creato un nuovo componente generico `.editor-section`, con un'intestazione (`.editor-section-header`) separata dal corpo (`.editor-section-body`). Questo corpo ha ora una `min-height` per garantire un'altezza uniforme e maggiore, come richiesto. La spaziatura tra le sezioni è stata ridotta per un aspetto più compatto.
+    * La logica di rendering in `src/ui/modals/dayEditorModal.js` è stata completamente riscritta per utilizzare questa nuova struttura a sezioni, applicandola sia ai pasti che alla sezione allenamento. Questo risolve tutti i problemi di spaginazione e migliora notevolmente l'estetica.
 
-  **2. Ripristino del Layout dell'Editor Allenamenti:**
-  * **Problema:** Le modifiche CSS precedenti avevano rotto il layout dell'editor degli allenamenti.
-  * **Soluzione:** Grazie all'introduzione di stili isolati per l'editor dei pasti, le regole CSS problematiche sono state rimosse. Le classi esistenti per l'editor degli allenamenti (es. `.draggable-item`) ora funzionano come previsto, ripristinando il layout orizzontale corretto e risolvendo la regressione visiva.
+  **2. Ripristino e Coerenza dell'Editor Allenamenti:**
+  * **Problema:** Il layout dell'editor degli allenamenti era stato compromesso.
+  * **Soluzione:** Le regole CSS problematiche e non isolate sono state rimosse. L'editor degli allenamenti ora utilizza implicitamente le nuove regole unificate del componente `.editor-section` attraverso le sue classi esistenti, ripristinando il suo aspetto corretto e garantendo la coerenza visiva con il nuovo editor dei pasti. Le classi sono state allineate per rispondere allo stesso stile, creando un'esperienza utente omogenea.
 patches:
   - file: src/ui/modals/dayEditorModal.js
     content: |
@@ -54,12 +54,11 @@ patches:
           const plannedMeal = state.weeklyPlan[slotId];
           const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
           
-          let mealDetailsHTML = `<div class="meal-editor-body"><button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button></div>`;
+          let mealContentHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
           if (meal) {
-            mealDetailsHTML = `
-              <div class="meal-editor-body">
+            mealContentHTML = `
                 <div class="meal-details">
-                  <div>
+                  <div class="meal-info">
                     <span class="meal-details__name">${meal.nomePasto}</span>
                     ${formatIngredients(meal)}
                   </div>
@@ -67,12 +66,11 @@ patches:
                     ${getRecipeButtonHTML(meal, state)}
                     <button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
                   </div>
-                </div>
-              </div>`;
+                </div>`;
           }
-          return `<div class="meal-editor-section">
-                    <div class="meal-editor-header">${mealType}</div>
-                    ${mealDetailsHTML}
+          return `<div class="editor-section">
+                    <div class="editor-section-header">${mealType}</div>
+                    <div class="editor-section-body">${mealContentHTML}</div>
                   </div>`;
         }).join('');
 
@@ -87,9 +85,9 @@ patches:
             workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
         }
         
-        const workoutSlotHTML = `<div class="meal-editor-section">
-                                  <div class="meal-editor-header">${WORKOUT_SLOT_ID}</div>
-                                  <div class="meal-editor-body">${workoutDetailsHTML}</div>
+        const workoutSlotHTML = `<div class="editor-section">
+                                  <div class="editor-section-header">${WORKOUT_SLOT_ID}</div>
+                                  <div class="editor-section-body">${workoutDetailsHTML}</div>
                                 </div>`;
 
         body.innerHTML = mealSlotsHTML + workoutSlotHTML;
@@ -150,44 +148,61 @@ patches:
       .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
       .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
 
-      /* --- DAY EDITOR REFACTORED STYLES --- */
-      .day-editor-list { display: flex; flex-direction: column; gap: 1.5rem; }
-      .meal-editor-section {
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
+      }
+      .editor-section-body {
         background: var(--bg-color);
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        overflow: hidden;
-      }
-      .meal-editor-header {
-        font-weight: bold;
-        color: var(--text-color-muted);
-        padding: 0.75rem 1rem;
-        background-color: rgba(255,255,255,0.05);
-        border-bottom: 1px solid var(--border-color);
-      }
-      .meal-editor-body {
         padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-
-      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
-      .workout-summary-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-      .meal-details { display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; }
-      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
-      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
+      .meal-details, .workout-summary {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .meal-info, .exercise-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .meal-details__name {
+        font-weight: 500;
+      }
+      .meal-actions, .workout-summary-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
       .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
       .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 
       /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
-      .workout-editor-list .meal-details {
-        flex-direction: row;
+      .workout-editor-list .draggable-item {
+        display: flex;
         align-items: center;
         padding: 0.5rem;
+        background-color: var(--card-color);
       }
       .meal-actions .btn-remove-exercise { color: var(--danger-color); }
-      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
       .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 
       #exercise-editor-form {
         display: grid;
@@ -233,7 +248,6 @@ patches:
       .structured-form .full-width { grid-column: 1 / -1; }
 
       .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
-      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
       .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
 
       @media (min-width: 600px) {
@@ -258,4 +272,4 @@ patches:
         }
       }
 commands:
-  - "echo 'Refactoring del modale editor completato. Il layout dei pasti è ora verticale e gli stili sono stati isolati per correggere la regressione sull\\'editor degli allenamenti.'"
+  - "echo 'Refactoring del layout del modale completato. Ora pasti e allenamenti condividono un design unificato e robusto.'"

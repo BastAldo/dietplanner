@@ -38,12 +38,11 @@ export function openDayEditorModal(isoDate) {
     const plannedMeal = state.weeklyPlan[slotId];
     const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
     
-    let mealDetailsHTML = `<div class="meal-editor-body"><button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button></div>`;
+    let mealContentHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
     if (meal) {
-      mealDetailsHTML = `
-        <div class="meal-editor-body">
+      mealContentHTML = `
           <div class="meal-details">
-            <div>
+            <div class="meal-info">
               <span class="meal-details__name">${meal.nomePasto}</span>
               ${formatIngredients(meal)}
             </div>
@@ -51,12 +50,11 @@ export function openDayEditorModal(isoDate) {
               ${getRecipeButtonHTML(meal, state)}
               <button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
             </div>
-          </div>
-        </div>`;
+          </div>`;
     }
-    return `<div class="meal-editor-section">
-              <div class="meal-editor-header">${mealType}</div>
-              ${mealDetailsHTML}
+    return `<div class="editor-section">
+              <div class="editor-section-header">${mealType}</div>
+              <div class="editor-section-body">${mealContentHTML}</div>
             </div>`;
   }).join('');
 
@@ -71,9 +69,9 @@ export function openDayEditorModal(isoDate) {
       workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
   }
   
-  const workoutSlotHTML = `<div class="meal-editor-section">
-                            <div class="meal-editor-header">${WORKOUT_SLOT_ID}</div>
-                            <div class="meal-editor-body">${workoutDetailsHTML}</div>
+  const workoutSlotHTML = `<div class="editor-section">
+                            <div class="editor-section-header">${WORKOUT_SLOT_ID}</div>
+                            <div class="editor-section-body">${workoutDetailsHTML}</div>
                           </div>`;
 
   body.innerHTML = mealSlotsHTML + workoutSlotHTML;
