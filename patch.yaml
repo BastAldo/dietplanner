@@ -1,267 +1,226 @@
-commit_message: "fix(UX): Corregge audio, flusso di uscita del trainer, scrollbar e scroll iniziale"
+commit_message: "refactor(UI): Ridisegna il modale di conferma per supportare pulsanti multipli e corregge il flusso di uscita dal trainer"
 rationale: |
-  Questa patch cumulativa risolve diversi bug critici di funzionalità e usabilità nell'interfaccia del trainer e nei modali, basandosi su un'analisi approfondita del feedback dell'utente.
+  Questa patch risolve un'importante regressione funzionale e di usabilità nel flusso di terminazione dell'allenamento e migliora l'architettura dei componenti modali.
 
-  **1. Correzione della Funzionalità Audio (Mute/Unmute):**
-  * **Problema:** Il pulsante per attivare/disattivare l'audio durante un allenamento non funzionava perché lo stato dell'audio veniva letto una sola volta all'inizio del loop di esecuzione.
-  * **Soluzione:** La logica in `src/core/trainer.js` è stata modificata per controllare lo stato di `isAudioEnabled` in tempo reale, direttamente prima di ogni riproduzione audio o vocale, rendendo il pulsante istantaneamente reattivo.
+  **1. Refactoring Architettonico del `confirmModal`:**
+  * **Problema:** Il componente `showConfirmModal` era rigido, progettato per soli due pulsanti (conferma/annulla). Questo ha impedito la corretta implementazione di un'interfaccia a tre opzioni (Salva/Scarta/Annulla), portando a una logica a cascata fragile e a bug funzionali.
+  * **Soluzione:**
+      * Il componente è stato completamente refattorizzato. Ora `showConfirmModal` in `src/ui/modals/confirmModal.js` accetta un array di oggetti `buttons`, dove ogni oggetto definisce `text`, `className`, e `callback`.
+      * Il template `templates/modals.html` è stato aggiornato per avere un footer dinamico che viene popolato programmaticamente.
+      * Questo rende il `confirmModal` un componente altamente riutilizzabile e flessibile, capace di gestire qualsiasi numero di azioni.
+      * Tutte le chiamate esistenti a `showConfirmModal` nell'applicazione (`globalInteractions.js`, `plannerInteractions.js`, `progressInteractions.js`) sono state aggiornate per utilizzare la nuova firma, garantendo la retrocompatibilità.
 
-  **2. Refactoring del Flusso di Uscita dall'Allenamento:**
-  * **Problema:** Il pulsante "Scarta Allenamento" non funzionava e mancava un'opzione per annullare la decisione di terminare l'allenamento.
-  * **Soluzione:** È stato implementato un nuovo flusso a due passaggi in `src/ui/components/TrainerComponent.js`:
-      1. Il primo modale ora chiede se l'utente vuole terminare, con un'opzione "No, continua" per annullare e riprendere l'allenamento.
-      2. Se si prosegue, un secondo modale offre la scelta finale tra "Salva" e "Scarta", risolvendo il bug precedente e rendendo il processo più chiaro e sicuro.
-  * Per supportare questo, sono stati aggiunti nuovi testi a `src/config/uiText.js`.
-
-  **3. Stilizzazione della Scrollbar dei Modali:**
-  * **Problema:** La scrollbar di default del browser era esteticamente incoerente con il tema scuro dell'applicazione.
-  * **Soluzione:** Sono state aggiunte regole CSS custom in `styles/modals.css` per stilizzare la scrollbar all'interno di `.modal-body`, rendendola sottile e cromaticamente integrata con il design.
-
-  **4. Correzione Definitiva dello Scroll della Pagina Trainer:**
-  * **Problema:** All'apertura su mobile, la pagina del trainer risultava scorlata verso il basso.
-  * **Soluzione:** In `src/ui/renderer.js`, la chiamata `window.scrollTo(0, 0)` è stata inserita in un `setTimeout(..., 0)`. Questa tecnica standard di JavaScript posticipa l'esecuzione dello scroll alla fine del ciclo di rendering del browser, garantendo che la vista sia sempre posizionata correttamente in cima.
+  **2. Implementazione del Flusso di Uscita Corretto nel Trainer:**
+  * **Problema:** Il flusso per terminare un allenamento era confuso, non funzionante e mancava di un'opzione chiara per annullare l'azione.
+  * **Soluzione:**
+      * Sfruttando il nuovo `confirmModal`, il metodo `_handleEndWorkoutFlow` in `src/ui/components/TrainerComponent.js` è stato riscritto da zero.
+      * Ora, una singola chiamata al modale presenta all'utente le tre opzioni chiare e dirette come richiesto: "Salva e Termina", "Scarta Allenamento" e "Annulla".
+      * Ogni pulsante è collegato alla sua azione corretta (`endWorkout`, `discardWorkout`, o semplicemente la chiusura del modale), risolvendo il bug funzionale e migliorando drasticamente l'esperienza utente.
 patches:
-  - file: src/core/trainer.js
+  - file: src/ui/modals/confirmModal.js
     content: |
-      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
-      import { log } from '../utils/logger.js';
-      import { getWorkoutState, resetState, updateState } from './trainer/state.js';
-      import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
-      import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
-      import { calculateWorkoutCalories } from './calculations.js';
-      import { speak, playStartCue, playTick } from '../utils/audioFeedback.js';
-      import { UI_TEXT } from '../config/uiText.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
 
-      // This is the "Director d'Orchestra"
-      async function runWorkoutLoop() {
-        const state = getWorkoutState();
-        if (state.status !== 'running') return;
+      export function showConfirmModal(options) {
+        const {
+          title,
+          message,
+          buttons = [], // Default to an empty array
+          // The following are fallbacks for the old API signature
+          onConfirm,
+          onCancel,
+          type = 'secondary',
+          confirmText = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN,
+          cancelText = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
+        } = options;
 
-        for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
-            if (getWorkoutState().status !== 'running') {
-                log('Trainer', 'Workout loop terminated.');
-                return;
-            }
+        log('Modals', 'Showing confirm modal', { title });
+        const confirmModal = document.getElementById('confirm-modal');
+        confirmModal.querySelector('#confirm-modal-title').textContent = title;
+        confirmModal.querySelector('#confirm-modal-message').textContent = message;
+        const footer = confirmModal.querySelector('.modal-footer');
+        footer.innerHTML = ''; // Clear previous buttons
 
-            updateState({ currentQueueIndex: i });
-            const phase = state.fullExecutionQueue[i];
+        let buttonConfigs = buttons;
 
-            log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
-
-            switch (phase.type) {
-                case 'speech':
-                    if (getWorkoutState().isAudioEnabled && phase.text) {
-                        if(phase.await) await speak(phase.text);
-                        else speak(phase.text);
-                    }
-                    break;
-                case 'audio':
-                     if (getWorkoutState().isAudioEnabled) {
-                        if (phase.cue === 'tick') playTick();
-                     }
-                    break;
-                case 'movement':
-                case 'rest':
-                case 'static_hold':
-                    await runTimerAnimation(phase.duration_ms);
-                    break;
-                case 'set_completed':
-                    collectSetData();
-                    break;
-                case 'manual_rep':
-                    // This phase is handled by user interaction via incrementManualRep
-                    // We wait here until the rep count is met
-                    await new Promise(resolve => {
-                        const checkReps = () => {
-                            const currentState = getWorkoutState();
-                            const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
-                            if (!currentPhase || currentPhase.repsCompleted >= currentPhase.context.reps) {
-                                document.removeEventListener('workoutStateChange', checkReps);
-                                resolve();
-                            }
-                        };
-                        document.addEventListener('workoutStateChange', checkReps);
-                    });
-                    break;
-            }
-        }
-        // If the loop completes naturally, end the workout
-        if (getWorkoutState().status === 'running') {
-            endWorkout();
-        }
-      }
-
-      export function resetWorkoutState() {
-        log('Trainer', 'Resetting workout state.');
-        stopAllAnimations();
-        resetState();
-      }
-
-      export function initializeWorkout(plannedExercises, isoDate) {
-        if (!plannedExercises || plannedExercises.length === 0) {
-            return;
-        }
-        resetWorkoutState();
-
-        const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
-
-        const initialState = {
-            workoutDate: isoDate,
-            exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
-            fullExecutionQueue: fullExecutionQueue,
-            currentQueueIndex: 0,
-            status: 'idle',
-            startTime: 0,
-            setsData: []
-        };
-        updateState(initialState);
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
-      }
-
-      export function collectSetData() {
-          const state = getWorkoutState();
-          const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
-          if (!currentPhase || !currentPhase.context) return;
-
-          const { exercise, set, reps, weight } = currentPhase.context;
-
-          const setData = {
-              exerciseId: exercise.instanceId,
-              set: set,
-              reps: reps,
-              duration: state.lastTimerDuration || 0, // Duration from animation engine
-              rest: exercise.defaultRest,
-              weight: weight || 0
-          };
-
-          const newSetsData = [...state.setsData, setData];
-          updateState({ setsData: newSetsData });
-          log('Trainer', 'Set data collected', { setData });
-      }
-
-      export async function startWorkout() {
-        const state = getWorkoutState();
-        log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
-        if (state.status !== 'idle') return;
-
-        if (getWorkoutState().isAudioEnabled) {
-            playStartCue();
-        }
-
-        // Small delay to allow the sound cue to play before any potential UI lag
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        if (getWorkoutState().status !== 'idle') {
-            log('Trainer', 'Workout start aborted, status changed during start cue.');
-            return;
-        }
-
-        updateState({ status: 'running', startTime: Date.now() });
-        runWorkoutLoop(); // Start the master loop
-        log('Trainer', 'Workout started.');
-      }
-
-      export function pauseWorkout() {
-        const state = getWorkoutState();
-        if (state.status === 'running') {
-            updateState({ status: 'paused' });
-            log('Trainer', 'Workout paused.');
-        }
-      }
-
-      export function resumeWorkout() {
-        const state = getWorkoutState();
-        if (state.status === 'paused') {
-            updateState({ status: 'running' });
-            log('Trainer', 'Workout resumed.');
-        }
-      }
-
-      export function incrementManualRep() {
-          const state = getWorkoutState();
-          if (state.status !== 'running') return;
-
-          const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
-          if (currentPhase && currentPhase.type === 'manual_rep') {
-              const newRepCount = (currentPhase.repsCompleted || 0) + 1;
-              currentPhase.repsCompleted = newRepCount;
-              // Dispatch change to notify the waiting promise in the loop
-              document.dispatchEvent(new CustomEvent('workoutStateChange'));
-          }
-      }
-
-      function createWorkoutSummary(finalState) {
-          const totalTime = Date.now() - finalState.startTime;
-          let totalTonnage = 0;
-
-          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
-              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
-              const setsCompleted = setsForThisExercise.length;
-              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
-              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
-              totalTonnage += exerciseTonnage;
-
-              return {
-                  ...exercise,
-                  setsCompleted: setsCompleted,
-                  setsData: setsForThisExercise,
-                  totalTime: totalExerciseTime,
-                  tonnage: exerciseTonnage
-              };
+        // Handle backward compatibility for old 2-button calls
+        if (buttonConfigs.length === 0 && onConfirm) {
+          buttonConfigs.push({
+            text: confirmText,
+            className: `btn btn-${type}`,
+            callback: onConfirm
           });
-
-          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
-          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
-          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
-
-          const summary = {
-              date: finalState.workoutDate,
-              totalTime,
-              totalSets,
-              totalExerciseTime,
-              totalRestTime,
-              totalTonnage,
-              exercises: exercisesWithDetails,
-              startTime: finalState.startTime,
-              totalCaloriesBurned: 0
-          };
-
-          const globalState = getGlobalState();
-          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
-          if (latestWeight) {
-            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
-          }
-
-          return summary;
-      }
-
-      export function endWorkout() {
-        const finalState = getWorkoutState();
-        if (finalState.status === 'finished') {
-            log('Trainer', 'Workout already finished, not saving again.');
-            return;
+          buttonConfigs.push({
+            text: cancelText,
+            className: 'btn btn-secondary',
+            callback: onCancel
+          });
         }
-        stopAllAnimations();
-        updateState({ status: 'finished' });
 
-        if (finalState.startTime === 0) {
-            log('Trainer', 'Workout ended prematurely, not saving summary.');
-            setView('planner');
-            return;
+        const cleanup = () => {
+          confirmModal.classList.add('modal-hidden');
+        };
+
+        buttonConfigs.forEach(btnConfig => {
+          const button = document.createElement('button');
+          button.textContent = btnConfig.text;
+          button.className = btnConfig.className || 'btn btn-secondary';
+          button.addEventListener('click', () => {
+            if (btnConfig.callback) {
+              btnConfig.callback();
+            }
+            cleanup();
+          }, { once: true });
+          footer.appendChild(button);
+        });
+
+        // Add a default cancel button if the user only provides one button via the old API
+        // This is a safety measure to ensure modals can always be closed.
+        if (buttons.length === 0 && onConfirm && !onCancel && buttonConfigs.length === 1) {
+            const cancelButton = document.createElement('button');
+            cancelButton.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
+            cancelButton.className = 'btn btn-secondary';
+            cancelButton.addEventListener('click', cleanup, { once: true });
+            footer.appendChild(cancelButton);
         }
-        const summary = createWorkoutSummary(finalState);
-        setLastWorkoutSummary(summary);
-        addWorkoutToHistory(summary);
 
-        setView('debriefing');
+        confirmModal.classList.remove('modal-hidden');
       }
-
-      export function discardWorkout() {
-        log('Trainer', 'Discarding workout.');
-        stopAllAnimations();
-        resetWorkoutState();
-        setView('planner');
-      }
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div id="exercise-editor-body" class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+      <div id="chart-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content modal-content-large">
+              <div class="modal-header">
+                <h3 id="chart-modal-title"></h3>
+                <button class="modal-close-btn" data-target="chart-modal"></button>
+              </div>
+              <div id="chart-modal-body" class="modal-body">
+                <canvas id="chart-modal-canvas"></canvas>
+              </div>
+          </div>
+      </div>
   - file: src/ui/components/TrainerComponent.js
     content: |
       import { getWorkoutState, updateState } from '../../core/trainer/state.js';
@@ -317,24 +276,26 @@ patches:
           }
 
           _handleEndWorkoutFlow() {
-            const confirmEnd = () => {
-                showConfirmModal({
-                    title: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
-                    message: "Vuoi salvare i progressi di questo allenamento?",
-                    onConfirm: endWorkout,
-                    onCancel: discardWorkout,
-                    confirmText: UI_TEXT.SAVE_AND_END_BTN,
-                    cancelText: UI_TEXT.DISCARD_WORKOUT_BTN,
-                    type: 'primary'
-                });
-            };
-
             showConfirmModal({
                 title: UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
-                message: "Sei sicuro di voler interrompere l'allenamento?",
-                onConfirm: confirmEnd,
-                confirmText: "Sì, termina",
-                cancelText: "No, continua",
+                message: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
+                buttons: [
+                    {
+                        text: UI_TEXT.SAVE_AND_END_BTN,
+                        className: 'btn btn-primary',
+                        callback: endWorkout
+                    },
+                    {
+                        text: UI_TEXT.DISCARD_WORKOUT_BTN,
+                        className: 'btn btn-danger',
+                        callback: discardWorkout
+                    },
+                    {
+                        text: UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
+                        className: 'btn btn-secondary',
+                        callback: null // Just closes the modal
+                    }
+                ]
             });
           }
 
