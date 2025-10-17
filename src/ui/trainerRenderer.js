@@ -1,6 +1,7 @@
-import { getWorkoutState, resetWorkoutState } from '../../core/trainer/state.js';
+import { getWorkoutState, resetState } from '../../core/trainer/state.js';
 import { TrainerComponent } from './components/TrainerComponent.js';
 import { log } from '../../utils/logger.js';
+import { resetWorkoutState as resetWorkoutController } from '../../core/trainer.js';
 
 let trainerComponent = null;
 
@@ -14,7 +15,7 @@ export function initializeTrainerController() {
     log('TrainerRenderer', 'Initializing TrainerComponent...');
     const container = document.getElementById('trainer-page');
     if (container && !trainerComponent) {
-        window.scrollTo(0, 0); // Ensure view is at the top before component mounts
+        setTimeout(() => window.scrollTo(0, 0), 0); // Defer scroll to after render cycle
         trainerComponent = new TrainerComponent(container);
         trainerComponent.mount();
         document.addEventListener('workoutStateChange', handleWorkoutStateChange);
@@ -30,6 +31,6 @@ export function destroyTrainerController() {
         trainerComponent = null;
     }
     document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
-    resetWorkoutState(); // <-- Ensure state is reset when leaving the view
+    resetWorkoutController(); // Use the controller's reset function which also handles state
     log('TrainerRenderer', 'TrainerComponent destroyed.');
 }

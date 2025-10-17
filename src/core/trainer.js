@@ -1,9 +1,9 @@
-import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from '../state.js';
+import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
 import { log } from '../utils/logger.js';
 import { getWorkoutState, resetState, updateState } from './trainer/state.js';
 import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
 import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
-import { calculateWorkoutCalories } from '../calculations.js';
+import { calculateWorkoutCalories } from './calculations.js';
 import { speak, playStartCue, playTick } from '../utils/audioFeedback.js';
 import { UI_TEXT } from '../config/uiText.js';
 
