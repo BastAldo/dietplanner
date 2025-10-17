@@ -101,7 +101,7 @@ export function initializeGlobalListeners() {
   document.getElementById('nav-goals').addEventListener('click', () => setView('goals'));
   document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
 
-  document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('modal-hidden'));
+  document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('hidden'));
 
   document.querySelectorAll('.modal-close-btn').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -110,8 +110,22 @@ export function initializeGlobalListeners() {
       if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
     });
   });
+
+  // Robust modal closing logic
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
-    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.classList.add('modal-hidden'); } });
+      let mouseDownTarget = null;
+      overlay.addEventListener('mousedown', e => {
+          if (e.target === overlay) {
+              mouseDownTarget = e.target;
+          }
+      });
+      overlay.addEventListener('mouseup', e => {
+          if (e.target === mouseDownTarget) {
+              overlay.classList.add('modal-hidden');
+          }
+          mouseDownTarget = null;
+      });
   });
+  
   document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
 }

@@ -1,22 +1,458 @@
-commit_message: "fix(UI): Corregge la visualizzazione dei dettagli degli ingredienti"
+commit_message: "fix(UX): Migliora formattazione nomi, stabilità layout e logica chiusura modali"
 rationale: |
-  Questa patch risolve un bug critico introdotto in una precedente modifica, dove i dettagli degli ingredienti e delle calorie dei pasti non venivano visualizzati correttamente.
+  Questa patch cumulativa affronta tre problemi di usabilità identificati per migliorare la coerenza e la robustezza dell'interfaccia.
 
-  **Analisi del Bug:**
-  Le funzioni di formattazione in `src/utils/formatters.js` (`formatIngredients` e `formatIngredientsSummary`) trattavano erroneamente il campo `meal.ingredienti` come una stringa, mentre la struttura dati corretta, utilizzata per il calcolo delle calorie, è un array di oggetti. Questo causava un output vuoto o errato.
+  **1. Correzione Visualizzazione Nomi Ingredienti:**
+  Il problema principale era la visualizzazione degli ID degli ingredienti (es. `fiocchi_latte`) invece dei loro nomi leggibili.
+  * **Causa:** La funzione `formatIngredientsSummary` era logicamente errata e mancava l'accesso a una lista centralizzata di ingredienti.
+  * **Soluzione:**
+      * È stato modificato lo stato globale in `src/core/state.js` per includere una `masterIngredientList`, popolata al caricamento della configurazione.
+      * La funzione `formatIngredientsSummary` in `src/utils/formatters.js` è stata riscritta per utilizzare questa nuova lista, garantendo la corretta mappatura da ID a nome.
+      * Tutti i file che renderizzano i dettagli dei pasti (`dayEditorModal.js`, `selectionModal.js`, `plannerRenderer.js`, `pageRenderers.js`) sono stati verificati per assicurare l'uso corretto della nuova logica.
 
-  **Soluzione Implementata:**
+  **2. Stabilità Layout nel Modale "Editor del Giorno":**
+  L'altezza variabile degli slot dei pasti causava un fastidioso "salto" del layout quando si aggiungeva o rimuoveva un pasto.
+  * **Soluzione:** È stata applicata una regola CSS `min-height` al selettore `.meal-details-container` in `styles/modals.css`. Questo assicura che tutti gli slot, pieni o vuoti, mantengano una dimensione uniforme, stabilizzando l'interfaccia.
 
-  1.  **Logica di Formattazione Corretta:**
-      * La funzione `formatIngredientsSummary` in `src/utils/formatters.js` è stata riscritta. Ora accetta l'elenco completo degli ingredienti come secondo argomento, itera sull'array `meal.ingredienti`, cerca il nome di ciascun ingrediente tramite il suo `id` e costruisce una stringa di riepilogo leggibile per l'utente (es. "Riso: 80g, Pollo: 150g").
-      * La funzione `formatIngredients` è stata aggiornata per passare correttamente la lista degli ingredienti alla funzione `formatIngredientsSummary`.
-
-  2.  **Propagazione dei Dati Necessari:**
-      * Tutti i moduli dell'interfaccia utente che visualizzano i dettagli dei pasti (`dayEditorModal.js`, `selectionModal.js`, `plannerRenderer.js` per la vista registro, e `pageRenderers.js` per la pagina delle ricette) sono stati aggiornati.
-      * Ora, quando invocano le funzioni di formattazione, passano correttamente la lista completa degli ingredienti, recuperandola dallo stato globale dell'applicazione.
-
-  Questa correzione assicura che i dettagli dei pasti, inclusi ingredienti, quantità e calorie, siano visualizzati in modo coerente e corretto in tutte le sezioni rilevanti dell'applicazione, risolvendo il problema di usabilità e ripristinando la funzionalità prevista.
+  **3. Logica di Chiusura dei Modali Resa più Robusta:**
+  I modali si chiudevano accidentalmente se un utente iniziava a selezionare del testo all'interno del modale e rilasciava il click del mouse all'esterno.
+  * **Soluzione:** La logica in `src/ui/interactions/globalInteractions.js` è stata aggiornata. Invece di un semplice evento `click`, ora viene utilizzata una combinazione di `mousedown` e `mouseup` per garantire che il modale si chiuda solo quando l'intera azione del click (pressione e rilascio) avviene sull'overlay, prevenendo chiusure involontarie.
 patches:
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterIngredientList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        configUrl: '',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        debugMode: false,
+        ui: {
+          currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+          lastWorkoutSummary: null,
+          charts: {
+            currentRangeFilter: 30,
+            dateOffset: 0,
+            selectedBiometric: 'weight',
+            plannerChartType: 'bar'
+          }
+        }
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+      export const setState = (newState) => {
+        state = { ...state, ...newState };
+        notify();
+      }
+      export const setUiState = (uiChanges) => {
+        state.ui = { ...state.ui, ...uiChanges };
+        notify();
+      }
+
+      export function getMealsForType(mealType) {
+        return state.masterMealList.filter(meal => {
+          if (meal.tipoPasto === 'Tutti') return true;
+          if (Array.isArray(meal.tipoPasto)) {
+            return meal.tipoPasto.includes(mealType);
+          }
+          return meal.tipoPasto === mealType;
+        });
+      }
+
+      export function getExerciseForPlanner(slotId, instanceId) {
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function getExerciseFromHistory(date, startTime, instanceId) {
+        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+        if (!workout) return null;
+        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+      }
+
+      export function setPlannerConfig(config, url) {
+        log('State', 'Setting new planner config', { url });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+        state.masterIngredientList = ingredients;
+
+        // Calcola calorie e popola la master list
+        state.masterMealList = processMealsWithCalories(meals, ingredients);
+
+        // Deriva e imposta la recipeBaseUrl
+        if (url) {
+            const baseUrl = new URL(url);
+            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
+            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
+        } else {
+            state.recipeBaseUrl = '';
+        }
+
+        notify();
+      }
+
+      export function setConfigUrl(url) {
+        log('State', 'Setting new config URL', { url });
+        state.configUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (url) { state.configUrl = url; }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.configUrl = backupData.configUrl || '';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addMultipleBiometricEntries(newEntries) {
+        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
+        state.biometricData = [...state.biometricData, ...newEntries];
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) { // Add an exercise
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = {
+                      ...exercise,
+                      instanceId: Date.now() + Math.random()
+                  };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) { // Remove an exercise
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+
+            // Clear meals for the day
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+
+            // Clear planned workouts for the day
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+
+            // Clear workout history for the day
+            if (state.workoutHistory[isoDate]) {
+                delete state.workoutHistory[isoDate];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
+        if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
+          state.ui.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.ui.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+
+      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
+        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
+        if (!state.workoutHistory[date]) return;
+
+        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+        if (workoutIndex === -1) return;
+
+        const workout = state.workoutHistory[date][workoutIndex];
+        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
+        if (exerciseIndex === -1) return;
+
+        // Update sets data for the specific exercise
+        workout.exercises[exerciseIndex].setsData = newSetsData;
+
+        // Recalculate tonnage for the exercise
+        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
+
+        // Recalculate total tonnage for the entire workout
+        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
+
+        saveStateToLocalStorage();
+        notify();
+      }
+
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
   - file: src/utils/formatters.js
     content: |
       import { getState } from '../core/state.js';
@@ -73,15 +509,11 @@ patches:
       }
 
       export function formatIngredients(meal) {
-          const state = getState();
-          const ingredientsList = state.masterMealList.find(m => m.id === meal.id)?.ingredienti;
-          if (!ingredientsList || !Array.isArray(ingredientsList)) {
-              return '';
-          }
-          const summary = formatIngredientsSummary(meal);
-          const calories = formatMealCalories(meal);
-          const details = `<div class="meal-item-details">${summary} | ${calories}</div>`;
-          return details;
+        const summary = formatIngredientsSummary(meal);
+        const calories = formatMealCalories(meal);
+        if (!summary && !calories) return '';
+        const details = `<div class="meal-item-details">${summary || ''} | ${calories || ''}</div>`;
+        return details.replace(" |  | ", " | ");
       }
 
       export function formatIngredientsSummary(meal) {
@@ -89,11 +521,13 @@ patches:
         const mealDetails = state.masterMealList.find(m => m.id === meal.id);
 
         if (!mealDetails || !Array.isArray(mealDetails.ingredienti)) {
-          return meal.ingredienti || '';
+          // Fallback for older data structures or simple string ingredients
+          if (typeof meal.ingredienti === 'string') return meal.ingredienti;
+          return '';
         }
 
         const ingredientsSummary = mealDetails.ingredienti.map(item => {
-          const ingredientData = state.masterMealList.find(ing => ing.id === item.id);
+          const ingredientData = state.masterIngredientList.find(ing => ing.id === item.id);
           const name = ingredientData ? ingredientData.nome : item.id;
           let quantity = '';
           if (item.quantita_g) quantity = `${item.quantita_g}g`;
@@ -104,169 +538,6 @@ patches:
         }).join(', ');
 
         return ingredientsSummary;
-      }
-  - file: src/ui/modals/dayEditorModal.js
-    content: |
-      import { getState, updateWeeklyPlan, getMealsForType } from '../../core/state.js';
-      import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
-      import { log } from '../../utils/logger.js';
-      import { showRecipeModal } from './recipeModal.js';
-      import { openSelectionModal } from './selectionModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-      import { openManualWorkoutModal } from './manualWorkoutModal.js';
-      import { formatIngredients } from '../../utils/formatters.js';
-
-      let currentEditingDayISO = null;
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      export function openDayEditorModal(isoDate) {
-        log('Modals', 'Opening day editor modal', { isoDate });
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const dayEditorModal = document.getElementById('day-editor-modal');
-        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        const body = dayEditorModal.querySelector('#day-editor-body');
-        
-        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const plannedMeal = state.weeklyPlan[slotId];
-          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-          
-          let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            mealDetailsHTML = `
-              <div class="meal-details">
-                <div>
-                  <span class="meal-details__name">${meal.nomePasto}</span>
-                  ${formatIngredients(meal)}
-                </div>
-                <div class="meal-actions">
-                  ${getRecipeButtonHTML(meal, state)}
-                  <button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                </div>
-              </div>`;
-          }
-          return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
-        }).join('');
-
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-        
-        let workoutDetailsHTML;
-        if (plannedWorkoutList.length > 0) {
-            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
-        } else {
-            workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
-        }
-        
-        const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
-
-        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
-
-        body.onclick = e => {
-          const btnAddMeal = e.target.closest('.btn-add-meal');
-          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-          const btnAddExercise = e.target.closest('.btn-add-exercise');
-          const btnManageWorkout = e.target.closest('.btn-manage-workout');
-          const btnLogActivity = e.target.closest('.btn-log-activity');
-
-          if (btnAddMeal) {
-            const mealType = btnAddMeal.dataset.mealType;
-            const relevantMeals = getMealsForType(mealType);
-            dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(btnAddMeal.dataset.slotId, isoDate, relevantMeals);
-          }
-          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
-          else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-          else if (btnAddExercise) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnManageWorkout) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnLogActivity) {
-            dayEditorModal.classList.add('modal-hidden');
-            openManualWorkoutModal(isoDate);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
-      }
-  - file: src/ui/modals/selectionModal.js
-    content: |
-      import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
-      import { formatIngredients } from '../../utils/formatters.js';
-      import { openDayEditorModal } from './dayEditorModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-
-      export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
-        log('Modals', 'Opening meal selection modal', { slotId });
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        const list = selectionModal.querySelector('#selection-modal-list');
-        list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openDayEditorModal(returnIsoDate);
-        };
-
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { 
-            updateWeeklyPlan(slotId, item.dataset.mealId); 
-            closeAndReturn(); 
-          }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-
-      export function openWorkoutSelectionModal(slotId, returnIsoDate) {
-        log('Modals', 'Opening workout selection modal', { slotId });
-        const state = getState();
-        const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
-        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
-        const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          workoutSelectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
-        };
-
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
-            closeAndReturn();
-          }
-        };
-        workoutSelectionModal.classList.remove('modal-hidden');
       }
   - file: src/ui/pageRenderers.js
     content: |
@@ -492,350 +763,257 @@ patches:
         }
 
         let html = recipes.map(recipe => {
-            const ingredientsHtml = formatIngredientsSummary(recipe, state.masterMealList);
+            const ingredientsHtml = formatIngredientsSummary(recipe);
 
             return `
                 <div class="recipe-list-item" data-meal-id="${recipe.id}">
                     <h4>${recipe.nomePasto}</h4>
                     <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-                    ${ingredientsHtml ? `<div class="meal-item-details"><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
+                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
                 </div>
             `;
         }).join('');
 
         recipesList.innerHTML = html;
       }
-  - file: src/ui/plannerRenderer.js
+  - file: styles/modals.css
     content: |
-      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { formatIngredientsSummary } from '../utils/formatters.js';
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
+      .day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
+      .day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
+      .meal-details-container { flex-grow: 1; min-width: 0; min-height: 60px; display: flex; align-items: center; }
+      .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
+      .workout-summary-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .meal-details { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 0.5rem; width: 100%; }
+      .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
+      .meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--card-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
+      }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
       }
 
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
       }
 
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
 
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .draggable-item { background-color: var(--bg-color); border-radius: 8px; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
 
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
-
-      function calculateDailyCalories(isoDate, weeklyPlan) {
-        let min = 0, max = 0;
-        MEAL_TYPES.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
         }
-        return '';
       }
 
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) details.push(`${setData.reps} reps`);
-          if (setData.weight) details.push(`${setData.weight} kg`);
-          if (setData.duration) details.push(`${formatDuration(setData.duration)}`);
-          return details.join(' / ');
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+      }
+  - file: src/ui/interactions/globalInteractions.js
+    content: |
+      import { setView, getState, setAppState } from '../../core/state.js';
+      import { showConfirmModal } from '../modals.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+
+      function handleShareConfig() {
+        log('Interactions', 'Share config button clicked');
+        const state = getState();
+        if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
+        }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
       }
 
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
       }
 
-      function renderPlannerSummaryWidget(state, weekStart) {
-        const widgetContainer = document.getElementById('planner-summary-widget');
-        const { userGoals, biometricData, workoutHistory } = state;
-        let totalCaloriesConsumed = 0;
-        let dayCount = 0;
-        let completedWorkouts = 0;
-        let totalCaloriesBurned = 0;
+      async function handleSaveBackup() {
+        log('Interactions', 'Save backup button clicked');
+        const state = getState();
+        const backupData = {
+          configUrl: state.configUrl,
+          weeklyPlan: state.weeklyPlan,
+          weeklyWorkouts: state.weeklyWorkouts,
+          workoutHistory: state.workoutHistory,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile,
+          userGoals: state.userGoals
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
+          }
+        } else { triggerDownload(blob, fileName); }
+      }
 
-        for (let i = 0; i < 7; i++) {
-            const dayDate = new Date(weekStart);
-            dayDate.setDate(dayDate.getDate() + i);
-            const isoDate = toISODateString(dayDate);
+      function handleRestoreBackup() {
+          log('Interactions', 'Restore backup button clicked');
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                          showConfirmModal(
+                              UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              UI_TEXT.RESTORE_CONFIRM_MSG,
+                              () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              'danger'
+                          );
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
 
-            let dailyMin = 0;
-            let hasMeals = false;
-            MEAL_TYPES.forEach(type => {
-                const meal = state.weeklyPlan[`${isoDate}-${type}`];
-                if (meal) {
-                    dailyMin += Number(meal.calories_min) || 0;
-                    hasMeals = true;
+      function handleHamburgerClick() {
+          const nav = document.getElementById('main-nav');
+          nav.classList.toggle('is-open');
+          nav.classList.toggle('is-mobile');
+      }
+
+      export function initializeGlobalListeners() {
+        document.getElementById('backup-btn').addEventListener('click', handleSaveBackup);
+        document.getElementById('restore-btn').addEventListener('click', handleRestoreBackup);
+        document.getElementById('share-config-btn').addEventListener('click', handleShareConfig);
+        document.getElementById('hamburger-btn').addEventListener('click', handleHamburgerClick);
+
+        document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+        document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
+        document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
+        document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
+        document.getElementById('nav-goals').addEventListener('click', () => setView('goals'));
+        document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
+
+        document.getElementById('info-icon').addEventListener('click', () => document.getElementById('info-modal').classList.remove('hidden'));
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const modalId = e.currentTarget.dataset.target;
+            if (modalId) { document.getElementById(modalId).classList.add('modal-hidden'); }
+          });
+        });
+
+        // Robust modal closing logic
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            let mouseDownTarget = null;
+            overlay.addEventListener('mousedown', e => {
+                if (e.target === overlay) {
+                    mouseDownTarget = e.target;
                 }
             });
-
-            if (hasMeals) {
-                totalCaloriesConsumed += dailyMin;
-                dayCount++;
-            }
-
-            if (workoutHistory[isoDate]) {
-                completedWorkouts += workoutHistory[isoDate].length;
-                workoutHistory[isoDate].forEach(workout => {
-                    totalCaloriesBurned += workout.totalCaloriesBurned || 0;
-                });
-            }
-        }
-
-        const avgCalories = dayCount > 0 ? Math.round(totalCaloriesConsumed / dayCount) : 0;
-        const calGoal = userGoals.avg_calories || 0;
-        const workoutGoal = userGoals.num_workouts || 0;
-        const weightGoal = userGoals.target_weight || 0;
-        const latestWeight = biometricData.length > 0 ? biometricData[0].weight : 0;
-        const kgToGoal = (latestWeight && weightGoal) ? (latestWeight - weightGoal).toFixed(1) : 0;
-
-        let weightProgressHTML = '';
-        if (latestWeight > 0 && weightGoal > 0) {
-            weightProgressHTML = `
-            <div class="planner-summary-stat">
-                <div class="stat-icon">${renderIcon('GOAL', {width: 20, height: 20})}</div>
-                <div>
-                    <span class="stat-value">${kgToGoal} kg</span>
-                    <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WEIGHT_PROGRESS}</span>
-                </div>
-            </div>`;
-        }
-
-        widgetContainer.innerHTML = `
-            <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
-            <div class="planner-summary-stats">
-                <div class="planner-summary-stat">
-                    <div class="stat-icon">${renderIcon('PLANNER', {width: 20, height: 20})}</div>
-                    <div>
-                        <span class="stat-value">${avgCalories} ${calGoal > 0 ? `/ ${calGoal}`: ''}</span>
-                        <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
-                    </div>
-                </div>
-                <div class="planner-summary-stat">
-                    <div class="stat-icon">${renderIcon('DUMBBELL', {width: 20, height: 20})}</div>
-                    <div>
-                        <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
-                        <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
-                    </div>
-                </div>
-                <div class="planner-summary-stat">
-                    <div class="stat-icon">${renderIcon('BAR_CHART', {width: 20, height: 20})}</div>
-                    <div>
-                        <span class="stat-value">${Math.round(totalCaloriesBurned)}</span>
-                        <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_CALORIES_BURNED}</span>
-                    </div>
-                </div>
-                ${weightProgressHTML}
-            </div>
-        `;
-      }
-
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-          const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-
-          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
-          let workoutButtonHTML = '';
-
-          if (workoutList && workoutList.length > 0) {
-              const exerciseCount = workoutList.length;
-              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
-              summaryHTML += `<div class="daily-summary-item">${renderIcon('DUMBBELL', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-          }
-
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `
-            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
-            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
-          calendarGrid.appendChild(dayCell);
-        }
-      }
-
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        let logViewHTML = '';
-        let hasContent = false;
-
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          const completedWorkouts = state.workoutHistory[isoDate] || [];
-
-          if (dayMeals.length > 0 || completedWorkouts.length > 0) {
-            hasContent = true;
-            let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
-            dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
-
-            if (dayMeals.length > 0) {
-              dayLogHTML += dayMeals.map(item => `
-                <div class="log-item">
-                  <div class="log-item__name">
-                    <div>
-                      <strong>${item.type}:</strong>
-                      <span>${item.meal.nomePasto}</span>
-                      <div class="log-item-details">${formatIngredientsSummary(item.meal)}</div>
-                    </div>
-                    ${getRecipeButtonHTML(item.meal, state)}
-                  </div>
-                  <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
-                </div>`).join('');
-            }
-
-            if (completedWorkouts.length > 0) {
-                completedWorkouts.forEach(workout => {
-                    if (workout.type === 'structured') {
-                        dayLogHTML += `<div class="log-workout-summary">
-                            <div class="log-workout-header">
-                                <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                                <div class="log-workout-header-actions">
-                                    <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                                </div>
-                            </div>
-                            <div class="log-workout-stats">
-                                <span>Durata: ${formatDuration(workout.totalTime)}</span>
-                                ${workout.totalCaloriesBurned > 0 ? `<span>/</span><span>Kcal: ${workout.totalCaloriesBurned}</span>` : ''}
-                                ${workout.totalTonnage > 0 ? `<span>/</span><span>Volume: ${workout.totalTonnage} kg</span>` : ''}
-                                ${workout.rpe ? `<span>/</span><span>RPE: ${workout.rpe}</span>` : ''}
-                            </div>
-                            ${workout.exercises.map(ex => `
-                            <div class="log-workout-exercise">
-                                <div class="log-item">
-                                  <strong>${ex.name}</strong>
-                                  <div class="log-workout-header-actions">
-                                    <button class="btn-edit-logged-exercise" data-date="${workout.date}" data-starttime="${workout.startTime}" data-instanceid="${ex.instanceId}" title="Modifica Esercizio">${renderIcon('EDIT')}</button>
-                                  </div>
-                                </div>
-                                <div class="log-sets-details">
-                                ${ex.setsData.map((setData, i) => `
-                                    <div class="log-set-item">
-                                    <span>Serie ${i + 1}</span>
-                                    <span>${getSetDetails(setData)}</span>
-                                    </div>
-                                `).join('')}
-                                </div>
-                            </div>
-                            `).join('')}
-                        </div>`;
-                    } else if (workout.type === 'manual') {
-                        let detailsHTML = '';
-                        if (workout.distance) detailsHTML += `<div><strong>Distanza:</strong> ${workout.distance} km</div>`;
-                        if (workout.fc_avg) detailsHTML += `<div><strong>FC Media:</strong> ${workout.fc_avg} bpm</div>`;
-                        if (workout.fc_max) detailsHTML += `<div><strong>FC Max:</strong> ${workout.fc_max} bpm</div>`;
-                        if (workout.notes) detailsHTML += `<div class="log-item-details">${workout.notes.replace(/\n/g, '<br>')}</div>`;
-
-                        dayLogHTML += `<div class="log-workout-summary">
-                            <div class="log-workout-header">
-                                <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
-                                <div class="log-workout-header-actions">
-                                  <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                                </div>
-                            </div>
-                            <div class="log-item">
-                                <strong>${workout.name}</strong>
-                                <span>${workout.duration || ''}</span>
-                            </div>
-                            ${detailsHTML ? `<div class="log-manual-details">${detailsHTML}</div>` : ''}
-                        </div>`;
-                    }
-                });
-            }
-
-            dayLogHTML += `</div>`;
-            logViewHTML += dayLogHTML;
-          }
-        }
-
-        if (!hasContent) {
-          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-        } else {
-          logView.innerHTML = logViewHTML;
-        }
-      }
-
-      export function renderPlannerPage(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-
-        const calendarGrid = document.getElementById('calendar-grid');
-        const logView = document.getElementById('log-view');
-        const viewCalendarBtn = document.getElementById('view-calendar-btn');
-        const viewLogBtn = document.getElementById('view-log-btn');
-        const { currentView } = state.ui;
-
-        if (currentView === 'planner' || currentView === 'log') {
-            renderPlannerSummaryWidget(state, weekStart);
-        }
-
-        if (currentView === 'planner') {
-            calendarGrid.classList.remove('hidden');
-            logView.classList.add('hidden');
-            viewCalendarBtn.classList.add('active');
-            viewLogBtn.classList.remove('active');
-        } else if (currentView === 'log') {
-            calendarGrid.classList.add('hidden');
-            logView.classList.remove('hidden');
-            viewCalendarBtn.classList.remove('active');
-            viewLogBtn.classList.add('active');
-        }
-
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
+            overlay.addEventListener('mouseup', e => {
+                if (e.target === mouseDownTarget) {
+                    overlay.classList.add('modal-hidden');
+                }
+                mouseDownTarget = null;
+            });
+        });
+        
+        document.getElementById('global-alert-close').addEventListener('click', () => { document.getElementById('global-alert').classList.add('hidden'); });
       }
 commands:
-  - "echo 'Patch correttiva applicata. La visualizzazione dei dettagli degli ingredienti è stata ripristinata.'"
+  - "echo 'Patch applicato: nomi ingredienti, layout modale e chiusura modali sono stati corretti.'"

@@ -6,6 +6,7 @@ import { log } from '../utils/logger.js';
 let state = {
   rules: [],
   masterMealList: [],
+  masterIngredientList: [],
   masterWorkoutList: [],
   weeklyPlan: {},
   weeklyWorkouts: {},
@@ -81,6 +82,7 @@ export function setPlannerConfig(config, url) {
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
   state.masterWorkoutList = config.esercizi || [];
+  state.masterIngredientList = ingredients;
 
   // Calcola calorie e popola la master list
   state.masterMealList = processMealsWithCalories(meals, ingredients);

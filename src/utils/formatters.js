@@ -52,15 +52,11 @@ export function formatDateWithYear(date) {
 }
 
 export function formatIngredients(meal) {
-    const state = getState();
-    const ingredientsList = state.masterMealList.find(m => m.id === meal.id)?.ingredienti;
-    if (!ingredientsList || !Array.isArray(ingredientsList)) {
-        return '';
-    }
-    const summary = formatIngredientsSummary(meal);
-    const calories = formatMealCalories(meal);
-    const details = `<div class="meal-item-details">${summary} | ${calories}</div>`;
-    return details;
+  const summary = formatIngredientsSummary(meal);
+  const calories = formatMealCalories(meal);
+  if (!summary && !calories) return '';
+  const details = `<div class="meal-item-details">${summary || ''} | ${calories || ''}</div>`;
+  return details.replace(" |  | ", " | ");
 }
 
 export function formatIngredientsSummary(meal) {
@@ -68,11 +64,13 @@ export function formatIngredientsSummary(meal) {
   const mealDetails = state.masterMealList.find(m => m.id === meal.id);
 
   if (!mealDetails || !Array.isArray(mealDetails.ingredienti)) {
-    return meal.ingredienti || '';
+    // Fallback for older data structures or simple string ingredients
+    if (typeof meal.ingredienti === 'string') return meal.ingredienti;
+    return '';
   }
 
   const ingredientsSummary = mealDetails.ingredienti.map(item => {
-    const ingredientData = state.masterMealList.find(ing => ing.id === item.id);
+    const ingredientData = state.masterIngredientList.find(ing => ing.id === item.id);
     const name = ingredientData ? ingredientData.nome : item.id;
     let quantity = '';
     if (item.quantita_g) quantity = `${item.quantita_g}g`;

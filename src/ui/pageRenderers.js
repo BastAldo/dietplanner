@@ -220,13 +220,13 @@ export function renderRecipesPage(state) {
   }
 
   let html = recipes.map(recipe => {
-      const ingredientsHtml = formatIngredientsSummary(recipe, state.masterMealList);
+      const ingredientsHtml = formatIngredientsSummary(recipe);
 
       return `
           <div class="recipe-list-item" data-meal-id="${recipe.id}">
               <h4>${recipe.nomePasto}</h4>
               <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-              ${ingredientsHtml ? `<div class="meal-item-details"><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
+              ${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
           </div>
       `;
   }).join('');
