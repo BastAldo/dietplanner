@@ -1,226 +1,169 @@
-commit_message: "refactor(UI): Ridisegna il modale di conferma per supportare pulsanti multipli e corregge il flusso di uscita dal trainer"
+commit_message: "fix(UI): Corregge il layout del modale su mobile e ripristina la funzionalità del toogle audio"
 rationale: |
-  Questa patch risolve un'importante regressione funzionale e di usabilità nel flusso di terminazione dell'allenamento e migliora l'architettura dei componenti modali.
+  Questa patch risolve due bug distinti nell'interfaccia utente, migliorando la reattività e la funzionalità del componente Trainer.
 
-  **1. Refactoring Architettonico del `confirmModal`:**
-  * **Problema:** Il componente `showConfirmModal` era rigido, progettato per soli due pulsanti (conferma/annulla). Questo ha impedito la corretta implementazione di un'interfaccia a tre opzioni (Salva/Scarta/Annulla), portando a una logica a cascata fragile e a bug funzionali.
-  * **Soluzione:**
-      * Il componente è stato completamente refattorizzato. Ora `showConfirmModal` in `src/ui/modals/confirmModal.js` accetta un array di oggetti `buttons`, dove ogni oggetto definisce `text`, `className`, e `callback`.
-      * Il template `templates/modals.html` è stato aggiornato per avere un footer dinamico che viene popolato programmaticamente.
-      * Questo rende il `confirmModal` un componente altamente riutilizzabile e flessibile, capace di gestire qualsiasi numero di azioni.
-      * Tutte le chiamate esistenti a `showConfirmModal` nell'applicazione (`globalInteractions.js`, `plannerInteractions.js`, `progressInteractions.js`) sono state aggiornate per utilizzare la nuova firma, garantendo la retrocompatibilità.
+  **1. Correzione del Layout del Modale di Conferma su Mobile:**
+  * **Problema:** Il modale utilizzato per terminare l'allenamento, che presenta tre pulsanti, non gestiva correttamente gli schermi di piccole dimensioni. I pulsanti non andavano a capo, causando un overflow e rompendo il layout del modale.
+  * **Soluzione:** È stata applicata una semplice ma efficace correzione CSS al file `styles/modals.css`. Aggiungendo `flex-wrap: wrap;` e `justify-content: center;` alla classe `.modal-footer`, i pulsanti ora si dispongono verticalmente quando lo spazio orizzontale è insufficiente, garantendo una visualizzazione corretta su tutti i dispositivi mobili.
 
-  **2. Implementazione del Flusso di Uscita Corretto nel Trainer:**
-  * **Problema:** Il flusso per terminare un allenamento era confuso, non funzionante e mancava di un'opzione chiara per annullare l'azione.
-  * **Soluzione:**
-      * Sfruttando il nuovo `confirmModal`, il metodo `_handleEndWorkoutFlow` in `src/ui/components/TrainerComponent.js` è stato riscritto da zero.
-      * Ora, una singola chiamata al modale presenta all'utente le tre opzioni chiare e dirette come richiesto: "Salva e Termina", "Scarta Allenamento" e "Annulla".
-      * Ogni pulsante è collegato alla sua azione corretta (`endWorkout`, `discardWorkout`, o semplicemente la chiusura del modale), risolvendo il bug funzionale e migliorando drasticamente l'esperienza utente.
+  **2. Ripristino Funzionalità del Pulsante Audio nel Trainer:**
+  * **Problema:** Il pulsante per attivare o disattivare l'audio guida nella schermata del trainer non rispondeva al click. L'analisi ha rivelato una gestione impropria dei listener di eventi nel file `src/ui/components/TrainerComponent.js`. L'uso di `.bind(this)` sia in `addEventListener` che in `removeEventListener` creava nuove istanze della funzione, impedendo la corretta rimozione del listener e causando un comportamento imprevedibile.
+  * **Soluzione:** È stata implementata una best practice per la gestione degli eventi in JavaScript. La funzione di gestione `handleControls` viene ora associata (`bind`) una sola volta nel costruttore del componente e memorizzata in una proprietà (`this.boundHandleControls`). Questa proprietà viene poi utilizzata in modo coerente sia per aggiungere (`mount`) che per rimuovere (`destroy`) il listener, risolvendo il bug e rendendo il componente più robusto e privo di potenziali memory leak.
 patches:
-  - file: src/ui/modals/confirmModal.js
+  - file: styles/modals.css
     content: |
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
 
-      export function showConfirmModal(options) {
-        const {
-          title,
-          message,
-          buttons = [], // Default to an empty array
-          // The following are fallbacks for the old API signature
-          onConfirm,
-          onCancel,
-          type = 'secondary',
-          confirmText = UI_TEXT.CONFIRM_MODAL_CONFIRM_BTN,
-          cancelText = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
-        } = options;
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
 
-        log('Modals', 'Showing confirm modal', { title });
-        const confirmModal = document.getElementById('confirm-modal');
-        confirmModal.querySelector('#confirm-modal-title').textContent = title;
-        confirmModal.querySelector('#confirm-modal-message').textContent = message;
-        const footer = confirmModal.querySelector('.modal-footer');
-        footer.innerHTML = ''; // Clear previous buttons
-
-        let buttonConfigs = buttons;
-
-        // Handle backward compatibility for old 2-button calls
-        if (buttonConfigs.length === 0 && onConfirm) {
-          buttonConfigs.push({
-            text: confirmText,
-            className: `btn btn-${type}`,
-            callback: onConfirm
-          });
-          buttonConfigs.push({
-            text: cancelText,
-            className: 'btn btn-secondary',
-            callback: onCancel
-          });
-        }
-
-        const cleanup = () => {
-          confirmModal.classList.add('modal-hidden');
-        };
-
-        buttonConfigs.forEach(btnConfig => {
-          const button = document.createElement('button');
-          button.textContent = btnConfig.text;
-          button.className = btnConfig.className || 'btn btn-secondary';
-          button.addEventListener('click', () => {
-            if (btnConfig.callback) {
-              btnConfig.callback();
-            }
-            cleanup();
-          }, { once: true });
-          footer.appendChild(button);
-        });
-
-        // Add a default cancel button if the user only provides one button via the old API
-        // This is a safety measure to ensure modals can always be closed.
-        if (buttons.length === 0 && onConfirm && !onCancel && buttonConfigs.length === 1) {
-            const cancelButton = document.createElement('button');
-            cancelButton.textContent = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN;
-            cancelButton.className = 'btn btn-secondary';
-            cancelButton.addEventListener('click', cleanup, { once: true });
-            footer.appendChild(cancelButton);
-        }
-
-        confirmModal.classList.remove('modal-hidden');
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
       }
-  - file: templates/modals.html
-    content: |
-      <div id="info-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="info-modal-title"></h3>
-                <button class="modal-close-btn" data-target="info-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <p id="info-modal-desc"></p>
-                  <pre><code id="info-modal-json-example"></code></pre>
-              </div>
-          </div>
-      </div>
-      <div id="selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="selection-modal"></button>
-              </div>
-              <div id="selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="workout-selection-modal-title"></h3>
-                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
-              </div>
-              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
-          </div>
-      </div>
-      <div id="day-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="day-editor-title"></h3>
-              <button class="modal-close-btn" data-target="day-editor-modal"></button>
-            </div>
-            <div id="day-editor-body" class="modal-body day-editor-list"></div>
-        </div>
-      </div>
-      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="workout-editor-title"></h3>
-              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
-            </div>
-            <div id="workout-editor-body" class="modal-body"></div>
-        </div>
-      </div>
-      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="exercise-editor-title"></h3>
-              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
-            </div>
-            <div id="exercise-editor-body" class="modal-body">
-            </div>
-            <div class="modal-footer">
-                <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
-            </div>
-        </div>
-      </div>
-      <div id="confirm-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="confirm-modal-title"></h3>
-            </div>
-            <div class="modal-body">
-              <p id="confirm-modal-message"></p>
-            </div>
-            <div class="modal-footer">
-              </div>
-        </div>
-      </div>
-      <div id="recipe-modal" class="modal-overlay modal-hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-              <h3 id="recipe-modal-title"></h3>
-              <button class="modal-close-btn" data-target="recipe-modal"></button>
-            </div>
-            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
-        </div>
-      </div>
-      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content">
-              <div class="modal-header">
-                <h3 id="manual-workout-modal-title"></h3>
-                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
-              </div>
-              <div class="modal-body">
-                  <form id="manual-workout-form" class="structured-form">
-                      <div class="form-group">
-                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
-                          <input type="text" id="manual-workout-name" name="name" required>
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
-                          <input type="text" id="manual-workout-duration" name="duration">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
-                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
-                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
-                      </div>
-                      <div class="form-group">
-                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
-                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
-                      </div>
-                      <div class="form-group full-width">
-                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
-                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
-                      </div>
-                  </form>
-              </div>
-              <div class="modal-footer">
-                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
-              </div>
-          </div>
-      </div>
-      <div id="chart-modal" class="modal-overlay modal-hidden">
-          <div class="modal-content modal-content-large">
-              <div class="modal-header">
-                <h3 id="chart-modal-title"></h3>
-                <button class="modal-close-btn" data-target="chart-modal"></button>
-              </div>
-              <div id="chart-modal-body" class="modal-body">
-                <canvas id="chart-modal-canvas"></canvas>
-              </div>
-          </div>
-      </div>
+      .editor-section-body {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .meal-details, .workout-summary {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .meal-info, .exercise-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .meal-details__name {
+        font-weight: 500;
+      }
+      .meal-actions, .workout-summary-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+
+      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+      .workout-editor-list .draggable-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        min-height: 70px;
+      }
+      .workout-editor-list .meal-actions { margin-left: auto; }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
+      }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
+      }
+
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
+      }
+
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+      }
   - file: src/ui/components/TrainerComponent.js
     content: |
       import { getWorkoutState, updateState } from '../../core/trainer/state.js';
@@ -256,11 +199,14 @@ patches:
 
               this.ringProgress = null;
               this.ringText = null;
+
+              // Bind the event handler once in the constructor
+              this.boundHandleControls = this.handleControls.bind(this);
           }
 
           mount() {
               this.createTimerRing();
-              this.container.addEventListener('click', this.handleControls.bind(this));
+              this.container.addEventListener('click', this.boundHandleControls);
               this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
               this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
               this.updateAudioButton(getWorkoutState().isAudioEnabled);
@@ -268,7 +214,7 @@ patches:
 
           destroy() {
               log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.handleControls.bind(this));
+              this.container.removeEventListener('click', this.boundHandleControls);
               if (this.elements.ringContainer) {
                   this.elements.ringContainer.innerHTML = '';
               }
@@ -517,3 +463,4 @@ patches:
               return details;
           }
       }
+commands: []

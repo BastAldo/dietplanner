@@ -31,11 +31,14 @@ export class TrainerComponent {
 
         this.ringProgress = null;
         this.ringText = null;
+
+        // Bind the event handler once in the constructor
+        this.boundHandleControls = this.handleControls.bind(this);
     }
 
     mount() {
         this.createTimerRing();
-        this.container.addEventListener('click', this.handleControls.bind(this));
+        this.container.addEventListener('click', this.boundHandleControls);
         this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
         this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
         this.updateAudioButton(getWorkoutState().isAudioEnabled);
@@ -43,7 +46,7 @@ export class TrainerComponent {
 
     destroy() {
         log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-        this.container.removeEventListener('click', this.handleControls.bind(this));
+        this.container.removeEventListener('click', this.boundHandleControls);
         if (this.elements.ringContainer) {
             this.elements.ringContainer.innerHTML = '';
         }
