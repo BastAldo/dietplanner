@@ -1,3 +1,5 @@
+import { getState } from '../core/state.js';
+
 function formatMealCalories(meal) {
   if (!meal || typeof meal.calories_min !== 'number') return '';
   const minCals = Number(meal.calories_min) || 0;
@@ -50,22 +52,35 @@ export function formatDateWithYear(date) {
 }
 
 export function formatIngredients(meal) {
-    const ingredientsString = meal.ingredienti;
-    if (!ingredientsString || typeof ingredientsString !== 'string') {
+    const state = getState();
+    const ingredientsList = state.masterMealList.find(m => m.id === meal.id)?.ingredienti;
+    if (!ingredientsList || !Array.isArray(ingredientsList)) {
         return '';
     }
-    const ingredients = ingredientsString.split(',').map(item => item.trim());
-    if (ingredients.length === 0) {
-        return '';
-    }
-    const details = `<div class="meal-item-details">${formatIngredientsSummary(meal)} | ${formatMealCalories(meal)}</div>`;
+    const summary = formatIngredientsSummary(meal);
+    const calories = formatMealCalories(meal);
+    const details = `<div class="meal-item-details">${summary} | ${calories}</div>`;
     return details;
 }
 
 export function formatIngredientsSummary(meal) {
-  const ingredientsString = meal.ingredienti;
-  if (!ingredientsString || typeof ingredientsString !== 'string') {
-    return '';
+  const state = getState();
+  const mealDetails = state.masterMealList.find(m => m.id === meal.id);
+
+  if (!mealDetails || !Array.isArray(mealDetails.ingredienti)) {
+    return meal.ingredienti || '';
   }
-  return ingredientsString;
+
+  const ingredientsSummary = mealDetails.ingredienti.map(item => {
+    const ingredientData = state.masterMealList.find(ing => ing.id === item.id);
+    const name = ingredientData ? ingredientData.nome : item.id;
+    let quantity = '';
+    if (item.quantita_g) quantity = `${item.quantita_g}g`;
+    else if (item.quantita_g_min && item.quantita_g_max) quantity = `${item.quantita_g_min}-${item.quantita_g_max}g`;
+    else if (item.quantita_g_min) quantity = `${item.quantita_g_min}g`;
+    else if (item.quantita_pezzi) quantity = `${item.quantita_pezzi} pz`;
+    return `${name}: ${quantity}`;
+  }).join(', ');
+
+  return ingredientsSummary;
 }

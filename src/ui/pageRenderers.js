@@ -3,7 +3,7 @@ import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { renderCharts } from './charts.js';
-import { formatIngredients } from '../utils/formatters.js';
+import { formatIngredientsSummary } from '../utils/formatters.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -220,14 +220,13 @@ export function renderRecipesPage(state) {
   }
 
   let html = recipes.map(recipe => {
-      // Usa il campo 'ingredienti' che è una stringa pre-formattata
-      const ingredientsHtml = formatIngredients(recipe.ingredienti);
+      const ingredientsHtml = formatIngredientsSummary(recipe, state.masterMealList);
 
       return `
           <div class="recipe-list-item" data-meal-id="${recipe.id}">
               <h4>${recipe.nomePasto}</h4>
               <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-              ${ingredientsHtml ? `<div><strong>Ingredienti:</strong>${ingredientsHtml}</div>` : ''}
+              ${ingredientsHtml ? `<div class="meal-item-details"><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
           </div>
       `;
   }).join('');
