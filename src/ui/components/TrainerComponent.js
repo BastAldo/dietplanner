@@ -1,5 +1,4 @@
-import { getWorkoutState, updateState } from '../../core/trainer/state.js';
-import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, incrementManualRep } from '../../core/trainer.js';
+import { getWorkoutState, updateState, startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, incrementManualRep } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
@@ -24,6 +23,7 @@ export class TrainerComponent {
             btnResume: this.container.querySelector('#trainer-resume-btn'),
             btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
             btnAudio: this.container.querySelector('#audio-toggle-btn'),
+            btnEnd: this.container.querySelector('#trainer-end-btn'),
 
             ringContainer: this.container.querySelector('#timer-ring-container'),
         };
@@ -36,6 +36,7 @@ export class TrainerComponent {
         this.createTimerRing();
         this.container.addEventListener('click', this.handleControls.bind(this));
         this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
+        this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
         this.updateAudioButton(getWorkoutState().isAudioEnabled);
     }
 
@@ -46,6 +47,28 @@ export class TrainerComponent {
             this.elements.ringContainer.innerHTML = '';
         }
         log('TrainerComponent', 'Component destroyed.');
+    }
+
+    _handleEndWorkoutFlow() {
+      const promptDiscard = () => {
+          showConfirmModal({
+              title: UI_TEXT.DISCARD_WORKOUT_CONFIRM_TITLE,
+              message: UI_TEXT.DISCARD_WORKOUT_CONFIRM_MSG,
+              onConfirm: discardWorkout,
+              type: 'danger',
+              confirmText: UI_TEXT.DISCARD_WORKOUT_BTN
+          });
+      };
+
+      showConfirmModal({
+          title: UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
+          message: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
+          onConfirm: endWorkout,
+          onCancel: promptDiscard,
+          confirmText: UI_TEXT.SAVE_AND_END_BTN,
+          cancelText: UI_TEXT.DISCARD_WORKOUT_BTN,
+          type: 'primary'
+      });
     }
 
     async handleControls(e) {
@@ -64,15 +87,7 @@ export class TrainerComponent {
                 break;
             case 'trainer-pause-btn': pauseWorkout(); break;
             case 'trainer-resume-btn': resumeWorkout(); break;
-            case 'trainer-end-btn':
-                showConfirmModal(
-                    UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
-                    UI_TEXT.TERMINATE_WORKOUT_CONFIRM_MSG,
-                    () => endWorkout(),
-                    'danger'
-                );
-                break;
-            case 'trainer-back-btn': setView('planner'); break;
+            case 'trainer-end-btn': this._handleEndWorkoutFlow(); break;
             case 'trainer-manual-rep-btn': incrementManualRep(); break;
             case 'audio-toggle-btn': this.toggleAudio(); break;
         }

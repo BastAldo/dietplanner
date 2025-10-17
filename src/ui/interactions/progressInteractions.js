@@ -34,14 +34,14 @@ function handleImportCSV() {
               const currentState = getState();
               
               if (!currentState.userProfile.dateOfBirth && importedProfile.dateOfBirth) {
-                showConfirmModal(
-                  "Profilo Utente Trovato",
-                  "Il file CSV contiene i dati del tuo profilo. Vuoi importarli?",
-                  () => {
+                showConfirmModal({
+                  title: "Profilo Utente Trovato",
+                  message: "Il file CSV contiene i dati del tuo profilo. Vuoi importarli?",
+                  onConfirm: () => {
                     saveUserProfile(importedProfile);
                     showNotification("Profilo importato con successo!", 'success');
                   }
-                );
+                });
               }
 
               const newEntries = parsedEntries.filter(newEntry =>
@@ -58,15 +58,15 @@ function handleImportCSV() {
               });
 
               if (finalEntries.length > 0) {
-                  showConfirmModal(
-                      UI_TEXT.IMPORT_CONFIRM_TITLE,
-                      `Trovate ${finalEntries.length} nuove misurazioni. Vuoi importarle?`,
-                      () => {
+                  showConfirmModal({
+                      title: UI_TEXT.IMPORT_CONFIRM_TITLE,
+                      message: `Trovate ${finalEntries.length} nuove misurazioni. Vuoi importarle?`,
+                      onConfirm: () => {
                           addMultipleBiometricEntries(finalEntries);
                           showNotification(UI_TEXT.IMPORT_SUCCESS, 'success');
                       },
-                      'primary'
-                  );
+                      type: 'primary'
+                  });
               } else {
                   showNotification(UI_TEXT.IMPORT_NO_NEW_DATA, 'info');
               }
@@ -112,10 +112,12 @@ function handleBiometricsListClick(e) {
   if (btnDelete) {
       const date = btnDelete.dataset.date;
       log('Interactions', 'Delete biometrics button clicked', { date });
-      showConfirmModal(
-          UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE, UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
-          () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); }, 'danger'
-      );
+      showConfirmModal({
+          title: UI_TEXT.BIOMETRICS_DELETE_CONFIRM_TITLE,
+          message: UI_TEXT.BIOMETRICS_DELETE_CONFIRM_MSG,
+          onConfirm: () => { deleteBiometricEntry(date); showNotification(UI_TEXT.BIOMETRICS_DELETE_SUCCESS, 'info'); },
+          type: 'danger'
+      });
       const dropdown = btnDelete.closest('.actions-dropdown');
       if (dropdown) dropdown.classList.remove('show');
       return;

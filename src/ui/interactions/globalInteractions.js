@@ -68,12 +68,12 @@ function handleRestoreBackup() {
                 const content = readerEvent.target.result;
                 const backupData = JSON.parse(content);
                 if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
-                    showConfirmModal(
-                        UI_TEXT.RESTORE_CONFIRM_TITLE,
-                        UI_TEXT.RESTORE_CONFIRM_MSG,
-                        () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                        'danger'
-                    );
+                    showConfirmModal({
+                        title: UI_TEXT.RESTORE_CONFIRM_TITLE,
+                        message: UI_TEXT.RESTORE_CONFIRM_MSG,
+                        onConfirm: () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                        type: 'danger'
+                    });
                 } else { throw new Error('Invalid structure'); }
             } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
         };

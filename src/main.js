@@ -68,16 +68,16 @@ async function init() {
     const decodedUrl = decodeURIComponent(configUrlFromParam);
     initialState = getState();
     if (decodedUrl !== initialState.configUrl) {
-      showConfirmModal(
-        UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
-        UI_TEXT.LOAD_SHARED_CONFIG_MSG,
-        () => {
+      showConfirmModal({
+        title: UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
+        message: UI_TEXT.LOAD_SHARED_CONFIG_MSG,
+        onConfirm: () => {
           setConfigUrl(decodedUrl);
           document.getElementById('config-url-input').value = decodedUrl;
           loadConfig(decodedUrl);
         },
-        'primary'
-      );
+        type: 'primary'
+      });
     } else {
       await loadConfig(initialState.configUrl);
     }

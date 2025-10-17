@@ -21,15 +21,43 @@
 .trainer-header h2 {
     font-size: 1.25rem;
     color: var(--primary-color);
-    flex-shrink: 1;
+    flex-grow: 1;
     min-width: 0;
     text-align: center;
 }
 
-.trainer-header-controls {
+.trainer-header-controls, .trainer-header-placeholder {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-basis: 80px; /* Give side elements a basis to help centering */
+}
+.trainer-header-controls { justify-content: flex-end; }
+.trainer-header-placeholder { justify-content: flex-start; }
+
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-color-muted);
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+}
+.btn-icon:hover {
+  background-color: rgba(255,255,255,0.1);
+  color: var(--text-color);
+}
+#trainer-end-btn {
+  color: var(--danger-color);
+}
+ #trainer-end-btn:hover {
+  background-color: rgba(239, 83, 80, 0.1);
 }
 
 #audio-toggle-btn {

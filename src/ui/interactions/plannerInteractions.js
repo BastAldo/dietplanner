@@ -70,15 +70,15 @@ function handleLogViewClick(e) {
   if (btnDeleteWorkout) {
     const { date, starttime } = btnDeleteWorkout.dataset;
     log('Interactions', 'Delete workout button clicked', { date, starttime });
-    showConfirmModal(
-      UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
-      UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
-      () => {
+    showConfirmModal({
+      title: UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+      message: UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+      onConfirm: () => {
         deleteWorkoutFromHistory(date, parseInt(starttime));
         showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
       },
-      'danger'
-    );
+      type: 'danger'
+    });
     return;
   }
 
@@ -101,18 +101,22 @@ function handleLogViewClick(e) {
 
 function handleCopyWeek() {
   log('Interactions', 'Copy week button clicked');
-  showConfirmModal(
-    UI_TEXT.COPY_WEEK_CONFIRM_TITLE, UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-    () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); }, 'primary'
-  );
+  showConfirmModal({
+    title: UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
+    message: UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+    onConfirm: () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); },
+    type: 'primary'
+  });
 }
 
 function handleResetWeek() {
   log('Interactions', 'Reset week button clicked');
-  showConfirmModal(
-    UI_TEXT.RESET_WEEK_CONFIRM_TITLE, UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-    () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); }, 'danger'
-  );
+  showConfirmModal({
+    title: UI_TEXT.RESET_WEEK_CONFIRM_TITLE,
+    message: UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+    onConfirm: () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); },
+    type: 'danger'
+  });
 }
 
 export function initializePlannerListeners() {

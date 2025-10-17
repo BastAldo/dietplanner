@@ -234,3 +234,10 @@ export function endWorkout() {
 
   setView('debriefing');
 }
+
+export function discardWorkout() {
+  log('Trainer', 'Discarding workout.');
+  stopAllAnimations();
+  resetWorkoutState();
+  setView('planner');
+}

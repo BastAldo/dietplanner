@@ -168,6 +168,11 @@ const UI_TEXT_CONFIG = [
   { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' },
   { id: 'TERMINATE_WORKOUT_CONFIRM_TITLE', text: 'Termina Allenamento' },
   { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' },
+  { id: 'TERMINATE_WORKOUT_PROMPT_MSG', text: 'Vuoi salvare i progressi o scartare completamente questo allenamento?' },
+  { id: 'SAVE_AND_END_BTN', text: 'Salva e Termina' },
+  { id: 'DISCARD_WORKOUT_BTN', text: 'Scarta Allenamento' },
+  { id: 'DISCARD_WORKOUT_CONFIRM_TITLE', text: 'Scartare Allenamento?' },
+  { id: 'DISCARD_WORKOUT_CONFIRM_MSG', text: 'L\'allenamento non verrà salvato nello storico. Questa azione è irreversibile.' },
   { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
   { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' }
 ];
