@@ -1,23 +1,19 @@
-import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from '../state.js';
 import { log } from '../utils/logger.js';
-import { getWorkoutState as getState, resetState, updateState } from './trainer/state.js';
+import { getWorkoutState, resetState, updateState } from './trainer/state.js';
 import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
 import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
-import { calculateWorkoutCalories } from './calculations.js';
+import { calculateWorkoutCalories } from '../calculations.js';
 import { speak, playStartCue, playTick } from '../utils/audioFeedback.js';
 import { UI_TEXT } from '../config/uiText.js';
 
-export { getState as getWorkoutState };
-
 // This is the "Director d'Orchestra"
 async function runWorkoutLoop() {
-  const state = getState();
+  const state = getWorkoutState();
   if (state.status !== 'running') return;
 
   for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
-      // The pause is now handled inside runTimerAnimation, so this top-level check is no longer needed
-      // a while loop here would also block the main thread.
-      if (getState().status !== 'running') {
+      if (getWorkoutState().status !== 'running') {
           log('Trainer', 'Workout loop terminated.');
           return;
       }
@@ -52,7 +48,7 @@ async function runWorkoutLoop() {
               // We wait here until the rep count is met
               await new Promise(resolve => {
                   const checkReps = () => {
-                      const currentState = getState();
+                      const currentState = getWorkoutState();
                       const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
                       if (!currentPhase || currentPhase.repsCompleted >= currentPhase.context.reps) {
                           document.removeEventListener('workoutStateChange', checkReps);
@@ -65,7 +61,7 @@ async function runWorkoutLoop() {
       }
   }
   // If the loop completes naturally, end the workout
-  if (getState().status === 'running') {
+  if (getWorkoutState().status === 'running') {
       endWorkout();
   }
 }
@@ -98,7 +94,7 @@ export function initializeWorkout(plannedExercises, isoDate) {
 }
 
 export function collectSetData() {
-    const state = getState();
+    const state = getWorkoutState();
     const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
     if (!currentPhase || !currentPhase.context) return;
 
@@ -119,7 +115,7 @@ export function collectSetData() {
 }
 
 export async function startWorkout() {
-  const state = getState();
+  const state = getWorkoutState();
   log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
   if (state.status !== 'idle') return;
 
@@ -130,7 +126,7 @@ export async function startWorkout() {
   // Small delay to allow the sound cue to play before any potential UI lag
   await new Promise(resolve => setTimeout(resolve, 50));
   
-  if (getState().status !== 'idle') {
+  if (getWorkoutState().status !== 'idle') {
       log('Trainer', 'Workout start aborted, status changed during start cue.');
       return;
   }
@@ -141,7 +137,7 @@ export async function startWorkout() {
 }
 
 export function pauseWorkout() {
-  const state = getState();
+  const state = getWorkoutState();
   if (state.status === 'running') {
       updateState({ status: 'paused' });
       log('Trainer', 'Workout paused.');
@@ -149,7 +145,7 @@ export function pauseWorkout() {
 }
 
 export function resumeWorkout() {
-  const state = getState();
+  const state = getWorkoutState();
   if (state.status === 'paused') {
       updateState({ status: 'running' });
       log('Trainer', 'Workout resumed.');
@@ -157,7 +153,7 @@ export function resumeWorkout() {
 }
 
 export function incrementManualRep() {
-    const state = getState();
+    const state = getWorkoutState();
     if (state.status !== 'running') return;
 
     const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
@@ -215,7 +211,7 @@ function createWorkoutSummary(finalState) {
 }
 
 export function endWorkout() {
-  const finalState = getState();
+  const finalState = getWorkoutState();
   if (finalState.status === 'finished') {
       log('Trainer', 'Workout already finished, not saving again.');
       return;

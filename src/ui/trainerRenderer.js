@@ -1,6 +1,6 @@
-import { getWorkoutState, resetWorkoutState } from '../core/trainer.js';
+import { getWorkoutState, resetWorkoutState } from '../../core/trainer/state.js';
 import { TrainerComponent } from './components/TrainerComponent.js';
-import { log } from '../utils/logger.js';
+import { log } from '../../utils/logger.js';
 
 let trainerComponent = null;
 
@@ -14,6 +14,7 @@ export function initializeTrainerController() {
     log('TrainerRenderer', 'Initializing TrainerComponent...');
     const container = document.getElementById('trainer-page');
     if (container && !trainerComponent) {
+        window.scrollTo(0, 0); // Ensure view is at the top before component mounts
         trainerComponent = new TrainerComponent(container);
         trainerComponent.mount();
         document.addEventListener('workoutStateChange', handleWorkoutStateChange);

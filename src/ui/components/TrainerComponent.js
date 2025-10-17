@@ -1,4 +1,5 @@
-import { getWorkoutState, updateState, startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, incrementManualRep } from '../../core/trainer.js';
+import { getWorkoutState, updateState } from '../../core/trainer/state.js';
+import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, incrementManualRep } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
