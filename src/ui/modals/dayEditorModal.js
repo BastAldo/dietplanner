@@ -38,21 +38,26 @@ export function openDayEditorModal(isoDate) {
     const plannedMeal = state.weeklyPlan[slotId];
     const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
     
-    let mealDetailsHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
+    let mealDetailsHTML = `<div class="meal-editor-body"><button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button></div>`;
     if (meal) {
       mealDetailsHTML = `
-        <div class="meal-details">
-          <div>
-            <span class="meal-details__name">${meal.nomePasto}</span>
-            ${formatIngredients(meal)}
-          </div>
-          <div class="meal-actions">
-            ${getRecipeButtonHTML(meal, state)}
-            <button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+        <div class="meal-editor-body">
+          <div class="meal-details">
+            <div>
+              <span class="meal-details__name">${meal.nomePasto}</span>
+              ${formatIngredients(meal)}
+            </div>
+            <div class="meal-actions">
+              ${getRecipeButtonHTML(meal, state)}
+              <button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+            </div>
           </div>
         </div>`;
     }
-    return `<div class="day-editor-slot"><span class="meal-type-label">${mealType}</span><div class="meal-details-container">${mealDetailsHTML}</div></div>`;
+    return `<div class="meal-editor-section">
+              <div class="meal-editor-header">${mealType}</div>
+              ${mealDetailsHTML}
+            </div>`;
   }).join('');
 
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
@@ -66,7 +71,10 @@ export function openDayEditorModal(isoDate) {
       workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
   }
   
-  const workoutSlotHTML = `<div class="day-editor-slot"><span class="meal-type-label">${WORKOUT_SLOT_ID}</span><div class="meal-details-container">${workoutDetailsHTML}</div></div>`;
+  const workoutSlotHTML = `<div class="meal-editor-section">
+                            <div class="meal-editor-header">${WORKOUT_SLOT_ID}</div>
+                            <div class="meal-editor-body">${workoutDetailsHTML}</div>
+                          </div>`;
 
   body.innerHTML = mealSlotsHTML + workoutSlotHTML;
 

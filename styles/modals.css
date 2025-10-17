@@ -17,17 +17,40 @@
 .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
 .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
 .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
-.day-editor-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.day-editor-slot { display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-color); border-radius: 8px; }
-.day-editor-slot .meal-type-label { font-weight: bold; color: var(--text-color-muted); flex-shrink: 0; width: 150px; }
-.meal-details-container { flex-grow: 1; min-width: 0; min-height: 60px; display: flex; align-items: center; }
+
+/* --- DAY EDITOR REFACTORED STYLES --- */
+.day-editor-list { display: flex; flex-direction: column; gap: 1.5rem; }
+.meal-editor-section {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.meal-editor-header {
+  font-weight: bold;
+  color: var(--text-color-muted);
+  padding: 0.75rem 1rem;
+  background-color: rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--border-color);
+}
+.meal-editor-body {
+  padding: 1rem;
+}
+
 .workout-summary { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 1rem; }
 .workout-summary-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.meal-details { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 0.5rem; width: 100%; }
+.meal-details { display: flex; justify-content: space-between; align-items: center; gap: 1rem; width: 100%; }
 .meal-details__name { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500;}
-.meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; margin-left: auto; }
+.meal-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
 .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+
+/* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+.workout-editor-list .meal-details {
+  flex-direction: row;
+  align-items: center;
+  padding: 0.5rem;
+}
 .meal-actions .btn-remove-exercise { color: var(--danger-color); }
 .exercise-info { display: flex; flex-direction: column; gap: 0.25rem; }
 .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
