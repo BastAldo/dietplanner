@@ -29,6 +29,6 @@ export function destroyTrainerController() {
         trainerComponent = null;
     }
     document.removeEventListener('workoutStateChange', handleWorkoutStateChange);
-    // resetWorkoutState(); // <-- Ensure state is reset when leaving the view
+    resetWorkoutState(); // <-- Ensure state is reset when leaving the view
     log('TrainerRenderer', 'TrainerComponent destroyed.');
 }

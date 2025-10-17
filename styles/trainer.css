@@ -21,6 +21,9 @@
 .trainer-header h2 {
     font-size: 1.25rem;
     color: var(--primary-color);
+    flex-shrink: 1;
+    min-width: 0;
+    text-align: center;
 }
 
 .trainer-header-controls {
