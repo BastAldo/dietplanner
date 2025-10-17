@@ -1,131 +1,15 @@
-commit_message: "refactor(UI): Ridisegna l'editor modale con un layout unificato e corregge gli stili"
+commit_message: "fix(UI): Aggiunge scrollbar custom e corregge lo scroll della pagina trainer"
 rationale: |
-  Questa patch implementa un refactoring completo del modale "Editor del Giorno" e corregge le regressioni di layout nell' "Editor Allenamento", basandosi sul feedback diretto e sugli screenshot forniti. L'obiettivo è creare un'interfaccia più pulita, coerente e visivamente stabile, come richiesto.
+  Questa patch risolve due problemi di usabilità e di estetica per migliorare la professionalità dell'applicazione.
 
-  **1. Refactoring del Layout dell'Editor (Visione Unificata):**
-  * **Problema:** Il precedente design dell'editor dei pasti era esteticamente sgradevole, con l'header all'interno del box, spaziature eccessive e altezze inconsistenti. Le regole CSS avevano inoltre causato una regressione nel layout dell'editor degli allenamenti.
-  * **Soluzione:** È stato adottato un nuovo pattern di design unificato, ispirato al layout originale dell'editor degli allenamenti.
-    * In `styles/modals.css`, è stato creato un nuovo componente generico `.editor-section`, con un'intestazione (`.editor-section-header`) separata dal corpo (`.editor-section-body`). Questo corpo ha ora una `min-height` per garantire un'altezza uniforme e maggiore, come richiesto. La spaziatura tra le sezioni è stata ridotta per un aspetto più compatto.
-    * La logica di rendering in `src/ui/modals/dayEditorModal.js` è stata completamente riscritta per utilizzare questa nuova struttura a sezioni, applicandola sia ai pasti che alla sezione allenamento. Questo risolve tutti i problemi di spaginazione e migliora notevolmente l'estetica.
+  **1. Implementazione di una Scrollbar Personalizzata per i Modali:**
+  * **Problema:** La scrollbar di default del browser era visivamente sgradevole e stonava con il tema scuro dell'applicazione, rovinando l'esperienza utente all'interno dei modali con contenuto esteso.
+  * **Soluzione:** Sono state aggiunte delle regole CSS specifiche al file `styles/modals.css` utilizzando i selettori `::-webkit-scrollbar`. Queste regole personalizzano l'aspetto della scrollbar esclusivamente per il `.modal-body`, rendendola più sottile e colorandola in modo che si integri perfettamente con la palette scura dell'applicazione, come da `STYLE_GUIDE`.
 
-  **2. Ripristino e Coerenza dell'Editor Allenamenti:**
-  * **Problema:** Il layout dell'editor degli allenamenti era stato compromesso.
-  * **Soluzione:** Le regole CSS problematiche e non isolate sono state rimosse. L'editor degli allenamenti ora utilizza implicitamente le nuove regole unificate del componente `.editor-section` attraverso le sue classi esistenti, ripristinando il suo aspetto corretto e garantendo la coerenza visiva con il nuovo editor dei pasti. Le classi sono state allineate per rispondere allo stesso stile, creando un'esperienza utente omogenea.
+  **2. Correzione della Posizione di Scroll all'Apertura della Pagina Trainer:**
+  * **Problema:** Su dispositivi mobili, all'apertura della pagina di allenamento ("Trainer"), la vista risultava scorlata verso il basso, costringendo l'utente a risalire manualmente per vedere i controlli principali.
+  * **Soluzione:** È stata aggiunta una logica nel file `src/ui/renderer.js`, all'interno della funzione `renderApp`. Ora, ogni volta che la `currentView` viene impostata su `'trainer'`, viene eseguito un `window.scrollTo(0, 0)`. Questo assicura che la pagina venga riportata in cima, garantendo che l'utente veda sempre la parte superiore dell'interfaccia del trainer all'avvio dell'allenamento.
 patches:
-  - file: src/ui/modals/dayEditorModal.js
-    content: |
-      import { getState, updateWeeklyPlan, getMealsForType } from '../../core/state.js';
-      import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
-      import { log } from '../../utils/logger.js';
-      import { showRecipeModal } from './recipeModal.js';
-      import { openSelectionModal } from './selectionModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-      import { openManualWorkoutModal } from './manualWorkoutModal.js';
-      import { formatIngredients } from '../../utils/formatters.js';
-
-      let currentEditingDayISO = null;
-
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      function getRecipeButtonHTML(meal, state) {
-        if (state.recipeBaseUrl && meal && meal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${meal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
-
-      export function openDayEditorModal(isoDate) {
-        log('Modals', 'Opening day editor modal', { isoDate });
-        currentEditingDayISO = isoDate;
-        const state = getState();
-        const dayEditorModal = document.getElementById('day-editor-modal');
-        dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
-        const body = dayEditorModal.querySelector('#day-editor-body');
-        
-        const mealSlotsHTML = MEAL_TYPES.map(mealType => {
-          const slotId = `${isoDate}-${mealType}`;
-          const plannedMeal = state.weeklyPlan[slotId];
-          const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-          
-          let mealContentHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
-          if (meal) {
-            mealContentHTML = `
-                <div class="meal-details">
-                  <div class="meal-info">
-                    <span class="meal-details__name">${meal.nomePasto}</span>
-                    ${formatIngredients(meal)}
-                  </div>
-                  <div class="meal-actions">
-                    ${getRecipeButtonHTML(meal, state)}
-                    <button class="btn-remove-meal" data-slot-id="${slotId}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                  </div>
-                </div>`;
-          }
-          return `<div class="editor-section">
-                    <div class="editor-section-header">${mealType}</div>
-                    <div class="editor-section-body">${mealContentHTML}</div>
-                  </div>`;
-        }).join('');
-
-        const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-        const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-        
-        let workoutDetailsHTML;
-        if (plannedWorkoutList.length > 0) {
-            const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-            workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
-        } else {
-            workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
-        }
-        
-        const workoutSlotHTML = `<div class="editor-section">
-                                  <div class="editor-section-header">${WORKOUT_SLOT_ID}</div>
-                                  <div class="editor-section-body">${workoutDetailsHTML}</div>
-                                </div>`;
-
-        body.innerHTML = mealSlotsHTML + workoutSlotHTML;
-
-        body.onclick = e => {
-          const btnAddMeal = e.target.closest('.btn-add-meal');
-          const btnRemoveMeal = e.target.closest('.btn-remove-meal');
-          const btnRecipe = e.target.closest('.btn-view-recipe');
-          const btnAddExercise = e.target.closest('.btn-add-exercise');
-          const btnManageWorkout = e.target.closest('.btn-manage-workout');
-          const btnLogActivity = e.target.closest('.btn-log-activity');
-
-          if (btnAddMeal) {
-            const mealType = btnAddMeal.dataset.mealType;
-            const relevantMeals = getMealsForType(mealType);
-            dayEditorModal.classList.add('modal-hidden');
-            openSelectionModal(btnAddMeal.dataset.slotId, isoDate, relevantMeals);
-          }
-          else if (btnRemoveMeal) { updateWeeklyPlan(btnRemoveMeal.dataset.slotId, null); openDayEditorModal(isoDate); }
-          else if (btnRecipe) {
-            const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-            if (meal) showRecipeModal(meal);
-          }
-          else if (btnAddExercise) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnManageWorkout) {
-            dayEditorModal.classList.add('modal-hidden');
-            openWorkoutEditorModal(isoDate);
-          }
-          else if (btnLogActivity) {
-            dayEditorModal.classList.add('modal-hidden');
-            openManualWorkoutModal(isoDate);
-          }
-        };
-        dayEditorModal.classList.remove('modal-hidden');
-      }
   - file: styles/modals.css
     content: |
       /* --- MODALS --- */
@@ -147,6 +31,12 @@ patches:
       .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
       .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
       .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
+
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
 
       /* --- UNIFIED EDITOR SECTION COMPONENT --- */
       .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
@@ -274,5 +164,143 @@ patches:
           flex-grow: 1;
         }
       }
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage } from './pageRenderers.js';
+      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { log } from '../utils/logger.js';
+
+      let isTrainerActive = false;
+
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
+          document.getElementById('info-icon').innerHTML = renderIcon('INFO');
+          document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
+          document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
+          document.querySelectorAll('.btn-expand-chart').forEach(btn => {
+              btn.innerHTML = renderIcon('EXPAND', { width: 20, height: 20 });
+          });
+
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
+        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
+        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const { currentView } = state.ui;
+        const plannerPage = document.getElementById('planner-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const goalsPage = document.getElementById('goals-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+        const debriefingPage = document.getElementById('debriefing-page');
+
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navGoalsBtn = document.getElementById('nav-goals');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        log('Renderer', 'Render triggered. Current view:', currentView, 'isTrainerActive:', isTrainerActive);
+
+        if (currentView !== 'trainer' && isTrainerActive) {
+            log('Renderer', 'View is not trainer, destroying trainer controller...');
+            destroyTrainerController();
+            isTrainerActive = false;
+        }
+
+        [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+        document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
+
+        if (currentView === 'planner' || currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (currentView === 'goals') {
+          goalsPage.classList.remove('hidden');
+          navGoalsBtn.classList.add('active');
+          renderGoalsPage(state);
+        } else if (currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+        } else if (currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          window.scrollTo(0, 0); // Ensure view starts at the top
+          log('Renderer', 'View is trainer, checking if trainer is active...');
+          if (!isTrainerActive) {
+            log('Renderer', 'Trainer is not active, initializing trainer controller...');
+            initializeTrainerController();
+            isTrainerActive = true;
+          }
+        } else if (currentView === 'debriefing') {
+          debriefingPage.classList.remove('hidden');
+          renderDebriefingPage(state);
+        }
+
+        const urlInput = document.getElementById('config-url-input');
+        if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
+      }
 commands:
-  - "echo 'Refactoring del layout del modale completato. Ora pasti e allenamenti condividono un design unificato e robusto.'"
+  - "echo 'Patch applicato: La scrollbar dei modali è ora stilizzata e il bug di scroll della pagina trainer è stato risolto.'"

@@ -119,6 +119,7 @@ export function renderApp() {
     renderProfilePage(state);
   } else if (currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
+    window.scrollTo(0, 0); // Ensure view starts at the top
     log('Renderer', 'View is trainer, checking if trainer is active...');
     if (!isTrainerActive) {
       log('Renderer', 'Trainer is not active, initializing trainer controller...');
