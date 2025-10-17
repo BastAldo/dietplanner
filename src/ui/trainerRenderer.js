@@ -1,7 +1,7 @@
-import { getWorkoutState, resetState } from '../../core/trainer/state.js';
+import { getWorkoutState, resetState } from '../core/trainer/state.js';
 import { TrainerComponent } from './components/TrainerComponent.js';
-import { log } from '../../utils/logger.js';
-import { resetWorkoutState as resetWorkoutController } from '../../core/trainer.js';
+import { log } from '../utils/logger.js';
+import { resetWorkoutState as resetWorkoutController } from '../core/trainer.js';
 
 let trainerComponent = null;
 
