@@ -51,24 +51,24 @@ export class TrainerComponent {
     }
 
     _handleEndWorkoutFlow() {
-      const promptDiscard = () => {
+      const confirmEnd = () => {
           showConfirmModal({
-              title: UI_TEXT.DISCARD_WORKOUT_CONFIRM_TITLE,
-              message: UI_TEXT.DISCARD_WORKOUT_CONFIRM_MSG,
-              onConfirm: discardWorkout,
-              type: 'danger',
-              confirmText: UI_TEXT.DISCARD_WORKOUT_BTN
+              title: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
+              message: "Vuoi salvare i progressi di questo allenamento?",
+              onConfirm: endWorkout,
+              onCancel: discardWorkout,
+              confirmText: UI_TEXT.SAVE_AND_END_BTN,
+              cancelText: UI_TEXT.DISCARD_WORKOUT_BTN,
+              type: 'primary'
           });
       };
 
       showConfirmModal({
           title: UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
-          message: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
-          onConfirm: endWorkout,
-          onCancel: promptDiscard,
-          confirmText: UI_TEXT.SAVE_AND_END_BTN,
-          cancelText: UI_TEXT.DISCARD_WORKOUT_BTN,
-          type: 'primary'
+          message: "Sei sicuro di voler interrompere l'allenamento?",
+          onConfirm: confirmEnd,
+          confirmText: "Sì, termina",
+          cancelText: "No, continua",
       });
     }
 

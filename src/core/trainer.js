@@ -25,13 +25,13 @@ async function runWorkoutLoop() {
 
       switch (phase.type) {
           case 'speech':
-              if (state.isAudioEnabled && phase.text) {
+              if (getWorkoutState().isAudioEnabled && phase.text) {
                   if(phase.await) await speak(phase.text);
                   else speak(phase.text);
               }
               break;
           case 'audio':
-               if (state.isAudioEnabled) {
+               if (getWorkoutState().isAudioEnabled) {
                   if (phase.cue === 'tick') playTick();
                }
               break;
@@ -119,7 +119,7 @@ export async function startWorkout() {
   log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
   if (state.status !== 'idle') return;
 
-  if (state.isAudioEnabled) {
+  if (getWorkoutState().isAudioEnabled) {
       playStartCue();
   }
 
