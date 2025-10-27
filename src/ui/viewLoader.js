@@ -21,6 +21,7 @@ export async function loadViews() {
 
     // Carica le viste principali
     await fetchAndInject('templates/planner.html', 'app-container');
+    await fetchAndInject('templates/library.html', 'app-container');
     await fetchAndInject('templates/progress.html', 'app-container');
     await fetchAndInject('templates/charts.html', 'app-container');
     await fetchAndInject('templates/recipes.html', 'app-container');

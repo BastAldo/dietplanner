@@ -1,6 +1,6 @@
 import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
-import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage } from './pageRenderers.js';
+import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage, renderLibraryPage } from './pageRenderers.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
@@ -11,6 +11,7 @@ let isTrainerActive = false;
 function populateIcons() {
     document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
     document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+    document.getElementById('nav-library').insertAdjacentHTML('afterbegin', renderIcon('LIBRARY'));
     document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
     document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
     document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
@@ -35,6 +36,7 @@ export function populateInitialText() {
   document.title = UI_TEXT.MAIN_TITLE;
   document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
   document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+  document.querySelector('#nav-library span').textContent = UI_TEXT.NAV_LIBRARY;
   document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
   document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
   document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
@@ -66,6 +68,7 @@ export function renderApp() {
   const state = getState();
   const { currentView } = state.ui;
   const plannerPage = document.getElementById('planner-page');
+  const libraryPage = document.getElementById('library-page');
   const progressPage = document.getElementById('progress-page');
   const chartsPage = document.getElementById('charts-page');
   const recipesPage = document.getElementById('recipes-page');
@@ -75,6 +78,7 @@ export function renderApp() {
   const debriefingPage = document.getElementById('debriefing-page');
 
   const navPlannerBtn = document.getElementById('nav-planner');
+  const navLibraryBtn = document.getElementById('nav-library');
   const navProgressBtn = document.getElementById('nav-progress');
   const navChartsBtn = document.getElementById('nav-charts');
   const navRecipesBtn = document.getElementById('nav-recipes');
@@ -89,14 +93,18 @@ export function renderApp() {
       isTrainerActive = false;
   }
 
-  [plannerPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
-  [navPlannerBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+  [plannerPage, libraryPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+  [navPlannerBtn, navLibraryBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
   document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
 
   if (currentView === 'planner' || currentView === 'log') {
     plannerPage.classList.remove('hidden');
     navPlannerBtn.classList.add('active');
     renderPlannerPage(state);
+  } else if (currentView === 'library') {
+    libraryPage.classList.remove('hidden');
+    navLibraryBtn.classList.add('active');
+    renderLibraryPage(state);
   } else if (currentView === 'progress') {
     progressPage.classList.remove('hidden');
     navProgressBtn.classList.add('active');

@@ -18,3 +18,10 @@ export const BIOMETRIC_FIELDS = [
   { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
   { id: 'notes', label: 'Note', type: 'textarea' }
 ];
+
+export const INGREDIENT_FIELDS = [
+  { id: 'id', label: 'ID Univoco', type: 'text', props: 'required' },
+  { id: 'nome', label: 'Nome', type: 'text', props: 'required' },
+  { id: 'kcal_per_100g', label: 'Kcal / 100g', type: 'number', props: 'required min="0"' },
+  { id: 'g_per_pezzo', label: 'Grammi per pezzo (opzionale)', type: 'number', props: 'min="0"' }
+];

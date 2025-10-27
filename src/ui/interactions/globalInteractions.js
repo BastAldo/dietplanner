@@ -37,7 +37,8 @@ async function handleSaveBackup() {
     workoutHistory: state.workoutHistory,
     biometricData: state.biometricData,
     userProfile: state.userProfile,
-    userGoals: state.userGoals
+    userGoals: state.userGoals,
+    masterIngredientList: state.masterIngredientList
   };
   const fileName = 'healtypro_backup.txt';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
@@ -95,6 +96,7 @@ export function initializeGlobalListeners() {
   document.getElementById('hamburger-btn').addEventListener('click', handleHamburgerClick);
 
   document.getElementById('nav-planner').addEventListener('click', () => setView('planner'));
+  document.getElementById('nav-library').addEventListener('click', () => setView('library'));
   document.getElementById('nav-progress').addEventListener('click', () => setView('progress'));
   document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
   document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));

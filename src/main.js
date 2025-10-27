@@ -8,6 +8,7 @@ import { initializeProfileListeners } from './ui/interactions/profileInteraction
 import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
 import { initializeGoalsListeners } from './ui/interactions/goalsInteractions.js';
 import { initializeChartsListeners } from './ui/interactions/chartsInteractions.js';
+import { initializeLibraryListeners } from './ui/interactions/libraryInteractions.js';
 import { loadViews } from './ui/viewLoader.js';
 import { DEFAULT_CONFIG_URL } from './utils/constants.js';
 import { UI_TEXT } from './config/uiText.js';
@@ -56,6 +57,7 @@ async function init() {
   initializeDebriefingListeners();
   initializeGoalsListeners();
   initializeChartsListeners();
+  initializeLibraryListeners();
 
   renderApp();
 

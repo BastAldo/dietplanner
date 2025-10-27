@@ -233,3 +233,18 @@ export function renderRecipesPage(state) {
 
   recipesList.innerHTML = html;
 }
+
+export function renderLibraryPage(state) {
+  // Placeholder for Phase 1
+  const ingredientList = document.getElementById('ingredient-list');
+  if (state.masterIngredientList.length > 0) {
+    ingredientList.innerHTML = state.masterIngredientList.map(ing => `
+      <div class="library-item" data-id="${ing.id}">
+        <span>${ing.nome}</span>
+        <span>${ing.kcal_per_100g} kcal / 100g</span>
+      </div>
+    `).join('');
+  } else {
+    ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente nella tua libreria. Aggiungine uno per iniziare!</p>`;
+  }
+}

@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
 import { log } from '../utils/logger.js';
@@ -19,7 +19,7 @@ let state = {
   focusedDate: new Date(),
   debugMode: false,
   ui: {
-    currentView: 'planner', // 'planner', 'log', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+    currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
     lastWorkoutSummary: null,
     charts: {
       currentRangeFilter: 30,
@@ -82,10 +82,17 @@ export function setPlannerConfig(config, url) {
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
   state.masterWorkoutList = config.esercizi || [];
-  state.masterIngredientList = ingredients;
+
+  // NON sovrascrivere la libreria ingredienti utente, ma Aggiungi se non esistono
+  ingredients.forEach(ing => {
+    if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
+      state.masterIngredientList.push(ing);
+    }
+  });
+  saveStateToLocalStorage(); // Salva la libreria ingredienti aggiornata
 
   // Calcola calorie e popola la master list
-  state.masterMealList = processMealsWithCalories(meals, ingredients);
+  state.masterMealList = processMealsWithCalories(meals, state.masterIngredientList);
 
   // Deriva e imposta la recipeBaseUrl
   if (url) {
@@ -114,6 +121,7 @@ export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
   localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+  localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
 }
 
 export function loadStateFromLocalStorage() {
@@ -125,6 +133,7 @@ export function loadStateFromLocalStorage() {
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
   const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
   const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+  const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
 
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
   if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
@@ -133,6 +142,7 @@ export function loadStateFromLocalStorage() {
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
   if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+  if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
 }
 
 export function setAppState(backupData) {
@@ -144,6 +154,7 @@ export function setAppState(backupData) {
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
   state.userGoals = backupData.userGoals || {};
+  state.masterIngredientList = backupData.masterIngredientList || [];
   saveStateToLocalStorage();
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
   notify();
@@ -299,7 +310,7 @@ export function navigateWeek(direction) {
 
 export function setView(view) {
   log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
-  if (['planner', 'log', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
+  if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
     state.ui.currentView = view;
     notify();
   }
