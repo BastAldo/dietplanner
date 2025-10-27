@@ -186,6 +186,5 @@
   .workout-summary-actions .btn {
     flex-grow: 1;
   }
-  .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 40px; }
-  .meal-editor-ingredient-row .quantita_pezzi { display: none; } /* Hide pieces on small screens to save space */
+  .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
 }
