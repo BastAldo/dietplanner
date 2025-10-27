@@ -202,6 +202,31 @@ export function deleteBiometricEntry(date) {
   notify();
 }
 
+export function addIngredient(ingredientData) {
+  log('State', 'Adding new ingredient', { ingredientData });
+  state.masterIngredientList.push(ingredientData);
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function updateIngredient(ingredientId, updatedData) {
+  log('State', 'Updating ingredient', { ingredientId, updatedData });
+  const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
+  if (index > -1) {
+    state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
+    saveStateToLocalStorage();
+    notify();
+  }
+}
+
+export function deleteIngredient(ingredientId) {
+  log('State', 'Deleting ingredient', { ingredientId });
+  state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
+  saveStateToLocalStorage();
+  notify();
+}
+
+
 export function updateWeeklyPlan(slotId, mealId) {
   log('State', 'Updating weekly plan', { slotId, mealId });
   if (mealId) {

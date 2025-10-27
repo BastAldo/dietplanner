@@ -235,13 +235,18 @@ export function renderRecipesPage(state) {
 }
 
 export function renderLibraryPage(state) {
-  // Placeholder for Phase 1
   const ingredientList = document.getElementById('ingredient-list');
   if (state.masterIngredientList.length > 0) {
     ingredientList.innerHTML = state.masterIngredientList.map(ing => `
       <div class="library-item" data-id="${ing.id}">
-        <span>${ing.nome}</span>
-        <span>${ing.kcal_per_100g} kcal / 100g</span>
+        <div class="library-item-info">
+          <span class="library-item-info__name">${ing.nome}</span>
+          <span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span>
+        </div>
+        <div class="library-item-actions">
+          <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
+          <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
+        </div>
       </div>
     `).join('');
   } else {

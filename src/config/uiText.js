@@ -175,7 +175,16 @@ const UI_TEXT_CONFIG = [
   { id: 'DISCARD_WORKOUT_CONFIRM_TITLE', text: 'Scartare Allenamento?' },
   { id: 'DISCARD_WORKOUT_CONFIRM_MSG', text: 'L\'allenamento non verrà salvato nello storico. Questa azione è irreversibile.' },
   { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
-  { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' }
+  { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' },
+  { id: 'INGREDIENT_NEW_TITLE', text: 'Nuovo Ingrediente' },
+  { id: 'INGREDIENT_EDIT_TITLE', text: 'Modifica Ingrediente' },
+  { id: 'INGREDIENT_SAVE_BTN', text: 'Salva Ingrediente' },
+  { id: 'INGREDIENT_CREATE_SUCCESS', text: 'Ingrediente creato con successo!' },
+  { id: 'INGREDIENT_UPDATE_SUCCESS', text: 'Ingrediente aggiornato con successo!' },
+  { id: 'INGREDIENT_DELETE_SUCCESS', text: 'Ingrediente eliminato.' },
+  { id: 'INGREDIENT_ID_CONFLICT', text: 'Esiste già un ingrediente con questo ID.' },
+  { id: 'INGREDIENT_DELETE_CONFIRM_TITLE', text: 'Elimina Ingrediente' },
+  { id: 'INGREDIENT_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare l\'ingrediente' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
