@@ -252,9 +252,10 @@ export function renderLibraryPage(state) {
     panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab));
   });
 
+  const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
+
   // Filter and render ingredients
   const ingredientList = document.getElementById('ingredient-list');
-  const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
   const filteredIngredients = state.masterIngredientList.filter(ing =>
     ing.nome.toLowerCase().includes(lowerCaseSearchTerm)
   );
@@ -274,5 +275,34 @@ export function renderLibraryPage(state) {
     `).join('');
   } else {
     ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
+  }
+
+  // Filter and render meals
+  const mealList = document.getElementById('meal-list');
+  const filteredMeals = state.masterMealList.filter(meal =>
+    meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm)
+  );
+
+  if (filteredMeals.length > 0) {
+    mealList.innerHTML = filteredMeals.map(meal => {
+      const calorieText = (meal.calories_min && meal.calories_max)
+        ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`)
+        : 'Calorie non calcolate';
+
+      return `
+        <div class="library-item" data-id="${meal.id}">
+          <div class="library-item-info">
+            <span class="library-item-info__name">${meal.nomePasto}</span>
+            <span class="library-item-info__details">${calorieText}</span>
+          </div>
+          <div class="library-item-actions">
+            <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
+            <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
   }
 }
