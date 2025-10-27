@@ -158,6 +158,38 @@ function renderPlannerSummaryWidget(state, weekStart) {
   `;
 }
 
+function renderTodayWidget(state, todayISO) {
+  const widget = document.getElementById('today-widget');
+  const dailyCalories = calculateDailyCalories(todayISO, state.weeklyPlan);
+  const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${todayISO}-${type}`] })).filter(item => item.meal);
+  const workoutList = state.weeklyWorkouts[`${todayISO}-${WORKOUT_SLOT_ID}`];
+
+  let mealsHtml = dayMeals.map(item => `
+    <div class="today-meal-item">
+      <span><strong>${item.type}:</strong> ${item.meal.nomePasto}</span>
+      <span>${formatMealCalories(item.meal)}</span>
+    </div>
+  `).join('');
+
+  let workoutHtml = '';
+  if (workoutList && workoutList.length > 0) {
+    workoutHtml = `<button class="btn btn-primary btn-start-workout-day" data-date="${todayISO}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
+  } else {
+    workoutHtml = `<p class="placeholder-text">Nessun allenamento pianificato per oggi.</p>`;
+  }
+
+  widget.innerHTML = `
+    <div class="today-widget-header">
+      <h3>Oggi, ${formatFullDate(todayISO)}</h3>
+      <span>${dailyCalories}</span>
+    </div>
+    <div class="today-widget-body">
+      ${mealsHtml}
+      ${workoutHtml}
+    </div>
+  `;
+}
+
 function renderCalendarView(state, weekStart) {
   const calendarGrid = document.getElementById('calendar-grid');
   const todayISO = toISODateString(new Date());
@@ -209,7 +241,13 @@ function renderLogView(state, weekStart) {
     if (dayMeals.length > 0 || completedWorkouts.length > 0) {
       hasContent = true;
       let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
-      dayLogHTML += `<h3><span>${formatFullDate(isoDate)}</span><span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span></h3>`;
+      dayLogHTML += `
+        <div class="log-day-header">
+          <h3>${formatFullDate(isoDate)}</h3>
+          <span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span>
+        </div>
+        <div class="log-day-body">
+      `;
 
       if (dayMeals.length > 0) {
         dayLogHTML += dayMeals.map(item => `
@@ -285,7 +323,7 @@ function renderLogView(state, weekStart) {
           });
       }
 
-      dayLogHTML += `</div>`;
+      dayLogHTML += `</div></div>`;
       logViewHTML += dayLogHTML;
     }
   }
@@ -303,28 +341,9 @@ export function renderPlannerPage(state) {
   weekEnd.setDate(weekEnd.getDate() + 6);
   document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
 
-  const calendarGrid = document.getElementById('calendar-grid');
-  const logView = document.getElementById('log-view');
-  const viewCalendarBtn = document.getElementById('view-calendar-btn');
-  const viewLogBtn = document.getElementById('view-log-btn');
-  const { currentView } = state.ui;
-
-  if (currentView === 'planner' || currentView === 'log') {
-      renderPlannerSummaryWidget(state, weekStart);
-  }
-
-  if (currentView === 'planner') {
-      calendarGrid.classList.remove('hidden');
-      logView.classList.add('hidden');
-      viewCalendarBtn.classList.add('active');
-      viewLogBtn.classList.remove('active');
-  } else if (currentView === 'log') {
-      calendarGrid.classList.add('hidden');
-      logView.classList.remove('hidden');
-      viewCalendarBtn.classList.remove('active');
-      viewLogBtn.classList.add('active');
-  }
-
+  const todayISO = toISODateString(new Date());
+  renderTodayWidget(state, todayISO);
+  renderPlannerSummaryWidget(state, weekStart);
   renderCalendarView(state, weekStart);
   renderLogView(state, weekStart);
 }
