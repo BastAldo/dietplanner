@@ -19,8 +19,8 @@
     margin-bottom: 2rem;
 }
 .form-group { display: flex; flex-direction: column; }
-.form-group label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-.form-group input, .form-group textarea, .form-group fieldset {
+.form-group label, .form-group legend { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+.form-group input, .form-group textarea {
     padding: 0.75rem; border: 1px solid var(--border-color);
     border-radius: 8px; font-size: 1rem; background-color: var(--bg-color);
     color: var(--text-color);
@@ -28,9 +28,9 @@
 .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--primary-color); }
 .form-group input[readonly] { background-color: #222; color: var(--text-color-muted); }
 .form-group textarea { min-height: 80px; resize: vertical; }
-.form-group fieldset { border: 1px solid var(--border-color); padding: 0.75rem; }
-.form-group fieldset legend { padding: 0 0.5rem; color: var(--text-color-muted); font-size: 0.9rem; }
-.form-group fieldset label { display: inline-flex; align-items: center; margin-right: 1.5rem; }
+.form-group fieldset { border: 1px solid var(--border-color); padding: 1rem; border-radius: 8px; display: flex; flex-direction: column; gap: 0.75rem; }
+.form-group fieldset legend { padding: 0 0.5rem; font-weight: 500;}
+.form-group fieldset label { display: inline-flex; align-items: center; margin: 0; }
 .form-group fieldset input { margin-right: 0.5rem; }
 .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
 
@@ -89,6 +89,12 @@
 }
 .actions-dropdown button:hover { background-color: var(--card-color); }
 .actions-dropdown button.delete { color: var(--danger-color); }
+
+/* Data Management Section on Profile Page */
+.data-management-section { margin-top: 3rem; }
+.data-management-section h3 { color: var(--primary-color); margin-bottom: 1.5rem; }
+.backup-controls { display: flex; gap: 1rem; margin-top: 1rem; }
+
 
 /* Desktop Layout */
 @media (min-width: 768px) {
