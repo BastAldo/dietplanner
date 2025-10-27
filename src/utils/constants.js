@@ -11,4 +11,10 @@ export const LOCAL_STORAGE_KEY_MEALS = 'healtyproUserMeals';
 export const WEEK_STARTS_ON_MONDAY = 1;
 export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+export const OPTIONAL_MEAL_TYPES = {
+  enablePreWorkout: 'Pre-Workout',
+  enablePostWorkout: 'Post-Workout',
+  enablePreNanna: 'Pre-Nanna'
+};
+export const ALL_MEAL_TYPES = [...MEAL_TYPES, ...Object.values(OPTIONAL_MEAL_TYPES)];
 export const WORKOUT_SLOT_ID = 'Allenamento';

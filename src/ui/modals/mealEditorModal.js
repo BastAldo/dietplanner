@@ -2,7 +2,7 @@ import { getState, addMeal, updateMeal } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { showNotification } from '../notifications.js';
 import { log } from '../../utils/logger.js';
-import { MEAL_TYPES } from '../../utils/constants.js';
+import { ALL_MEAL_TYPES } from '../../utils/constants.js';
 import { renderIcon } from '../icons.js';
 import { processMealsWithCalories } from '../../core/calorieCalculator.js';
 
@@ -157,7 +157,7 @@ export function openMealEditorModal(meal = null) {
 
   // Populate meal type chips
   const tipoPastoContainer = document.getElementById('meal-edit-tipoPasto-container');
-  tipoPastoContainer.innerHTML = MEAL_TYPES.map(type => `
+  tipoPastoContainer.innerHTML = ALL_MEAL_TYPES.map(type => `
     <div class="meal-type-chip ${meal?.tipoPasto?.includes(type) ? 'active' : ''}" data-value="${type}">
       ${type}
     </div>

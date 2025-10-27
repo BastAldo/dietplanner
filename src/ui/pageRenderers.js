@@ -81,8 +81,27 @@ export function renderBiometricsPage(state) {
 
 export function renderProfilePage(state) {
   const form = document.getElementById('profile-form');
-  form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
+  let formHTML = '';
+
+  PROFILE_FIELDS.forEach(field => {
+    let fieldHTML = '<div class="form-group">';
+    switch (field.type) {
+      case 'radio':
+        fieldHTML += `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>`;
+        break;
+      case 'checkbox-group':
+        fieldHTML += `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="checkbox" name="${opt.id}" id="prof-${opt.id}" ${state.userProfile[opt.id] ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>`;
+        break;
+      default:
+        fieldHTML += `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`;
+    }
+    fieldHTML += '</div>';
+    formHTML += fieldHTML;
+  });
+
+  form.innerHTML = `${formHTML}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
 }
+
 
 export function renderGoalsPage(state) {
     const form = document.getElementById('goals-form');

@@ -1,5 +1,5 @@
 import { getState, updateWeeklyPlan, getMealsForType } from '../../core/state.js';
-import { MEAL_TYPES, WORKOUT_SLOT_ID } from '../../utils/constants.js';
+import { MEAL_TYPES, WORKOUT_SLOT_ID, OPTIONAL_MEAL_TYPES } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
 import { log } from '../../utils/logger.js';
@@ -29,15 +29,24 @@ export function openDayEditorModal(isoDate) {
   log('Modals', 'Opening day editor modal', { isoDate });
   currentEditingDayISO = isoDate;
   const state = getState();
+  const { userProfile } = state;
   const dayEditorModal = document.getElementById('day-editor-modal');
   dayEditorModal.querySelector('#day-editor-title').textContent = `${UI_TEXT.EDITOR_MODAL_TITLE_PREFIX} ${formatFullDate(isoDate)}`;
   const body = dayEditorModal.querySelector('#day-editor-body');
-  
-  const mealSlotsHTML = MEAL_TYPES.map(mealType => {
+
+  // Build dynamic list of meal slots to show
+  const activeMealSlots = [...MEAL_TYPES];
+  Object.keys(OPTIONAL_MEAL_TYPES).forEach(key => {
+    if (userProfile[key]) {
+      activeMealSlots.push(OPTIONAL_MEAL_TYPES[key]);
+    }
+  });
+
+  const mealSlotsHTML = activeMealSlots.map(mealType => {
     const slotId = `${isoDate}-${mealType}`;
     const plannedMeal = state.weeklyPlan[slotId];
     const meal = plannedMeal ? state.masterMealList.find(m => m.id === plannedMeal.id) : null;
-    
+
     let mealContentHTML = `<button class="btn-add-meal" data-slot-id="${slotId}" data-meal-type="${mealType}">${UI_TEXT.ADD_MEAL_BTN}</button>`;
     if (meal) {
       mealContentHTML = `
@@ -60,7 +69,7 @@ export function openDayEditorModal(isoDate) {
 
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
   const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
-  
+
   let workoutDetailsHTML;
   if (plannedWorkoutList.length > 0) {
       const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
@@ -68,7 +77,7 @@ export function openDayEditorModal(isoDate) {
   } else {
       workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
   }
-  
+
   const workoutSlotHTML = `<div class="editor-section">
                             <div class="editor-section-header">${WORKOUT_SLOT_ID}</div>
                             <div class="editor-section-body">${workoutDetailsHTML}</div>

@@ -4,7 +4,17 @@ export const PROFILE_FIELDS = [
   { id: 'nickname', label: 'Nickname', type: 'text' },
   { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
   { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-  { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] }
+  { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] },
+  {
+    id: 'plannerPrefs',
+    label: 'Preferenze Planner',
+    type: 'checkbox-group',
+    options: [
+      { id: 'enablePreWorkout', label: 'Attiva slot Pre-Workout' },
+      { id: 'enablePostWorkout', label: 'Attiva slot Post-Workout' },
+      { id: 'enablePreNanna', label: 'Attiva slot Pre-Nanna' },
+    ]
+  }
 ];
 
 export const BIOMETRIC_FIELDS = [
