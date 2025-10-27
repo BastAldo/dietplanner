@@ -38,7 +38,8 @@ async function handleSaveBackup() {
     biometricData: state.biometricData,
     userProfile: state.userProfile,
     userGoals: state.userGoals,
-    masterIngredientList: state.masterIngredientList
+    masterIngredientList: state.masterIngredientList,
+    masterMealList: state.masterMealList
   };
   const fileName = 'healtypro_backup.txt';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
