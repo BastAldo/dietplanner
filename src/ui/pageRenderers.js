@@ -235,9 +235,32 @@ export function renderRecipesPage(state) {
 }
 
 export function renderLibraryPage(state) {
+  const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
+
+  // Update search input
+  const searchInput = document.getElementById('library-search-input');
+  searchInput.value = librarySearchTerm;
+  searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
+
+  // Update active tab
+  document.querySelectorAll('#library-page .btn-view').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === activeLibraryTab);
+  });
+
+  // Show/hide content panels
+  document.querySelectorAll('.library-content').forEach(panel => {
+    panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab));
+  });
+
+  // Filter and render ingredients
   const ingredientList = document.getElementById('ingredient-list');
-  if (state.masterIngredientList.length > 0) {
-    ingredientList.innerHTML = state.masterIngredientList.map(ing => `
+  const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
+  const filteredIngredients = state.masterIngredientList.filter(ing =>
+    ing.nome.toLowerCase().includes(lowerCaseSearchTerm)
+  );
+
+  if (filteredIngredients.length > 0) {
+    ingredientList.innerHTML = filteredIngredients.map(ing => `
       <div class="library-item" data-id="${ing.id}">
         <div class="library-item-info">
           <span class="library-item-info__name">${ing.nome}</span>
@@ -250,6 +273,6 @@ export function renderLibraryPage(state) {
       </div>
     `).join('');
   } else {
-    ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente nella tua libreria. Aggiungine uno per iniziare!</p>`;
+    ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
   }
 }

@@ -1,7 +1,7 @@
 import { log } from '../../utils/logger.js';
 import { openIngredientEditorModal } from '../modals.js';
 import { showConfirmModal } from '../modals.js';
-import { deleteIngredient, getState } from '../../core/state.js';
+import { deleteIngredient, getState, setUiState } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { showNotification } from '../notifications.js';
 
@@ -10,6 +10,18 @@ function handleLibraryClick(e) {
   if (addBtn) {
     log('Interactions-Library', 'Add new ingredient button clicked');
     openIngredientEditorModal();
+    return;
+  }
+
+  const tabBtn = e.target.closest('.btn-view');
+  if (tabBtn && tabBtn.dataset.view) {
+    const newView = tabBtn.dataset.view;
+    log('Interactions-Library', 'Tab changed', { newView });
+    const currentState = getState();
+    setUiState({
+      ...currentState.ui,
+      activeLibraryTab: newView
+    });
     return;
   }
 
@@ -45,10 +57,21 @@ function handleLibraryClick(e) {
   }
 }
 
+function handleSearchInput(e) {
+  const searchTerm = e.target.value;
+  const currentState = getState();
+  setUiState({
+    ...currentState.ui,
+    librarySearchTerm: searchTerm
+  });
+}
+
 export function initializeLibraryListeners() {
   log('Interactions', 'Initializing library listeners');
   const libraryPage = document.getElementById('library-page');
   if (libraryPage) {
     libraryPage.addEventListener('click', handleLibraryClick);
+    const searchInput = document.getElementById('library-search-input');
+    searchInput.addEventListener('input', handleSearchInput);
   }
 }

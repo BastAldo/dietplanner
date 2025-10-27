@@ -2,18 +2,28 @@
     <h3>La Mia Libreria</h3>
 
     <div class="library-controls">
-        <button id="add-ingredient-btn" class="btn btn-primary">Nuovo Ingrediente</button>
-    </div>
-
-    <div class="library-section">
-        <h4>Ingredienti</h4>
-        <div id="ingredient-list"></div>
-    </div>
-
-    <div class="library-section">
-        <h4>Pasti</h4>
-        <div id="meal-list">
-            <p class="placeholder-text">Il compositore di pasti sarà disponibile a breve.</p>
+        <input type="search" id="library-search-input" class="library-search-bar" placeholder="Cerca in ingredienti...">
+        <div class="view-switcher">
+            <button id="library-tab-ingredients" class="btn-view active" data-view="ingredients">Ingredienti</button>
+            <button id="library-tab-meals" class="btn-view" data-view="meals">Pasti</button>
         </div>
+    </div>
+
+    <div id="library-content-ingredients" class="library-content">
+      <div class="library-header">
+        <h4>Ingredienti</h4>
+        <button id="add-ingredient-btn" class="btn btn-primary">Nuovo</button>
+      </div>
+      <div id="ingredient-list"></div>
+    </div>
+
+    <div id="library-content-meals" class="library-content hidden">
+      <div class="library-header">
+        <h4>Pasti</h4>
+        <button id="add-meal-btn" class="btn btn-primary" disabled>Nuovo</button>
+      </div>
+      <div id="meal-list">
+        <p class="placeholder-text">Il compositore di pasti sarà disponibile a breve.</p>
+      </div>
     </div>
 </div>

@@ -20,6 +20,8 @@ let state = {
   debugMode: false,
   ui: {
     currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+    activeLibraryTab: 'ingredients',
+    librarySearchTerm: '',
     lastWorkoutSummary: null,
     charts: {
       currentRangeFilter: 30,
@@ -205,6 +207,7 @@ export function deleteBiometricEntry(date) {
 export function addIngredient(ingredientData) {
   log('State', 'Adding new ingredient', { ingredientData });
   state.masterIngredientList.push(ingredientData);
+  state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
   saveStateToLocalStorage();
   notify();
 }
@@ -214,6 +217,7 @@ export function updateIngredient(ingredientId, updatedData) {
   const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
   if (index > -1) {
     state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
+    state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
     saveStateToLocalStorage();
     notify();
   }
