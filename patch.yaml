@@ -1,319 +1,387 @@
-commit_message: "fix(library): Implement rendering logic for meals tab"
+commit_message: "fix(library): Overhaul Meal Editor modal to fix critical bugs and improve UI"
 rationale: |
-  This commit fixes a critical UI bug where the "Meals" tab in the library would appear empty, even when meal data was correctly loaded into the application state. The previous patch had implemented the state logic for meals but neglected to implement the corresponding rendering logic.
+  This commit addresses several critical bugs and a significant UI/UX issue in the Meal Editor modal, as reported by the user. The previous implementation was unusable due to flawed event handling and a non-mobile-friendly design.
 
-  The fix involves:
-  1.  **Updating `renderLibraryPage`**: The `renderLibraryPage` function in `src/ui/pageRenderers.js` has been updated to include the logic necessary to render the list of meals.
-  2.  **Meal List Rendering**: When the "Meals" tab is active, the function now filters the `masterMealList` based on the current search term and generates the appropriate HTML for each meal, including its name, calorie details, and management buttons (edit/delete).
-  3.  **Consistent User Experience**: This change ensures that both the "Ingredients" and "Meals" tabs now behave identically, providing a consistent and intuitive user experience by correctly displaying the data loaded from either local storage or a remote configuration.
+  The following fixes and improvements have been implemented:
+  1.  **Robust Event Handling**: The entire event listener logic in `src/ui/modals/mealEditorModal.js` has been refactored. The fragile `cloneNode` approach has been replaced with a robust event delegation pattern. A single, persistent listener on the modal body now handles all actions (add/remove ingredient, save), fixing the critical bugs that prevented adding ingredients and saving the meal.
+  2.  **Improved Meal Type Selector**: The vertical list of checkboxes for selecting "Meal Type" has been replaced with a modern, mobile-friendly horizontal group of selectable "chips" or "pills". This is more compact, intuitive, and improves the user experience on all screen sizes.
+  3.  **CSS for New Components**: New styles have been added to `styles/modals.css` to support the new chip-based UI for the meal type selector, ensuring it aligns with the project's overall design system.
+  4.  **Code Cleanup**: The logic within `mealEditorModal.js` has been streamlined and simplified as a result of the refactoring, making the component more maintainable.
+
+  These changes resolve all reported issues, making the Meal Composer fully functional, stable, and user-friendly.
 patches:
-  - file: src/ui/pageRenderers.js
+  - file: styles/modals.css
     content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-      import { formatIngredientsSummary } from '../utils/formatters.js';
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
+
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
+      }
+      .editor-section-body {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .meal-details, .workout-summary {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .meal-info, .exercise-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .meal-details__name {
+        font-weight: 500;
+      }
+      .meal-actions, .workout-summary-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+
+      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+      .workout-editor-list .draggable-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        min-height: 70px;
+      }
+      .workout-editor-list .meal-actions { margin-left: auto; }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
+      }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
       }
 
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
       }
 
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+      /* --- MEAL EDITOR MODAL --- */
+      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
+      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      .meal-type-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .meal-type-chip {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+      }
+      .meal-type-chip.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+      }
+      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
+      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
+      .meal-editor-ingredient-row label { display: none; }
+      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
+          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
+      }
+      .meal-editor-ingredient-row .btn-remove-ingredient {
+          background: none; border: none; color: var(--danger-color); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+      }
+      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
+      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
+
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
+        }
+        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
       }
 
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 40px; }
+        .meal-editor-ingredient-row .quantita_pezzi { display: none; } /* Hide pieces on small screens to save space */
+      }
+  - file: src/ui/modals/mealEditorModal.js
+    content: |
+      import { getState, addMeal, updateMeal } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { showNotification } from '../notifications.js';
+      import { log } from '../../utils/logger.js';
+      import { MEAL_TYPES } from '../../utils/constants.js';
+      import { renderIcon } from '../icons.js';
+      import { processMealsWithCalories } from '../../core/calorieCalculator.js';
 
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
+      let tempIngredients = [];
+      let isEditingMode = false;
 
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
+      function renderIngredientRows() {
+        const listContainer = document.getElementById('meal-editor-ingredients-list');
+        const { masterIngredientList } = getState();
+        const optionsHtml = masterIngredientList.map(ing => `<option value="${ing.id}">${ing.nome}</option>`).join('');
 
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
+        if (tempIngredients.length === 0) {
+          listContainer.innerHTML = `<p class="placeholder-text">Aggiungi il primo ingrediente al tuo pasto.</p>`;
         } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderGoalsPage(state) {
-          const form = document.getElementById('goals-form');
-          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
-          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
-          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
-          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
-          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
-          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
-          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
-          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
-          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
-          form.elements.target_weight.value = state.userGoals.target_weight || '';
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
-      }
-
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.weight) {
-              details.push(`${setData.weight} kg`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
-      }
-
-      export function renderDebriefingPage(state) {
-        const summaryContainer = document.getElementById('debriefing-summary');
-        const statsContainer = document.getElementById('debriefing-stats');
-        const summary = state.ui.lastWorkoutSummary;
-
-        if (!summary || !summary.exercises) {
-            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
-            statsContainer.innerHTML = '';
-            document.getElementById('debriefing-feedback').classList.add('hidden');
-            return;
-        }
-
-        document.getElementById('debriefing-feedback').classList.remove('hidden');
-        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
-        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
-        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
-        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
-
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-                <span class="stat-value">${summary.totalCaloriesBurned}</span>
-            </div>
-        ` : '';
-
-        const tonnageHTML = summary.totalTonnage > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-                <span class="stat-value">${summary.totalTonnage} kg</span>
-            </div>
-        ` : '';
-
-        const statsHTML = `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-            </div>
-            ${caloriesBurnedHTML}
-            ${tonnageHTML}
-        `;
-        statsContainer.innerHTML = statsHTML;
-
-        const summaryHTML = summary.exercises.map(exercise => {
-            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-                <div class="set-detail-item">
-                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
-                </div>
-            `).join('');
-
-            return `
-                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header">
-                        <h4>${exercise.name}</h4>
-                        <div class="debriefing-status">
-                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                        </div>
-                    </div>
-                    <div class="debriefing-card-body">
-                      <div class="exercise-stats">
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
-                      </div>
-                      <div class="sets-details-container">
-                          ${setsDetailsHTML}
-                      </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        summaryContainer.innerHTML = summaryHTML;
-      }
-
-      export function renderRecipesPage(state) {
-        const recipesList = document.getElementById('recipes-list');
-        const recipes = state.masterMealList.filter(meal => meal.recipeId);
-
-        if (!recipes || recipes.length === 0) {
-            recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-            return;
-        }
-
-        let html = recipes.map(recipe => {
-            const ingredientsHtml = formatIngredientsSummary(recipe);
-
-            return `
-                <div class="recipe-list-item" data-meal-id="${recipe.id}">
-                    <h4>${recipe.nomePasto}</h4>
-                    <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
-                </div>
-            `;
-        }).join('');
-
-        recipesList.innerHTML = html;
-      }
-
-      export function renderLibraryPage(state) {
-        const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
-
-        // Update search input
-        const searchInput = document.getElementById('library-search-input');
-        searchInput.value = librarySearchTerm;
-        searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
-
-        // Update active tab
-        document.querySelectorAll('#library-page .btn-view').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.view === activeLibraryTab);
-        });
-
-        // Show/hide content panels
-        document.querySelectorAll('.library-content').forEach(panel => {
-          panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab));
-        });
-
-        const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
-
-        // Filter and render ingredients
-        const ingredientList = document.getElementById('ingredient-list');
-        const filteredIngredients = state.masterIngredientList.filter(ing =>
-          ing.nome.toLowerCase().includes(lowerCaseSearchTerm)
-        );
-
-        if (filteredIngredients.length > 0) {
-          ingredientList.innerHTML = filteredIngredients.map(ing => `
-            <div class="library-item" data-id="${ing.id}">
-              <div class="library-item-info">
-                <span class="library-item-info__name">${ing.nome}</span>
-                <span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span>
-              </div>
-              <div class="library-item-actions">
-                <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-                <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-              </div>
+          listContainer.innerHTML = tempIngredients.map((item, index) => `
+            <div class="meal-editor-ingredient-row" data-index="${index}">
+              <select name="ingredient_${index}" required>${optionsHtml}</select>
+              <input type="number" name="quantita_g_${index}" placeholder="Grammi" min="0" value="${item.quantita_g || ''}" class="quantita_g">
+              <input type="number" name="quantita_pezzi_${index}" placeholder="Pezzi" min="0" value="${item.quantita_pezzi || ''}" class="quantita_pezzi">
+              <button type="button" class="btn-remove-ingredient">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
             </div>
           `).join('');
+
+          // Set selected options
+          tempIngredients.forEach((item, index) => {
+            const select = listContainer.querySelector(`select[name="ingredient_${index}"]`);
+            if (select) {
+              select.value = item.id;
+            }
+          });
+        }
+        updateTotals();
+      }
+
+      function updateTotals() {
+        const totalsEl = document.getElementById('meal-editor-totals');
+        const mealForCalc = {
+          id: 'temp',
+          ingredienti: tempIngredients,
+        };
+
+        const [processedMeal] = processMealsWithCalories([mealForCalc], getState().masterIngredientList);
+
+        if (processedMeal.calories_min > 0) {
+          if (processedMeal.calories_min === processedMeal.calories_max) {
+            totalsEl.textContent = `Totale: ${processedMeal.calories_min} Kcal`;
+          } else {
+            totalsEl.textContent = `Totale: ${processedMeal.calories_min} - ${processedMeal.calories_max} Kcal`;
+          }
         } else {
-          ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
+          totalsEl.textContent = '';
+        }
+      }
+
+      function handleModalBodyClick(e) {
+        // Add new ingredient
+        if (e.target.closest('#meal-add-ingredient-btn')) {
+          tempIngredients.push({ id: getState().masterIngredientList[0]?.id || '', quantita_g: null, quantita_pezzi: null });
+          renderIngredientRows();
+          return;
         }
 
-        // Filter and render meals
-        const mealList = document.getElementById('meal-list');
-        const filteredMeals = state.masterMealList.filter(meal =>
-          meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm)
-        );
-
-        if (filteredMeals.length > 0) {
-          mealList.innerHTML = filteredMeals.map(meal => {
-            const calorieText = (meal.calories_min && meal.calories_max)
-              ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`)
-              : 'Calorie non calcolate';
-
-            return `
-              <div class="library-item" data-id="${meal.id}">
-                <div class="library-item-info">
-                  <span class="library-item-info__name">${meal.nomePasto}</span>
-                  <span class="library-item-info__details">${calorieText}</span>
-                </div>
-                <div class="library-item-actions">
-                  <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-                  <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-                </div>
-              </div>
-            `;
-          }).join('');
-        } else {
-          mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
+        // Remove an ingredient
+        const removeBtn = e.target.closest('.btn-remove-ingredient');
+        if (removeBtn) {
+          const row = e.target.closest('.meal-editor-ingredient-row');
+          if (row) {
+            tempIngredients.splice(parseInt(row.dataset.index, 10), 1);
+            renderIngredientRows();
+          }
+          return;
         }
+
+        // Toggle meal type chip
+        const chip = e.target.closest('.meal-type-chip');
+        if (chip) {
+          chip.classList.toggle('active');
+          return;
+        }
+      }
+
+      function handleIngredientInputChange(e) {
+        const target = e.target;
+        const row = target.closest('.meal-editor-ingredient-row');
+        if (!row) return;
+        const index = parseInt(row.dataset.index, 10);
+
+        if (target.matches('select')) {
+          tempIngredients[index].id = target.value;
+        } else if (target.matches('input[name^="quantita_g"]')) {
+          tempIngredients[index].quantita_g = parseFloat(target.value) || null;
+        } else if (target.matches('input[name^="quantita_pezzi"]')) {
+          tempIngredients[index].quantita_pezzi = parseFloat(target.value) || null;
+        }
+        updateTotals();
+      }
+
+      function handleFormSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const mealData = {
+          id: form.elements['id'].value,
+          nomePasto: form.elements['nomePasto'].value,
+          tipoPasto: [],
+          ingredienti: tempIngredients.filter(ing => ing.id), // Filter out empty ones
+        };
+
+        document.querySelectorAll('#meal-edit-tipoPasto-container .meal-type-chip.active').forEach(chip => {
+          mealData.tipoPasto.push(chip.dataset.value);
+        });
+
+        if (!mealData.id || !mealData.nomePasto) {
+          showNotification('ID e Nome Pasto sono obbligatori.', 'error');
+          return;
+        }
+
+        if (isEditingMode) {
+          updateMeal(form.elements['id'].value, mealData);
+          showNotification(UI_TEXT.MEAL_UPDATE_SUCCESS, 'success');
+        } else {
+          if (getState().masterMealList.some(m => m.id === mealData.id)) {
+            showNotification(UI_TEXT.MEAL_ID_CONFLICT, 'error');
+            return;
+          }
+          addMeal(mealData);
+          showNotification(UI_TEXT.MEAL_CREATE_SUCCESS, 'success');
+        }
+
+        document.getElementById('meal-editor-modal').classList.add('modal-hidden');
+      }
+
+
+      export function openMealEditorModal(meal = null) {
+        isEditingMode = meal !== null;
+        log('Modals', isEditingMode ? 'Opening meal editor (edit)' : 'Opening meal editor (new)', { meal });
+
+        tempIngredients = isEditingMode ? JSON.parse(JSON.stringify(meal.ingredienti || [])) : [];
+
+        const modal = document.getElementById('meal-editor-modal');
+        const form = modal.querySelector('#meal-editor-form');
+        const title = modal.querySelector('#meal-editor-title');
+        const saveBtn = modal.querySelector('#meal-editor-save-btn');
+        const modalBody = modal.querySelector('.modal-body');
+
+        title.textContent = isEditingMode ? UI_TEXT.MEAL_EDIT_TITLE : UI_TEXT.MEAL_NEW_TITLE;
+        saveBtn.textContent = UI_TEXT.MEAL_SAVE_BTN;
+
+        // Populate main form fields
+        form.elements.id.value = meal?.id || '';
+        form.elements.nomePasto.value = meal?.nomePasto || '';
+        form.elements.id.readOnly = isEditingMode;
+
+        // Populate meal type chips
+        const tipoPastoContainer = document.getElementById('meal-edit-tipoPasto-container');
+        tipoPastoContainer.innerHTML = MEAL_TYPES.map(type => `
+          <div class="meal-type-chip ${meal?.tipoPasto?.includes(type) ? 'active' : ''}" data-value="${type}">
+            ${type}
+          </div>
+        `).join('');
+
+        renderIngredientRows();
+
+        // --- Event Listener Management ---
+        // Remove old listeners to prevent duplication
+        modalBody.removeEventListener('click', handleModalBodyClick);
+        modalBody.removeEventListener('input', handleIngredientInputChange);
+        form.removeEventListener('submit', handleFormSubmit);
+
+        // Add fresh listeners
+        modalBody.addEventListener('click', handleModalBodyClick);
+        modalBody.addEventListener('input', handleIngredientInputChange);
+        form.addEventListener('submit', handleFormSubmit);
+
+        modal.classList.remove('modal-hidden');
       }

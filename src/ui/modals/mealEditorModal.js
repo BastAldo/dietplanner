@@ -20,8 +20,8 @@ function renderIngredientRows() {
     listContainer.innerHTML = tempIngredients.map((item, index) => `
       <div class="meal-editor-ingredient-row" data-index="${index}">
         <select name="ingredient_${index}" required>${optionsHtml}</select>
-        <input type="number" name="quantita_g_${index}" placeholder="Grammi" min="0" value="${item.quantita_g || ''}">
-        <input type="number" name="quantita_pezzi_${index}" placeholder="Pezzi" min="0" value="${item.quantita_pezzi || ''}">
+        <input type="number" name="quantita_g_${index}" placeholder="Grammi" min="0" value="${item.quantita_g || ''}" class="quantita_g">
+        <input type="number" name="quantita_pezzi_${index}" placeholder="Pezzi" min="0" value="${item.quantita_pezzi || ''}" class="quantita_pezzi">
         <button type="button" class="btn-remove-ingredient">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
       </div>
     `).join('');
@@ -57,21 +57,83 @@ function updateTotals() {
   }
 }
 
-function handleIngredientChange(e) {
+function handleModalBodyClick(e) {
+  // Add new ingredient
+  if (e.target.closest('#meal-add-ingredient-btn')) {
+    tempIngredients.push({ id: getState().masterIngredientList[0]?.id || '', quantita_g: null, quantita_pezzi: null });
+    renderIngredientRows();
+    return;
+  }
+
+  // Remove an ingredient
+  const removeBtn = e.target.closest('.btn-remove-ingredient');
+  if (removeBtn) {
+    const row = e.target.closest('.meal-editor-ingredient-row');
+    if (row) {
+      tempIngredients.splice(parseInt(row.dataset.index, 10), 1);
+      renderIngredientRows();
+    }
+    return;
+  }
+
+  // Toggle meal type chip
+  const chip = e.target.closest('.meal-type-chip');
+  if (chip) {
+    chip.classList.toggle('active');
+    return;
+  }
+}
+
+function handleIngredientInputChange(e) {
   const target = e.target;
   const row = target.closest('.meal-editor-ingredient-row');
   if (!row) return;
   const index = parseInt(row.dataset.index, 10);
 
-  if (target.name.startsWith('ingredient')) {
+  if (target.matches('select')) {
     tempIngredients[index].id = target.value;
-  } else if (target.name.startsWith('quantita_g')) {
+  } else if (target.matches('input[name^="quantita_g"]')) {
     tempIngredients[index].quantita_g = parseFloat(target.value) || null;
-  } else if (target.name.startsWith('quantita_pezzi')) {
+  } else if (target.matches('input[name^="quantita_pezzi"]')) {
     tempIngredients[index].quantita_pezzi = parseFloat(target.value) || null;
   }
   updateTotals();
 }
+
+function handleFormSubmit(e) {
+  e.preventDefault();
+  const form = e.target;
+  const mealData = {
+    id: form.elements['id'].value,
+    nomePasto: form.elements['nomePasto'].value,
+    tipoPasto: [],
+    ingredienti: tempIngredients.filter(ing => ing.id), // Filter out empty ones
+  };
+
+  document.querySelectorAll('#meal-edit-tipoPasto-container .meal-type-chip.active').forEach(chip => {
+    mealData.tipoPasto.push(chip.dataset.value);
+  });
+
+  if (!mealData.id || !mealData.nomePasto) {
+    showNotification('ID e Nome Pasto sono obbligatori.', 'error');
+    return;
+  }
+
+  if (isEditingMode) {
+    updateMeal(form.elements['id'].value, mealData);
+    showNotification(UI_TEXT.MEAL_UPDATE_SUCCESS, 'success');
+  } else {
+    if (getState().masterMealList.some(m => m.id === mealData.id)) {
+      showNotification(UI_TEXT.MEAL_ID_CONFLICT, 'error');
+      return;
+    }
+    addMeal(mealData);
+    showNotification(UI_TEXT.MEAL_CREATE_SUCCESS, 'success');
+  }
+
+  document.getElementById('meal-editor-modal').classList.add('modal-hidden');
+}
+
 
 export function openMealEditorModal(meal = null) {
   isEditingMode = meal !== null;
@@ -83,6 +145,7 @@ export function openMealEditorModal(meal = null) {
   const form = modal.querySelector('#meal-editor-form');
   const title = modal.querySelector('#meal-editor-title');
   const saveBtn = modal.querySelector('#meal-editor-save-btn');
+  const modalBody = modal.querySelector('.modal-body');
 
   title.textContent = isEditingMode ? UI_TEXT.MEAL_EDIT_TITLE : UI_TEXT.MEAL_NEW_TITLE;
   saveBtn.textContent = UI_TEXT.MEAL_SAVE_BTN;
@@ -92,79 +155,26 @@ export function openMealEditorModal(meal = null) {
   form.elements.nomePasto.value = meal?.nomePasto || '';
   form.elements.id.readOnly = isEditingMode;
 
-  // Populate meal type checkboxes
+  // Populate meal type chips
   const tipoPastoContainer = document.getElementById('meal-edit-tipoPasto-container');
   tipoPastoContainer.innerHTML = MEAL_TYPES.map(type => `
-    <label>
-      <input type="checkbox" name="tipoPasto" value="${type}" ${meal?.tipoPasto?.includes(type) ? 'checked' : ''}>
+    <div class="meal-type-chip ${meal?.tipoPasto?.includes(type) ? 'active' : ''}" data-value="${type}">
       ${type}
-    </label>
+    </div>
   `).join('');
 
   renderIngredientRows();
 
-  // Attach listeners
-  const ingredientsList = document.getElementById('meal-editor-ingredients-list');
-  const addIngredientBtn = document.getElementById('meal-add-ingredient-btn');
+  // --- Event Listener Management ---
+  // Remove old listeners to prevent duplication
+  modalBody.removeEventListener('click', handleModalBodyClick);
+  modalBody.removeEventListener('input', handleIngredientInputChange);
+  form.removeEventListener('submit', handleFormSubmit);
 
-  const ingredientChangeHandler = (e) => handleIngredientChange(e);
-  const addIngredientHandler = () => {
-    tempIngredients.push({ id: getState().masterIngredientList[0]?.id || '', quantita_g: null, quantita_pezzi: null });
-    renderIngredientRows();
-  };
-  const removeIngredientHandler = (e) => {
-    if (e.target.closest('.btn-remove-ingredient')) {
-      const row = e.target.closest('.meal-editor-ingredient-row');
-      if (row) {
-        tempIngredients.splice(parseInt(row.dataset.index, 10), 1);
-        renderIngredientRows();
-      }
-    }
-  };
-  const formSubmitHandler = (e) => {
-    e.preventDefault();
-    const formData = new FormData(form);
-
-    const mealData = {
-      id: formData.get('id'),
-      nomePasto: formData.get('nomePasto'),
-      tipoPasto: formData.getAll('tipoPasto'),
-      ingredienti: tempIngredients.filter(ing => ing.id), // Filter out empty ones
-    };
-
-    if (!mealData.id || !mealData.nomePasto) {
-      showNotification('ID e Nome Pasto sono obbligatori.', 'error');
-      return;
-    }
-
-    if (isEditingMode) {
-      updateMeal(meal.id, mealData);
-      showNotification(UI_TEXT.MEAL_UPDATE_SUCCESS, 'success');
-    } else {
-      if (getState().masterMealList.some(m => m.id === mealData.id)) {
-        showNotification(UI_TEXT.MEAL_ID_CONFLICT, 'error');
-        return;
-      }
-      addMeal(mealData);
-      showNotification(UI_TEXT.MEAL_CREATE_SUCCESS, 'success');
-    }
-
-    modal.classList.add('modal-hidden');
-  };
-
-  // Use cloning to remove old listeners
-  const newForm = form.cloneNode(true);
-  form.parentNode.replaceChild(newForm, form);
-  newForm.addEventListener('submit', formSubmitHandler);
-
-  const newAddBtn = addIngredientBtn.cloneNode(true);
-  addIngredientBtn.parentNode.replaceChild(newAddBtn, addIngredientBtn);
-  newAddBtn.addEventListener('click', addIngredientHandler);
-
-  const newList = ingredientsList.cloneNode(true);
-  ingredientsList.parentNode.replaceChild(newList, ingredientsList);
-  newList.addEventListener('change', ingredientChangeHandler);
-  newList.addEventListener('click', removeIngredientHandler);
+  // Add fresh listeners
+  modalBody.addEventListener('click', handleModalBodyClick);
+  modalBody.addEventListener('input', handleIngredientInputChange);
+  form.addEventListener('submit', handleFormSubmit);
 
   modal.classList.remove('modal-hidden');
 }

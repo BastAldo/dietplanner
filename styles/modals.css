@@ -132,6 +132,24 @@
 /* --- MEAL EDITOR MODAL --- */
 #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
 .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+.meal-type-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.meal-type-chip {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+.meal-type-chip.active {
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+  border-color: var(--primary-color);
+}
 .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
 .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
 .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
