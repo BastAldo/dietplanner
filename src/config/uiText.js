@@ -184,7 +184,16 @@ const UI_TEXT_CONFIG = [
   { id: 'INGREDIENT_DELETE_SUCCESS', text: 'Ingrediente eliminato.' },
   { id: 'INGREDIENT_ID_CONFLICT', text: 'Esiste già un ingrediente con questo ID.' },
   { id: 'INGREDIENT_DELETE_CONFIRM_TITLE', text: 'Elimina Ingrediente' },
-  { id: 'INGREDIENT_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare l\'ingrediente' }
+  { id: 'INGREDIENT_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare l\'ingrediente' },
+  { id: 'MEAL_NEW_TITLE', text: 'Nuovo Pasto' },
+  { id: 'MEAL_EDIT_TITLE', text: 'Modifica Pasto' },
+  { id: 'MEAL_SAVE_BTN', text: 'Salva Pasto' },
+  { id: 'MEAL_CREATE_SUCCESS', text: 'Pasto creato con successo!' },
+  { id: 'MEAL_UPDATE_SUCCESS', text: 'Pasto aggiornato con successo!' },
+  { id: 'MEAL_DELETE_SUCCESS', text: 'Pasto eliminato.' },
+  { id: 'MEAL_ID_CONFLICT', text: 'Esiste già un pasto con questo ID.' },
+  { id: 'MEAL_DELETE_CONFIRM_TITLE', text: 'Elimina Pasto' },
+  { id: 'MEAL_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare il pasto' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
