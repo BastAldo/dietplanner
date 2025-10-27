@@ -4,6 +4,7 @@
 </div>
 
 <div id="planner-page" class="page-view">
+    <section id="today-widget" class="today-widget"></section>
     <section id="planner-summary-widget" class="planner-summary-widget"></section>
     <section class="view-container">
         <header class="calendar-header">
@@ -12,16 +13,13 @@
             <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
         </header>
          <div class="planner-controls-wrapper">
-            <div class="view-switcher">
-                <button id="view-calendar-btn" class="btn-view active" title="Vista Calendario"></button>
-                <button id="view-log-btn" class="btn-view" title="Vista Registro"></button>
-            </div>
             <div class="planner-actions">
               <button id="copy-week-btn" class="btn btn-secondary"></button>
               <button id="reset-btn" class="btn btn-secondary"></button>
             </div>
         </div>
         <div id="calendar-grid" class="calendar-grid"></div>
-        <div id="log-view" class="log-view hidden"></div>
+        <h3 id="log-view-title" class="section-title">Registro Dettagliato</h3>
+        <div id="log-view" class="log-view"></div>
     </section>
 </div>

@@ -17,10 +17,6 @@ function populateIcons() {
     document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
     document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
     document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
-    document.getElementById('share-config-btn').innerHTML = renderIcon('SHARE');
-    document.getElementById('info-icon').innerHTML = renderIcon('INFO');
-    document.getElementById('view-calendar-btn').innerHTML = renderIcon('PLANNER');
-    document.getElementById('view-log-btn').innerHTML = renderIcon('LOG_VIEW');
     document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
     document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
     document.querySelectorAll('.btn-expand-chart').forEach(btn => {
@@ -53,6 +49,7 @@ export function populateInitialText() {
   document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
   document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
   document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+  document.getElementById('data-management-title').textContent = "Gestione Dati";
   document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
   document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
   document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
@@ -61,6 +58,7 @@ export function populateInitialText() {
   document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
   document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
   document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
+  document.getElementById('log-view-title').textContent = "Registro Dettagliato";
   populateIcons();
 }
 
@@ -125,6 +123,7 @@ export function renderApp() {
     profilePage.classList.remove('hidden');
     navProfileBtn.classList.add('active');
     renderProfilePage(state);
+    document.getElementById('config-url-input').value = state.configUrl;
   } else if (currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
     setTimeout(() => window.scrollTo(0, 0), 0); // Defer scroll to after render cycle
@@ -138,7 +137,4 @@ export function renderApp() {
     debriefingPage.classList.remove('hidden');
     renderDebriefingPage(state);
   }
-
-  const urlInput = document.getElementById('config-url-input');
-  if (document.activeElement !== urlInput) urlInput.value = state.configUrl;
 }
