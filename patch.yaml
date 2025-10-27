@@ -1,110 +1,374 @@
-commit_message: "feat(library): Implement tabbed UI, search, and ingredient CRUD"
+commit_message: "feat(library): Implement Meal Composer with full CRUD functionality"
 rationale: |
-  This commit delivers the complete, user-approved plan for the "Library" feature. It transforms the library from a static placeholder into a fully functional, interactive, and user-friendly management tool.
+  This commit completes Phase 2 of the content creation roadmap, introducing the "Meal Composer". Users can now create, update, and delete custom meals by assembling ingredients from their personal library.
 
-  Key enhancements include:
-  1.  **Tabbed Interface**: The library view now uses a tabbed navigation system, allowing users to switch between "Ingredients" and "Meals". This addresses the usability concerns of a long scrolling page and provides a scalable structure for future content types.
-  2.  **Search and Filtering**: A search bar has been implemented at the top of the library page. It provides real-time filtering of the content within the active tab, significantly improving the user's ability to find specific items in large collections.
-  3.  **State Management for UI**: The application's UI state has been extended to manage the active tab and the current search term, ensuring a persistent and intuitive user experience when navigating away from and back to the library.
-  4.  **Full Ingredient CRUD**: The entire workflow for creating, reading, updating, and deleting ingredients is now functional, including the editor modal and confirmation dialogues, as per the agreed plan.
+  Key features and changes include:
+  1.  **Meal Editor Modal**: A new, sophisticated modal (`meal-editor-modal`) has been introduced. It allows users to define meal properties (ID, name, type) and dynamically add, remove, and quantify ingredients from their library.
+  2.  **Real-Time Calorie Calculation**: The meal editor provides immediate feedback by calculating and displaying the total minimum and maximum calories of the meal as ingredients are added or modified.
+  3.  **Meal CRUD in State**: The core state management (`state.js`) now includes `addMeal`, `updateMeal`, and `deleteMeal` functions. The user's `masterMealList` is now persisted to `localStorage`, making it a personal and editable collection.
+  4.  **Activated Meals Tab**: The "Meals" tab in the Library view is now fully functional. It displays the user's custom meals, integrates with the search functionality, and provides controls to edit or delete each meal.
+  5.  **Decoupling from Remote Config**: The `setPlannerConfig` function has been updated to no longer overwrite the user's custom `masterMealList`, allowing for the safe importation of external meal plans without data loss.
 patches:
-  - file: styles/library.css
+  - file: styles/modals.css
     content: |
-      /* --- LIBRARY PAGE --- */
-      #library-page > h3 {
-          color: var(--primary-color);
-          margin-bottom: 1.5rem;
-      }
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
 
-      .library-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-      }
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
 
-      .library-search-bar {
-        width: 100%;
-        padding: 0.75rem;
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
+      }
+      .editor-section-body {
+        background: var(--bg-color);
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        font-size: 1rem;
-        background-color: var(--card-color);
-        color: var(--text-color);
+        padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-
-      .library-search-bar:focus {
-        outline: none;
-        border-color: var(--primary-color);
-      }
-
-      .library-header {
+      .meal-details, .workout-summary {
+        width: 100%;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1rem;
+        gap: 1rem;
       }
-
-      .library-section {
-        margin-bottom: 2rem;
-      }
-
-      .library-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 1rem;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          margin-bottom: 0.75rem;
-      }
-
-      .library-item-info {
+      .meal-info, .exercise-info {
         display: flex;
         flex-direction: column;
         gap: 0.25rem;
         flex-grow: 1;
         min-width: 0;
       }
-
-      .library-item-info__name {
+      .meal-details__name {
         font-weight: 500;
-        word-break: break-word;
       }
-      .library-item-info__details {
-        font-size: 0.85rem;
-        color: var(--text-color-muted);
-        word-break: break-word;
-      }
-
-      .library-item-actions {
+      .meal-actions, .workout-summary-actions {
         display: flex;
         gap: 0.5rem;
         flex-shrink: 0;
       }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
 
-      .library-item-actions button {
-        background: none;
-        border: none;
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        border-radius: 50%;
+      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+      .workout-editor-list .draggable-item {
         display: flex;
         align-items: center;
-        justify-content: center;
+        padding: 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        min-height: 70px;
       }
-      .library-item-actions button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
+      .workout-editor-list .meal-actions { margin-left: auto; }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
       }
-      .library-item-actions .btn-edit:hover {
-        color: var(--primary-color);
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
       }
-      .library-item-actions .btn-delete:hover {
-        color: var(--danger-color);
+
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
       }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
+      }
+
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+      /* --- MEAL EDITOR MODAL --- */
+      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
+      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
+      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
+      .meal-editor-ingredient-row label { display: none; }
+      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
+          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
+      }
+      .meal-editor-ingredient-row .btn-remove-ingredient {
+          background: none; border: none; color: var(--danger-color); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+      }
+      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
+      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
+
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
+        }
+        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
+      }
+
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 40px; }
+        .meal-editor-ingredient-row .quantita_pezzi { display: none; } /* Hide pieces on small screens to save space */
+      }
+  - file: templates/modals.html
+    content: |
+      <div id="info-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="info-modal-title"></h3>
+                <button class="modal-close-btn" data-target="info-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <p id="info-modal-desc"></p>
+                  <pre><code id="info-modal-json-example"></code></pre>
+              </div>
+          </div>
+      </div>
+      <div id="selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="selection-modal"></button>
+              </div>
+              <div id="selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="workout-selection-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="workout-selection-modal-title"></h3>
+                <button class="modal-close-btn" data-target="workout-selection-modal"></button>
+              </div>
+              <div id="workout-selection-modal-list" class="modal-body selection-list"></div>
+          </div>
+      </div>
+      <div id="day-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="day-editor-title"></h3>
+              <button class="modal-close-btn" data-target="day-editor-modal"></button>
+            </div>
+            <div id="day-editor-body" class="modal-body day-editor-list"></div>
+        </div>
+      </div>
+      <div id="workout-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="workout-editor-title"></h3>
+              <button class="modal-close-btn" data-target="workout-editor-modal"></button>
+            </div>
+            <div id="workout-editor-body" class="modal-body"></div>
+        </div>
+      </div>
+      <div id="exercise-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="exercise-editor-title"></h3>
+              <button class="modal-close-btn" data-target="exercise-editor-modal"></button>
+            </div>
+            <div id="exercise-editor-body" class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button id="exercise-editor-save-btn" class="btn btn-primary"></button>
+            </div>
+        </div>
+      </div>
+      <div id="confirm-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirm-modal-title"></h3>
+            </div>
+            <div class="modal-body">
+              <p id="confirm-modal-message"></p>
+            </div>
+            <div class="modal-footer">
+              </div>
+        </div>
+      </div>
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="recipe-modal-title"></h3>
+              <button class="modal-close-btn" data-target="recipe-modal"></button>
+            </div>
+            <div id="recipe-modal-body" class="modal-body recipe-body"></div>
+        </div>
+      </div>
+      <div id="manual-workout-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="manual-workout-modal-title"></h3>
+                <button class="modal-close-btn" data-target="manual-workout-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="manual-workout-form" class="structured-form">
+                      <div class="form-group">
+                          <label id="manual-workout-name-label" for="manual-workout-name"></label>
+                          <input type="text" id="manual-workout-name" name="name" required>
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-duration-label" for="manual-workout-duration"></label>
+                          <input type="text" id="manual-workout-duration" name="duration">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-distance-label" for="manual-workout-distance"></label>
+                          <input type="number" id="manual-workout-distance" name="distance" min="0" step="0.1">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-avg-label" for="manual-workout-fc-avg"></label>
+                          <input type="number" id="manual-workout-fc-avg" name="fc_avg" min="0">
+                      </div>
+                      <div class="form-group">
+                          <label id="manual-workout-fc-max-label" for="manual-workout-fc-max"></label>
+                          <input type="number" id="manual-workout-fc-max" name="fc_max" min="0">
+                      </div>
+                      <div class="form-group full-width">
+                          <label id="manual-workout-notes-label" for="manual-workout-notes"></label>
+                          <textarea id="manual-workout-notes" name="notes" rows="3"></textarea>
+                      </div>
+                  </form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="manual-workout-form" class="btn btn-primary" id="manual-workout-save-btn"></button>
+              </div>
+          </div>
+      </div>
+      <div id="chart-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content modal-content-large">
+              <div class="modal-header">
+                <h3 id="chart-modal-title"></h3>
+                <button class="modal-close-btn" data-target="chart-modal"></button>
+              </div>
+              <div id="chart-modal-body" class="modal-body">
+                <canvas id="chart-modal-canvas"></canvas>
+              </div>
+          </div>
+      </div>
+      <div id="ingredient-editor-modal" class="modal-overlay modal-hidden">
+          <div class="modal-content">
+              <div class="modal-header">
+                <h3 id="ingredient-editor-title"></h3>
+                <button class="modal-close-btn" data-target="ingredient-editor-modal"></button>
+              </div>
+              <div class="modal-body">
+                  <form id="ingredient-editor-form" class="biometrics-form"></form>
+              </div>
+              <div class="modal-footer">
+                  <button type="submit" form="ingredient-editor-form" id="ingredient-editor-save-btn" class="btn btn-primary"></button>
+              </div>
+          </div>
+      </div>
+      <div id="meal-editor-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content modal-content-large">
+            <div class="modal-header">
+              <h3 id="meal-editor-title"></h3>
+              <button class="modal-close-btn" data-target="meal-editor-modal"></button>
+            </div>
+            <div id="meal-editor-body" class="modal-body">
+                <form id="meal-editor-form">
+                    <div class="meal-editor-form-grid">
+                        <div class="form-group">
+                            <label for="meal-edit-id">ID Pasto (univoco)</label>
+                            <input type="text" id="meal-edit-id" name="id" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="meal-edit-nomePasto">Nome Pasto</label>
+                            <input type="text" id="meal-edit-nomePasto" name="nomePasto" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo Pasto (seleziona uno o più)</label>
+                        <div id="meal-edit-tipoPasto-container" class="checkbox-group"></div>
+                    </div>
+                    <div class="meal-editor-ingredients-header">
+                      <h4>Ingredienti</h4>
+                      <button type="button" id="meal-add-ingredient-btn" class="btn btn-secondary">Aggiungi</button>
+                    </div>
+                    <div id="meal-editor-ingredients-list" class="day-editor-list"></div>
+                    <div class="meal-editor-footer">
+                      <p id="meal-editor-totals" class="meal-editor-totals"></p>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" form="meal-editor-form" id="meal-editor-save-btn" class="btn btn-primary"></button>
+            </div>
+        </div>
+       </div>
   - file: templates/library.html
     content: |
       <div id="library-page" class="page-view hidden">
@@ -129,71 +393,283 @@ patches:
           <div id="library-content-meals" class="library-content hidden">
             <div class="library-header">
               <h4>Pasti</h4>
-              <button id="add-meal-btn" class="btn btn-primary" disabled>Nuovo</button>
+              <button id="add-meal-btn" class="btn btn-primary">Nuovo</button>
             </div>
-            <div id="meal-list">
-              <p class="placeholder-text">Il compositore di pasti sarà disponibile a breve.</p>
-            </div>
+            <div id="meal-list"></div>
           </div>
       </div>
+  - file: src/ui/modals/mealEditorModal.js
+    content: |
+      import { getState, addMeal, updateMeal } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { showNotification } from '../notifications.js';
+      import { log } from '../../utils/logger.js';
+      import { MEAL_TYPES } from '../../utils/constants.js';
+      import { renderIcon } from '../icons.js';
+      import { processMealsWithCalories } from '../../core/calorieCalculator.js';
+
+      let tempIngredients = [];
+      let isEditingMode = false;
+
+      function renderIngredientRows() {
+        const listContainer = document.getElementById('meal-editor-ingredients-list');
+        const { masterIngredientList } = getState();
+        const optionsHtml = masterIngredientList.map(ing => `<option value="${ing.id}">${ing.nome}</option>`).join('');
+
+        if (tempIngredients.length === 0) {
+          listContainer.innerHTML = `<p class="placeholder-text">Aggiungi il primo ingrediente al tuo pasto.</p>`;
+        } else {
+          listContainer.innerHTML = tempIngredients.map((item, index) => `
+            <div class="meal-editor-ingredient-row" data-index="${index}">
+              <select name="ingredient_${index}" required>${optionsHtml}</select>
+              <input type="number" name="quantita_g_${index}" placeholder="Grammi" min="0" value="${item.quantita_g || ''}">
+              <input type="number" name="quantita_pezzi_${index}" placeholder="Pezzi" min="0" value="${item.quantita_pezzi || ''}">
+              <button type="button" class="btn-remove-ingredient">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
+            </div>
+          `).join('');
+
+          // Set selected options
+          tempIngredients.forEach((item, index) => {
+            const select = listContainer.querySelector(`select[name="ingredient_${index}"]`);
+            if (select) {
+              select.value = item.id;
+            }
+          });
+        }
+        updateTotals();
+      }
+
+      function updateTotals() {
+        const totalsEl = document.getElementById('meal-editor-totals');
+        const mealForCalc = {
+          id: 'temp',
+          ingredienti: tempIngredients,
+        };
+
+        const [processedMeal] = processMealsWithCalories([mealForCalc], getState().masterIngredientList);
+
+        if (processedMeal.calories_min > 0) {
+          if (processedMeal.calories_min === processedMeal.calories_max) {
+            totalsEl.textContent = `Totale: ${processedMeal.calories_min} Kcal`;
+          } else {
+            totalsEl.textContent = `Totale: ${processedMeal.calories_min} - ${processedMeal.calories_max} Kcal`;
+          }
+        } else {
+          totalsEl.textContent = '';
+        }
+      }
+
+      function handleIngredientChange(e) {
+        const target = e.target;
+        const row = target.closest('.meal-editor-ingredient-row');
+        if (!row) return;
+        const index = parseInt(row.dataset.index, 10);
+
+        if (target.name.startsWith('ingredient')) {
+          tempIngredients[index].id = target.value;
+        } else if (target.name.startsWith('quantita_g')) {
+          tempIngredients[index].quantita_g = parseFloat(target.value) || null;
+        } else if (target.name.startsWith('quantita_pezzi')) {
+          tempIngredients[index].quantita_pezzi = parseFloat(target.value) || null;
+        }
+        updateTotals();
+      }
+
+      export function openMealEditorModal(meal = null) {
+        isEditingMode = meal !== null;
+        log('Modals', isEditingMode ? 'Opening meal editor (edit)' : 'Opening meal editor (new)', { meal });
+
+        tempIngredients = isEditingMode ? JSON.parse(JSON.stringify(meal.ingredienti || [])) : [];
+
+        const modal = document.getElementById('meal-editor-modal');
+        const form = modal.querySelector('#meal-editor-form');
+        const title = modal.querySelector('#meal-editor-title');
+        const saveBtn = modal.querySelector('#meal-editor-save-btn');
+
+        title.textContent = isEditingMode ? UI_TEXT.MEAL_EDIT_TITLE : UI_TEXT.MEAL_NEW_TITLE;
+        saveBtn.textContent = UI_TEXT.MEAL_SAVE_BTN;
+
+        // Populate main form fields
+        form.elements.id.value = meal?.id || '';
+        form.elements.nomePasto.value = meal?.nomePasto || '';
+        form.elements.id.readOnly = isEditingMode;
+
+        // Populate meal type checkboxes
+        const tipoPastoContainer = document.getElementById('meal-edit-tipoPasto-container');
+        tipoPastoContainer.innerHTML = MEAL_TYPES.map(type => `
+          <label>
+            <input type="checkbox" name="tipoPasto" value="${type}" ${meal?.tipoPasto?.includes(type) ? 'checked' : ''}>
+            ${type}
+          </label>
+        `).join('');
+
+        renderIngredientRows();
+
+        // Attach listeners
+        const ingredientsList = document.getElementById('meal-editor-ingredients-list');
+        const addIngredientBtn = document.getElementById('meal-add-ingredient-btn');
+
+        const ingredientChangeHandler = (e) => handleIngredientChange(e);
+        const addIngredientHandler = () => {
+          tempIngredients.push({ id: getState().masterIngredientList[0]?.id || '', quantita_g: null, quantita_pezzi: null });
+          renderIngredientRows();
+        };
+        const removeIngredientHandler = (e) => {
+          if (e.target.closest('.btn-remove-ingredient')) {
+            const row = e.target.closest('.meal-editor-ingredient-row');
+            if (row) {
+              tempIngredients.splice(parseInt(row.dataset.index, 10), 1);
+              renderIngredientRows();
+            }
+          }
+        };
+        const formSubmitHandler = (e) => {
+          e.preventDefault();
+          const formData = new FormData(form);
+
+          const mealData = {
+            id: formData.get('id'),
+            nomePasto: formData.get('nomePasto'),
+            tipoPasto: formData.getAll('tipoPasto'),
+            ingredienti: tempIngredients.filter(ing => ing.id), // Filter out empty ones
+          };
+
+          if (!mealData.id || !mealData.nomePasto) {
+            showNotification('ID e Nome Pasto sono obbligatori.', 'error');
+            return;
+          }
+
+          if (isEditingMode) {
+            updateMeal(meal.id, mealData);
+            showNotification(UI_TEXT.MEAL_UPDATE_SUCCESS, 'success');
+          } else {
+            if (getState().masterMealList.some(m => m.id === mealData.id)) {
+              showNotification(UI_TEXT.MEAL_ID_CONFLICT, 'error');
+              return;
+            }
+            addMeal(mealData);
+            showNotification(UI_TEXT.MEAL_CREATE_SUCCESS, 'success');
+          }
+
+          modal.classList.add('modal-hidden');
+        };
+
+        // Use cloning to remove old listeners
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        newForm.addEventListener('submit', formSubmitHandler);
+
+        const newAddBtn = addIngredientBtn.cloneNode(true);
+        addIngredientBtn.parentNode.replaceChild(newAddBtn, addIngredientBtn);
+        newAddBtn.addEventListener('click', addIngredientHandler);
+
+        const newList = ingredientsList.cloneNode(true);
+        ingredientsList.parentNode.replaceChild(newList, ingredientsList);
+        newList.addEventListener('change', ingredientChangeHandler);
+        newList.addEventListener('click', removeIngredientHandler);
+
+        modal.classList.remove('modal-hidden');
+      }
   - file: src/ui/interactions/libraryInteractions.js
     content: |
       import { log } from '../../utils/logger.js';
-      import { openIngredientEditorModal } from '../modals.js';
+      import { openIngredientEditorModal, openMealEditorModal } from '../modals.js';
       import { showConfirmModal } from '../modals.js';
-      import { deleteIngredient, getState, setUiState } from '../../core/state.js';
+      import { deleteIngredient, deleteMeal, getState, setUiState } from '../../core/state.js';
       import { UI_TEXT } from '../../config/uiText.js';
       import { showNotification } from '../notifications.js';
 
       function handleLibraryClick(e) {
-        const addBtn = e.target.closest('#add-ingredient-btn');
-        if (addBtn) {
-          log('Interactions-Library', 'Add new ingredient button clicked');
-          openIngredientEditorModal();
-          return;
-        }
+        const state = getState();
 
+        // Tab switching
         const tabBtn = e.target.closest('.btn-view');
         if (tabBtn && tabBtn.dataset.view) {
           const newView = tabBtn.dataset.view;
           log('Interactions-Library', 'Tab changed', { newView });
-          const currentState = getState();
           setUiState({
-            ...currentState.ui,
+            ...state.ui,
             activeLibraryTab: newView
           });
           return;
         }
 
-        const item = e.target.closest('.library-item');
-        if (!item) return;
+        // --- Ingredient Actions ---
+        if (state.ui.activeLibraryTab === 'ingredients') {
+          const addBtn = e.target.closest('#add-ingredient-btn');
+          if (addBtn) {
+            log('Interactions-Library', 'Add new ingredient button clicked');
+            openIngredientEditorModal();
+            return;
+          }
 
-        const ingredientId = item.dataset.id;
-        const state = getState();
-        const ingredient = state.masterIngredientList.find(ing => ing.id === ingredientId);
+          const item = e.target.closest('.library-item');
+          if (!item) return;
 
-        if (!ingredient) return;
+          const ingredientId = item.dataset.id;
+          const ingredient = state.masterIngredientList.find(ing => ing.id === ingredientId);
+          if (!ingredient) return;
 
-        const editBtn = e.target.closest('.btn-edit');
-        if (editBtn) {
-          log('Interactions-Library', 'Edit ingredient button clicked', { ingredientId });
-          openIngredientEditorModal(ingredient);
-          return;
+          const editBtn = e.target.closest('.btn-edit');
+          if (editBtn) {
+            log('Interactions-Library', 'Edit ingredient button clicked', { ingredientId });
+            openIngredientEditorModal(ingredient);
+            return;
+          }
+
+          const deleteBtn = e.target.closest('.btn-delete');
+          if (deleteBtn) {
+            log('Interactions-Library', 'Delete ingredient button clicked', { ingredientId });
+            showConfirmModal({
+              title: UI_TEXT.INGREDIENT_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.INGREDIENT_DELETE_CONFIRM_MSG} "${ingredient.nome}"?`,
+              onConfirm: () => {
+                deleteIngredient(ingredientId);
+                showNotification(UI_TEXT.INGREDIENT_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
         }
 
-        const deleteBtn = e.target.closest('.btn-delete');
-        if (deleteBtn) {
-          log('Interactions-Library', 'Delete ingredient button clicked', { ingredientId });
-          showConfirmModal({
-            title: UI_TEXT.INGREDIENT_DELETE_CONFIRM_TITLE,
-            message: `${UI_TEXT.INGREDIENT_DELETE_CONFIRM_MSG} "${ingredient.nome}"?`,
-            onConfirm: () => {
-              deleteIngredient(ingredientId);
-              showNotification(UI_TEXT.INGREDIENT_DELETE_SUCCESS, 'success');
-            },
-            type: 'danger'
-          });
-          return;
+        // --- Meal Actions ---
+        if (state.ui.activeLibraryTab === 'meals') {
+          const addMealBtn = e.target.closest('#add-meal-btn');
+          if (addMealBtn) {
+            log('Interactions-Library', 'Add new meal button clicked');
+            openMealEditorModal();
+            return;
+          }
+
+          const mealItem = e.target.closest('.library-item');
+          if (!mealItem) return;
+
+          const mealId = mealItem.dataset.id;
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (!meal) return;
+
+          const editMealBtn = e.target.closest('.btn-edit');
+          if (editMealBtn) {
+            log('Interactions-Library', 'Edit meal button clicked', { mealId });
+            openMealEditorModal(meal);
+            return;
+          }
+
+          const deleteMealBtn = e.target.closest('.btn-delete');
+          if (deleteMealBtn) {
+            log('Interactions-Library', 'Delete meal button clicked', { mealId });
+            showConfirmModal({
+              title: UI_TEXT.MEAL_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.MEAL_DELETE_CONFIRM_MSG} "${meal.nomePasto}"?`,
+              onConfirm: () => {
+                deleteMeal(mealId);
+                showNotification(UI_TEXT.MEAL_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
         }
       }
 
@@ -215,758 +691,152 @@ patches:
           searchInput.addEventListener('input', handleSearchInput);
         }
       }
-  - file: src/ui/pageRenderers.js
+  - file: src/ui/modals.js
     content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-      import { formatIngredientsSummary } from '../utils/formatters.js';
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
+      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
+      import { openIngredientEditorModal } from './modals/ingredientEditorModal.js';
+      import { openMealEditorModal } from './modals/mealEditorModal.js';
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutEditorModal,
+        openManualWorkoutModal,
+        openIngredientEditorModal,
+        openMealEditorModal
+      };
+  - file: src/utils/constants.js
+    content: |
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const LOCAL_STORAGE_KEY_GOALS = 'healtyproUserGoals';
+      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
+      export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
+      export const LOCAL_STORAGE_KEY_INGREDIENTS = 'healtyproUserIngredients';
+      export const LOCAL_STORAGE_KEY_MEALS = 'healtyproUserMeals';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+      export const WORKOUT_SLOT_ID = 'Allenamento';
+  - file: sw.js
+    content: |
+      const CACHE_NAME = 'healtypro-v18';
+      const APP_SHELL_FILES = [
+        '.',
+        'index.html',
+        'styles/base.css',
+        'styles/planner.css',
+        'styles/progress.css',
+        'styles/modals.css',
+        'styles/charts.css',
+        'styles/recipes.css',
+        'styles/trainer.css',
+        'styles/debriefing.css',
+        'styles/goals.css',
+        'styles/library.css',
+        'templates/planner.html',
+        'templates/progress.html',
+        'templates/profile.html',
+        'templates/charts.html',
+        'templates/recipes.html',
+        'templates/modals.html',
+        'templates/trainer.html',
+        'templates/debriefing.html',
+        'templates/goals.html',
+        'templates/library.html',
+        'src/main.js',
+        'src/api/configService.js',
+        'src/config/forms.js',
+        'src/config/uiText.js',
+        'src/core/state.js',
+        'src/core/calculations.js',
+        'src/core/validation.js',
+        'src/core/trainer.js',
+        'src/core/trainer/state.js',
+        'src/core/trainer/queueBuilder.js',
+        'src/core/trainer/machine.js',
+        'src/core/trainer/animation.js',
+        'src/ui/interactions/globalInteractions.js',
+        'src/ui/interactions/plannerInteractions.js',
+        'src/ui/interactions/profileInteractions.js',
+        'src/ui/interactions/progressInteractions.js',
+        'src/ui/interactions/debriefingInteractions.js',
+        'src/ui/interactions/goalsInteractions.js',
+        'src/ui/interactions/libraryInteractions.js',
+        'src/ui/notifications.js',
+        'src/ui/renderer.js',
+        'src/ui/modals.js',
+        'src/ui/modals/confirmModal.js',
+        'src/ui/modals/dayEditorModal.js',
+        'src/ui/modals/exerciseEditorModal.js',
+        'src/ui/modals/recipeModal.js',
+        'src/ui/modals/selectionModal.js',
+        'src/ui/modals/workoutEditorModal.js',
+        'src/ui/modals/ingredientEditorModal.js',
+        'src/ui/modals/mealEditorModal.js',
+        'src/ui/plannerRenderer.js',
+        'src/ui/pageRenderers.js',
+        'src/ui/charts.js',
+        'src/ui/viewLoader.js',
+        'src/ui/icons.js',
+        'src/ui/trainerRenderer.js',
+        'src/ui/components/TrainerComponent.js',
+        'src/utils/constants.js',
+        'src/utils/formatters.js',
+        'src/utils/logger.js',
+        'src/utils/audioFeedback.js',
+        'icons/icon-192x192.png',
+        'icons/icon-512x512.png',
+        'screenshots/screen_desktop.png',
+        'screenshots/screen_mobile.png'
+      ];
 
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
-      }
-
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
-
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        form.innerHTML = `${PROFILE_FIELDS.map(field => `<div class="form-group">${field.type === 'radio' ? `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>` : `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderGoalsPage(state) {
-          const form = document.getElementById('goals-form');
-          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
-          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
-          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
-          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
-          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
-          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
-          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
-          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
-          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
-          form.elements.target_weight.value = state.userGoals.target_weight || '';
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
-      }
-
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.weight) {
-              details.push(`${setData.weight} kg`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
-      }
-
-      export function renderDebriefingPage(state) {
-        const summaryContainer = document.getElementById('debriefing-summary');
-        const statsContainer = document.getElementById('debriefing-stats');
-        const summary = state.ui.lastWorkoutSummary;
-
-        if (!summary || !summary.exercises) {
-            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
-            statsContainer.innerHTML = '';
-            document.getElementById('debriefing-feedback').classList.add('hidden');
-            return;
-        }
-
-        document.getElementById('debriefing-feedback').classList.remove('hidden');
-        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
-        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
-        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
-        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
-
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-                <span class="stat-value">${summary.totalCaloriesBurned}</span>
-            </div>
-        ` : '';
-
-        const tonnageHTML = summary.totalTonnage > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-                <span class="stat-value">${summary.totalTonnage} kg</span>
-            </div>
-        ` : '';
-
-        const statsHTML = `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-            </div>
-            ${caloriesBurnedHTML}
-            ${tonnageHTML}
-        `;
-        statsContainer.innerHTML = statsHTML;
-
-        const summaryHTML = summary.exercises.map(exercise => {
-            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-                <div class="set-detail-item">
-                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
-                </div>
-            `).join('');
-
-            return `
-                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header">
-                        <h4>${exercise.name}</h4>
-                        <div class="debriefing-status">
-                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                        </div>
-                    </div>
-                    <div class="debriefing-card-body">
-                      <div class="exercise-stats">
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
-                      </div>
-                      <div class="sets-details-container">
-                          ${setsDetailsHTML}
-                      </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        summaryContainer.innerHTML = summaryHTML;
-      }
-
-      export function renderRecipesPage(state) {
-        const recipesList = document.getElementById('recipes-list');
-        const recipes = state.masterMealList.filter(meal => meal.recipeId);
-
-        if (!recipes || recipes.length === 0) {
-            recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-            return;
-        }
-
-        let html = recipes.map(recipe => {
-            const ingredientsHtml = formatIngredientsSummary(recipe);
-
-            return `
-                <div class="recipe-list-item" data-meal-id="${recipe.id}">
-                    <h4>${recipe.nomePasto}</h4>
-                    <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
-                </div>
-            `;
-        }).join('');
-
-        recipesList.innerHTML = html;
-      }
-
-      export function renderLibraryPage(state) {
-        const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
-
-        // Update search input
-        const searchInput = document.getElementById('library-search-input');
-        searchInput.value = librarySearchTerm;
-        searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
-
-        // Update active tab
-        document.querySelectorAll('#library-page .btn-view').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.view === activeLibraryTab);
-        });
-
-        // Show/hide content panels
-        document.querySelectorAll('.library-content').forEach(panel => {
-          panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab));
-        });
-
-        // Filter and render ingredients
-        const ingredientList = document.getElementById('ingredient-list');
-        const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
-        const filteredIngredients = state.masterIngredientList.filter(ing =>
-          ing.nome.toLowerCase().includes(lowerCaseSearchTerm)
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+              console.log('Opened cache and caching app shell');
+              return cache.addAll(APP_SHELL_FILES);
+            })
         );
+      });
 
-        if (filteredIngredients.length > 0) {
-          ingredientList.innerHTML = filteredIngredients.map(ing => `
-            <div class="library-item" data-id="${ing.id}">
-              <div class="library-item-info">
-                <span class="library-item-info__name">${ing.nome}</span>
-                <span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span>
-              </div>
-              <div class="library-item-actions">
-                <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-                <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-              </div>
-            </div>
-          `).join('');
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((cacheNames) => {
+            return Promise.all(
+              cacheNames.filter((cacheName) => {
+                return cacheName !== CACHE_NAME;
+              }).map(cacheName => caches.delete(cacheName))
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', (event) => {
+        if (event.request.url.startsWith(self.location.origin)) {
+          event.respondWith(
+            caches.match(event.request)
+              .then((response) => {
+                return response || fetch(event.request);
+              })
+          );
         } else {
-          ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
+          event.respondWith(fetch(event.request));
         }
-      }
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-      import { resetWorkoutState } from './trainer.js';
-      import { log } from '../utils/logger.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterIngredientList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        workoutHistory: {},
-        biometricData: [],
-        userProfile: {},
-        userGoals: {},
-        configUrl: '',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        debugMode: false,
-        ui: {
-          currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
-          activeLibraryTab: 'ingredients',
-          librarySearchTerm: '',
-          lastWorkoutSummary: null,
-          charts: {
-            currentRangeFilter: 30,
-            dateOffset: 0,
-            selectedBiometric: 'weight',
-            plannerChartType: 'bar'
-          }
-        }
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-      export const setState = (newState) => {
-        state = { ...state, ...newState };
-        notify();
-      }
-      export const setUiState = (uiChanges) => {
-        state.ui = { ...state.ui, ...uiChanges };
-        notify();
-      }
-
-      export function getMealsForType(mealType) {
-        return state.masterMealList.filter(meal => {
-          if (meal.tipoPasto === 'Tutti') return true;
-          if (Array.isArray(meal.tipoPasto)) {
-            return meal.tipoPasto.includes(mealType);
-          }
-          return meal.tipoPasto === mealType;
-        });
-      }
-
-      export function getExerciseForPlanner(slotId, instanceId) {
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function getExerciseFromHistory(date, startTime, instanceId) {
-        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
-        if (!workout) return null;
-        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function toggleDebugMode() {
-        state.debugMode = !state.debugMode;
-        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
-      }
-
-      export function setPlannerConfig(config, url) {
-        log('State', 'Setting new planner config', { url });
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        // NON sovrascrivere la libreria ingredienti utente, ma Aggiungi se non esistono
-        ingredients.forEach(ing => {
-          if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
-            state.masterIngredientList.push(ing);
-          }
-        });
-        saveStateToLocalStorage(); // Salva la libreria ingredienti aggiornata
-
-        // Calcola calorie e popola la master list
-        state.masterMealList = processMealsWithCalories(meals, state.masterIngredientList);
-
-        // Deriva e imposta la recipeBaseUrl
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else {
-            state.recipeBaseUrl = '';
-        }
-
-        notify();
-      }
-
-      export function setConfigUrl(url) {
-        log('State', 'Setting new config URL', { url });
-        state.configUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        log('State', 'Saving all application state to localStorage');
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
-        localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
-      }
-
-      export function loadStateFromLocalStorage() {
-        log('State', 'Loading all application state from localStorage');
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
-        const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.configUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
-        if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
-      }
-
-      export function setAppState(backupData) {
-        log('State', 'Restoring application state from backup');
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.workoutHistory = backupData.workoutHistory || {};
-        state.configUrl = backupData.configUrl || '';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        state.userGoals = backupData.userGoals || {};
-        state.masterIngredientList = backupData.masterIngredientList || [];
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        log('State', 'Saving user profile', { profile });
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function saveUserGoals(goals) {
-          log('State', 'Saving user goals', { goals });
-          state.userGoals = goals;
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        log('State', 'Adding or updating biometric entry', { entry });
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addMultipleBiometricEntries(newEntries) {
-        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
-        state.biometricData = [...state.biometricData, ...newEntries];
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        log('State', 'Deleting biometric entry', { date });
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addIngredient(ingredientData) {
-        log('State', 'Adding new ingredient', { ingredientData });
-        state.masterIngredientList.push(ingredientData);
-        state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateIngredient(ingredientId, updatedData) {
-        log('State', 'Updating ingredient', { ingredientId, updatedData });
-        const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
-        if (index > -1) {
-          state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
-          state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
-          saveStateToLocalStorage();
-          notify();
-        }
-      }
-
-      export function deleteIngredient(ingredientId) {
-        log('State', 'Deleting ingredient', { ingredientId });
-        state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        log('State', 'Updating weekly plan', { slotId, mealId });
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) { // Add an exercise
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = {
-                      ...exercise,
-                      instanceId: Date.now() + Math.random()
-                  };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) { // Remove an exercise
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
-          if (!state.weeklyWorkouts[slotId]) return;
-
-          const workoutList = state.weeklyWorkouts[slotId];
-          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
-
-          if (exerciseIndex > -1) {
-              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-              if (newValues.defaultTempo) {
-                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
-              }
-              workoutList[exerciseIndex] = updatedExercise;
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
-        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
-          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
-          const workoutList = state.weeklyWorkouts[slotId];
-          const [movedItem] = workoutList.splice(oldIndex, 1);
-          workoutList.splice(newIndex, 0, movedItem);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        log('State', 'Resetting current week');
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-
-            // Clear meals for the day
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-
-            // Clear planned workouts for the day
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[workoutSlotId];
-            }
-
-            // Clear workout history for the day
-            if (state.workoutHistory[isoDate]) {
-                delete state.workoutHistory[isoDate];
-            }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        log('State', 'Navigating week', { direction });
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
-        if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
-          state.ui.currentView = view;
-          notify();
-        }
-      }
-
-      export function setLastWorkoutSummary(summary) {
-        log('State', 'Setting last workout summary');
-        state.ui.lastWorkoutSummary = summary;
-        notify();
-      }
-
-      export function addWorkoutToHistory(summary) {
-        log('State', 'Adding structured workout to history', { date: summary.date });
-        if (summary && summary.date) {
-            if (!state.workoutHistory[summary.date]) {
-                state.workoutHistory[summary.date] = [];
-            }
-            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
-            saveStateToLocalStorage();
-            notify();
-        }
-      }
-
-      export function addManualWorkoutToHistory(date, activityData) {
-          log('State', 'Adding manual workout to history', { date, activityData });
-          if (!state.workoutHistory[date]) {
-              state.workoutHistory[date] = [];
-          }
-          const manualWorkout = {
-              type: 'manual',
-              date: date,
-              startTime: Date.now(),
-              ...activityData
-          };
-          state.workoutHistory[date].push(manualWorkout);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function deleteWorkoutFromHistory(date, startTime) {
-          log('State', 'Deleting workout from history', { date, startTime });
-          if (state.workoutHistory[date]) {
-              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
-              if (state.workoutHistory[date].length === 0) {
-                  delete state.workoutHistory[date];
-              }
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function updateWorkoutInHistory(date, startTime, updates) {
-          log('State', 'Updating workout in history', { date, startTime, updates });
-          if (state.workoutHistory[date]) {
-              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-              if (workoutIndex > -1) {
-                  state.workoutHistory[date][workoutIndex] = {
-                      ...state.workoutHistory[date][workoutIndex],
-                      ...updates
-                  };
-                  saveStateToLocalStorage();
-                  notify();
-              }
-          }
-      }
-
-      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
-        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
-        if (!state.workoutHistory[date]) return;
-
-        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-        if (workoutIndex === -1) return;
-
-        const workout = state.workoutHistory[date][workoutIndex];
-        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
-        if (exerciseIndex === -1) return;
-
-        // Update sets data for the specific exercise
-        workout.exercises[exerciseIndex].setsData = newSetsData;
-
-        // Recalculate tonnage for the exercise
-        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
-        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
-
-        // Recalculate total tonnage for the entire workout
-        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
-
-        saveStateToLocalStorage();
-        notify();
-      }
-
-
-      export function copyPreviousWeek() {
-        log('State', 'Copying previous week');
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
+      });
+commands:
+  - "echo 'Fase 2 completata: Il Compositore di Pasti è ora pienamente funzionale.'"

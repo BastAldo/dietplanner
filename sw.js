@@ -51,6 +51,7 @@ const APP_SHELL_FILES = [
   'src/ui/modals/selectionModal.js',
   'src/ui/modals/workoutEditorModal.js',
   'src/ui/modals/ingredientEditorModal.js',
+  'src/ui/modals/mealEditorModal.js',
   'src/ui/plannerRenderer.js',
   'src/ui/pageRenderers.js',
   'src/ui/charts.js',

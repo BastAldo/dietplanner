@@ -144,3 +144,40 @@
         </div>
     </div>
 </div>
+<div id="meal-editor-modal" class="modal-overlay modal-hidden">
+  <div class="modal-content modal-content-large">
+      <div class="modal-header">
+        <h3 id="meal-editor-title"></h3>
+        <button class="modal-close-btn" data-target="meal-editor-modal"></button>
+      </div>
+      <div id="meal-editor-body" class="modal-body">
+          <form id="meal-editor-form">
+              <div class="meal-editor-form-grid">
+                  <div class="form-group">
+                      <label for="meal-edit-id">ID Pasto (univoco)</label>
+                      <input type="text" id="meal-edit-id" name="id" required>
+                  </div>
+                  <div class="form-group">
+                      <label for="meal-edit-nomePasto">Nome Pasto</label>
+                      <input type="text" id="meal-edit-nomePasto" name="nomePasto" required>
+                  </div>
+              </div>
+              <div class="form-group">
+                  <label>Tipo Pasto (seleziona uno o più)</label>
+                  <div id="meal-edit-tipoPasto-container" class="checkbox-group"></div>
+              </div>
+              <div class="meal-editor-ingredients-header">
+                <h4>Ingredienti</h4>
+                <button type="button" id="meal-add-ingredient-btn" class="btn btn-secondary">Aggiungi</button>
+              </div>
+              <div id="meal-editor-ingredients-list" class="day-editor-list"></div>
+              <div class="meal-editor-footer">
+                <p id="meal-editor-totals" class="meal-editor-totals"></p>
+              </div>
+          </form>
+      </div>
+      <div class="modal-footer">
+          <button type="submit" form="meal-editor-form" id="meal-editor-save-btn" class="btn btn-primary"></button>
+      </div>
+  </div>
+ </div>
