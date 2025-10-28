@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healtypro-v18';
+const CACHE_NAME = 'healtypro-v19';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
@@ -12,6 +12,7 @@ const APP_SHELL_FILES = [
   'styles/debriefing.css',
   'styles/goals.css',
   'styles/library.css',
+  'styles/explore.css',
   'templates/planner.html',
   'templates/progress.html',
   'templates/profile.html',
@@ -22,6 +23,7 @@ const APP_SHELL_FILES = [
   'templates/debriefing.html',
   'templates/goals.html',
   'templates/library.html',
+  'templates/explore.html',
   'src/main.js',
   'src/api/configService.js',
   'src/config/forms.js',
@@ -66,7 +68,8 @@ const APP_SHELL_FILES = [
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
   'screenshots/screen_desktop.png',
-  'screenshots/screen_mobile.png'
+  'screenshots/screen_mobile.png',
+  'public/explore.json'
 ];
 
 self.addEventListener('install', (event) => {

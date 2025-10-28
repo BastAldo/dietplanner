@@ -7,6 +7,7 @@ const UI_TEXT_CONFIG = [
   { id: 'NAV_RECIPES', text: 'Ricette' },
   { id: 'NAV_PROFILE', text: 'Profilo' },
   { id: 'NAV_GOALS', text: 'Obiettivi' },
+  { id: 'NAV_EXPLORE', text: 'Esplora' },
   { id: 'LOAD_BUTTON', text: 'Carica' },
   { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
   { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
@@ -193,7 +194,11 @@ const UI_TEXT_CONFIG = [
   { id: 'MEAL_DELETE_SUCCESS', text: 'Pasto eliminato.' },
   { id: 'MEAL_ID_CONFLICT', text: 'Esiste già un pasto con questo ID.' },
   { id: 'MEAL_DELETE_CONFIRM_TITLE', text: 'Elimina Pasto' },
-  { id: 'MEAL_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare il pasto' }
+  { id: 'MEAL_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare il pasto' },
+  { id: 'EXPLORE_TITLE', text: 'Esplora Nuovi Contenuti' },
+  { id: 'EXPLORE_ADD_TO_LIBRARY', text: 'Aggiungi alla Libreria' },
+  { id: 'EXPLORE_PACKAGE_LOAD_SUCCESS', text: 'Pacchetto aggiunto alla tua libreria!' },
+  { id: 'EXPLORE_PACKAGE_LOAD_FAIL', text: 'Errore durante l\'aggiunta del pacchetto.' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

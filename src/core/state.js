@@ -19,7 +19,7 @@ let state = {
   focusedDate: new Date(),
   debugMode: false,
   ui: {
-    currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals'
+    currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
     activeLibraryTab: 'ingredients',
     librarySearchTerm: '',
     lastWorkoutSummary: null,
@@ -103,12 +103,12 @@ export function setPlannerConfig(config, url) {
   state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
   saveStateToLocalStorage();
 
-  // Deriva e imposta la recipeBaseUrl
+  // Deriva e imposta la recipeBaseUrl only if a URL is provided (not for merges)
   if (url) {
       const baseUrl = new URL(url);
       const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
       state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-  } else {
+  } else if (!state.recipeBaseUrl) {
       state.recipeBaseUrl = '';
   }
 
@@ -375,7 +375,7 @@ export function navigateWeek(direction) {
 
 export function setView(view) {
   log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
-  if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals'].includes(view)) {
+  if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals', 'explore'].includes(view)) {
     state.ui.currentView = view;
     notify();
   }

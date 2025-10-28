@@ -16,6 +16,7 @@ export function initializeGlobalListeners() {
   document.getElementById('nav-charts').addEventListener('click', () => setView('charts'));
   document.getElementById('nav-recipes').addEventListener('click', () => setView('recipes'));
   document.getElementById('nav-goals').addEventListener('click', () => setView('goals'));
+  document.getElementById('nav-explore').addEventListener('click', () => setView('explore'));
   document.getElementById('nav-profile').addEventListener('click', () => setView('profile'));
 
   document.querySelectorAll('.modal-close-btn').forEach(btn => {

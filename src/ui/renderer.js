@@ -1,6 +1,6 @@
 import { getState } from '../core/state.js';
 import { renderPlannerPage } from './plannerRenderer.js';
-import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage, renderLibraryPage } from './pageRenderers.js';
+import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage, renderLibraryPage, renderExplorePage } from './pageRenderers.js';
 import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
@@ -16,6 +16,7 @@ function populateIcons() {
     document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
     document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
     document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
+    document.getElementById('nav-explore').insertAdjacentHTML('afterbegin', renderIcon('EXPLORE'));
     document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
     document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
     document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
@@ -37,6 +38,7 @@ export function populateInitialText() {
   document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
   document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
   document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
+  document.querySelector('#nav-explore span').textContent = UI_TEXT.NAV_EXPLORE;
   document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
   document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
@@ -71,6 +73,7 @@ export function renderApp() {
   const chartsPage = document.getElementById('charts-page');
   const recipesPage = document.getElementById('recipes-page');
   const goalsPage = document.getElementById('goals-page');
+  const explorePage = document.getElementById('explore-page');
   const profilePage = document.getElementById('profile-page');
   const trainerPage = document.getElementById('trainer-page');
   const debriefingPage = document.getElementById('debriefing-page');
@@ -81,6 +84,7 @@ export function renderApp() {
   const navChartsBtn = document.getElementById('nav-charts');
   const navRecipesBtn = document.getElementById('nav-recipes');
   const navGoalsBtn = document.getElementById('nav-goals');
+  const navExploreBtn = document.getElementById('nav-explore');
   const navProfileBtn = document.getElementById('nav-profile');
 
   log('Renderer', 'Render triggered. Current view:', currentView, 'isTrainerActive:', isTrainerActive);
@@ -91,8 +95,8 @@ export function renderApp() {
       isTrainerActive = false;
   }
 
-  [plannerPage, libraryPage, progressPage, chartsPage, recipesPage, goalsPage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
-  [navPlannerBtn, navLibraryBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+  [plannerPage, libraryPage, progressPage, chartsPage, recipesPage, goalsPage, explorePage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+  [navPlannerBtn, navLibraryBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navExploreBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
   document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
 
   if (currentView === 'planner' || currentView === 'log') {
@@ -119,6 +123,10 @@ export function renderApp() {
     goalsPage.classList.remove('hidden');
     navGoalsBtn.classList.add('active');
     renderGoalsPage(state);
+  } else if (currentView === 'explore') {
+    explorePage.classList.remove('hidden');
+    navExploreBtn.classList.add('active');
+    renderExplorePage(state);
   } else if (currentView === 'profile') {
     profilePage.classList.remove('hidden');
     navProfileBtn.classList.add('active');

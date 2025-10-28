@@ -4,6 +4,8 @@ import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { renderCharts } from './charts.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
+import { fetchAndMergePackage } from '../api/configService.js';
+import { log } from '../utils/logger.js';
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -323,5 +325,40 @@ export function renderLibraryPage(state) {
     }).join('');
   } else {
     mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
+  }
+}
+
+export async function renderExplorePage() {
+  log('Renderer', 'Rendering Explore Page');
+  const container = document.getElementById('explore-grid');
+  document.getElementById('explore-title').textContent = UI_TEXT.EXPLORE_TITLE;
+  container.innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
+
+  try {
+    const response = await fetch('public/explore.json');
+    if (!response.ok) throw new Error('Failed to load explore manifest');
+    const packages = await response.json();
+
+    container.innerHTML = packages.map(pkg => `
+      <div class="explore-card">
+        <img src="${pkg.image}" alt="${pkg.title}" class="explore-card-image">
+        <div class="explore-card-body">
+          <h3>${pkg.title}</h3>
+          <p>${pkg.description}</p>
+          <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
+        </div>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.btn-add-package').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const packageUrl = e.currentTarget.dataset.url;
+        fetchAndMergePackage(packageUrl);
+      });
+    });
+
+  } catch (error) {
+    log('Renderer', 'Error rendering explore page', error);
+    container.innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti da esplorare.</p>`;
   }
 }

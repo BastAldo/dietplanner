@@ -1,5 +1,7 @@
 import { UI_TEXT } from '../config/uiText.js';
 import { log } from '../utils/logger.js';
+import { setPlannerConfig } from '../core/state.js';
+import { showNotification } from '../ui/notifications.js';
 
 async function fetchJson(url) {
   const response = await fetch(url);
@@ -59,4 +61,40 @@ export async function fetchAndParseConfig(mealsUrl) {
         // Lancia l'errore specifico (che ora è pulito) invece di uno generico
         throw new Error(error.message || UI_TEXT.API_CONFIG_LOAD_FAIL);
     }
+}
+
+export async function fetchAndMergePackage(packageUrl) {
+  log('API_SERVICE', 'Fetching and merging content package', { packageUrl });
+  try {
+    const packageManifest = await fetchJson(packageUrl);
+    const contentPromises = [];
+
+    if (packageManifest.ingredientiUrl) {
+      contentPromises.push(fetchJson(new URL(packageManifest.ingredientiUrl, packageUrl).href));
+    } else { contentPromises.push(Promise.resolve({ ingredienti: [] })); }
+
+    if (packageManifest.pastiUrl) {
+      contentPromises.push(fetchJson(new URL(packageManifest.pastiUrl, packageUrl).href));
+    } else { contentPromises.push(Promise.resolve({ meals: [] })); }
+
+    if (packageManifest.eserciziUrl) {
+      contentPromises.push(fetchJson(new URL(packageManifest.eserciziUrl, packageUrl).href));
+    } else { contentPromises.push(Promise.resolve({ esercizi: [] })); }
+
+    const [ingredientsData, mealsData, exercisesData] = await Promise.all(contentPromises);
+
+    const mergedConfig = {
+      ingredienti: ingredientsData.ingredienti || [],
+      meals: mealsData.meals || [],
+      esercizi: exercisesData.esercizi || []
+    };
+
+    // Pass the merged data to setPlannerConfig, which handles the "intelligent merge"
+    setPlannerConfig(mergedConfig, null);
+    showNotification(UI_TEXT.EXPLORE_PACKAGE_LOAD_SUCCESS, 'success');
+
+  } catch (error) {
+    console.error("Failed to load and merge content package:", error);
+    showNotification(error.message || UI_TEXT.EXPLORE_PACKAGE_LOAD_FAIL, 'error');
+  }
 }
