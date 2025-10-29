@@ -198,7 +198,14 @@ const UI_TEXT_CONFIG = [
   { id: 'EXPLORE_TITLE', text: 'Esplora Nuovi Contenuti' },
   { id: 'EXPLORE_ADD_TO_LIBRARY', text: 'Aggiungi alla Libreria' },
   { id: 'EXPLORE_PACKAGE_LOAD_SUCCESS', text: 'Pacchetto aggiunto alla tua libreria!' },
-  { id: 'EXPLORE_PACKAGE_LOAD_FAIL', text: 'Errore durante l\'aggiunta del pacchetto.' }
+  { id: 'EXPLORE_PACKAGE_LOAD_FAIL', text: 'Errore durante l\'aggiunta del pacchetto.' },
+  { id: 'EXPLORE_SEARCH_PLACEHOLDER', text: 'Cerca per nome o descrizione...' },
+  { id: 'EXPLORE_SORT_LABEL', text: 'Ordina per:' },
+  { id: 'EXPLORE_SORT_DEFAULT', text: 'Rilevanza' },
+  { id: 'EXPLORE_SORT_NAME_ASC', text: 'Nome (A-Z)' },
+  { id: 'EXPLORE_SORT_NAME_DESC', text: 'Nome (Z-A)' },
+  { id: 'EXPLORE_SORT_AUTHOR', text: 'Autore' },
+  { id: 'EXPLORE_FILTER_ALL', text: 'Tutti' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {

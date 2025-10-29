@@ -1,5 +1,19 @@
 <div id="explore-page" class="page-view hidden">
   <h3 id="explore-title"></h3>
-  <div id="explore-grid" class="explore-grid">
+  <div class="explore-controls">
+    <input type="search" id="explore-search-input" class="library-search-bar" placeholder="Cerca...">
+    <div class="explore-filters">
+      <div class="form-group">
+          <label for="explore-sort-select" id="explore-sort-label"></label>
+          <select id="explore-sort-select">
+              <option value="default" id="explore-sort-default"></option>
+              <option value="name_asc" id="explore-sort-name-asc"></option>
+              <option value="name_desc" id="explore-sort-name-desc"></option>
+              <option value="author" id="explore-sort-author"></option>
+          </select>
+      </div>
     </div>
+  </div>
+  <div id="explore-tags-container" class="explore-tags"></div>
+  <div id="explore-grid" class="explore-grid"></div>
 </div>

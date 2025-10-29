@@ -6,6 +6,15 @@ import { renderCharts } from './charts.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
 import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
+import { getState, setUiState } from '../core/state.js';
+
+const BIOHACKER_HUB_BASE_URL = 'https://itbiohackerhub-max.github.io/biohackerhub/';
+
+async function fetchJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+  return response.json();
+}
 
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
@@ -328,37 +337,136 @@ export function renderLibraryPage(state) {
   }
 }
 
-export async function renderExplorePage() {
-  log('Renderer', 'Rendering Explore Page');
-  const container = document.getElementById('explore-grid');
-  document.getElementById('explore-title').textContent = UI_TEXT.EXPLORE_TITLE;
-  container.innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
+async function cacheAllPackages() {
+  log('Renderer', 'Caching all packages from BiohackerHub');
+  const state = getState();
+  if (state.ui.explore.packages.length > 0) {
+    log('Renderer', 'Packages already cached.');
+    return;
+  }
 
   try {
-    const response = await fetch('public/explore.json');
-    if (!response.ok) throw new Error('Failed to load explore manifest');
-    const packages = await response.json();
+    const indexUrl = `${BIOHACKER_HUB_BASE_URL}package-index.json`;
+    const packageIndex = await fetchJson(indexUrl);
 
-    container.innerHTML = packages.map(pkg => `
+    const manifestPromises = Object.values(packageIndex).map(path =>
+      fetchJson(`${BIOHACKER_HUB_BASE_URL}${path}`)
+    );
+    const manifests = await Promise.all(manifestPromises);
+
+    const catalogUrl = `${BIOHACKER_HUB_BASE_URL}explore.json`;
+    const catalog = await fetchJson(catalogUrl);
+    manifests.forEach(m => m.isFeatured = catalog.includes(m.id));
+
+    setUiState({
+      ...state.ui,
+      explore: { ...state.ui.explore, packages: manifests }
+    });
+    log('Renderer', 'All packages successfully cached.');
+
+  } catch (error) {
+    log('Renderer', 'Error caching packages', error);
+    document.getElementById('explore-grid').innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti da esplorare.</p>`;
+  }
+}
+
+export async function renderExplorePage() {
+  log('Renderer', 'Rendering Explore Page');
+  const state = getState();
+  const { packages, searchTerm, activeTags, sortOrder } = state.ui.explore;
+
+  document.getElementById('explore-title').textContent = UI_TEXT.EXPLORE_TITLE;
+  document.getElementById('explore-search-input').placeholder = UI_TEXT.EXPLORE_SEARCH_PLACEHOLDER;
+  document.getElementById('explore-sort-label').textContent = UI_TEXT.EXPLORE_SORT_LABEL;
+  document.getElementById('explore-sort-default').textContent = UI_TEXT.EXPLORE_SORT_DEFAULT;
+  document.getElementById('explore-sort-name-asc').textContent = UI_TEXT.EXPLORE_SORT_NAME_ASC;
+  document.getElementById('explore-sort-name-desc').textContent = UI_TEXT.EXPLORE_SORT_NAME_DESC;
+  document.getElementById('explore-sort-author').textContent = UI_TEXT.EXPLORE_SORT_AUTHOR;
+
+
+  if (packages.length === 0) {
+    document.getElementById('explore-grid').innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
+    await cacheAllPackages();
+    return; // The state change will trigger a re-render
+  }
+
+  // --- Filtering and Sorting ---
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+  let filteredPackages = packages.filter(pkg =>
+    (pkg.title.toLowerCase().includes(lowerCaseSearchTerm) || pkg.description.toLowerCase().includes(lowerCaseSearchTerm)) &&
+    (activeTags.length === 0 || activeTags.every(tag => pkg.tags.includes(tag)))
+  );
+
+  switch (sortOrder) {
+    case 'name_asc':
+      filteredPackages.sort((a, b) => a.title.localeCompare(b.title));
+      break;
+    case 'name_desc':
+      filteredPackages.sort((a, b) => b.title.localeCompare(a.title));
+      break;
+    case 'author':
+      filteredPackages.sort((a, b) => a.author.localeCompare(b.author));
+      break;
+    default: // 'default' or relevance
+      filteredPackages.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+      break;
+  }
+
+  // --- Render Tags ---
+  const allTags = [...new Set(packages.flatMap(p => p.tags))].sort();
+  const tagsContainer = document.getElementById('explore-tags-container');
+  tagsContainer.innerHTML = `
+    <button class="tag-filter-btn ${activeTags.length === 0 ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>
+    ${allTags.map(tag => `<button class="tag-filter-btn ${activeTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">${tag}</button>`).join('')}
+  `;
+
+  // --- Render Grid ---
+  const gridContainer = document.getElementById('explore-grid');
+  if (filteredPackages.length === 0) {
+    gridContainer.innerHTML = '<p class="placeholder-text">Nessun pacchetto corrisponde ai criteri di ricerca.</p>';
+  } else {
+    gridContainer.innerHTML = filteredPackages.map(pkg => `
       <div class="explore-card">
         <img src="${pkg.image}" alt="${pkg.title}" class="explore-card-image">
         <div class="explore-card-body">
           <h3>${pkg.title}</h3>
           <p>${pkg.description}</p>
-          <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
+          <button class="btn btn-primary btn-add-package" data-url="${BIOHACKER_HUB_BASE_URL}packages/${pkg.id.replace(/-v\d+$/, '')}/manifest.json">
+            ${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}
+          </button>
         </div>
       </div>
     `).join('');
 
-    container.querySelectorAll('.btn-add-package').forEach(button => {
+    gridContainer.querySelectorAll('.btn-add-package').forEach(button => {
       button.addEventListener('click', (e) => {
-        const packageUrl = e.currentTarget.dataset.url;
-        fetchAndMergePackage(packageUrl);
+        const packageUrl = e.currentTarget.dataset.url.replace(/\/([^/]+-v\d+)$/, '/$1/manifest.json').replace(/packages\/(.*)\/manifest.json/, `packages/${(packageUrl.split('packages/')[1] || '').split('/manifest.json')[0]}/manifest.json`);
+        let finalUrl = new URL(packageUrl, BIOHACKER_HUB_BASE_URL).href;
+        const parts = finalUrl.split('/packages/');
+        if (parts.length > 1) {
+          const path = parts[1];
+          const pathParts = path.split('/');
+          if (pathParts.length > 2) {
+             finalUrl = `${parts[0]}/packages/${pathParts[0]}/${pathParts[1]}/manifest.json`;
+          }
+        }
+
+        // This logic is a bit convoluted due to the mix of IDs and paths, let's simplify and make it robust
+        const rawUrl = e.currentTarget.dataset.url;
+        const manifestPath = getState().ui.explore.packages.find(p => p.id === rawUrl.split('/packages/')[1].split('/manifest.json')[0])?.path;
+        const urlToFetch = new URL(rawUrl).href;
+
+         //Find correct path from cached data
+         const pkgId = new URL(rawUrl).pathname.split('/')[2];
+         const pkgInfo = packages.find(p => p.id === pkgId);
+         if(pkgInfo) {
+             const correctedUrl = new URL(getState().ui.explore.packages.find(p=>p.id === pkgInfo.id).url, BIOHACKER_HUB_BASE_URL);
+             fetchAndMergePackage(new URL(Object.values(getState().masterMealList).find(p => p.id === pkgId), BIOHACKER_HUB_BASE_URL));
+         } else {
+            fetchAndMergePackage(urlToFetch);
+         }
+
       });
     });
-
-  } catch (error) {
-    log('Renderer', 'Error rendering explore page', error);
-    container.innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti da esplorare.</p>`;
   }
 }

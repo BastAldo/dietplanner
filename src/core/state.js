@@ -28,6 +28,12 @@ let state = {
       dateOffset: 0,
       selectedBiometric: 'weight',
       plannerChartType: 'bar'
+    },
+    explore: {
+      packages: [],
+      searchTerm: '',
+      activeTags: [],
+      sortOrder: 'default'
     }
   }
 };

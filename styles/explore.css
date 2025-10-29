@@ -5,6 +5,60 @@
   text-align: center;
 }
 
+.explore-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: end;
+}
+
+.explore-controls .form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.explore-controls label {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-color-muted);
+}
+
+.explore-controls select {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1rem;
+  background-color: var(--card-color);
+  color: var(--text-color);
+}
+
+.explore-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  justify-content: center;
+}
+
+.tag-filter-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  background-color: transparent;
+  color: var(--text-color-muted);
+}
+
+.tag-filter-btn.active {
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+  border-color: var(--primary-color);
+  font-weight: bold;
+}
+
 .explore-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -51,4 +105,10 @@
   line-height: 1.6;
   flex-grow: 1;
   margin-bottom: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .explore-controls {
+    grid-template-columns: 2fr 1fr;
+  }
 }

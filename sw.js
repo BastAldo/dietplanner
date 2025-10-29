@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healtypro-v19';
+const CACHE_NAME = 'healtypro-v20';
 const APP_SHELL_FILES = [
   '.',
   'index.html',
@@ -43,6 +43,7 @@ const APP_SHELL_FILES = [
   'src/ui/interactions/debriefingInteractions.js',
   'src/ui/interactions/goalsInteractions.js',
   'src/ui/interactions/libraryInteractions.js',
+  'src/ui/interactions/exploreInteractions.js',
   'src/ui/notifications.js',
   'src/ui/renderer.js',
   'src/ui/modals.js',
@@ -68,8 +69,7 @@ const APP_SHELL_FILES = [
   'icons/icon-192x192.png',
   'icons/icon-512x512.png',
   'screenshots/screen_desktop.png',
-  'screenshots/screen_mobile.png',
-  'public/explore.json'
+  'screenshots/screen_mobile.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -95,14 +95,20 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.url.startsWith(self.location.origin)) {
-    event.respondWith(
-      caches.match(event.request)
-        .then((response) => {
-          return response || fetch(event.request);
-        })
-    );
-  } else {
-    event.respondWith(fetch(event.request));
+  // Use a cache-first strategy for app shell files
+  if (APP_SHELL_FILES.some(file => event.request.url.endsWith(file))) {
+      event.respondWith(
+          caches.match(event.request).then(response => {
+              return response || fetch(event.request);
+          })
+      );
+      return;
   }
+
+  // Use a network-first strategy for external resources like manifests
+  event.respondWith(
+      fetch(event.request).catch(() => {
+          return caches.match(event.request);
+      })
+  );
 });
