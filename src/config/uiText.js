@@ -8,7 +8,7 @@ const UI_TEXT_CONFIG = [
   { id: 'NAV_PROFILE', text: 'Profilo' },
   { id: 'NAV_GOALS', text: 'Obiettivi' },
   { id: 'NAV_EXPLORE', text: 'Esplora' },
-  { id: 'LOAD_BUTTON', text: 'Carica' },
+  { id: 'LOAD_BUTTON', text: 'Carica Hub' },
   { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
   { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
   { id: 'BACKUP_BTN', text: 'Salva Backup' },

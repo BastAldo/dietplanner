@@ -1,146 +1,400 @@
-commit_message: "fix(refactor): Remove unused imports after contentHubUrl refactor"
+commit_message: "fix(core): Resolve startup error by aligning with contentHubUrl refactor"
 rationale: |
-  This commit resolves a critical `SyntaxError` that occurred after the recent architectural refactoring.
+  This commit fixes a critical TypeError that was preventing the application from initializing correctly. The error was a direct result of an inconsistency introduced during the refactoring from `configUrl` to `contentHubUrl`.
 
-  **Problem:**
-  - In the previous commit, the function `setConfigUrl` was renamed to `setContentHubUrl` in `src/core/state.js` to better reflect the new content hub architecture.
-  - However, the import statement in `src/ui/interactions/plannerInteractions.js` was not updated. This file was still attempting to import `setConfigUrl`, a function that no longer exists, causing a fatal module loading error at startup.
+  **Problem Analysis:**
+  - The `populateInitialText` function in `src/ui/renderer.js` was still attempting to find an element with the old ID `load-config-btn`.
+  - However, as part of the architectural shift, this button's ID was correctly changed to `load-content-hub-btn` in `templates/profile.html`.
+  - This mismatch caused `document.getElementById('load-config-btn')` to return `null`, leading to a fatal error when trying to set its `textContent`.
 
-  **Solution:**
-  - The unused import of `setConfigUrl` has been removed from `src/ui/interactions/plannerInteractions.js`.
-  - Additionally, the unused import of `fetchAndParseConfig` has also been removed from the same file as part of the code cleanup.
+  **Solution Implemented:**
+  1.  **Corrected ID in Renderer:** The JavaScript in `src/ui/renderer.js` has been updated to reference the correct button ID, `load-content-hub-btn`.
+  2.  **Updated UI Text:** The corresponding text label in `src/config/uiText.js` has been changed from "Carica" to "Carica Hub" to be more descriptive of the button's new function.
+  3.  **Cleaned HTML:** The hardcoded text was removed from the button in `templates/profile.html`, ensuring the UI text is consistently populated from the central `uiText.js` configuration, as per the project's architecture.
 
-  This is a surgical fix that resolves the startup error and cleans up dead code, ensuring the application runs correctly after the refactoring.
+  This fix resolves the startup error and eliminates the inconsistency between the HTML templates and the JavaScript that controls them.
 patches:
-  - file: src/ui/interactions/plannerInteractions.js
+  - file: src/config/uiText.js
     content: |
-      import {
-        resetCurrentWeek, navigateWeek, setView,
-        copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
-      } from '../../core/state.js';
-      import { initializeWorkout } from '../../core/trainer.js';
-      import { showNotification } from '../notifications.js';
-      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { log } from '../../utils/logger.js';
+      const UI_TEXT_CONFIG = [
+        { id: 'MAIN_TITLE', text: 'HealtyPro' },
+        { id: 'NAV_PLANNER', text: 'Planner' },
+        { id: 'NAV_LIBRARY', text: 'Libreria' },
+        { id: 'NAV_PROGRESS', text: 'Biometria' },
+        { id: 'NAV_CHARTS', text: 'Grafici' },
+        { id: 'NAV_RECIPES', text: 'Ricette' },
+        { id: 'NAV_PROFILE', text: 'Profilo' },
+        { id: 'NAV_GOALS', text: 'Obiettivi' },
+        { id: 'NAV_EXPLORE', text: 'Esplora' },
+        { id: 'LOAD_BUTTON', text: 'Carica Hub' },
+        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
+        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
+        { id: 'BACKUP_BTN', text: 'Salva Backup' },
+        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
+        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
+        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
+        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
+        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
+        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
+        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
+        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
+        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
+        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
+        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
+        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
+        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
+        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
+        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
+        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
+        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
+        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
+        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
+        { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
+        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
+        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
+        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
+        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
+        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
+        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
+        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
+        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
+        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
+        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
+        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
+        { id: 'DELETE_WORKOUT_CONFIRM_TITLE', text: 'Elimina Allenamento' },
+        { id: 'DELETE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare questo allenamento dallo storico? L\'azione è irreversibile.' },
+        { id: 'DELETE_WORKOUT_SUCCESS', text: 'Allenamento eliminato dallo storico.' },
+        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
+        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
+        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
+        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
+        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
+        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
+        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
+        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
+        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
+        { id: 'KCAL_LABEL', text: 'Kcal' },
+        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
+        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
+        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
+        { id: 'LOG_ACTIVITY_BTN', text: 'Log Attività' },
+        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
+        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
+        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
+        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
+        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
+        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
+        { id: 'EXERCISE_WEIGHT_LABEL', text: 'Peso (kg)' },
+        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
+        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
+        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
+        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
+        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
+        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
+        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
+        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
+        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
+        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
+        { id: 'CHARTS_CORRELATION_TITLE', text: 'Correlazione Peso e Calorie' },
+        { id: 'VELOCITY_CHART_TITLE', text: 'Andamento Variazione Peso' },
+        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
+        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
+        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
+        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
+        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
+        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
+        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
+        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
+        { id: 'API_INVALID_JSON', text: 'Errore nel formato di un file di configurazione. Controlla la console se il debug è attivo.' },
+        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
+        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
+        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
+        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
+        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
+        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
+        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
+        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
+        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
+        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
+        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
+        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
+        { id: 'IMPORT_BIOMETRICS_BTN', text: 'Importa CSV' },
+        { id: 'IMPORT_SUCCESS', text: 'Dati importati con successo!' },
+        { id: 'IMPORT_CONFIRM_TITLE', text: 'Importa Dati Biometrici' },
+        { id: 'IMPORT_NO_NEW_DATA', text: 'Nessuna nuova misurazione trovata nel file.' },
+        { id: 'IMPORT_ERROR_FILE', text: 'Errore durante la lettura del file.' },
+        { id: 'IMPORT_ERROR_FORMAT', text: 'Formato del file CSV non riconosciuto.' },
+        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
+        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
+        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
+        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
+        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
+        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
+        { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
+        { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
+        { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
+        { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
+        { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
+        { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
+        { id: 'DEBRIEFING_TONNAGE', text: 'Tonnellaggio' },
+        { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
+        { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
+        { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
+        { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
+        { id: 'DEBRIEFING_CALORIES_BURNED', text: 'Calorie Bruciate' },
+        { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
+        { id: 'DEBRIEFING_RPE_LABEL', text: 'Sforzo Percepito (RPE 1-10)' },
+        { id: 'DEBRIEFING_SAVE_RPE_BTN', text: 'Salva RPE' },
+        { id: 'DEBRIEFING_SUMMARY_AUDIO_BTN', text: 'Ascolta Riepilogo' },
+        { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
+        { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
+        { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti' },
+        { id: 'PLANNER_SUMMARY_CALORIES_BURNED', text: 'Kcal Bruciate' },
+        { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Kg mancanti' },
+        { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
+        { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
+        { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
+        { id: 'MANUAL_WORKOUT_DISTANCE_LABEL', text: 'Distanza (km)' },
+        { id: 'MANUAL_WORKOUT_FC_AVG_LABEL', text: 'FC Media (bpm)' },
+        { id: 'MANUAL_WORKOUT_FC_MAX_LABEL', text: 'FC Max (bpm)' },
+        { id: 'MANUAL_WORKOUT_NOTES_LABEL', text: 'Note' },
+        { id: 'MANUAL_WORKOUT_SAVE_BTN', text: 'Salva Attività' },
+        { id: 'LOG_VIEW_MANUAL_ACTIVITY_TITLE', text: 'Attività del Giorno' },
+        { id: 'GOALS_TITLE', text: 'Obiettivi Settimanali' },
+        { id: 'GOALS_SAVE_BTN', text: 'Salva Obiettivi' },
+        { id: 'GOALS_SAVE_SUCCESS', text: 'Obiettivi salvati!' },
+        { id: 'GOALS_EXPLANATION', text: 'Imposta i tuoi obiettivi settimanali per monitorare i progressi. Questi dati verranno visualizzati nel riepilogo del planner per tenerti motivato.' },
+        { id: 'GOALS_ACTIVITY_LEGEND', text: 'Attività Fisica' },
+        { id: 'GOALS_BIOMETRICS_LEGEND', text: 'Dati Biometrici' },
+        { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
+        { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' },
+        { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' },
+        { id: 'WORKOUT_LOG_SAVE_SUCCESS', text: 'Allenamento aggiornato con successo!' },
+        { id: 'LOGGED_EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio Registrato' },
+        { id: 'LOGGED_EXERCISE_SET_LABEL', text: 'Set' },
+        { id: 'LOGGED_EXERCISE_REPS_LABEL', text: 'Reps' },
+        { id: 'LOGGED_EXERCISE_WEIGHT_LABEL', text: 'Peso' },
+        { id: 'LOGGED_EXERCISE_SAVE_BTN', text: 'Salva Modifiche Esercizio' },
+        { id: 'VOICE_GUIDE_WORKOUT_START', text: 'Allenamento iniziato' },
+        { id: 'VOICE_GUIDE_NOW_STARTING', text: 'Inizio con' },
+        { id: 'VOICE_GUIDE_NEXT_EXERCISE', text: 'Prossimo esercizio' },
+        { id: 'VOICE_GUIDE_REST_START', text: 'Recupero' },
+        { id: 'VOICE_GUIDE_SET_START', text: 'Inizio' },
+        { id: 'VOICE_GUIDE_PHASE_UP', text: 'su' },
+        { id: 'VOICE_GUIDE_PHASE_HOLD', text: 'tieni' },
+        { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
+        { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' },
+        { id: 'TERMINATE_WORKOUT_CONFIRM_TITLE', text: 'Termina Allenamento' },
+        { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' },
+        { id: 'TERMINATE_WORKOUT_PROMPT_MSG', text: 'Vuoi salvare i progressi o scartare completamente questo allenamento?' },
+        { id: 'SAVE_AND_END_BTN', text: 'Salva e Termina' },
+        { id: 'DISCARD_WORKOUT_BTN', text: 'Scarta Allenamento' },
+        { id: 'DISCARD_WORKOUT_CONFIRM_TITLE', text: 'Scartare Allenamento?' },
+        { id: 'DISCARD_WORKOUT_CONFIRM_MSG', text: 'L\'allenamento non verrà salvato nello storico. Questa azione è irreversibile.' },
+        { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
+        { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' },
+        { id: 'INGREDIENT_NEW_TITLE', text: 'Nuovo Ingrediente' },
+        { id: 'INGREDIENT_EDIT_TITLE', text: 'Modifica Ingrediente' },
+        { id: 'INGREDIENT_SAVE_BTN', text: 'Salva Ingrediente' },
+        { id: 'INGREDIENT_CREATE_SUCCESS', text: 'Ingrediente creato con successo!' },
+        { id: 'INGREDIENT_UPDATE_SUCCESS', text: 'Ingrediente aggiornato con successo!' },
+        { id: 'INGREDIENT_DELETE_SUCCESS', text: 'Ingrediente eliminato.' },
+        { id: 'INGREDIENT_ID_CONFLICT', text: 'Esiste già un ingrediente con questo ID.' },
+        { id: 'INGREDIENT_DELETE_CONFIRM_TITLE', text: 'Elimina Ingrediente' },
+        { id: 'INGREDIENT_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare l\'ingrediente' },
+        { id: 'MEAL_NEW_TITLE', text: 'Nuovo Pasto' },
+        { id: 'MEAL_EDIT_TITLE', text: 'Modifica Pasto' },
+        { id: 'MEAL_SAVE_BTN', text: 'Salva Pasto' },
+        { id: 'MEAL_CREATE_SUCCESS', text: 'Pasto creato con successo!' },
+        { id: 'MEAL_UPDATE_SUCCESS', text: 'Pasto aggiornato con successo!' },
+        { id: 'MEAL_DELETE_SUCCESS', text: 'Pasto eliminato.' },
+        { id: 'MEAL_ID_CONFLICT', text: 'Esiste già un pasto con questo ID.' },
+        { id: 'MEAL_DELETE_CONFIRM_TITLE', text: 'Elimina Pasto' },
+        { id: 'MEAL_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare il pasto' },
+        { id: 'EXPLORE_TITLE', text: 'Esplora Nuovi Contenuti' },
+        { id: 'EXPLORE_ADD_TO_LIBRARY', text: 'Aggiungi alla Libreria' },
+        { id: 'EXPLORE_PACKAGE_LOAD_SUCCESS', text: 'Pacchetto aggiunto alla tua libreria!' },
+        { id: 'EXPLORE_PACKAGE_LOAD_FAIL', text: 'Errore durante l\'aggiunta del pacchetto.' },
+        { id: 'EXPLORE_SEARCH_PLACEHOLDER', text: 'Cerca per nome o descrizione...' },
+        { id: 'EXPLORE_SORT_LABEL', text: 'Ordina per:' },
+        { id: 'EXPLORE_SORT_DEFAULT', text: 'Rilevanza' },
+        { id: 'EXPLORE_SORT_NAME_ASC', text: 'Nome (A-Z)' },
+        { id: 'EXPLORE_SORT_NAME_DESC', text: 'Nome (Z-A)' },
+        { id: 'EXPLORE_SORT_AUTHOR', text: 'Autore' },
+        { id: 'EXPLORE_FILTER_ALL', text: 'Tutti' }
+      ];
 
-      function handleCalendarClick(e) {
-        const startBtn = e.target.closest('.btn-start-workout-day');
-        if (startBtn) {
-            const isoDate = startBtn.dataset.date;
-            log('Interactions', 'Start workout button clicked from calendar/widget', { date: isoDate });
-            const globalState = getState();
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
-            initializeWorkout(exercisesForWorkout, isoDate);
-            setView('trainer');
-            return;
-        }
+      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
+        acc[id] = text;
+        return acc;
+      }, {});
+  - file: src/ui/renderer.js
+    content: |
+      import { getState } from '../core/state.js';
+      import { renderPlannerPage } from './plannerRenderer.js';
+      import { renderBiometricsPage, renderProfilePage, renderChartsPage, renderDebriefingPage, renderGoalsPage, renderRecipesPage, renderLibraryPage, renderExplorePage } from './pageRenderers.js';
+      import { initializeTrainerController, destroyTrainerController } from './trainerRenderer.js';
+      import { UI_TEXT } from '../config/uiText.js';
+      import { renderIcon } from './icons.js';
+      import { log } from '../utils/logger.js';
 
-        const dayCell = e.target.closest('.day-cell');
-        if (dayCell) {
-          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
-          openDayEditorModal(dayCell.dataset.date);
-        }
-      }
+      let isTrainerActive = false;
 
-      function handleRecipeClick(e) {
-        const recipeItem = e.target.closest('.recipe-list-item');
-        if (recipeItem) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-        }
-      }
-
-      function handleLogViewClick(e) {
-        const header = e.target.closest('.log-day-header');
-        if (header) {
-          header.parentElement.classList.toggle('is-expanded');
-          return;
-        }
-
-        const btnRecipe = e.target.closest('.btn-view-recipe');
-        if (btnRecipe) {
-          const state = getState();
-          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
-          if (meal) {
-            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
-            showRecipeModal(meal);
-          }
-          return;
-        }
-
-        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
-        if (btnDeleteWorkout) {
-          const { date, starttime } = btnDeleteWorkout.dataset;
-          log('Interactions', 'Delete workout button clicked', { date, starttime });
-          showConfirmModal({
-            title: UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
-            message: UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
-            onConfirm: () => {
-              deleteWorkoutFromHistory(date, parseInt(starttime));
-              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
-            },
-            type: 'danger'
+      function populateIcons() {
+          document.querySelector('.app-title').insertAdjacentHTML('afterbegin', renderIcon('APP_LOGO', { width: 24, height: 24 }));
+          document.getElementById('nav-planner').insertAdjacentHTML('afterbegin', renderIcon('PLANNER'));
+          document.getElementById('nav-library').insertAdjacentHTML('afterbegin', renderIcon('LIBRARY'));
+          document.getElementById('nav-progress').insertAdjacentHTML('afterbegin', renderIcon('WEIGHT_SCALE'));
+          document.getElementById('nav-charts').insertAdjacentHTML('afterbegin', renderIcon('BAR_CHART'));
+          document.getElementById('nav-recipes').insertAdjacentHTML('afterbegin', renderIcon('BOOK'));
+          document.getElementById('nav-goals').insertAdjacentHTML('afterbegin', renderIcon('GOAL'));
+          document.getElementById('nav-explore').insertAdjacentHTML('afterbegin', renderIcon('EXPLORE'));
+          document.getElementById('nav-profile').insertAdjacentHTML('afterbegin', renderIcon('PROFILE'));
+          document.getElementById('global-alert-close').innerHTML = renderIcon('CLOSE', { width: 24, height: 24, classes: 'alert-icon' });
+          document.getElementById('hamburger-btn').innerHTML = renderIcon('HAMBURGER', { width: 28, height: 28 });
+          document.querySelectorAll('.btn-expand-chart').forEach(btn => {
+              btn.innerHTML = renderIcon('EXPAND', { width: 20, height: 20 });
           });
-          return;
+
+          document.querySelectorAll('.modal-close-btn').forEach(btn => {
+              btn.innerHTML = renderIcon('CLOSE');
+          });
+      }
+
+      export function populateInitialText() {
+        document.title = UI_TEXT.MAIN_TITLE;
+        document.getElementById('main-title').textContent = UI_TEXT.MAIN_TITLE;
+        document.querySelector('#nav-planner span').textContent = UI_TEXT.NAV_PLANNER;
+        document.querySelector('#nav-library span').textContent = UI_TEXT.NAV_LIBRARY;
+        document.querySelector('#nav-progress span').textContent = UI_TEXT.NAV_PROGRESS;
+        document.querySelector('#nav-charts span').textContent = UI_TEXT.NAV_CHARTS;
+        document.querySelector('#nav-recipes span').textContent = UI_TEXT.NAV_RECIPES;
+        document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
+        document.querySelector('#nav-explore span').textContent = UI_TEXT.NAV_EXPLORE;
+        document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
+        document.getElementById('load-content-hub-btn').textContent = UI_TEXT.LOAD_BUTTON;
+        document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
+        document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
+        document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
+        document.getElementById('restore-btn').textContent = UI_TEXT.RESTORE_BTN;
+        document.getElementById('info-modal-title').textContent = UI_TEXT.INFO_MODAL_TITLE;
+        document.getElementById('info-modal-desc').textContent = UI_TEXT.INFO_MODAL_DESC;
+        document.getElementById('info-modal-json-example').textContent = UI_TEXT.INFO_MODAL_EXAMPLE_JSON;
+        document.getElementById('biometrics-title').textContent = UI_TEXT.BIOMETRICS_FORM_TITLE;
+        document.getElementById('biometrics-history-title').textContent = UI_TEXT.BIOMETRICS_HISTORY_TITLE;
+        document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
+        document.getElementById('data-management-title').textContent = "Gestione Dati";
+        document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
+        document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+        document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
+        document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
+        document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
+        document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
+        document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
+        document.getElementById('log-view-title').textContent = "Registro Dettagliato";
+        populateIcons();
+      }
+
+      export function renderApp() {
+        const state = getState();
+        const { currentView } = state.ui;
+        const plannerPage = document.getElementById('planner-page');
+        const libraryPage = document.getElementById('library-page');
+        const progressPage = document.getElementById('progress-page');
+        const chartsPage = document.getElementById('charts-page');
+        const recipesPage = document.getElementById('recipes-page');
+        const goalsPage = document.getElementById('goals-page');
+        const explorePage = document.getElementById('explore-page');
+        const profilePage = document.getElementById('profile-page');
+        const trainerPage = document.getElementById('trainer-page');
+        const debriefingPage = document.getElementById('debriefing-page');
+
+        const navPlannerBtn = document.getElementById('nav-planner');
+        const navLibraryBtn = document.getElementById('nav-library');
+        const navProgressBtn = document.getElementById('nav-progress');
+        const navChartsBtn = document.getElementById('nav-charts');
+        const navRecipesBtn = document.getElementById('nav-recipes');
+        const navGoalsBtn = document.getElementById('nav-goals');
+        const navExploreBtn = document.getElementById('nav-explore');
+        const navProfileBtn = document.getElementById('nav-profile');
+
+        log('Renderer', 'Render triggered. Current view:', currentView, 'isTrainerActive:', isTrainerActive);
+
+        if (currentView !== 'trainer' && isTrainerActive) {
+            log('Renderer', 'View is not trainer, destroying trainer controller...');
+            destroyTrainerController();
+            isTrainerActive = false;
         }
 
-        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
-        if(btnEditExercise) {
-          const { date, starttime, instanceid } = btnEditExercise.dataset;
-          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
-          const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
-          if (exercise) {
-            openExerciseEditorModal({
-              context: 'history',
-              exercise,
-              date,
-              startTime: parseInt(starttime, 10)
-            });
+        [plannerPage, libraryPage, progressPage, chartsPage, recipesPage, goalsPage, explorePage, profilePage, trainerPage, debriefingPage].forEach(p => p.classList.add('hidden'));
+        [navPlannerBtn, navLibraryBtn, navProgressBtn, navChartsBtn, navRecipesBtn, navGoalsBtn, navExploreBtn, navProfileBtn].forEach(b => b.classList.remove('active'));
+        document.getElementById('main-nav').classList.remove('is-open', 'is-mobile');
+
+        if (currentView === 'planner' || currentView === 'log') {
+          plannerPage.classList.remove('hidden');
+          navPlannerBtn.classList.add('active');
+          renderPlannerPage(state);
+        } else if (currentView === 'library') {
+          libraryPage.classList.remove('hidden');
+          navLibraryBtn.classList.add('active');
+          renderLibraryPage(state);
+        } else if (currentView === 'progress') {
+          progressPage.classList.remove('hidden');
+          navProgressBtn.classList.add('active');
+          renderBiometricsPage(state);
+        } else if (currentView === 'charts') {
+          chartsPage.classList.remove('hidden');
+          navChartsBtn.classList.add('active');
+          renderChartsPage(state);
+        } else if (currentView === 'recipes') {
+          recipesPage.classList.remove('hidden');
+          navRecipesBtn.classList.add('active');
+          renderRecipesPage(state);
+        } else if (currentView === 'goals') {
+          goalsPage.classList.remove('hidden');
+          navGoalsBtn.classList.add('active');
+          renderGoalsPage(state);
+        } else if (currentView === 'explore') {
+          explorePage.classList.remove('hidden');
+          navExploreBtn.classList.add('active');
+          renderExplorePage(state);
+        } else if (currentView === 'profile') {
+          profilePage.classList.remove('hidden');
+          navProfileBtn.classList.add('active');
+          renderProfilePage(state);
+          document.getElementById('content-hub-url-input').value = state.contentHubUrl;
+        } else if (currentView === 'trainer') {
+          trainerPage.classList.remove('hidden');
+          setTimeout(() => window.scrollTo(0, 0), 0);
+          log('Renderer', 'View is trainer, checking if trainer is active...');
+          if (!isTrainerActive) {
+            log('Renderer', 'Trainer is not active, initializing trainer controller...');
+            initializeTrainerController();
+            isTrainerActive = true;
           }
-          return;
+        } else if (currentView === 'debriefing') {
+          debriefingPage.classList.remove('hidden');
+          renderDebriefingPage(state);
         }
       }
+  - file: templates/profile.html
+    content: |
+      <div id="profile-page" class="page-view hidden">
+          <h3 id="profile-title"></h3>
+          <form id="profile-form" class="profile-form"></form>
 
-      function handleCopyWeek() {
-        log('Interactions', 'Copy week button clicked');
-        showConfirmModal({
-          title: UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
-          message: UI_TEXT.COPY_WEEK_CONFIRM_MSG,
-          onConfirm: () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); },
-          type: 'primary'
-        });
-      }
-
-      function handleResetWeek() {
-        log('Interactions', 'Reset week button clicked');
-        showConfirmModal({
-          title: UI_TEXT.RESET_WEEK_CONFIRM_TITLE,
-          message: UI_TEXT.RESET_WEEK_CONFIRM_MSG,
-          onConfirm: () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); },
-          type: 'danger'
-        });
-      }
-
-      export function initializePlannerListeners() {
-        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
-        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
-        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
-        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
-        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
-        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
-        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
-
-        const todayWidget = document.getElementById('today-widget');
-        if(todayWidget) {
-          todayWidget.addEventListener('click', handleCalendarClick); // Re-use handler for start button
-        }
-      }
-commands:
-  - "echo '✅ Bug fix applicato. L''errore di import è stato risolto.'"
+          <div class="data-management-section">
+              <h3 id="data-management-title">Gestione Dati</h3>
+              <div class="data-source-container">
+                  <input type="url" id="content-hub-url-input" placeholder="URL del Content Hub...">
+                  <button id="load-content-hub-btn" class="btn btn-primary"></button>
+              </div>
+              <div class="backup-controls">
+                  <button id="restore-btn" class="btn btn-secondary"></button>
+                  <button id="backup-btn" class="btn btn-secondary"></button>
+              </div>
+          </div>
+      </div>

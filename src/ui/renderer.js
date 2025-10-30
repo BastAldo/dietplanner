@@ -40,7 +40,7 @@ export function populateInitialText() {
   document.querySelector('#nav-goals span').textContent = UI_TEXT.NAV_GOALS;
   document.querySelector('#nav-explore span').textContent = UI_TEXT.NAV_EXPLORE;
   document.querySelector('#nav-profile span').textContent = UI_TEXT.NAV_PROFILE;
-  document.getElementById('load-config-btn').textContent = UI_TEXT.LOAD_BUTTON;
+  document.getElementById('load-content-hub-btn').textContent = UI_TEXT.LOAD_BUTTON;
   document.getElementById('reset-btn').textContent = UI_TEXT.RESET_BUTTON;
   document.getElementById('copy-week-btn').textContent = UI_TEXT.COPY_WEEK_BTN;
   document.getElementById('backup-btn').textContent = UI_TEXT.BACKUP_BTN;
@@ -131,10 +131,10 @@ export function renderApp() {
     profilePage.classList.remove('hidden');
     navProfileBtn.classList.add('active');
     renderProfilePage(state);
-    document.getElementById('config-url-input').value = state.configUrl;
+    document.getElementById('content-hub-url-input').value = state.contentHubUrl;
   } else if (currentView === 'trainer') {
     trainerPage.classList.remove('hidden');
-    setTimeout(() => window.scrollTo(0, 0), 0); // Defer scroll to after render cycle
+    setTimeout(() => window.scrollTo(0, 0), 0);
     log('Renderer', 'View is trainer, checking if trainer is active...');
     if (!isTrainerActive) {
       log('Renderer', 'Trainer is not active, initializing trainer controller...');
