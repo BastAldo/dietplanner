@@ -1,1065 +1,146 @@
-commit_message: "refactor(core): Shift from personal configUrl to dynamic contentHubUrl"
+commit_message: "fix(refactor): Remove unused imports after contentHubUrl refactor"
 rationale: |
-  This commit marks a significant architectural evolution for the application, moving away from a personal, user-supplied configuration file (`configUrl`) towards a dynamic content discovery model centered around a configurable content hub (`contentHubUrl`).
+  This commit resolves a critical `SyntaxError` that occurred after the recent architectural refactoring.
 
-  **1. Architectural Shift:**
-  - The concept of a personal `configUrl` loaded on startup has been entirely removed from `src/main.js` and `src/core/state.js`. The application now starts with a clean slate, encouraging users to populate their library from the "Explore" section.
-  - The state key `configUrl` has been renamed to `contentHubUrl` to accurately reflect its new purpose: defining the base URL for the content discovery hub.
-  - The default value for `contentHubUrl` is now set to the official BiohackerHub repository (`https://itbiohackerhub-max.github.io/BiohackerHub/`), making the application useful out-of-the-box.
+  **Problem:**
+  - In the previous commit, the function `setConfigUrl` was renamed to `setContentHubUrl` in `src/core/state.js` to better reflect the new content hub architecture.
+  - However, the import statement in `src/ui/interactions/plannerInteractions.js` was not updated. This file was still attempting to import `setConfigUrl`, a function that no longer exists, causing a fatal module loading error at startup.
 
-  **2. Dynamic "Explore" Section:**
-  - The `renderExplorePage` function in `src/ui/pageRenderers.js` no longer relies on a hardcoded constant. It now dynamically fetches the `package-index.json` and manifest files from the `contentHubUrl` present in the application state.
-  - This makes the "Explore" section fully dynamic. Changing the `contentHubUrl` in the profile will now point the entire discovery feature to a new source.
+  **Solution:**
+  - The unused import of `setConfigUrl` has been removed from `src/ui/interactions/plannerInteractions.js`.
+  - Additionally, the unused import of `fetchAndParseConfig` has also been removed from the same file as part of the code cleanup.
 
-  **3. UI and Interaction Refactoring:**
-  - The "Data Management" section in the Profile view (`templates/profile.html`) has been simplified. The input field now clearly refers to the "Content Hub URL".
-  - The logic in `src/ui/interactions/profileInteractions.js` has been updated. The "Load" button now updates the `contentHubUrl` in the state and clears the local package cache, forcing "Explore" to reload from the new source.
-  - The "Share Config" button, which was tied to the old personal `configUrl` concept, has been removed.
-
-  This refactoring fulfills the strategic goal of transforming HealtyPro into an open platform that consumes content from discoverable sources, while giving users the freedom to switch to alternative or forked content hubs in the future.
+  This is a surgical fix that resolves the startup error and cleans up dead code, ensuring the application runs correctly after the refactoring.
 patches:
-  - file: src/core/state.js
+  - file: src/ui/interactions/plannerInteractions.js
     content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-      import { resetWorkoutState } from './trainer.js';
-      import { log } from '../utils/logger.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterIngredientList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        workoutHistory: {},
-        biometricData: [],
-        userProfile: {},
-        userGoals: {},
-        contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        debugMode: false,
-        ui: {
-          currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
-          activeLibraryTab: 'ingredients',
-          librarySearchTerm: '',
-          lastWorkoutSummary: null,
-          charts: {
-            currentRangeFilter: 30,
-            dateOffset: 0,
-            selectedBiometric: 'weight',
-            plannerChartType: 'bar'
-          },
-          explore: {
-            packages: [],
-            searchTerm: '',
-            activeTags: [],
-            sortOrder: 'default'
-          }
-        }
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-      export const setState = (newState) => {
-        state = { ...state, ...newState };
-        notify();
-      }
-      export const setUiState = (uiChanges) => {
-        state.ui = { ...state.ui, ...uiChanges };
-        notify();
-      }
-
-      export function getMealsForType(mealType) {
-        return state.masterMealList.filter(meal => {
-          if (meal.tipoPasto === 'Tutti') return true;
-          if (Array.isArray(meal.tipoPasto)) {
-            return meal.tipoPasto.includes(mealType);
-          }
-          return meal.tipoPasto === mealType;
-        });
-      }
-
-      export function getExerciseForPlanner(slotId, instanceId) {
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function getExerciseFromHistory(date, startTime, instanceId) {
-        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
-        if (!workout) return null;
-        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function toggleDebugMode() {
-        state.debugMode = !state.debugMode;
-        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
-      }
-
-      export function setPlannerConfig(config, url) {
-        log('State', 'Merging new planner config', { url });
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        ingredients.forEach(ing => {
-          if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
-            state.masterIngredientList.push(ing);
-          }
-        });
-
-        meals.forEach(meal => {
-          if (!state.masterMealList.some(existing => existing.id === meal.id)) {
-            state.masterMealList.push(meal);
-          }
-        });
-
-        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function setContentHubUrl(url) {
-        log('State', 'Setting new Content Hub URL', { url });
-        state.contentHubUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        log('State', 'Saving all application state to localStorage');
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
-        localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
-        localStorage.setItem(LOCAL_STORAGE_KEY_MEALS, JSON.stringify(state.masterMealList));
-      }
-
-      export function loadStateFromLocalStorage() {
-        log('State', 'Loading all application state from localStorage');
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
-        const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
-        const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.contentHubUrl = url; }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
-        if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
-        if (meals) { try { state.masterMealList = JSON.parse(meals); } catch (e) { console.error("Error parsing masterMealList", e); state.masterMealList = []; } }
-      }
-
-      export function setAppState(backupData) {
-        log('State', 'Restoring application state from backup');
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.workoutHistory = backupData.workoutHistory || {};
-        state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        state.userGoals = backupData.userGoals || {};
-        state.masterIngredientList = backupData.masterIngredientList || [];
-        state.masterMealList = backupData.masterMealList || [];
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        log('State', 'Saving user profile', { profile });
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function saveUserGoals(goals) {
-          log('State', 'Saving user goals', { goals });
-          state.userGoals = goals;
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        log('State', 'Adding or updating biometric entry', { entry });
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addMultipleBiometricEntries(newEntries) {
-        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
-        state.biometricData = [...state.biometricData, ...newEntries];
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        log('State', 'Deleting biometric entry', { date });
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addIngredient(ingredientData) {
-        log('State', 'Adding new ingredient', { ingredientData });
-        state.masterIngredientList.push(ingredientData);
-        state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateIngredient(ingredientId, updatedData) {
-        log('State', 'Updating ingredient', { ingredientId, updatedData });
-        const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
-        if (index > -1) {
-          state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
-          state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
-          saveStateToLocalStorage();
-          notify();
-        }
-      }
-
-      export function deleteIngredient(ingredientId) {
-        log('State', 'Deleting ingredient', { ingredientId });
-        state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addMeal(mealData) {
-        log('State', 'Adding new meal', { mealData });
-        state.masterMealList.push(mealData);
-        state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateMeal(mealId, updatedData) {
-        log('State', 'Updating meal', { mealId, updatedData });
-        const index = state.masterMealList.findIndex(m => m.id === mealId);
-        if (index > -1) {
-          state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
-          state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
-          saveStateToLocalStorage();
-          notify();
-        }
-      }
-
-      export function deleteMeal(mealId) {
-        log('State', 'Deleting meal', { mealId });
-        state.masterMealList = state.masterMealList.filter(m => m.id !== mealId);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        log('State', 'Updating weekly plan', { slotId, mealId });
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) { // Add an exercise
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = {
-                      ...exercise,
-                      instanceId: Date.now() + Math.random()
-                  };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) { // Remove an exercise
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
-          if (!state.weeklyWorkouts[slotId]) return;
-
-          const workoutList = state.weeklyWorkouts[slotId];
-          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
-
-          if (exerciseIndex > -1) {
-              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-              if (newValues.defaultTempo) {
-                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
-              }
-              workoutList[exerciseIndex] = updatedExercise;
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
-        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
-          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
-          const workoutList = state.weeklyWorkouts[slotId];
-          const [movedItem] = workoutList.splice(oldIndex, 1);
-          workoutList.splice(newIndex, 0, movedItem);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        log('State', 'Resetting current week');
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[workoutSlotId];
-            }
-
-            if (state.workoutHistory[isoDate]) {
-                delete state.workoutHistory[isoDate];
-            }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        log('State', 'Navigating week', { direction });
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
-        if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals', 'explore'].includes(view)) {
-          state.ui.currentView = view;
-          notify();
-        }
-      }
-
-      export function setLastWorkoutSummary(summary) {
-        log('State', 'Setting last workout summary');
-        state.ui.lastWorkoutSummary = summary;
-        notify();
-      }
-
-      export function addWorkoutToHistory(summary) {
-        log('State', 'Adding structured workout to history', { date: summary.date });
-        if (summary && summary.date) {
-            if (!state.workoutHistory[summary.date]) {
-                state.workoutHistory[summary.date] = [];
-            }
-            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
-            saveStateToLocalStorage();
-            notify();
-        }
-      }
-
-      export function addManualWorkoutToHistory(date, activityData) {
-          log('State', 'Adding manual workout to history', { date, activityData });
-          if (!state.workoutHistory[date]) {
-              state.workoutHistory[date] = [];
-          }
-          const manualWorkout = {
-              type: 'manual',
-              date: date,
-              startTime: Date.now(),
-              ...activityData
-          };
-          state.workoutHistory[date].push(manualWorkout);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function deleteWorkoutFromHistory(date, startTime) {
-          log('State', 'Deleting workout from history', { date, startTime });
-          if (state.workoutHistory[date]) {
-              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
-              if (state.workoutHistory[date].length === 0) {
-                  delete state.workoutHistory[date];
-              }
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function updateWorkoutInHistory(date, startTime, updates) {
-          log('State', 'Updating workout in history', { date, startTime, updates });
-          if (state.workoutHistory[date]) {
-              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-              if (workoutIndex > -1) {
-                  state.workoutHistory[date][workoutIndex] = {
-                      ...state.workoutHistory[date][workoutIndex],
-                      ...updates
-                  };
-                  saveStateToLocalStorage();
-                  notify();
-              }
-          }
-      }
-
-      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
-        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
-        if (!state.workoutHistory[date]) return;
-
-        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-        if (workoutIndex === -1) return;
-
-        const workout = state.workoutHistory[date][workoutIndex];
-        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
-        if (exerciseIndex === -1) return;
-
-        workout.exercises[exerciseIndex].setsData = newSetsData;
-
-        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
-        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
-
-        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
-
-        saveStateToLocalStorage();
-        notify();
-      }
-
-
-      export function copyPreviousWeek() {
-        log('State', 'Copying previous week');
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-  - file: src/main.js
-    content: |
-      import { loadStateFromLocalStorage, getState, setPlannerConfig, setContentHubUrl, toggleDebugMode } from './core/state.js';
-      import { renderApp, populateInitialText } from './ui/renderer.js';
-      import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
-      import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
-      import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
-      import { initializeProfileListeners } from './ui/interactions/profileInteractions.js';
-      import { initializeDebriefingListeners } from './ui/interactions/debriefingInteractions.js';
-      import { initializeGoalsListeners } from './ui/interactions/goalsInteractions.js';
-      import { initializeChartsListeners } from './ui/interactions/chartsInteractions.js';
-      import { initializeLibraryListeners } from './ui/interactions/libraryInteractions.js';
-      import { initializeExploreListeners } from './ui/interactions/exploreInteractions.js';
-      import { loadViews } from './ui/viewLoader.js';
-
-      function registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/dietplanner/sw.js')
-              .then(registration => console.log('ServiceWorker registration successful'))
-              .catch(err => console.log('ServiceWorker registration failed: ', err));
-          });
-        }
-      }
-
-      async function init() {
-        await loadViews();
-        document.addEventListener('stateChange', renderApp);
-
-        loadStateFromLocalStorage();
-        const initialState = getState();
-        document.getElementById('content-hub-url-input').value = initialState.contentHubUrl;
-
-        populateInitialText();
-
-        initializeGlobalListeners();
-        initializePlannerListeners();
-        initializeProgressListeners();
-        initializeProfileListeners();
-        initializeDebriefingListeners();
-        initializeGoalsListeners();
-        initializeChartsListeners();
-        initializeLibraryListeners();
-        initializeExploreListeners();
-
-        renderApp();
-
-        window.toggleDebugMode = toggleDebugMode;
-
-        registerServiceWorker();
-      }
-
-      document.addEventListener('DOMContentLoaded', init);
-  - file: src/ui/interactions/profileInteractions.js
-    content: |
-      import { saveUserProfile, setContentHubUrl, setAppState, getState, setUiState } from '../../core/state.js';
+      import {
+        resetCurrentWeek, navigateWeek, setView,
+        copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
+      } from '../../core/state.js';
+      import { initializeWorkout } from '../../core/trainer.js';
       import { showNotification } from '../notifications.js';
+      import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
       import { UI_TEXT } from '../../config/uiText.js';
       import { log } from '../../utils/logger.js';
-      import { PROFILE_FIELDS } from '../../config/forms.js';
-      import { showConfirmModal } from '../modals.js';
 
-      function handleProfileForm(e) {
-        e.preventDefault();
-        log('Interactions', 'Profile form submitted');
-        const formData = new FormData(e.target);
-        const profile = {};
-
-        for (let [key, value] of formData.entries()) {
-          if (!key.startsWith('planner-pref-')) {
-            profile[key] = value;
-          }
-        }
-
-        const plannerPrefsField = PROFILE_FIELDS.find(f => f.id === 'plannerPrefs');
-        if (plannerPrefsField) {
-          plannerPrefsField.options.forEach(opt => {
-            profile[opt.id] = formData.has(opt.id);
-          });
-        }
-
-        saveUserProfile(profile);
-        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
-      }
-
-      async function handleLoadContentHub() {
-        log('Interactions', 'Handling Content Hub load button click');
-        const url = document.getElementById('content-hub-url-input').value.trim();
-        if (!url) { showNotification('Per favore, inserisci un URL per l\'hub di contenuti.', 'error'); return; }
-
-        const currentState = getState();
-        setContentHubUrl(url);
-
-        // Clear the cached packages to force a refetch from the new URL
-        setUiState({
-          ...currentState.ui,
-          explore: {
-            ...currentState.ui.explore,
-            packages: []
-          }
-        });
-
-        showNotification('Fonte contenuti aggiornata. La sezione Esplora si ricaricherà.', 'success');
-      }
-
-      function triggerDownload(blob, fileName) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
-      }
-
-      async function handleSaveBackup() {
-        log('Interactions', 'Save backup button clicked');
-        const state = getState();
-        const backupData = {
-          contentHubUrl: state.contentHubUrl,
-          weeklyPlan: state.weeklyPlan,
-          weeklyWorkouts: state.weeklyWorkouts,
-          workoutHistory: state.workoutHistory,
-          biometricData: state.biometricData,
-          userProfile: state.userProfile,
-          userGoals: state.userGoals,
-          masterIngredientList: state.masterIngredientList,
-          masterMealList: state.masterMealList
-        };
-        const fileName = 'healtypro_backup.txt';
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              console.warn('Web Share API failed, falling back to download:', error);
-              triggerDownload(blob, fileName);
-            }
-          }
-        } else {
-          triggerDownload(blob, fileName);
-        }
-      }
-
-      function handleRestoreBackup() {
-          log('Interactions', 'Restore backup button clicked');
-          const fileInput = document.createElement('input');
-          fileInput.type = 'file';
-          fileInput.accept = '.json,.txt,application/json,text/plain';
-          fileInput.onchange = e => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = readerEvent => {
-                  try {
-                      const content = readerEvent.target.result;
-                      const backupData = JSON.parse(content);
-                      if (typeof backupData.weeklyPlan === 'object') { // Basic validation
-                          showConfirmModal({
-                              title: UI_TEXT.RESTORE_CONFIRM_TITLE,
-                              message: UI_TEXT.RESTORE_CONFIRM_MSG,
-                              onConfirm: () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
-                              type: 'danger'
-                          });
-                      } else { throw new Error('Invalid structure'); }
-                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
-              };
-              reader.readAsText(file);
-          };
-          fileInput.click();
-      }
-
-      export function initializeProfileListeners() {
-        const profilePage = document.getElementById('profile-page');
-        profilePage.addEventListener('submit', e => {
-          if (e.target.id === 'profile-form') {
-            handleProfileForm(e);
-          }
-        });
-
-        profilePage.addEventListener('click', e => {
-          if (e.target.id === 'load-content-hub-btn') handleLoadContentHub();
-          if (e.target.id === 'backup-btn') handleSaveBackup();
-          if (e.target.id === 'restore-btn') handleRestoreBackup();
-          if (e.target.closest('#info-icon')) document.getElementById('info-modal').classList.remove('hidden');
-        });
-      }
-  - file: src/ui/pageRenderers.js
-    content: |
-      import { calculateBMR } from '../core/calculations.js';
-      import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { renderCharts } from './charts.js';
-      import { formatIngredientsSummary } from '../utils/formatters.js';
-      import { fetchAndMergePackage } from '../api/configService.js';
-      import { log } from '../utils/logger.js';
-      import { getState, setUiState } from '../core/state.js';
-
-      async function fetchJson(url) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-        return response.json();
-      }
-
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
-
-      function formatReadableDate(isoDate) {
-          const date = new Date(isoDate);
-          return date.toLocaleDateString('it-IT', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-          });
-      }
-
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-
-      export function renderBiometricsPage(state) {
-        const form = document.getElementById('biometrics-form');
-        const listContainer = document.getElementById('biometrics-list');
-        document.getElementById('import-csv-btn').textContent = UI_TEXT.IMPORT_BIOMETRICS_BTN;
-
-        form.innerHTML = `${BIOMETRIC_FIELDS.map(field => `<div class="form-group"><label for="bio-${field.id}">${field.label}</label>${field.type === 'textarea' ? `<textarea id="bio-${field.id}" name="${field.id}"></textarea>` : `<input type="${field.type}" id="bio-${field.id}" name="${field.id}" ${field.props || ''} ${field.id === 'date' ? `value="${toISODateString(new Date())}"` : ''}>`}</div>`).join('')}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.BIOMETRICS_SAVE_BTN}</button><button type="reset" class="btn btn-secondary">${UI_TEXT.BIOMETRICS_CLEAR_BTN}</button></div>`;
-
-        if (state.biometricData.length > 0) {
-            listContainer.innerHTML = state.biometricData.map(entry => {
-                const fieldsHTML = BIOMETRIC_FIELDS.filter(field => field.id !== 'date' && entry[field.id])
-                    .map(field => `
-                        <div class="biometric-card__item ${field.id === 'notes' ? 'biometric-card__notes' : ''}">
-                            <span class="biometric-card__label">${field.label}</span>
-                            <span class="biometric-card__value">${entry[field.id]}</span>
-                        </div>
-                    `).join('');
-
-                return `
-                    <div class="biometric-card" data-date="${entry.date}">
-                        <div class="biometric-card__header">
-                            <span class="biometric-card__date">${formatReadableDate(entry.date)}</span>
-                            <div class="biometrics-actions">
-                                <button class="btn-actions-menu" data-date="${entry.date}" title="${UI_TEXT.BIOMETRICS_ACTIONS_TITLE}">
-                                    ${renderIcon('KEBAB_MENU', { width: 24, height: 24 })}
-                                </button>
-                                <div class="actions-dropdown">
-                                    <button class="btn-edit-biometrics" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_EDIT_BTN}</button>
-                                    <button class="btn-delete-biometrics delete" data-date="${entry.date}">${UI_TEXT.BIOMETRICS_DELETE_BTN}</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="biometric-card__body">
-                            ${fieldsHTML}
-                        </div>
-                    </div>`;
-            }).join('');
-        } else {
-            listContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.BIOMETRICS_EMPTY_LIST}</p>`;
-        }
-
-        const weightInput = form.elements.weight;
-        const bmrInput = form.elements.basalMetabolism;
-        const weightForCalc = weightInput.value || (state.biometricData.length > 0 ? state.biometricData[0].weight : null);
-
-        const bmr = calculateBMR(state.userProfile, weightForCalc);
-        if (bmr !== null) {
-          bmrInput.value = bmr;
-        } else {
-          bmrInput.placeholder = UI_TEXT.BIOMETRICS_BMR_PLACEHOLDER;
-        }
-      }
-
-      export function renderProfilePage(state) {
-        const form = document.getElementById('profile-form');
-        let formHTML = '';
-
-        PROFILE_FIELDS.forEach(field => {
-          let fieldHTML = '<div class="form-group">';
-          switch (field.type) {
-            case 'radio':
-              fieldHTML += `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>`;
-              break;
-            case 'checkbox-group':
-              fieldHTML += `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="checkbox" name="${opt.id}" id="prof-${opt.id}" ${state.userProfile[opt.id] ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>`;
-              break;
-            default:
-              fieldHTML += `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`;
-          }
-          fieldHTML += '</div>';
-          formHTML += fieldHTML;
-        });
-
-        form.innerHTML = `${formHTML}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
-      }
-
-      export function renderGoalsPage(state) {
-          const form = document.getElementById('goals-form');
-          document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
-          document.getElementById('goals-explanation-text').textContent = UI_TEXT.GOALS_EXPLANATION;
-          document.getElementById('goals-activity-legend').textContent = UI_TEXT.GOALS_ACTIVITY_LEGEND;
-          document.getElementById('goals-biometrics-legend').textContent = UI_TEXT.GOALS_BIOMETRICS_LEGEND;
-          document.getElementById('goal-calories-label').textContent = UI_TEXT.GOAL_CALORIES_LABEL;
-          document.getElementById('goal-workouts-label').textContent = UI_TEXT.GOAL_WORKOUTS_LABEL;
-          document.getElementById('goal-weight-label').textContent = UI_TEXT.GOAL_WEIGHT_LABEL;
-          document.getElementById('goals-save-btn').textContent = UI_TEXT.GOALS_SAVE_BTN;
-          form.elements.avg_calories.value = state.userGoals.avg_calories || '';
-          form.elements.num_workouts.value = state.userGoals.num_workouts || '';
-          form.elements.target_weight.value = state.userGoals.target_weight || '';
-      }
-
-      export function renderChartsPage(state) {
-          const placeholder = document.getElementById('biometrics-chart-placeholder');
-          const canvas = document.getElementById('biometrics-chart-canvas');
-          if (state.biometricData.length < 2) {
-              placeholder.textContent = UI_TEXT.BIOMETRICS_CHART_EMPTY;
-              placeholder.classList.remove('hidden');
-              canvas.classList.add('hidden');
-          } else {
-              placeholder.classList.add('hidden');
-              canvas.classList.remove('hidden');
-          }
-          renderCharts(state);
-      }
-
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) {
-              details.push(`${setData.reps} reps`);
-          }
-          if (setData.weight) {
-              details.push(`${setData.weight} kg`);
-          }
-          if (setData.duration) {
-              details.push(`${formatDuration(setData.duration)}`);
-          }
-          return details.join(' / ');
-      }
-
-      export function renderDebriefingPage(state) {
-        const summaryContainer = document.getElementById('debriefing-summary');
-        const statsContainer = document.getElementById('debriefing-stats');
-        const summary = state.ui.lastWorkoutSummary;
-
-        if (!summary || !summary.exercises) {
-            summaryContainer.innerHTML = `<p class="placeholder-text">${UI_TEXT.DEBRIEFING_NO_SUMMARY}</p>`;
-            statsContainer.innerHTML = '';
-            document.getElementById('debriefing-feedback').classList.add('hidden');
+      function handleCalendarClick(e) {
+        const startBtn = e.target.closest('.btn-start-workout-day');
+        if (startBtn) {
+            const isoDate = startBtn.dataset.date;
+            log('Interactions', 'Start workout button clicked from calendar/widget', { date: isoDate });
+            const globalState = getState();
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            const exercisesForWorkout = globalState.weeklyWorkouts[workoutSlotId];
+            initializeWorkout(exercisesForWorkout, isoDate);
+            setView('trainer');
             return;
         }
 
-        document.getElementById('debriefing-feedback').classList.remove('hidden');
-        document.getElementById('debriefing-stats-title').textContent = UI_TEXT.DEBRIEFING_STATS_TITLE;
-        document.getElementById('debriefing-rpe-label').textContent = UI_TEXT.DEBRIEFING_RPE_LABEL;
-        document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
-        document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
-
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `<div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span><span class="stat-value">${summary.totalCaloriesBurned}</span></div>` : '';
-        const tonnageHTML = summary.totalTonnage > 0 ? `<div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span><span class="stat-value">${summary.totalTonnage} kg</span></div>` : '';
-
-        statsContainer.innerHTML = `
-            <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span><span class="stat-value">${formatDuration(summary.totalTime)}</span></div>
-            <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span><span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span></div>
-            <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span><span class="stat-value">${formatDuration(summary.totalRestTime)}</span></div>
-            ${caloriesBurnedHTML}
-            ${tonnageHTML}
-        `;
-
-        summaryContainer.innerHTML = summary.exercises.map(exercise => {
-            const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            return `
-                <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header"><h4>${exercise.name}</h4><div class="debriefing-status">${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}</div></div>
-                    <div class="debriefing-card-body">
-                      <div class="exercise-stats">
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
-                        <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
-                      </div>
-                      <div class="sets-details-container">${exercise.setsData.map((setData, i) => `<div class="set-detail-item"><span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span><span>${getSetDetails(setData)}</span></div>`).join('')}</div>
-                    </div>
-                </div>`;
-        }).join('');
-      }
-
-      export function renderRecipesPage(state) {
-        const recipesList = document.getElementById('recipes-list');
-        const recipes = state.masterMealList.filter(meal => meal.recipeId);
-        if (!recipes || recipes.length === 0) {
-            recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
-            return;
-        }
-        recipesList.innerHTML = recipes.map(recipe => {
-            const ingredientsHtml = formatIngredientsSummary(recipe);
-            return `<div class="recipe-list-item" data-meal-id="${recipe.id}"><h4>${recipe.nomePasto}</h4><p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}</div>`;
-        }).join('');
-      }
-
-      export function renderLibraryPage(state) {
-        const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
-        const searchInput = document.getElementById('library-search-input');
-        searchInput.value = librarySearchTerm;
-        searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
-        document.querySelectorAll('#library-page .btn-view').forEach(btn => btn.classList.toggle('active', btn.dataset.view === activeLibraryTab));
-        document.querySelectorAll('.library-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab)));
-        const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
-
-        const ingredientList = document.getElementById('ingredient-list');
-        const filteredIngredients = state.masterIngredientList.filter(ing => ing.nome.toLowerCase().includes(lowerCaseSearchTerm));
-        if (filteredIngredients.length > 0) {
-          ingredientList.innerHTML = filteredIngredients.map(ing => `<div class="library-item" data-id="${ing.id}"><div class="library-item-info"><span class="library-item-info__name">${ing.nome}</span><span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`).join('');
-        } else {
-          ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
-        }
-
-        const mealList = document.getElementById('meal-list');
-        const filteredMeals = state.masterMealList.filter(meal => meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm));
-        if (filteredMeals.length > 0) {
-          mealList.innerHTML = filteredMeals.map(meal => {
-            const calorieText = (meal.calories_min && meal.calories_max) ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`) : 'Calorie non calcolate';
-            return `<div class="library-item" data-id="${meal.id}"><div class="library-item-info"><span class="library-item-info__name">${meal.nomePasto}</span><span class="library-item-info__details">${calorieText}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`;
-          }).join('');
-        } else {
-          mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
+        const dayCell = e.target.closest('.day-cell');
+        if (dayCell) {
+          log('Interactions', 'Calendar cell clicked', { date: dayCell.dataset.date });
+          openDayEditorModal(dayCell.dataset.date);
         }
       }
 
-      async function cacheAllPackages() {
-        log('Renderer', 'Caching all packages from Content Hub');
-        const state = getState();
-        if (state.ui.explore.packages.length > 0) {
-          log('Renderer', 'Packages already cached.');
+      function handleRecipeClick(e) {
+        const recipeItem = e.target.closest('.recipe-list-item');
+        if (recipeItem) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === recipeItem.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe list item clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
+        }
+      }
+
+      function handleLogViewClick(e) {
+        const header = e.target.closest('.log-day-header');
+        if (header) {
+          header.parentElement.classList.toggle('is-expanded');
           return;
         }
 
-        try {
-          const indexUrl = new URL('package-index.json', state.contentHubUrl).href;
-          const packageIndex = await fetchJson(indexUrl);
-
-          const manifestPromises = Object.values(packageIndex).map(path =>
-            fetchJson(new URL(path, state.contentHubUrl).href)
-          );
-          const manifests = await Promise.all(manifestPromises);
-
-          manifests.forEach(m => {
-            m.url = new URL(Object.values(packageIndex).find(p => p.includes(m.id)), state.contentHubUrl).href;
-          });
-
-          setUiState({
-            ...state.ui,
-            explore: { ...state.ui.explore, packages: manifests }
-          });
-          log('Renderer', 'All packages successfully cached.');
-
-        } catch (error) {
-          log('Renderer', 'Error caching packages', error);
-          document.getElementById('explore-grid').innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti dall'hub.</p>`;
-        }
-      }
-
-      export async function renderExplorePage() {
-        log('Renderer', 'Rendering Explore Page');
-        const state = getState();
-        const { packages, searchTerm, activeTags, sortOrder } = state.ui.explore;
-
-        document.getElementById('explore-title').textContent = UI_TEXT.EXPLORE_TITLE;
-        document.getElementById('explore-search-input').placeholder = UI_TEXT.EXPLORE_SEARCH_PLACEHOLDER;
-        document.getElementById('explore-sort-label').textContent = UI_TEXT.EXPLORE_SORT_LABEL;
-        document.getElementById('explore-sort-default').textContent = UI_TEXT.EXPLORE_SORT_DEFAULT;
-        document.getElementById('explore-sort-name-asc').textContent = UI_TEXT.EXPLORE_SORT_NAME_ASC;
-        document.getElementById('explore-sort-name-desc').textContent = UI_TEXT.EXPLORE_SORT_NAME_DESC;
-        document.getElementById('explore-sort-author').textContent = UI_TEXT.EXPLORE_SORT_AUTHOR;
-
-
-        if (packages.length === 0) {
-          document.getElementById('explore-grid').innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
-          await cacheAllPackages();
+        const btnRecipe = e.target.closest('.btn-view-recipe');
+        if (btnRecipe) {
+          const state = getState();
+          const meal = state.masterMealList.find(m => m.id === btnRecipe.dataset.mealId);
+          if (meal) {
+            log('Interactions', 'Recipe button in log view clicked', { mealId: meal.id });
+            showRecipeModal(meal);
+          }
           return;
         }
 
-        const lowerCaseSearchTerm = searchTerm.toLowerCase();
-        let filteredPackages = packages.filter(pkg =>
-          (pkg.title.toLowerCase().includes(lowerCaseSearchTerm) || pkg.description.toLowerCase().includes(lowerCaseSearchTerm)) &&
-          (activeTags.length === 0 || activeTags.every(tag => pkg.tags && pkg.tags.includes(tag)))
-        );
-
-        switch (sortOrder) {
-          case 'name_asc': filteredPackages.sort((a, b) => a.title.localeCompare(b.title)); break;
-          case 'name_desc': filteredPackages.sort((a, b) => b.title.localeCompare(a.title)); break;
-          case 'author': filteredPackages.sort((a, b) => a.author.localeCompare(b.author)); break;
-          default: break;
+        const btnDeleteWorkout = e.target.closest('.btn-delete-workout');
+        if (btnDeleteWorkout) {
+          const { date, starttime } = btnDeleteWorkout.dataset;
+          log('Interactions', 'Delete workout button clicked', { date, starttime });
+          showConfirmModal({
+            title: UI_TEXT.DELETE_WORKOUT_CONFIRM_TITLE,
+            message: UI_TEXT.DELETE_WORKOUT_CONFIRM_MSG,
+            onConfirm: () => {
+              deleteWorkoutFromHistory(date, parseInt(starttime));
+              showNotification(UI_TEXT.DELETE_WORKOUT_SUCCESS, 'info');
+            },
+            type: 'danger'
+          });
+          return;
         }
 
-        const allTags = [...new Set(packages.flatMap(p => p.tags || []))].sort();
-        const tagsContainer = document.getElementById('explore-tags-container');
-        tagsContainer.innerHTML = `<button class="tag-filter-btn ${activeTags.length === 0 ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>${allTags.map(tag => `<button class="tag-filter-btn ${activeTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">${tag}</button>`).join('')}`;
-
-        const gridContainer = document.getElementById('explore-grid');
-        if (filteredPackages.length === 0) {
-          gridContainer.innerHTML = '<p class="placeholder-text">Nessun pacchetto corrisponde ai criteri di ricerca.</p>';
-        } else {
-          gridContainer.innerHTML = filteredPackages.map(pkg => `
-            <div class="explore-card">
-              <img src="${pkg.image}" alt="${pkg.title}" class="explore-card-image">
-              <div class="explore-card-body">
-                <h3>${pkg.title}</h3>
-                <p>${pkg.description}</p>
-                <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
-              </div>
-            </div>
-          `).join('');
-
-          gridContainer.querySelectorAll('.btn-add-package').forEach(button => {
-            button.addEventListener('click', (e) => {
-              fetchAndMergePackage(e.currentTarget.dataset.url);
+        const btnEditExercise = e.target.closest('.btn-edit-logged-exercise');
+        if(btnEditExercise) {
+          const { date, starttime, instanceid } = btnEditExercise.dataset;
+          log('Interactions', 'Edit logged exercise button clicked', { date, starttime, instanceid });
+          const exercise = getExerciseFromHistory(date, parseInt(starttime, 10), parseFloat(instanceid));
+          if (exercise) {
+            openExerciseEditorModal({
+              context: 'history',
+              exercise,
+              date,
+              startTime: parseInt(starttime, 10)
             });
-          });
+          }
+          return;
         }
       }
-  - file: templates/profile.html
-    content: |
-      <div id="profile-page" class="page-view hidden">
-          <h3 id="profile-title"></h3>
-          <form id="profile-form" class="profile-form"></form>
 
-          <div class="data-management-section">
-              <h3 id="data-management-title">Gestione Dati</h3>
-              <div class="data-source-container">
-                  <input type="url" id="content-hub-url-input" placeholder="URL del Content Hub...">
-                  <button id="load-content-hub-btn" class="btn btn-primary">Usa questo Hub</button>
-              </div>
-              <div class="backup-controls">
-                  <button id="restore-btn" class="btn btn-secondary"></button>
-                  <button id="backup-btn" class="btn btn-secondary"></button>
-              </div>
-          </div>
-      </div>
+      function handleCopyWeek() {
+        log('Interactions', 'Copy week button clicked');
+        showConfirmModal({
+          title: UI_TEXT.COPY_WEEK_CONFIRM_TITLE,
+          message: UI_TEXT.COPY_WEEK_CONFIRM_MSG,
+          onConfirm: () => { copyPreviousWeek(); showNotification(UI_TEXT.COPY_WEEK_SUCCESS, 'success'); },
+          type: 'primary'
+        });
+      }
+
+      function handleResetWeek() {
+        log('Interactions', 'Reset week button clicked');
+        showConfirmModal({
+          title: UI_TEXT.RESET_WEEK_CONFIRM_TITLE,
+          message: UI_TEXT.RESET_WEEK_CONFIRM_MSG,
+          onConfirm: () => { resetCurrentWeek(); showNotification(UI_TEXT.RESET_WEEK_SUCCESS, 'info'); },
+          type: 'danger'
+        });
+      }
+
+      export function initializePlannerListeners() {
+        document.getElementById('calendar-grid').addEventListener('click', handleCalendarClick);
+        document.getElementById('log-view').addEventListener('click', handleLogViewClick);
+        document.getElementById('recipes-page').addEventListener('click', handleRecipeClick);
+        document.getElementById('prev-week-btn').addEventListener('click', () => navigateWeek(-1));
+        document.getElementById('next-week-btn').addEventListener('click', () => navigateWeek(1));
+        document.getElementById('copy-week-btn').addEventListener('click', handleCopyWeek);
+        document.getElementById('reset-btn').addEventListener('click', handleResetWeek);
+
+        const todayWidget = document.getElementById('today-widget');
+        if(todayWidget) {
+          todayWidget.addEventListener('click', handleCalendarClick); // Re-use handler for start button
+        }
+      }
+commands:
+  - "echo '✅ Bug fix applicato. L''errore di import è stato risolto.'"

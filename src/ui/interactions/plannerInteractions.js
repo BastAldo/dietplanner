@@ -1,9 +1,8 @@
 import {
-  resetCurrentWeek, setPlannerConfig, setConfigUrl, navigateWeek, setView,
+  resetCurrentWeek, navigateWeek, setView,
   copyPreviousWeek, getState, deleteWorkoutFromHistory, getExerciseFromHistory
 } from '../../core/state.js';
 import { initializeWorkout } from '../../core/trainer.js';
-import { fetchAndParseConfig } from '../../api/configService.js';
 import { showNotification } from '../notifications.js';
 import { openDayEditorModal, showConfirmModal, showRecipeModal, openExerciseEditorModal } from '../modals.js';
 import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
