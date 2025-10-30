@@ -1,6 +1,5 @@
-import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
+import { loadStateFromLocalStorage, getState, setPlannerConfig, setContentHubUrl, toggleDebugMode } from './core/state.js';
 import { renderApp, populateInitialText } from './ui/renderer.js';
-import { showConfirmModal } from './ui/modals.js';
 import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
 import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
 import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
@@ -11,25 +10,6 @@ import { initializeChartsListeners } from './ui/interactions/chartsInteractions.
 import { initializeLibraryListeners } from './ui/interactions/libraryInteractions.js';
 import { initializeExploreListeners } from './ui/interactions/exploreInteractions.js';
 import { loadViews } from './ui/viewLoader.js';
-import { DEFAULT_CONFIG_URL } from './utils/constants.js';
-import { UI_TEXT } from './config/uiText.js';
-import { fetchAndParseConfig } from './api/configService.js';
-import { showNotification } from './ui/notifications.js';
-
-async function loadConfig(url) {
-  if (!url) {
-    setPlannerConfig({}, url);
-    return;
-  };
-  try {
-    const config = await fetchAndParseConfig(url);
-    setPlannerConfig(config, url);
-    showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-  } catch (error) {
-    showNotification(error.message, 'error');
-    setPlannerConfig({}, url);
-  }
-}
 
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
@@ -46,8 +26,8 @@ async function init() {
   document.addEventListener('stateChange', renderApp);
 
   loadStateFromLocalStorage();
-  let initialState = getState();
-  document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+  const initialState = getState();
+  document.getElementById('content-hub-url-input').value = initialState.contentHubUrl;
 
   populateInitialText();
 
@@ -64,30 +44,6 @@ async function init() {
   renderApp();
 
   window.toggleDebugMode = toggleDebugMode;
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const configUrlFromParam = urlParams.get('configUrl');
-
-  if (configUrlFromParam) {
-    const decodedUrl = decodeURIComponent(configUrlFromParam);
-    initialState = getState();
-    if (decodedUrl !== initialState.configUrl) {
-      showConfirmModal({
-        title: UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
-        message: UI_TEXT.LOAD_SHARED_CONFIG_MSG,
-        onConfirm: () => {
-          setConfigUrl(decodedUrl);
-          document.getElementById('config-url-input').value = decodedUrl;
-          loadConfig(decodedUrl);
-        },
-        type: 'primary'
-      });
-    } else {
-      await loadConfig(initialState.configUrl);
-    }
-  } else {
-    await loadConfig(initialState.configUrl);
-  }
 
   registerServiceWorker();
 }

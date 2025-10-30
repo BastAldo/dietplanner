@@ -1,243 +1,23 @@
-commit_message: "feat(explore): Implement dynamic search, filter, and sort"
+commit_message: "refactor(core): Shift from personal configUrl to dynamic contentHubUrl"
 rationale: |
-  This commit completely revamps the "Explore" section to be a dynamic, performant, and feature-rich content discovery platform, directly addressing the approved architectural plan.
+  This commit marks a significant architectural evolution for the application, moving away from a personal, user-supplied configuration file (`configUrl`) towards a dynamic content discovery model centered around a configurable content hub (`contentHubUrl`).
 
-  **1. Dynamic Content Loading from `biohackerhub`:**
-  - The "Explore" page now fetches its content directly from the `itbiohackerhub-max/biohackerhub` repository.
-  - It uses a "fetch-once, cache-many" strategy: on first load, it fetches the `package-index.json` and then all individual `manifest.json` files, caching them in the application's state (`state.ui.explorePackages`). This makes subsequent filtering, searching, and sorting operations instantaneous.
-  - The static `public/explore.json` has been removed as it is now obsolete.
+  **1. Architectural Shift:**
+  - The concept of a personal `configUrl` loaded on startup has been entirely removed from `src/main.js` and `src/core/state.js`. The application now starts with a clean slate, encouraging users to populate their library from the "Explore" section.
+  - The state key `configUrl` has been renamed to `contentHubUrl` to accurately reflect its new purpose: defining the base URL for the content discovery hub.
+  - The default value for `contentHubUrl` is now set to the official BiohackerHub repository (`https://itbiohackerhub-max.github.io/BiohackerHub/`), making the application useful out-of-the-box.
 
-  **2. Feature Implementation: Search, Filter & Sort:**
-  - **Search Bar**: A text input has been added to `templates/explore.html` allowing users to perform a free-text search on package titles and descriptions.
-  - **Dynamic Tag Filters**: The UI now automatically generates filter buttons from the `tags` found in the cached package manifests. This ensures filters are always relevant to the available content.
-  - **Sorting**: A dropdown menu allows users to sort packages by relevance (default), name (ascending/descending), or author.
+  **2. Dynamic "Explore" Section:**
+  - The `renderExplorePage` function in `src/ui/pageRenderers.js` no longer relies on a hardcoded constant. It now dynamically fetches the `package-index.json` and manifest files from the `contentHubUrl` present in the application state.
+  - This makes the "Explore" section fully dynamic. Changing the `contentHubUrl` in the profile will now point the entire discovery feature to a new source.
 
-  **3. State Management & Interactions:**
-  - The global state in `src/core/state.js` has been extended to manage the UI state for the Explore page (`explorePackages`, `exploreSearchTerm`, `exploreActiveTags`, `exploreSortOrder`).
-  - A new dedicated module, `src/ui/interactions/exploreInteractions.js`, has been created to handle all user input on this page, updating the state and triggering re-renders.
+  **3. UI and Interaction Refactoring:**
+  - The "Data Management" section in the Profile view (`templates/profile.html`) has been simplified. The input field now clearly refers to the "Content Hub URL".
+  - The logic in `src/ui/interactions/profileInteractions.js` has been updated. The "Load" button now updates the `contentHubUrl` in the state and clears the local package cache, forcing "Explore" to reload from the new source.
+  - The "Share Config" button, which was tied to the old personal `configUrl` concept, has been removed.
 
-  **4. Architectural Adherence:**
-  - The implementation follows the "KISS" principle and respects the existing architecture. All UI changes adhere to `docs/03_STYLE_GUIDE.md`.
-  - The new interaction module is integrated into the application's lifecycle via `main.js` and cached by the Service Worker for offline availability.
+  This refactoring fulfills the strategic goal of transforming HealtyPro into an open platform that consumes content from discoverable sources, while giving users the freedom to switch to alternative or forked content hubs in the future.
 patches:
-  - file: public/explore.json
-    content: ""
-  - file: src/config/uiText.js
-    content: |
-      const UI_TEXT_CONFIG = [
-        { id: 'MAIN_TITLE', text: 'HealtyPro' },
-        { id: 'NAV_PLANNER', text: 'Planner' },
-        { id: 'NAV_LIBRARY', text: 'Libreria' },
-        { id: 'NAV_PROGRESS', text: 'Biometria' },
-        { id: 'NAV_CHARTS', text: 'Grafici' },
-        { id: 'NAV_RECIPES', text: 'Ricette' },
-        { id: 'NAV_PROFILE', text: 'Profilo' },
-        { id: 'NAV_GOALS', text: 'Obiettivi' },
-        { id: 'NAV_EXPLORE', text: 'Esplora' },
-        { id: 'LOAD_BUTTON', text: 'Carica' },
-        { id: 'COPY_WEEK_BTN', text: 'Copia Settimana' },
-        { id: 'RESET_BUTTON', text: 'Pulisci Settimana' },
-        { id: 'BACKUP_BTN', text: 'Salva Backup' },
-        { id: 'RESTORE_BTN', text: 'Ripristina Backup' },
-        { id: 'CONFIG_URL_EMPTY_ERROR', text: 'Per favore, inserisci un URL.' },
-        { id: 'CONFIG_LOAD_SUCCESS', text: 'Configurazione caricata!' },
-        { id: 'COPY_WEEK_CONFIRM_TITLE', text: 'Copia Settimana' },
-        { id: 'COPY_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere il piano di questa settimana con quello della settimana precedente?' },
-        { id: 'COPY_WEEK_SUCCESS', text: 'Piano settimanale copiato!' },
-        { id: 'RESET_WEEK_CONFIRM_TITLE', text: 'Pulisci Settimana' },
-        { id: 'RESET_WEEK_CONFIRM_MSG', text: 'Sei sicuro di voler cancellare tutti i pasti e gli allenamenti da questa settimana? L\'azione è irreversibile.' },
-        { id: 'RESET_WEEK_SUCCESS', text: 'Settimana pulita!' },
-        { id: 'SHARE_NO_URL_INFO', text: 'Nessun URL di configurazione da condividere.' },
-        { id: 'SHARE_SUCCESS', text: 'Link di condivisione copiato!' },
-        { id: 'SHARE_ERROR', text: 'Impossibile copiare il link.' },
-        { id: 'BACKUP_SHARE_TITLE', text: 'Backup Dati HealtyPro' },
-        { id: 'BACKUP_SUCCESS', text: 'Backup salvato con successo!' },
-        { id: 'RESTORE_CONFIRM_TITLE', text: 'Ripristina Backup' },
-        { id: 'RESTORE_CONFIRM_MSG', text: 'Sei sicuro di voler sovrascrivere la configurazione e il piano attuali? L\'azione è irreversibile.' },
-        { id: 'RESTORE_SUCCESS', text: 'Backup ripristinato con successo!' },
-        { id: 'RESTORE_INVALID_FILE', text: 'File di backup non valido o corrotto.' },
-        { id: 'LOG_VIEW_EMPTY', text: 'Nessun pasto pianificato per questa settimana.' },
-        { id: 'LOG_VIEW_WORKOUT_TITLE', text: 'Allenamento del Giorno' },
-        { id: 'CONFIRM_MODAL_CONFIRM_BTN', text: 'Conferma' },
-        { id: 'CONFIRM_MODAL_CANCEL_BTN', text: 'Annulla' },
-        { id: 'LOAD_SHARED_CONFIG_TITLE', text: 'Caricare Nuova Configurazione?' },
-        { id: 'LOAD_SHARED_CONFIG_MSG', text: 'Hai aperto un link di condivisione. Vuoi caricare questa nuova configurazione? La libreria di pasti attuale verrà sostituita.' },
-        { id: 'BIOMETRICS_FORM_TITLE', text: 'Inserisci Misurazione' },
-        { id: 'BIOMETRICS_HISTORY_TITLE', text: 'Storico Misurazioni' },
-        { id: 'BIOMETRICS_SAVE_BTN', text: 'Salva Dati' },
-        { id: 'BIOMETRICS_CLEAR_BTN', text: 'Annulla' },
-        { id: 'BIOMETRICS_SAVE_SUCCESS', text: 'Dati biometrici salvati!' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_TITLE', text: 'Elimina Misurazione' },
-        { id: 'BIOMETRICS_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare i dati di questa data? L\'azione è irreversibile.' },
-        { id: 'BIOMETRICS_DELETE_SUCCESS', text: 'Misurazione eliminata.' },
-        { id: 'DELETE_WORKOUT_CONFIRM_TITLE', text: 'Elimina Allenamento' },
-        { id: 'DELETE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare questo allenamento dallo storico? L\'azione è irreversibile.' },
-        { id: 'DELETE_WORKOUT_SUCCESS', text: 'Allenamento eliminato dallo storico.' },
-        { id: 'BIOMETRICS_BMR_PLACEHOLDER', text: 'Completa il profilo per il calcolo' },
-        { id: 'BIOMETRICS_EMPTY_LIST', text: 'Nessuna misurazione ancora registrata.' },
-        { id: 'PROFILE_FORM_TITLE', text: 'Profilo Utente' },
-        { id: 'PROFILE_SAVE_BTN', text: 'Salva Profilo' },
-        { id: 'PROFILE_SAVE_SUCCESS', text: 'Profilo salvato con successo!' },
-        { id: 'INFO_MODAL_TITLE', text: 'Formato `config.json` Richiesto' },
-        { id: 'INFO_MODAL_DESC', text: 'Includi `calories_min` per ogni pasto. `calories_max` è opzionale.' },
-        { id: 'SELECT_MEAL_TITLE', text: 'Scegli' },
-        { id: 'NO_MEALS_AVAILABLE', text: 'Nessun pasto di questo tipo disponibile.' },
-        { id: 'KCAL_LABEL', text: 'Kcal' },
-        { id: 'EDITOR_MODAL_TITLE_PREFIX', text: 'Editor:' },
-        { id: 'ADD_MEAL_BTN', text: 'Aggiungi Pasto' },
-        { id: 'ADD_EXERCISE_BTN', text: 'Aggiungi Esercizio' },
-        { id: 'LOG_ACTIVITY_BTN', text: 'Log Attività' },
-        { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
-        { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
-        { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
-        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
-        { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
-        { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
-        { id: 'EXERCISE_WEIGHT_LABEL', text: 'Peso (kg)' },
-        { id: 'SELECT_EXERCISE_TITLE', text: 'Scegli Esercizio' },
-        { id: 'NO_WORKOUTS_AVAILABLE', text: 'Nessun esercizio disponibile. Controlla il file esercizi.json.' },
-        { id: 'RECIPE_BUTTON_TITLE', text: 'Mostra ricetta' },
-        { id: 'RECIPE_MODAL_LOADING', text: 'Caricamento ricetta...' },
-        { id: 'RECIPE_MODAL_LOAD_ERROR', text: 'Impossibile caricare la ricetta. Controlla l\'URL e la connessione.' },
-        { id: 'RECIPE_LOAD_FAIL_MSG', text: 'Caricamento ricetta fallito' },
-        { id: 'INFO_MODAL_EXAMPLE_JSON', text: '{\n  "rules": [],\n  "meals": []\n}' },
-        { id: 'CHARTS_TITLE', text: 'Dashboard Grafici' },
-        { id: 'PLANNER_CHART_TITLE', text: 'Riepilogo Calorie Settimanali' },
-        { id: 'BIOMETRICS_CHART_TITLE', text: 'Andamento Dati Biometrici' },
-        { id: 'CHARTS_CORRELATION_TITLE', text: 'Correlazione Peso e Calorie' },
-        { id: 'VELOCITY_CHART_TITLE', text: 'Andamento Variazione Peso' },
-        { id: 'BIOMETRICS_CHART_EMPTY', text: 'Inserisci almeno due misurazioni per visualizzare il grafico.' },
-        { id: 'RECIPES_TITLE', text: 'Tutte le Ricette' },
-        { id: 'RECIPES_EMPTY', text: 'Nessuna ricetta disponibile. Carica una configurazione che includa pasti con `recipeId`.' },
-        { id: 'TRAINER_REST_LABEL', text: 'RECUPERO' },
-        { id: 'TRAINER_PAUSED_LABEL', text: 'PAUSA' },
-        { id: 'TRAINER_REP_LABEL', text: 'Rip.' },
-        { id: 'TRAINER_UPCOMING_LABEL', text: 'A seguire:' },
-        { id: 'API_FETCH_ERROR', text: 'Errore di rete caricando' },
-        { id: 'API_INVALID_JSON', text: 'Errore nel formato di un file di configurazione. Controlla la console se il debug è attivo.' },
-        { id: 'API_INVALID_MEALS_FILE', text: 'Il file dei pasti non è valido. Manca la chiave \'meals\' o non è un array.' },
-        { id: 'API_INVALID_INGREDIENTS_FILE', text: 'Il file degli ingredienti non è valido. Manca la chiave \'ingredienti\' o non è un array.' },
-        { id: 'API_EXERCISES_FILE_WARN', text: 'File esercizi.json non trovato o non valido. Continuo senza dati di allenamento.' },
-        { id: 'API_CONFIG_LOAD_FAIL', text: 'Impossibile caricare la configurazione completa. Controlla la console.' },
-        { id: 'CHART_KCAL_MIN_LABEL', text: 'Kcal Min' },
-        { id: 'CHART_KCAL_MAX_LABEL', text: 'Kcal Max' },
-        { id: 'CHART_KCAL_RANGE_LABEL', text: 'Kcal (Min-Max)' },
-        { id: 'CHART_BAR_VIEW_BTN', text: 'Barre' },
-        { id: 'CHART_LINE_VIEW_BTN', text: 'Linee' },
-        { id: 'BIOMETRICS_EDIT_BTN', text: 'Modifica' },
-        { id: 'BIOMETRICS_DELETE_BTN', text: 'Elimina' },
-        { id: 'BIOMETRICS_ACTIONS_TITLE', text: 'Azioni' },
-        { id: 'IMPORT_BIOMETRICS_BTN', text: 'Importa CSV' },
-        { id: 'IMPORT_SUCCESS', text: 'Dati importati con successo!' },
-        { id: 'IMPORT_CONFIRM_TITLE', text: 'Importa Dati Biometrici' },
-        { id: 'IMPORT_NO_NEW_DATA', text: 'Nessuna nuova misurazione trovata nel file.' },
-        { id: 'IMPORT_ERROR_FILE', text: 'Errore durante la lettura del file.' },
-        { id: 'IMPORT_ERROR_FORMAT', text: 'Formato del file CSV non riconosciuto.' },
-        { id: 'PLANNER_EXERCISES_SINGLE_LABEL', text: 'esercizio' },
-        { id: 'PLANNER_EXERCISES_MULTI_LABEL', text: 'esercizi' },
-        { id: 'TRAINER_SET_LABEL', text: 'Serie' },
-        { id: 'TRAINER_OF_SETS_LABEL', text: 'di' },
-        { id: 'TRAINER_REPS_LABEL', text: 'Ripetizioni' },
-        { id: 'TRAINER_MANUAL_REP_BTN_LABEL', text: 'REGISTRA REP' },
-        { id: 'TRAINER_MANUAL_REPS_LABEL', text: 'Ripetizioni' },
-        { id: 'DEBRIEFING_TITLE', text: 'Riepilogo Allenamento' },
-        { id: 'DEBRIEFING_BACK_BTN', text: 'Torna al Planner' },
-        { id: 'DEBRIEFING_NO_SUMMARY', text: 'Nessun riepilogo dell\'allenamento disponibile.' },
-        { id: 'DEBRIEFING_COMPLETED', text: 'Completato' },
-        { id: 'DEBRIEFING_INCOMPLETE', text: 'Incompleto' },
-        { id: 'DEBRIEFING_SETS_COMPLETED', text: 'Serie completate' },
-        { id: 'DEBRIEFING_TONNAGE', text: 'Tonnellaggio' },
-        { id: 'DEBRIEFING_STATS_TITLE', text: 'Statistiche Finali' },
-        { id: 'DEBRIEFING_TOTAL_TIME', text: 'Tempo Totale' },
-        { id: 'DEBRIEFING_EXERCISE_TIME', text: 'Tempo di Lavoro' },
-        { id: 'DEBRIEFING_REST_TIME', text: 'Tempo di Recupero' },
-        { id: 'DEBRIEFING_CALORIES_BURNED', text: 'Calorie Bruciate' },
-        { id: 'DEBRIEFING_SET_LABEL', text: 'Serie' },
-        { id: 'DEBRIEFING_RPE_LABEL', text: 'Sforzo Percepito (RPE 1-10)' },
-        { id: 'DEBRIEFING_SAVE_RPE_BTN', text: 'Salva RPE' },
-        { id: 'DEBRIEFING_SUMMARY_AUDIO_BTN', text: 'Ascolta Riepilogo' },
-        { id: 'PLANNER_SUMMARY_TITLE', text: 'Riepilogo Settimanale' },
-        { id: 'PLANNER_SUMMARY_AVG_KCAL', text: 'Media Kcal/giorno' },
-        { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti' },
-        { id: 'PLANNER_SUMMARY_CALORIES_BURNED', text: 'Kcal Bruciate' },
-        { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Kg mancanti' },
-        { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
-        { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
-        { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
-        { id: 'MANUAL_WORKOUT_DISTANCE_LABEL', text: 'Distanza (km)' },
-        { id: 'MANUAL_WORKOUT_FC_AVG_LABEL', text: 'FC Media (bpm)' },
-        { id: 'MANUAL_WORKOUT_FC_MAX_LABEL', text: 'FC Max (bpm)' },
-        { id: 'MANUAL_WORKOUT_NOTES_LABEL', text: 'Note' },
-        { id: 'MANUAL_WORKOUT_SAVE_BTN', text: 'Salva Attività' },
-        { id: 'LOG_VIEW_MANUAL_ACTIVITY_TITLE', text: 'Attività del Giorno' },
-        { id: 'GOALS_TITLE', text: 'Obiettivi Settimanali' },
-        { id: 'GOALS_SAVE_BTN', text: 'Salva Obiettivi' },
-        { id: 'GOALS_SAVE_SUCCESS', text: 'Obiettivi salvati!' },
-        { id: 'GOALS_EXPLANATION', text: 'Imposta i tuoi obiettivi settimanali per monitorare i progressi. Questi dati verranno visualizzati nel riepilogo del planner per tenerti motivato.' },
-        { id: 'GOALS_ACTIVITY_LEGEND', text: 'Attività Fisica' },
-        { id: 'GOALS_BIOMETRICS_LEGEND', text: 'Dati Biometrici' },
-        { id: 'GOAL_CALORIES_LABEL', text: 'Obiettivo Calorico Medio Giornaliero' },
-        { id: 'GOAL_WORKOUTS_LABEL', text: 'Obiettivo Allenamenti a Settimana' },
-        { id: 'GOAL_WEIGHT_LABEL', text: 'Obiettivo Peso (kg)' },
-        { id: 'WORKOUT_LOG_SAVE_SUCCESS', text: 'Allenamento aggiornato con successo!' },
-        { id: 'LOGGED_EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio Registrato' },
-        { id: 'LOGGED_EXERCISE_SET_LABEL', text: 'Set' },
-        { id: 'LOGGED_EXERCISE_REPS_LABEL', text: 'Reps' },
-        { id: 'LOGGED_EXERCISE_WEIGHT_LABEL', text: 'Peso' },
-        { id: 'LOGGED_EXERCISE_SAVE_BTN', text: 'Salva Modifiche Esercizio' },
-        { id: 'VOICE_GUIDE_WORKOUT_START', text: 'Allenamento iniziato' },
-        { id: 'VOICE_GUIDE_NOW_STARTING', text: 'Inizio con' },
-        { id: 'VOICE_GUIDE_NEXT_EXERCISE', text: 'Prossimo esercizio' },
-        { id: 'VOICE_GUIDE_REST_START', text: 'Recupero' },
-        { id: 'VOICE_GUIDE_SET_START', text: 'Inizio' },
-        { id: 'VOICE_GUIDE_PHASE_UP', text: 'su' },
-        { id: 'VOICE_GUIDE_PHASE_HOLD', text: 'tieni' },
-        { id: 'VOICE_GUIDE_PHASE_DOWN', text: 'giù' },
-        { id: 'VOICE_GUIDE_WORKOUT_COMPLETED', text: 'Allenamento completato' },
-        { id: 'TERMINATE_WORKOUT_CONFIRM_TITLE', text: 'Termina Allenamento' },
-        { id: 'TERMINATE_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler terminare l\'allenamento? I progressi verranno salvati.' },
-        { id: 'TERMINATE_WORKOUT_PROMPT_MSG', text: 'Vuoi salvare i progressi o scartare completamente questo allenamento?' },
-        { id: 'SAVE_AND_END_BTN', text: 'Salva e Termina' },
-        { id: 'DISCARD_WORKOUT_BTN', text: 'Scarta Allenamento' },
-        { id: 'DISCARD_WORKOUT_CONFIRM_TITLE', text: 'Scartare Allenamento?' },
-        { id: 'DISCARD_WORKOUT_CONFIRM_MSG', text: 'L\'allenamento non verrà salvato nello storico. Questa azione è irreversibile.' },
-        { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
-        { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' },
-        { id: 'INGREDIENT_NEW_TITLE', text: 'Nuovo Ingrediente' },
-        { id: 'INGREDIENT_EDIT_TITLE', text: 'Modifica Ingrediente' },
-        { id: 'INGREDIENT_SAVE_BTN', text: 'Salva Ingrediente' },
-        { id: 'INGREDIENT_CREATE_SUCCESS', text: 'Ingrediente creato con successo!' },
-        { id: 'INGREDIENT_UPDATE_SUCCESS', text: 'Ingrediente aggiornato con successo!' },
-        { id: 'INGREDIENT_DELETE_SUCCESS', text: 'Ingrediente eliminato.' },
-        { id: 'INGREDIENT_ID_CONFLICT', text: 'Esiste già un ingrediente con questo ID.' },
-        { id: 'INGREDIENT_DELETE_CONFIRM_TITLE', text: 'Elimina Ingrediente' },
-        { id: 'INGREDIENT_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare l\'ingrediente' },
-        { id: 'MEAL_NEW_TITLE', text: 'Nuovo Pasto' },
-        { id: 'MEAL_EDIT_TITLE', text: 'Modifica Pasto' },
-        { id: 'MEAL_SAVE_BTN', text: 'Salva Pasto' },
-        { id: 'MEAL_CREATE_SUCCESS', text: 'Pasto creato con successo!' },
-        { id: 'MEAL_UPDATE_SUCCESS', text: 'Pasto aggiornato con successo!' },
-        { id: 'MEAL_DELETE_SUCCESS', text: 'Pasto eliminato.' },
-        { id: 'MEAL_ID_CONFLICT', text: 'Esiste già un pasto con questo ID.' },
-        { id: 'MEAL_DELETE_CONFIRM_TITLE', text: 'Elimina Pasto' },
-        { id: 'MEAL_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare il pasto' },
-        { id: 'EXPLORE_TITLE', text: 'Esplora Nuovi Contenuti' },
-        { id: 'EXPLORE_ADD_TO_LIBRARY', text: 'Aggiungi alla Libreria' },
-        { id: 'EXPLORE_PACKAGE_LOAD_SUCCESS', text: 'Pacchetto aggiunto alla tua libreria!' },
-        { id: 'EXPLORE_PACKAGE_LOAD_FAIL', text: 'Errore durante l\'aggiunta del pacchetto.' },
-        { id: 'EXPLORE_SEARCH_PLACEHOLDER', text: 'Cerca per nome o descrizione...' },
-        { id: 'EXPLORE_SORT_LABEL', text: 'Ordina per:' },
-        { id: 'EXPLORE_SORT_DEFAULT', text: 'Rilevanza' },
-        { id: 'EXPLORE_SORT_NAME_ASC', text: 'Nome (A-Z)' },
-        { id: 'EXPLORE_SORT_NAME_DESC', text: 'Nome (Z-A)' },
-        { id: 'EXPLORE_SORT_AUTHOR', text: 'Autore' },
-        { id: 'EXPLORE_FILTER_ALL', text: 'Tutti' }
-      ];
-
-      export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
-        acc[id] = text;
-        return acc;
-      }, {});
   - file: src/core/state.js
     content: |
       import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS } from '../utils/constants.js';
@@ -256,7 +36,7 @@ patches:
         biometricData: [],
         userProfile: {},
         userGoals: {},
-        configUrl: '',
+        contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
         recipeBaseUrl: '',
         focusedDate: new Date(),
         debugMode: false,
@@ -327,45 +107,32 @@ patches:
       }
 
       export function setPlannerConfig(config, url) {
-        log('State', 'Setting new planner config', { url });
+        log('State', 'Merging new planner config', { url });
         state.rules = config.rules || [];
         const ingredients = config.ingredienti || [];
         const meals = config.meals || [];
         state.masterWorkoutList = config.esercizi || [];
 
-        // Add new ingredients from config if they don't exist
         ingredients.forEach(ing => {
           if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
             state.masterIngredientList.push(ing);
           }
         });
 
-        // Add new meals from config if they don't exist
         meals.forEach(meal => {
           if (!state.masterMealList.some(existing => existing.id === meal.id)) {
             state.masterMealList.push(meal);
           }
         });
 
-        // Recalculate calories for all meals, as ingredients might have been updated
         state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
         saveStateToLocalStorage();
-
-        // Deriva e imposta la recipeBaseUrl only if a URL is provided (not for merges)
-        if (url) {
-            const baseUrl = new URL(url);
-            const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-            state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-        } else if (!state.recipeBaseUrl) {
-            state.recipeBaseUrl = '';
-        }
-
         notify();
       }
 
-      export function setConfigUrl(url) {
-        log('State', 'Setting new config URL', { url });
-        state.configUrl = url;
+      export function setContentHubUrl(url) {
+        log('State', 'Setting new Content Hub URL', { url });
+        state.contentHubUrl = url;
         localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
         notify();
       }
@@ -397,7 +164,7 @@ patches:
         if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
         if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
         if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.configUrl = url; }
+        if (url) { state.contentHubUrl = url; }
         if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
         if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
         if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
@@ -410,14 +177,14 @@ patches:
         state.weeklyPlan = backupData.weeklyPlan || {};
         state.weeklyWorkouts = backupData.weeklyWorkouts || {};
         state.workoutHistory = backupData.workoutHistory || {};
-        state.configUrl = backupData.configUrl || '';
+        state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
         state.biometricData = backupData.biometricData || [];
         state.userProfile = backupData.userProfile || {};
         state.userGoals = backupData.userGoals || {};
         state.masterIngredientList = backupData.masterIngredientList || [];
         state.masterMealList = backupData.masterMealList || [];
         saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
         notify();
       }
 
@@ -590,7 +357,6 @@ patches:
             date.setDate(date.getDate() + i);
             const isoDate = toISODateString(date);
 
-            // Clear meals for the day
             MEAL_TYPES.forEach(mealType => {
                 const slotId = `${isoDate}-${mealType}`;
                 if (state.weeklyPlan[slotId]) {
@@ -598,13 +364,11 @@ patches:
                 }
             });
 
-            // Clear planned workouts for the day
             const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
             if (state.weeklyWorkouts[workoutSlotId]) {
                 delete state.weeklyWorkouts[workoutSlotId];
             }
 
-            // Clear workout history for the day
             if (state.workoutHistory[isoDate]) {
                 delete state.workoutHistory[isoDate];
             }
@@ -701,14 +465,11 @@ patches:
         const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
         if (exerciseIndex === -1) return;
 
-        // Update sets data for the specific exercise
         workout.exercises[exerciseIndex].setsData = newSetsData;
 
-        // Recalculate tonnage for the exercise
         const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
         workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
 
-        // Recalculate total tonnage for the entire workout
         workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
 
         saveStateToLocalStorage();
@@ -757,9 +518,8 @@ patches:
       }
   - file: src/main.js
     content: |
-      import { loadStateFromLocalStorage, getState, setPlannerConfig, setConfigUrl, toggleDebugMode } from './core/state.js';
+      import { loadStateFromLocalStorage, getState, setPlannerConfig, setContentHubUrl, toggleDebugMode } from './core/state.js';
       import { renderApp, populateInitialText } from './ui/renderer.js';
-      import { showConfirmModal } from './ui/modals.js';
       import { initializeGlobalListeners } from './ui/interactions/globalInteractions.js';
       import { initializePlannerListeners } from './ui/interactions/plannerInteractions.js';
       import { initializeProgressListeners } from './ui/interactions/progressInteractions.js';
@@ -770,25 +530,6 @@ patches:
       import { initializeLibraryListeners } from './ui/interactions/libraryInteractions.js';
       import { initializeExploreListeners } from './ui/interactions/exploreInteractions.js';
       import { loadViews } from './ui/viewLoader.js';
-      import { DEFAULT_CONFIG_URL } from './utils/constants.js';
-      import { UI_TEXT } from './config/uiText.js';
-      import { fetchAndParseConfig } from './api/configService.js';
-      import { showNotification } from './ui/notifications.js';
-
-      async function loadConfig(url) {
-        if (!url) {
-          setPlannerConfig({}, url);
-          return;
-        };
-        try {
-          const config = await fetchAndParseConfig(url);
-          setPlannerConfig(config, url);
-          showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-        } catch (error) {
-          showNotification(error.message, 'error');
-          setPlannerConfig({}, url);
-        }
-      }
 
       function registerServiceWorker() {
         if ('serviceWorker' in navigator) {
@@ -805,8 +546,8 @@ patches:
         document.addEventListener('stateChange', renderApp);
 
         loadStateFromLocalStorage();
-        let initialState = getState();
-        document.getElementById('config-url-input').value = initialState.configUrl || DEFAULT_CONFIG_URL;
+        const initialState = getState();
+        document.getElementById('content-hub-url-input').value = initialState.contentHubUrl;
 
         populateInitialText();
 
@@ -824,356 +565,148 @@ patches:
 
         window.toggleDebugMode = toggleDebugMode;
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const configUrlFromParam = urlParams.get('configUrl');
-
-        if (configUrlFromParam) {
-          const decodedUrl = decodeURIComponent(configUrlFromParam);
-          initialState = getState();
-          if (decodedUrl !== initialState.configUrl) {
-            showConfirmModal({
-              title: UI_TEXT.LOAD_SHARED_CONFIG_TITLE,
-              message: UI_TEXT.LOAD_SHARED_CONFIG_MSG,
-              onConfirm: () => {
-                setConfigUrl(decodedUrl);
-                document.getElementById('config-url-input').value = decodedUrl;
-                loadConfig(decodedUrl);
-              },
-              type: 'primary'
-            });
-          } else {
-            await loadConfig(initialState.configUrl);
-          }
-        } else {
-          await loadConfig(initialState.configUrl);
-        }
-
         registerServiceWorker();
       }
 
       document.addEventListener('DOMContentLoaded', init);
-  - file: src/ui/interactions/exploreInteractions.js
+  - file: src/ui/interactions/profileInteractions.js
     content: |
-      import { getState, setUiState } from '../../core/state.js';
+      import { saveUserProfile, setContentHubUrl, setAppState, getState, setUiState } from '../../core/state.js';
+      import { showNotification } from '../notifications.js';
+      import { UI_TEXT } from '../../config/uiText.js';
       import { log } from '../../utils/logger.js';
+      import { PROFILE_FIELDS } from '../../config/forms.js';
+      import { showConfirmModal } from '../modals.js';
 
-      function handleSearchInput(e) {
-        const searchTerm = e.target.value;
+      function handleProfileForm(e) {
+        e.preventDefault();
+        log('Interactions', 'Profile form submitted');
+        const formData = new FormData(e.target);
+        const profile = {};
+
+        for (let [key, value] of formData.entries()) {
+          if (!key.startsWith('planner-pref-')) {
+            profile[key] = value;
+          }
+        }
+
+        const plannerPrefsField = PROFILE_FIELDS.find(f => f.id === 'plannerPrefs');
+        if (plannerPrefsField) {
+          plannerPrefsField.options.forEach(opt => {
+            profile[opt.id] = formData.has(opt.id);
+          });
+        }
+
+        saveUserProfile(profile);
+        showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
+      }
+
+      async function handleLoadContentHub() {
+        log('Interactions', 'Handling Content Hub load button click');
+        const url = document.getElementById('content-hub-url-input').value.trim();
+        if (!url) { showNotification('Per favore, inserisci un URL per l\'hub di contenuti.', 'error'); return; }
+
         const currentState = getState();
+        setContentHubUrl(url);
+
+        // Clear the cached packages to force a refetch from the new URL
         setUiState({
           ...currentState.ui,
           explore: {
             ...currentState.ui.explore,
-            searchTerm: searchTerm
+            packages: []
           }
         });
+
+        showNotification('Fonte contenuti aggiornata. La sezione Esplora si ricaricherà.', 'success');
       }
 
-      function handleSortChange(e) {
-        const sortOrder = e.target.value;
-        const currentState = getState();
-        setUiState({
-          ...currentState.ui,
-          explore: {
-            ...currentState.ui.explore,
-            sortOrder: sortOrder
+      function triggerDownload(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showNotification(UI_TEXT.BACKUP_SUCCESS, 'success');
+      }
+
+      async function handleSaveBackup() {
+        log('Interactions', 'Save backup button clicked');
+        const state = getState();
+        const backupData = {
+          contentHubUrl: state.contentHubUrl,
+          weeklyPlan: state.weeklyPlan,
+          weeklyWorkouts: state.weeklyWorkouts,
+          workoutHistory: state.workoutHistory,
+          biometricData: state.biometricData,
+          userProfile: state.userProfile,
+          userGoals: state.userGoals,
+          masterIngredientList: state.masterIngredientList,
+          masterMealList: state.masterMealList
+        };
+        const fileName = 'healtypro_backup.txt';
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.warn('Web Share API failed, falling back to download:', error);
+              triggerDownload(blob, fileName);
+            }
           }
-        });
-      }
-
-      function handleTagClick(e) {
-        const tag = e.target.dataset.tag;
-        if (!tag) return;
-
-        const currentState = getState();
-        const { activeTags } = currentState.ui.explore;
-        let newActiveTags;
-
-        if (tag === 'all') {
-          newActiveTags = [];
         } else {
-          if (activeTags.includes(tag)) {
-            newActiveTags = activeTags.filter(t => t !== tag);
-          } else {
-            newActiveTags = [...activeTags, tag];
-          }
+          triggerDownload(blob, fileName);
         }
+      }
 
-        setUiState({
-          ...currentState.ui,
-          explore: {
-            ...currentState.ui.explore,
-            activeTags: newActiveTags
+      function handleRestoreBackup() {
+          log('Interactions', 'Restore backup button clicked');
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = '.json,.txt,application/json,text/plain';
+          fileInput.onchange = e => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = readerEvent => {
+                  try {
+                      const content = readerEvent.target.result;
+                      const backupData = JSON.parse(content);
+                      if (typeof backupData.weeklyPlan === 'object') { // Basic validation
+                          showConfirmModal({
+                              title: UI_TEXT.RESTORE_CONFIRM_TITLE,
+                              message: UI_TEXT.RESTORE_CONFIRM_MSG,
+                              onConfirm: () => { setAppState(backupData); showNotification(UI_TEXT.RESTORE_SUCCESS, 'success'); },
+                              type: 'danger'
+                          });
+                      } else { throw new Error('Invalid structure'); }
+                  } catch (err) { showNotification(UI_TEXT.RESTORE_INVALID_FILE, 'error'); }
+              };
+              reader.readAsText(file);
+          };
+          fileInput.click();
+      }
+
+      export function initializeProfileListeners() {
+        const profilePage = document.getElementById('profile-page');
+        profilePage.addEventListener('submit', e => {
+          if (e.target.id === 'profile-form') {
+            handleProfileForm(e);
           }
         });
-      }
 
-      export function initializeExploreListeners() {
-        log('Interactions', 'Initializing explore listeners');
-        const explorePage = document.getElementById('explore-page');
-        if (explorePage) {
-          const searchInput = document.getElementById('explore-search-input');
-          searchInput.addEventListener('input', handleSearchInput);
-
-          const sortSelect = document.getElementById('explore-sort-select');
-          sortSelect.addEventListener('change', handleSortChange);
-
-          const tagsContainer = document.getElementById('explore-tags-container');
-          tagsContainer.addEventListener('click', handleTagClick);
-        }
-      }
-  - file: sw.js
-    content: |
-      const CACHE_NAME = 'healtypro-v20';
-      const APP_SHELL_FILES = [
-        '.',
-        'index.html',
-        'styles/base.css',
-        'styles/planner.css',
-        'styles/progress.css',
-        'styles/modals.css',
-        'styles/charts.css',
-        'styles/recipes.css',
-        'styles/trainer.css',
-        'styles/debriefing.css',
-        'styles/goals.css',
-        'styles/library.css',
-        'styles/explore.css',
-        'templates/planner.html',
-        'templates/progress.html',
-        'templates/profile.html',
-        'templates/charts.html',
-        'templates/recipes.html',
-        'templates/modals.html',
-        'templates/trainer.html',
-        'templates/debriefing.html',
-        'templates/goals.html',
-        'templates/library.html',
-        'templates/explore.html',
-        'src/main.js',
-        'src/api/configService.js',
-        'src/config/forms.js',
-        'src/config/uiText.js',
-        'src/core/state.js',
-        'src/core/calculations.js',
-        'src/core/validation.js',
-        'src/core/trainer.js',
-        'src/core/trainer/state.js',
-        'src/core/trainer/queueBuilder.js',
-        'src/core/trainer/machine.js',
-        'src/core/trainer/animation.js',
-        'src/ui/interactions/globalInteractions.js',
-        'src/ui/interactions/plannerInteractions.js',
-        'src/ui/interactions/profileInteractions.js',
-        'src/ui/interactions/progressInteractions.js',
-        'src/ui/interactions/debriefingInteractions.js',
-        'src/ui/interactions/goalsInteractions.js',
-        'src/ui/interactions/libraryInteractions.js',
-        'src/ui/interactions/exploreInteractions.js',
-        'src/ui/notifications.js',
-        'src/ui/renderer.js',
-        'src/ui/modals.js',
-        'src/ui/modals/confirmModal.js',
-        'src/ui/modals/dayEditorModal.js',
-        'src/ui/modals/exerciseEditorModal.js',
-        'src/ui/modals/recipeModal.js',
-        'src/ui/modals/selectionModal.js',
-        'src/ui/modals/workoutEditorModal.js',
-        'src/ui/modals/ingredientEditorModal.js',
-        'src/ui/modals/mealEditorModal.js',
-        'src/ui/plannerRenderer.js',
-        'src/ui/pageRenderers.js',
-        'src/ui/charts.js',
-        'src/ui/viewLoader.js',
-        'src/ui/icons.js',
-        'src/ui/trainerRenderer.js',
-        'src/ui/components/TrainerComponent.js',
-        'src/utils/constants.js',
-        'src/utils/formatters.js',
-        'src/utils/logger.js',
-        'src/utils/audioFeedback.js',
-        'icons/icon-192x192.png',
-        'icons/icon-512x512.png',
-        'screenshots/screen_desktop.png',
-        'screenshots/screen_mobile.png'
-      ];
-
-      self.addEventListener('install', (event) => {
-        event.waitUntil(
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              console.log('Opened cache and caching app shell');
-              return cache.addAll(APP_SHELL_FILES);
-            })
-        );
-      });
-
-      self.addEventListener('activate', (event) => {
-        event.waitUntil(
-          caches.keys().then((cacheNames) => {
-            return Promise.all(
-              cacheNames.filter((cacheName) => {
-                return cacheName !== CACHE_NAME;
-              }).map(cacheName => caches.delete(cacheName))
-            );
-          })
-        );
-      });
-
-      self.addEventListener('fetch', (event) => {
-        // Use a cache-first strategy for app shell files
-        if (APP_SHELL_FILES.some(file => event.request.url.endsWith(file))) {
-            event.respondWith(
-                caches.match(event.request).then(response => {
-                    return response || fetch(event.request);
-                })
-            );
-            return;
-        }
-
-        // Use a network-first strategy for external resources like manifests
-        event.respondWith(
-            fetch(event.request).catch(() => {
-                return caches.match(event.request);
-            })
-        );
-      });
-  - file: templates/explore.html
-    content: |
-      <div id="explore-page" class="page-view hidden">
-        <h3 id="explore-title"></h3>
-        <div class="explore-controls">
-          <input type="search" id="explore-search-input" class="library-search-bar" placeholder="Cerca...">
-          <div class="explore-filters">
-            <div class="form-group">
-                <label for="explore-sort-select" id="explore-sort-label"></label>
-                <select id="explore-sort-select">
-                    <option value="default" id="explore-sort-default"></option>
-                    <option value="name_asc" id="explore-sort-name-asc"></option>
-                    <option value="name_desc" id="explore-sort-name-desc"></option>
-                    <option value="author" id="explore-sort-author"></option>
-                </select>
-            </div>
-          </div>
-        </div>
-        <div id="explore-tags-container" class="explore-tags"></div>
-        <div id="explore-grid" class="explore-grid"></div>
-      </div>
-  - file: styles/explore.css
-    content: |
-      /* --- EXPLORE VIEW --- */
-      #explore-page > h3 {
-        color: var(--primary-color);
-        margin-bottom: 1.5rem;
-        text-align: center;
-      }
-
-      .explore-controls {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-        align-items: end;
-      }
-
-      .explore-controls .form-group {
-        display: flex;
-        flex-direction: column;
-      }
-
-      .explore-controls label {
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-      }
-
-      .explore-controls select {
-        padding: 0.75rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 1rem;
-        background-color: var(--card-color);
-        color: var(--text-color);
-      }
-
-      .explore-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 2rem;
-        justify-content: center;
-      }
-
-      .tag-filter-btn {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 0.9rem;
-        background-color: transparent;
-        color: var(--text-color-muted);
-      }
-
-      .tag-filter-btn.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-        border-color: var(--primary-color);
-        font-weight: bold;
-      }
-
-      .explore-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1.5rem;
-      }
-
-      .explore-card {
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        transition: transform 0.2s, box-shadow 0.2s;
-      }
-
-      .explore-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-      }
-
-      .explore-card-image {
-        width: 100%;
-        height: 180px;
-        object-fit: cover;
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      .explore-card-body {
-        padding: 1.5rem;
-        display: flex;
-        flex-direction: column;
-        flex-grow: 1;
-      }
-
-      .explore-card-body h3 {
-        color: var(--primary-color);
-        margin-bottom: 0.75rem;
-      }
-
-      .explore-card-body p {
-        font-size: 0.95rem;
-        color: var(--text-color-muted);
-        line-height: 1.6;
-        flex-grow: 1;
-        margin-bottom: 1.5rem;
-      }
-
-      @media (min-width: 768px) {
-        .explore-controls {
-          grid-template-columns: 2fr 1fr;
-        }
+        profilePage.addEventListener('click', e => {
+          if (e.target.id === 'load-content-hub-btn') handleLoadContentHub();
+          if (e.target.id === 'backup-btn') handleSaveBackup();
+          if (e.target.id === 'restore-btn') handleRestoreBackup();
+          if (e.target.closest('#info-icon')) document.getElementById('info-modal').classList.remove('hidden');
+        });
       }
   - file: src/ui/pageRenderers.js
     content: |
@@ -1186,8 +719,6 @@ patches:
       import { fetchAndMergePackage } from '../api/configService.js';
       import { log } from '../utils/logger.js';
       import { getState, setUiState } from '../core/state.js';
-
-      const BIOHACKER_HUB_BASE_URL = 'https://itbiohackerhub-max.github.io/biohackerhub/';
 
       async function fetchJson(url) {
         const response = await fetch(url);
@@ -1292,7 +823,6 @@ patches:
         form.innerHTML = `${formHTML}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
       }
 
-
       export function renderGoalsPage(state) {
           const form = document.getElementById('goals-form');
           document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
@@ -1354,162 +884,69 @@ patches:
         document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
         document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
 
-        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-                <span class="stat-value">${summary.totalCaloriesBurned}</span>
-            </div>
-        ` : '';
+        const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `<div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span><span class="stat-value">${summary.totalCaloriesBurned}</span></div>` : '';
+        const tonnageHTML = summary.totalTonnage > 0 ? `<div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span><span class="stat-value">${summary.totalTonnage} kg</span></div>` : '';
 
-        const tonnageHTML = summary.totalTonnage > 0 ? `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-                <span class="stat-value">${summary.totalTonnage} kg</span>
-            </div>
-        ` : '';
-
-        const statsHTML = `
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-                <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-            </div>
+        statsContainer.innerHTML = `
+            <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span><span class="stat-value">${formatDuration(summary.totalTime)}</span></div>
+            <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span><span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span></div>
+            <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span><span class="stat-value">${formatDuration(summary.totalRestTime)}</span></div>
             ${caloriesBurnedHTML}
             ${tonnageHTML}
         `;
-        statsContainer.innerHTML = statsHTML;
 
-        const summaryHTML = summary.exercises.map(exercise => {
+        summaryContainer.innerHTML = summary.exercises.map(exercise => {
             const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-            const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-                <div class="set-detail-item">
-                    <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-                    <span>${getSetDetails(setData)}</span>
-                </div>
-            `).join('');
-
             return `
                 <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-                    <div class="debriefing-card-header">
-                        <h4>${exercise.name}</h4>
-                        <div class="debriefing-status">
-                            ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                        </div>
-                    </div>
+                    <div class="debriefing-card-header"><h4>${exercise.name}</h4><div class="debriefing-status">${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}</div></div>
                     <div class="debriefing-card-body">
                       <div class="exercise-stats">
                         <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
                         <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
                       </div>
-                      <div class="sets-details-container">
-                          ${setsDetailsHTML}
-                      </div>
+                      <div class="sets-details-container">${exercise.setsData.map((setData, i) => `<div class="set-detail-item"><span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span><span>${getSetDetails(setData)}</span></div>`).join('')}</div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }).join('');
-
-        summaryContainer.innerHTML = summaryHTML;
       }
 
       export function renderRecipesPage(state) {
         const recipesList = document.getElementById('recipes-list');
         const recipes = state.masterMealList.filter(meal => meal.recipeId);
-
         if (!recipes || recipes.length === 0) {
             recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
             return;
         }
-
-        let html = recipes.map(recipe => {
+        recipesList.innerHTML = recipes.map(recipe => {
             const ingredientsHtml = formatIngredientsSummary(recipe);
-
-            return `
-                <div class="recipe-list-item" data-meal-id="${recipe.id}">
-                    <h4>${recipe.nomePasto}</h4>
-                    <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-                    ${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
-                </div>
-            `;
+            return `<div class="recipe-list-item" data-meal-id="${recipe.id}"><h4>${recipe.nomePasto}</h4><p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}</div>`;
         }).join('');
-
-        recipesList.innerHTML = html;
       }
 
       export function renderLibraryPage(state) {
         const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
-
-        // Update search input
         const searchInput = document.getElementById('library-search-input');
         searchInput.value = librarySearchTerm;
         searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
-
-        // Update active tab
-        document.querySelectorAll('#library-page .btn-view').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.view === activeLibraryTab);
-        });
-
-        // Show/hide content panels
-        document.querySelectorAll('.library-content').forEach(panel => {
-          panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab));
-        });
-
+        document.querySelectorAll('#library-page .btn-view').forEach(btn => btn.classList.toggle('active', btn.dataset.view === activeLibraryTab));
+        document.querySelectorAll('.library-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab)));
         const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
 
-        // Filter and render ingredients
         const ingredientList = document.getElementById('ingredient-list');
-        const filteredIngredients = state.masterIngredientList.filter(ing =>
-          ing.nome.toLowerCase().includes(lowerCaseSearchTerm)
-        );
-
+        const filteredIngredients = state.masterIngredientList.filter(ing => ing.nome.toLowerCase().includes(lowerCaseSearchTerm));
         if (filteredIngredients.length > 0) {
-          ingredientList.innerHTML = filteredIngredients.map(ing => `
-            <div class="library-item" data-id="${ing.id}">
-              <div class="library-item-info">
-                <span class="library-item-info__name">${ing.nome}</span>
-                <span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span>
-              </div>
-              <div class="library-item-actions">
-                <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-                <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-              </div>
-            </div>
-          `).join('');
+          ingredientList.innerHTML = filteredIngredients.map(ing => `<div class="library-item" data-id="${ing.id}"><div class="library-item-info"><span class="library-item-info__name">${ing.nome}</span><span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`).join('');
         } else {
           ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
         }
 
-        // Filter and render meals
         const mealList = document.getElementById('meal-list');
-        const filteredMeals = state.masterMealList.filter(meal =>
-          meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm)
-        );
-
+        const filteredMeals = state.masterMealList.filter(meal => meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm));
         if (filteredMeals.length > 0) {
           mealList.innerHTML = filteredMeals.map(meal => {
-            const calorieText = (meal.calories_min && meal.calories_max)
-              ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`)
-              : 'Calorie non calcolate';
-
-            return `
-              <div class="library-item" data-id="${meal.id}">
-                <div class="library-item-info">
-                  <span class="library-item-info__name">${meal.nomePasto}</span>
-                  <span class="library-item-info__details">${calorieText}</span>
-                </div>
-                <div class="library-item-actions">
-                  <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-                  <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-                </div>
-              </div>
-            `;
+            const calorieText = (meal.calories_min && meal.calories_max) ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`) : 'Calorie non calcolate';
+            return `<div class="library-item" data-id="${meal.id}"><div class="library-item-info"><span class="library-item-info__name">${meal.nomePasto}</span><span class="library-item-info__details">${calorieText}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`;
           }).join('');
         } else {
           mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
@@ -1517,7 +954,7 @@ patches:
       }
 
       async function cacheAllPackages() {
-        log('Renderer', 'Caching all packages from BiohackerHub');
+        log('Renderer', 'Caching all packages from Content Hub');
         const state = getState();
         if (state.ui.explore.packages.length > 0) {
           log('Renderer', 'Packages already cached.');
@@ -1525,17 +962,17 @@ patches:
         }
 
         try {
-          const indexUrl = `${BIOHACKER_HUB_BASE_URL}package-index.json`;
+          const indexUrl = new URL('package-index.json', state.contentHubUrl).href;
           const packageIndex = await fetchJson(indexUrl);
 
           const manifestPromises = Object.values(packageIndex).map(path =>
-            fetchJson(`${BIOHACKER_HUB_BASE_URL}${path}`)
+            fetchJson(new URL(path, state.contentHubUrl).href)
           );
           const manifests = await Promise.all(manifestPromises);
 
-          const catalogUrl = `${BIOHACKER_HUB_BASE_URL}explore.json`;
-          const catalog = await fetchJson(catalogUrl);
-          manifests.forEach(m => m.isFeatured = catalog.includes(m.id));
+          manifests.forEach(m => {
+            m.url = new URL(Object.values(packageIndex).find(p => p.includes(m.id)), state.contentHubUrl).href;
+          });
 
           setUiState({
             ...state.ui,
@@ -1545,7 +982,7 @@ patches:
 
         } catch (error) {
           log('Renderer', 'Error caching packages', error);
-          document.getElementById('explore-grid').innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti da esplorare.</p>`;
+          document.getElementById('explore-grid').innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti dall'hub.</p>`;
         }
       }
 
@@ -1566,40 +1003,26 @@ patches:
         if (packages.length === 0) {
           document.getElementById('explore-grid').innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
           await cacheAllPackages();
-          return; // The state change will trigger a re-render
+          return;
         }
 
-        // --- Filtering and Sorting ---
         const lowerCaseSearchTerm = searchTerm.toLowerCase();
         let filteredPackages = packages.filter(pkg =>
           (pkg.title.toLowerCase().includes(lowerCaseSearchTerm) || pkg.description.toLowerCase().includes(lowerCaseSearchTerm)) &&
-          (activeTags.length === 0 || activeTags.every(tag => pkg.tags.includes(tag)))
+          (activeTags.length === 0 || activeTags.every(tag => pkg.tags && pkg.tags.includes(tag)))
         );
 
         switch (sortOrder) {
-          case 'name_asc':
-            filteredPackages.sort((a, b) => a.title.localeCompare(b.title));
-            break;
-          case 'name_desc':
-            filteredPackages.sort((a, b) => b.title.localeCompare(a.title));
-            break;
-          case 'author':
-            filteredPackages.sort((a, b) => a.author.localeCompare(b.author));
-            break;
-          default: // 'default' or relevance
-            filteredPackages.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
-            break;
+          case 'name_asc': filteredPackages.sort((a, b) => a.title.localeCompare(b.title)); break;
+          case 'name_desc': filteredPackages.sort((a, b) => b.title.localeCompare(a.title)); break;
+          case 'author': filteredPackages.sort((a, b) => a.author.localeCompare(b.author)); break;
+          default: break;
         }
 
-        // --- Render Tags ---
-        const allTags = [...new Set(packages.flatMap(p => p.tags))].sort();
+        const allTags = [...new Set(packages.flatMap(p => p.tags || []))].sort();
         const tagsContainer = document.getElementById('explore-tags-container');
-        tagsContainer.innerHTML = `
-          <button class="tag-filter-btn ${activeTags.length === 0 ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>
-          ${allTags.map(tag => `<button class="tag-filter-btn ${activeTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">${tag}</button>`).join('')}
-        `;
+        tagsContainer.innerHTML = `<button class="tag-filter-btn ${activeTags.length === 0 ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>${allTags.map(tag => `<button class="tag-filter-btn ${activeTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">${tag}</button>`).join('')}`;
 
-        // --- Render Grid ---
         const gridContainer = document.getElementById('explore-grid');
         if (filteredPackages.length === 0) {
           gridContainer.innerHTML = '<p class="placeholder-text">Nessun pacchetto corrisponde ai criteri di ricerca.</p>';
@@ -1610,44 +1033,33 @@ patches:
               <div class="explore-card-body">
                 <h3>${pkg.title}</h3>
                 <p>${pkg.description}</p>
-                <button class="btn btn-primary btn-add-package" data-url="${BIOHACKER_HUB_BASE_URL}packages/${pkg.id.replace(/-v\d+$/, '')}/manifest.json">
-                  ${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}
-                </button>
+                <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
               </div>
             </div>
           `).join('');
 
           gridContainer.querySelectorAll('.btn-add-package').forEach(button => {
             button.addEventListener('click', (e) => {
-              const packageUrl = e.currentTarget.dataset.url.replace(/\/([^/]+-v\d+)$/, '/$1/manifest.json').replace(/packages\/(.*)\/manifest.json/, `packages/${(packageUrl.split('packages/')[1] || '').split('/manifest.json')[0]}/manifest.json`);
-              let finalUrl = new URL(packageUrl, BIOHACKER_HUB_BASE_URL).href;
-              const parts = finalUrl.split('/packages/');
-              if (parts.length > 1) {
-                const path = parts[1];
-                const pathParts = path.split('/');
-                if (pathParts.length > 2) {
-                   finalUrl = `${parts[0]}/packages/${pathParts[0]}/${pathParts[1]}/manifest.json`;
-                }
-              }
-
-              // This logic is a bit convoluted due to the mix of IDs and paths, let's simplify and make it robust
-              const rawUrl = e.currentTarget.dataset.url;
-              const manifestPath = getState().ui.explore.packages.find(p => p.id === rawUrl.split('/packages/')[1].split('/manifest.json')[0])?.path;
-              const urlToFetch = new URL(rawUrl).href;
-
-               //Find correct path from cached data
-               const pkgId = new URL(rawUrl).pathname.split('/')[2];
-               const pkgInfo = packages.find(p => p.id === pkgId);
-               if(pkgInfo) {
-                   const correctedUrl = new URL(getState().ui.explore.packages.find(p=>p.id === pkgInfo.id).url, BIOHACKER_HUB_BASE_URL);
-                   fetchAndMergePackage(new URL(Object.values(getState().masterMealList).find(p => p.id === pkgId), BIOHACKER_HUB_BASE_URL));
-               } else {
-                  fetchAndMergePackage(urlToFetch);
-               }
-
+              fetchAndMergePackage(e.currentTarget.dataset.url);
             });
           });
         }
       }
-commands:
-  - "echo '✅ Funzionalità Esplora implementata con successo.'"
+  - file: templates/profile.html
+    content: |
+      <div id="profile-page" class="page-view hidden">
+          <h3 id="profile-title"></h3>
+          <form id="profile-form" class="profile-form"></form>
+
+          <div class="data-management-section">
+              <h3 id="data-management-title">Gestione Dati</h3>
+              <div class="data-source-container">
+                  <input type="url" id="content-hub-url-input" placeholder="URL del Content Hub...">
+                  <button id="load-content-hub-btn" class="btn btn-primary">Usa questo Hub</button>
+              </div>
+              <div class="backup-controls">
+                  <button id="restore-btn" class="btn btn-secondary"></button>
+                  <button id="backup-btn" class="btn btn-secondary"></button>
+              </div>
+          </div>
+      </div>

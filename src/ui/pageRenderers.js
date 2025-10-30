@@ -8,8 +8,6 @@ import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
 import { getState, setUiState } from '../core/state.js';
 
-const BIOHACKER_HUB_BASE_URL = 'https://itbiohackerhub-max.github.io/biohackerhub/';
-
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`Failed to fetch ${url}`);
@@ -113,7 +111,6 @@ export function renderProfilePage(state) {
   form.innerHTML = `${formHTML}<div class="form-actions"><button type="submit" class="btn btn-primary">${UI_TEXT.PROFILE_SAVE_BTN}</button></div>`;
 }
 
-
 export function renderGoalsPage(state) {
     const form = document.getElementById('goals-form');
     document.getElementById('goals-title').textContent = UI_TEXT.GOALS_TITLE;
@@ -175,162 +172,69 @@ export function renderDebriefingPage(state) {
   document.getElementById('save-rpe-btn').textContent = UI_TEXT.DEBRIEFING_SAVE_RPE_BTN;
   document.getElementById('speak-summary-btn').innerHTML = renderIcon('SPEAKER', {width: 24, height: 24});
 
-  const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `
-      <div class="stat-item">
-          <span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span>
-          <span class="stat-value">${summary.totalCaloriesBurned}</span>
-      </div>
-  ` : '';
+  const caloriesBurnedHTML = summary.totalCaloriesBurned > 0 ? `<div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_CALORIES_BURNED}</span><span class="stat-value">${summary.totalCaloriesBurned}</span></div>` : '';
+  const tonnageHTML = summary.totalTonnage > 0 ? `<div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span><span class="stat-value">${summary.totalTonnage} kg</span></div>` : '';
 
-  const tonnageHTML = summary.totalTonnage > 0 ? `
-      <div class="stat-item">
-          <span class="stat-label">${UI_TEXT.DEBRIEFING_TONNAGE}</span>
-          <span class="stat-value">${summary.totalTonnage} kg</span>
-      </div>
-  ` : '';
-
-  const statsHTML = `
-      <div class="stat-item">
-          <span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span>
-          <span class="stat-value">${formatDuration(summary.totalTime)}</span>
-      </div>
-      <div class="stat-item">
-          <span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span>
-          <span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span>
-      </div>
-      <div class="stat-item">
-          <span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span>
-          <span class="stat-value">${formatDuration(summary.totalRestTime)}</span>
-      </div>
+  statsContainer.innerHTML = `
+      <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span><span class="stat-value">${formatDuration(summary.totalTime)}</span></div>
+      <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span><span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span></div>
+      <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span><span class="stat-value">${formatDuration(summary.totalRestTime)}</span></div>
       ${caloriesBurnedHTML}
       ${tonnageHTML}
   `;
-  statsContainer.innerHTML = statsHTML;
 
-  const summaryHTML = summary.exercises.map(exercise => {
+  summaryContainer.innerHTML = summary.exercises.map(exercise => {
       const isCompleted = exercise.setsCompleted === exercise.defaultSets;
-      const setsDetailsHTML = exercise.setsData.map((setData, i) => `
-          <div class="set-detail-item">
-              <span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span>
-              <span>${getSetDetails(setData)}</span>
-          </div>
-      `).join('');
-
       return `
           <div class="debriefing-card ${isCompleted ? 'completed' : 'incomplete'}">
-              <div class="debriefing-card-header">
-                  <h4>${exercise.name}</h4>
-                  <div class="debriefing-status">
-                      ${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}
-                  </div>
-              </div>
+              <div class="debriefing-card-header"><h4>${exercise.name}</h4><div class="debriefing-status">${isCompleted ? UI_TEXT.DEBRIEFING_COMPLETED : UI_TEXT.DEBRIEFING_INCOMPLETE}</div></div>
               <div class="debriefing-card-body">
                 <div class="exercise-stats">
                   <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_SETS_COMPLETED}: ${exercise.setsCompleted}/${exercise.defaultSets}</span>
                   <span class="exercise-stat-item">${UI_TEXT.DEBRIEFING_TOTAL_TIME}: ${formatDuration(exercise.totalTime)}</span>
                 </div>
-                <div class="sets-details-container">
-                    ${setsDetailsHTML}
-                </div>
+                <div class="sets-details-container">${exercise.setsData.map((setData, i) => `<div class="set-detail-item"><span>${UI_TEXT.DEBRIEFING_SET_LABEL} ${i + 1}</span><span>${getSetDetails(setData)}</span></div>`).join('')}</div>
               </div>
-          </div>
-      `;
+          </div>`;
   }).join('');
-
-  summaryContainer.innerHTML = summaryHTML;
 }
 
 export function renderRecipesPage(state) {
   const recipesList = document.getElementById('recipes-list');
   const recipes = state.masterMealList.filter(meal => meal.recipeId);
-
   if (!recipes || recipes.length === 0) {
       recipesList.innerHTML = `<p class="placeholder-text">${UI_TEXT.RECIPES_EMPTY}</p>`;
       return;
   }
-
-  let html = recipes.map(recipe => {
+  recipesList.innerHTML = recipes.map(recipe => {
       const ingredientsHtml = formatIngredientsSummary(recipe);
-
-      return `
-          <div class="recipe-list-item" data-meal-id="${recipe.id}">
-              <h4>${recipe.nomePasto}</h4>
-              <p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>
-              ${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}
-          </div>
-      `;
+      return `<div class="recipe-list-item" data-meal-id="${recipe.id}"><h4>${recipe.nomePasto}</h4><p><strong>Calorie:</strong> ${recipe.calories_min}${recipe.calories_max && recipe.calories_max !== recipe.calories_min ? ' - ' + recipe.calories_max : ''} kcal</p>${ingredientsHtml ? `<div><strong>Ingredienti:</strong> ${ingredientsHtml}</div>` : ''}</div>`;
   }).join('');
-
-  recipesList.innerHTML = html;
 }
 
 export function renderLibraryPage(state) {
   const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
-
-  // Update search input
   const searchInput = document.getElementById('library-search-input');
   searchInput.value = librarySearchTerm;
   searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
-
-  // Update active tab
-  document.querySelectorAll('#library-page .btn-view').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === activeLibraryTab);
-  });
-
-  // Show/hide content panels
-  document.querySelectorAll('.library-content').forEach(panel => {
-    panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab));
-  });
-
+  document.querySelectorAll('#library-page .btn-view').forEach(btn => btn.classList.toggle('active', btn.dataset.view === activeLibraryTab));
+  document.querySelectorAll('.library-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab)));
   const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
 
-  // Filter and render ingredients
   const ingredientList = document.getElementById('ingredient-list');
-  const filteredIngredients = state.masterIngredientList.filter(ing =>
-    ing.nome.toLowerCase().includes(lowerCaseSearchTerm)
-  );
-
+  const filteredIngredients = state.masterIngredientList.filter(ing => ing.nome.toLowerCase().includes(lowerCaseSearchTerm));
   if (filteredIngredients.length > 0) {
-    ingredientList.innerHTML = filteredIngredients.map(ing => `
-      <div class="library-item" data-id="${ing.id}">
-        <div class="library-item-info">
-          <span class="library-item-info__name">${ing.nome}</span>
-          <span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span>
-        </div>
-        <div class="library-item-actions">
-          <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-          <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-        </div>
-      </div>
-    `).join('');
+    ingredientList.innerHTML = filteredIngredients.map(ing => `<div class="library-item" data-id="${ing.id}"><div class="library-item-info"><span class="library-item-info__name">${ing.nome}</span><span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`).join('');
   } else {
     ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
   }
 
-  // Filter and render meals
   const mealList = document.getElementById('meal-list');
-  const filteredMeals = state.masterMealList.filter(meal =>
-    meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm)
-  );
-
+  const filteredMeals = state.masterMealList.filter(meal => meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm));
   if (filteredMeals.length > 0) {
     mealList.innerHTML = filteredMeals.map(meal => {
-      const calorieText = (meal.calories_min && meal.calories_max)
-        ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`)
-        : 'Calorie non calcolate';
-
-      return `
-        <div class="library-item" data-id="${meal.id}">
-          <div class="library-item-info">
-            <span class="library-item-info__name">${meal.nomePasto}</span>
-            <span class="library-item-info__details">${calorieText}</span>
-          </div>
-          <div class="library-item-actions">
-            <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
-            <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
-          </div>
-        </div>
-      `;
+      const calorieText = (meal.calories_min && meal.calories_max) ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`) : 'Calorie non calcolate';
+      return `<div class="library-item" data-id="${meal.id}"><div class="library-item-info"><span class="library-item-info__name">${meal.nomePasto}</span><span class="library-item-info__details">${calorieText}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`;
     }).join('');
   } else {
     mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
@@ -338,7 +242,7 @@ export function renderLibraryPage(state) {
 }
 
 async function cacheAllPackages() {
-  log('Renderer', 'Caching all packages from BiohackerHub');
+  log('Renderer', 'Caching all packages from Content Hub');
   const state = getState();
   if (state.ui.explore.packages.length > 0) {
     log('Renderer', 'Packages already cached.');
@@ -346,17 +250,17 @@ async function cacheAllPackages() {
   }
 
   try {
-    const indexUrl = `${BIOHACKER_HUB_BASE_URL}package-index.json`;
+    const indexUrl = new URL('package-index.json', state.contentHubUrl).href;
     const packageIndex = await fetchJson(indexUrl);
 
     const manifestPromises = Object.values(packageIndex).map(path =>
-      fetchJson(`${BIOHACKER_HUB_BASE_URL}${path}`)
+      fetchJson(new URL(path, state.contentHubUrl).href)
     );
     const manifests = await Promise.all(manifestPromises);
 
-    const catalogUrl = `${BIOHACKER_HUB_BASE_URL}explore.json`;
-    const catalog = await fetchJson(catalogUrl);
-    manifests.forEach(m => m.isFeatured = catalog.includes(m.id));
+    manifests.forEach(m => {
+      m.url = new URL(Object.values(packageIndex).find(p => p.includes(m.id)), state.contentHubUrl).href;
+    });
 
     setUiState({
       ...state.ui,
@@ -366,7 +270,7 @@ async function cacheAllPackages() {
 
   } catch (error) {
     log('Renderer', 'Error caching packages', error);
-    document.getElementById('explore-grid').innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti da esplorare.</p>`;
+    document.getElementById('explore-grid').innerHTML = `<p class="placeholder-text">Impossibile caricare i contenuti dall'hub.</p>`;
   }
 }
 
@@ -387,40 +291,26 @@ export async function renderExplorePage() {
   if (packages.length === 0) {
     document.getElementById('explore-grid').innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
     await cacheAllPackages();
-    return; // The state change will trigger a re-render
+    return;
   }
 
-  // --- Filtering and Sorting ---
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   let filteredPackages = packages.filter(pkg =>
     (pkg.title.toLowerCase().includes(lowerCaseSearchTerm) || pkg.description.toLowerCase().includes(lowerCaseSearchTerm)) &&
-    (activeTags.length === 0 || activeTags.every(tag => pkg.tags.includes(tag)))
+    (activeTags.length === 0 || activeTags.every(tag => pkg.tags && pkg.tags.includes(tag)))
   );
 
   switch (sortOrder) {
-    case 'name_asc':
-      filteredPackages.sort((a, b) => a.title.localeCompare(b.title));
-      break;
-    case 'name_desc':
-      filteredPackages.sort((a, b) => b.title.localeCompare(a.title));
-      break;
-    case 'author':
-      filteredPackages.sort((a, b) => a.author.localeCompare(b.author));
-      break;
-    default: // 'default' or relevance
-      filteredPackages.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
-      break;
+    case 'name_asc': filteredPackages.sort((a, b) => a.title.localeCompare(b.title)); break;
+    case 'name_desc': filteredPackages.sort((a, b) => b.title.localeCompare(a.title)); break;
+    case 'author': filteredPackages.sort((a, b) => a.author.localeCompare(b.author)); break;
+    default: break;
   }
 
-  // --- Render Tags ---
-  const allTags = [...new Set(packages.flatMap(p => p.tags))].sort();
+  const allTags = [...new Set(packages.flatMap(p => p.tags || []))].sort();
   const tagsContainer = document.getElementById('explore-tags-container');
-  tagsContainer.innerHTML = `
-    <button class="tag-filter-btn ${activeTags.length === 0 ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>
-    ${allTags.map(tag => `<button class="tag-filter-btn ${activeTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">${tag}</button>`).join('')}
-  `;
+  tagsContainer.innerHTML = `<button class="tag-filter-btn ${activeTags.length === 0 ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>${allTags.map(tag => `<button class="tag-filter-btn ${activeTags.includes(tag) ? 'active' : ''}" data-tag="${tag}">${tag}</button>`).join('')}`;
 
-  // --- Render Grid ---
   const gridContainer = document.getElementById('explore-grid');
   if (filteredPackages.length === 0) {
     gridContainer.innerHTML = '<p class="placeholder-text">Nessun pacchetto corrisponde ai criteri di ricerca.</p>';
@@ -431,41 +321,14 @@ export async function renderExplorePage() {
         <div class="explore-card-body">
           <h3>${pkg.title}</h3>
           <p>${pkg.description}</p>
-          <button class="btn btn-primary btn-add-package" data-url="${BIOHACKER_HUB_BASE_URL}packages/${pkg.id.replace(/-v\d+$/, '')}/manifest.json">
-            ${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}
-          </button>
+          <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
         </div>
       </div>
     `).join('');
 
     gridContainer.querySelectorAll('.btn-add-package').forEach(button => {
       button.addEventListener('click', (e) => {
-        const packageUrl = e.currentTarget.dataset.url.replace(/\/([^/]+-v\d+)$/, '/$1/manifest.json').replace(/packages\/(.*)\/manifest.json/, `packages/${(packageUrl.split('packages/')[1] || '').split('/manifest.json')[0]}/manifest.json`);
-        let finalUrl = new URL(packageUrl, BIOHACKER_HUB_BASE_URL).href;
-        const parts = finalUrl.split('/packages/');
-        if (parts.length > 1) {
-          const path = parts[1];
-          const pathParts = path.split('/');
-          if (pathParts.length > 2) {
-             finalUrl = `${parts[0]}/packages/${pathParts[0]}/${pathParts[1]}/manifest.json`;
-          }
-        }
-
-        // This logic is a bit convoluted due to the mix of IDs and paths, let's simplify and make it robust
-        const rawUrl = e.currentTarget.dataset.url;
-        const manifestPath = getState().ui.explore.packages.find(p => p.id === rawUrl.split('/packages/')[1].split('/manifest.json')[0])?.path;
-        const urlToFetch = new URL(rawUrl).href;
-
-         //Find correct path from cached data
-         const pkgId = new URL(rawUrl).pathname.split('/')[2];
-         const pkgInfo = packages.find(p => p.id === pkgId);
-         if(pkgInfo) {
-             const correctedUrl = new URL(getState().ui.explore.packages.find(p=>p.id === pkgInfo.id).url, BIOHACKER_HUB_BASE_URL);
-             fetchAndMergePackage(new URL(Object.values(getState().masterMealList).find(p => p.id === pkgId), BIOHACKER_HUB_BASE_URL));
-         } else {
-            fetchAndMergePackage(urlToFetch);
-         }
-
+        fetchAndMergePackage(e.currentTarget.dataset.url);
       });
     });
   }

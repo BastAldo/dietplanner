@@ -14,7 +14,7 @@ let state = {
   biometricData: [],
   userProfile: {},
   userGoals: {},
-  configUrl: '',
+  contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
   recipeBaseUrl: '',
   focusedDate: new Date(),
   debugMode: false,
@@ -85,45 +85,32 @@ export function toggleDebugMode() {
 }
 
 export function setPlannerConfig(config, url) {
-  log('State', 'Setting new planner config', { url });
+  log('State', 'Merging new planner config', { url });
   state.rules = config.rules || [];
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
   state.masterWorkoutList = config.esercizi || [];
 
-  // Add new ingredients from config if they don't exist
   ingredients.forEach(ing => {
     if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
       state.masterIngredientList.push(ing);
     }
   });
 
-  // Add new meals from config if they don't exist
   meals.forEach(meal => {
     if (!state.masterMealList.some(existing => existing.id === meal.id)) {
       state.masterMealList.push(meal);
     }
   });
 
-  // Recalculate calories for all meals, as ingredients might have been updated
   state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
   saveStateToLocalStorage();
-
-  // Deriva e imposta la recipeBaseUrl only if a URL is provided (not for merges)
-  if (url) {
-      const baseUrl = new URL(url);
-      const recipePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/')) + '/ricette/';
-      state.recipeBaseUrl = `${baseUrl.origin}${recipePath}`;
-  } else if (!state.recipeBaseUrl) {
-      state.recipeBaseUrl = '';
-  }
-
   notify();
 }
 
-export function setConfigUrl(url) {
-  log('State', 'Setting new config URL', { url });
-  state.configUrl = url;
+export function setContentHubUrl(url) {
+  log('State', 'Setting new Content Hub URL', { url });
+  state.contentHubUrl = url;
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
   notify();
 }
@@ -155,7 +142,7 @@ export function loadStateFromLocalStorage() {
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
   if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
   if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-  if (url) { state.configUrl = url; }
+  if (url) { state.contentHubUrl = url; }
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
   if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
@@ -168,14 +155,14 @@ export function setAppState(backupData) {
   state.weeklyPlan = backupData.weeklyPlan || {};
   state.weeklyWorkouts = backupData.weeklyWorkouts || {};
   state.workoutHistory = backupData.workoutHistory || {};
-  state.configUrl = backupData.configUrl || '';
+  state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
   state.userGoals = backupData.userGoals || {};
   state.masterIngredientList = backupData.masterIngredientList || [];
   state.masterMealList = backupData.masterMealList || [];
   saveStateToLocalStorage();
-  localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.configUrl);
+  localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
   notify();
 }
 
@@ -348,7 +335,6 @@ export function resetCurrentWeek() {
       date.setDate(date.getDate() + i);
       const isoDate = toISODateString(date);
 
-      // Clear meals for the day
       MEAL_TYPES.forEach(mealType => {
           const slotId = `${isoDate}-${mealType}`;
           if (state.weeklyPlan[slotId]) {
@@ -356,13 +342,11 @@ export function resetCurrentWeek() {
           }
       });
 
-      // Clear planned workouts for the day
       const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
       if (state.weeklyWorkouts[workoutSlotId]) {
           delete state.weeklyWorkouts[workoutSlotId];
       }
 
-      // Clear workout history for the day
       if (state.workoutHistory[isoDate]) {
           delete state.workoutHistory[isoDate];
       }
@@ -459,14 +443,11 @@ export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId,
   const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
   if (exerciseIndex === -1) return;
 
-  // Update sets data for the specific exercise
   workout.exercises[exerciseIndex].setsData = newSetsData;
 
-  // Recalculate tonnage for the exercise
   const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
   workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
 
-  // Recalculate total tonnage for the entire workout
   workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
 
   saveStateToLocalStorage();

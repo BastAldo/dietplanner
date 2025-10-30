@@ -1,11 +1,9 @@
-import { saveUserProfile, setConfigUrl, setAppState } from '../../core/state.js';
+import { saveUserProfile, setContentHubUrl, setAppState, getState, setUiState } from '../../core/state.js';
 import { showNotification } from '../notifications.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { PROFILE_FIELDS } from '../../config/forms.js';
-import { fetchAndParseConfig } from '../../api/configService.js';
 import { showConfirmModal } from '../modals.js';
-import { getState } from '../../core/state.js';
 
 function handleProfileForm(e) {
   e.preventDefault();
@@ -13,14 +11,12 @@ function handleProfileForm(e) {
   const formData = new FormData(e.target);
   const profile = {};
 
-  // Handle standard fields
   for (let [key, value] of formData.entries()) {
     if (!key.startsWith('planner-pref-')) {
       profile[key] = value;
     }
   }
 
-  // Handle checkbox group for planner preferences
   const plannerPrefsField = PROFILE_FIELDS.find(f => f.id === 'plannerPrefs');
   if (plannerPrefsField) {
     plannerPrefsField.options.forEach(opt => {
@@ -32,28 +28,24 @@ function handleProfileForm(e) {
   showNotification(UI_TEXT.PROFILE_SAVE_SUCCESS, 'success');
 }
 
-async function handleLoadConfig() {
-  log('Interactions', 'Handling config load button click from profile');
-  const url = document.getElementById('config-url-input').value.trim();
-  if (!url) { showNotification(UI_TEXT.CONFIG_URL_EMPTY_ERROR, 'error'); return; }
-  setConfigUrl(url);
-  try {
-    const config = await fetchAndParseConfig(url);
-    // Note: setPlannerConfig now intelligently merges data
-    setPlannerConfig(config, url);
-    showNotification(UI_TEXT.CONFIG_LOAD_SUCCESS, 'success');
-  } catch (error) { showNotification(error.message, 'error'); }
-}
+async function handleLoadContentHub() {
+  log('Interactions', 'Handling Content Hub load button click');
+  const url = document.getElementById('content-hub-url-input').value.trim();
+  if (!url) { showNotification('Per favore, inserisci un URL per l\'hub di contenuti.', 'error'); return; }
 
-function handleShareConfig() {
-  log('Interactions', 'Share config button clicked');
-  const state = getState();
-  if (!state.configUrl) { showNotification(UI_TEXT.SHARE_NO_URL_INFO, 'info'); return; }
-  const baseUrl = window.location.origin + window.location.pathname;
-  const shareUrl = `${baseUrl}?configUrl=${encodeURIComponent(state.configUrl)}`;
-  navigator.clipboard.writeText(shareUrl).then(() => {
-    showNotification(UI_TEXT.SHARE_SUCCESS, 'success');
-  }).catch(() => { showNotification(UI_TEXT.SHARE_ERROR, 'error'); });
+  const currentState = getState();
+  setContentHubUrl(url);
+
+  // Clear the cached packages to force a refetch from the new URL
+  setUiState({
+    ...currentState.ui,
+    explore: {
+      ...currentState.ui.explore,
+      packages: []
+    }
+  });
+
+  showNotification('Fonte contenuti aggiornata. La sezione Esplora si ricaricherà.', 'success');
 }
 
 function triggerDownload(blob, fileName) {
@@ -72,7 +64,7 @@ async function handleSaveBackup() {
   log('Interactions', 'Save backup button clicked');
   const state = getState();
   const backupData = {
-    configUrl: state.configUrl,
+    contentHubUrl: state.contentHubUrl,
     weeklyPlan: state.weeklyPlan,
     weeklyWorkouts: state.weeklyWorkouts,
     workoutHistory: state.workoutHistory,
@@ -85,6 +77,7 @@ async function handleSaveBackup() {
   const fileName = 'healtypro_backup.txt';
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'text/plain' });
   const file = new File([blob], fileName, { type: 'text/plain' });
+
   if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ title: UI_TEXT.BACKUP_SHARE_TITLE, files: [file] });
@@ -94,7 +87,9 @@ async function handleSaveBackup() {
         triggerDownload(blob, fileName);
       }
     }
-  } else { triggerDownload(blob, fileName); }
+  } else {
+    triggerDownload(blob, fileName);
+  }
 }
 
 function handleRestoreBackup() {
@@ -110,7 +105,7 @@ function handleRestoreBackup() {
             try {
                 const content = readerEvent.target.result;
                 const backupData = JSON.parse(content);
-                if (typeof backupData.configUrl === 'string' && typeof backupData.weeklyPlan === 'object') {
+                if (typeof backupData.weeklyPlan === 'object') { // Basic validation
                     showConfirmModal({
                         title: UI_TEXT.RESTORE_CONFIRM_TITLE,
                         message: UI_TEXT.RESTORE_CONFIRM_MSG,
@@ -134,8 +129,7 @@ export function initializeProfileListeners() {
   });
 
   profilePage.addEventListener('click', e => {
-    if (e.target.id === 'load-config-btn') handleLoadConfig();
-    if (e.target.closest('#share-config-btn')) handleShareConfig();
+    if (e.target.id === 'load-content-hub-btn') handleLoadContentHub();
     if (e.target.id === 'backup-btn') handleSaveBackup();
     if (e.target.id === 'restore-btn') handleRestoreBackup();
     if (e.target.closest('#info-icon')) document.getElementById('info-modal').classList.remove('hidden');
