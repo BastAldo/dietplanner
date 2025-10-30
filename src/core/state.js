@@ -132,17 +132,26 @@ export function loadStateFromLocalStorage() {
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
   const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-  const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+  let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
   const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
   const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
   const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
   const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
 
+  if (url) {
+      // Migration for existing users with the old, incorrect URL without the repo name
+      if (url === 'https://itbiohackerhub-max.github.io/') {
+          log('State', 'Migrating incorrect legacy hub URL.');
+          url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+          localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
+      }
+      state.contentHubUrl = url;
+  }
+
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
   if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
   if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-  if (url) { state.contentHubUrl = url; }
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
   if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }

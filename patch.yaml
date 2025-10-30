@@ -1,17 +1,14 @@
-commit_message: "fix(core): Correct content hub URL composition and set default"
+commit_message: "fix(core): Implement robust URL handling and migration"
 rationale: |
-  This commit resolves a critical `404 Not Found` error that was preventing the "Explore" section from loading content. The error was caused by an incorrect URL composition logic and a missing default value in the application state.
+  This commit provides a comprehensive fix for two critical errors that were preventing the "Explore" feature from functioning correctly: a `404 Not Found` on the initial package index fetch, and an `undefined` URL when attempting to add a package to the library.
 
-  **Problem Analysis:**
-  1.  **Incorrect URL Composition:** The logic in `src/ui/pageRenderers.js` was not correctly joining the base `contentHubUrl` with the relative path for `package-index.json`, resulting in a malformed URL and a `404` error.
-  2.  **Missing Default Hub URL:** The initial state in `src/core/state.js` did not have the correct, full URL for the default content hub, which contributed to the issue.
+  **1. Fix for Initial `404 Not Found` (Error 1):**
+  - **Problem:** Existing users had an old, incorrect `contentHubUrl` (`.../`) stored in localStorage, which was overriding the correct default value (`.../BiohackerHub/`) at startup.
+  - **Solution:** A migration logic has been added to the `loadStateFromLocalStorage` function in `src/core/state.js`. This code now explicitly checks for the known incorrect URL upon loading from localStorage. If found, it automatically corrects it to the new, valid URL (`https://itbiohackerhub-max.github.io/BiohackerHub/`) and updates the value in localStorage to prevent the issue from recurring. This provides a seamless, automatic fix for all existing users.
 
-  **Solution Implemented:**
-  1.  **Set Default Hub URL:** The `contentHubUrl` in the initial state within `src/core/state.js` has been explicitly set to `https://itbiohackerhub-max.github.io/BiohackerHub/`. A trailing slash is included to ensure robust URL joining.
-  2.  **Robust URL Construction:** The `cacheAllPackages` function in `src/ui/pageRenderers.js` has been updated to use the `new URL()` constructor. This is the standard and correct way to resolve relative paths against a base URL, guaranteeing that the final URL for `package-index.json` is always correctly formed.
-  3.  **Backup Consistency:** The `setAppState` function has also been updated to use the correct default `contentHubUrl` when restoring from a backup that may not contain this key, ensuring application consistency.
-
-  This fix ensures that the application correctly points to the default content hub out-of-the-box and that the URL construction logic is robust, resolving the startup error and making the "Explore" feature fully functional.
+  **2. Fix for `undefined` Package URL (Error 2):**
+  - **Problem:** The logic in `src/ui/pageRenderers.js` for assigning a full URL to each fetched package manifest was brittle and based on faulty assumptions. It failed to correctly look up the package's path, resulting in an `undefined` URL being passed to the action button.
+  - **Solution:** The `cacheAllPackages` function has been refactored to be fully robust. It now correctly uses the `package-index.json` as a map. After fetching all manifests, it iterates through them and uses the `id` from each manifest's content to look up its corresponding relative path in the `packageIndex` map. This guarantees a correct and reliable association between a package and its manifest URL, completely eliminating the `undefined` URL bug.
 patches:
   - file: src/core/state.js
     content: |
@@ -149,17 +146,26 @@ patches:
         const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
         const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
         const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        const url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
         const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
         const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
         const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
         const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
         const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
 
+        if (url) {
+            // Migration for existing users with the old, incorrect URL without the repo name
+            if (url === 'https://itbiohackerhub-max.github.io/') {
+                log('State', 'Migrating incorrect legacy hub URL.');
+                url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+                localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
+            }
+            state.contentHubUrl = url;
+        }
+
         if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
         if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
         if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (url) { state.contentHubUrl = url; }
         if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
         if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
         if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
@@ -765,13 +771,21 @@ patches:
           );
           const manifests = await Promise.all(manifestPromises);
 
-          manifests.forEach(m => {
-            m.url = new URL(Object.values(packageIndex).find(p => p.endsWith(`${m.id}/manifest.json`)), state.contentHubUrl).href;
+          manifests.forEach(manifest => {
+            const path = packageIndex[manifest.id];
+            if (path) {
+              manifest.url = new URL(path, state.contentHubUrl).href;
+            } else {
+              log('Renderer', 'Could not find a path for manifest id:', manifest.id);
+              manifest.url = null;
+            }
           });
+
+          const validManifests = manifests.filter(m => m.url);
 
           setUiState({
             ...state.ui,
-            explore: { ...state.ui.explore, packages: manifests }
+            explore: { ...state.ui.explore, packages: validManifests }
           });
           log('Renderer', 'All packages successfully cached.');
 
@@ -824,7 +838,7 @@ patches:
         } else {
           gridContainer.innerHTML = filteredPackages.map(pkg => `
             <div class="explore-card">
-              <img src="${pkg.image}" alt="${pkg.title}" class="explore-card-image">
+              <img src="${new URL(pkg.image, pkg.url)}" alt="${pkg.title}" class="explore-card-image">
               <div class="explore-card-body">
                 <h3>${pkg.title}</h3>
                 <p>${pkg.description}</p>

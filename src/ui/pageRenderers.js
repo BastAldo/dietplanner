@@ -258,13 +258,21 @@ async function cacheAllPackages() {
     );
     const manifests = await Promise.all(manifestPromises);
 
-    manifests.forEach(m => {
-      m.url = new URL(Object.values(packageIndex).find(p => p.endsWith(`${m.id}/manifest.json`)), state.contentHubUrl).href;
+    manifests.forEach(manifest => {
+      const path = packageIndex[manifest.id];
+      if (path) {
+        manifest.url = new URL(path, state.contentHubUrl).href;
+      } else {
+        log('Renderer', 'Could not find a path for manifest id:', manifest.id);
+        manifest.url = null;
+      }
     });
+
+    const validManifests = manifests.filter(m => m.url);
 
     setUiState({
       ...state.ui,
-      explore: { ...state.ui.explore, packages: manifests }
+      explore: { ...state.ui.explore, packages: validManifests }
     });
     log('Renderer', 'All packages successfully cached.');
 
@@ -317,7 +325,7 @@ export async function renderExplorePage() {
   } else {
     gridContainer.innerHTML = filteredPackages.map(pkg => `
       <div class="explore-card">
-        <img src="${pkg.image}" alt="${pkg.title}" class="explore-card-image">
+        <img src="${new URL(pkg.image, pkg.url)}" alt="${pkg.title}" class="explore-card-image">
         <div class="explore-card-body">
           <h3>${pkg.title}</h3>
           <p>${pkg.description}</p>
