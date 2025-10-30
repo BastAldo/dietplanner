@@ -280,16 +280,13 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
         state.weeklyWorkouts[slotId] = [];
     }
 
-    if (exerciseId) { // Add an exercise
+    if (exerciseId) {
         const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
         if (exercise) {
-            const newExerciseInstance = {
-                ...exercise,
-                instanceId: Date.now() + Math.random()
-            };
+            const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
             state.weeklyWorkouts[slotId].push(newExerciseInstance);
         }
-    } else if (instanceId) { // Remove an exercise
+    } else if (instanceId) {
         state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
         if (state.weeklyWorkouts[slotId].length === 0) {
             delete state.weeklyWorkouts[slotId];
@@ -444,16 +441,12 @@ export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId,
   if (exerciseIndex === -1) return;
 
   workout.exercises[exerciseIndex].setsData = newSetsData;
-
   const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
   workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
-
   workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
-
   saveStateToLocalStorage();
   notify();
 }
-
 
 export function copyPreviousWeek() {
   log('State', 'Copying previous week');
@@ -474,7 +467,6 @@ export function copyPreviousWeek() {
       const sourceSlotId = `${sourceISO}-${mealType}`;
       const destSlotId = `${destISO}-${mealType}`;
       const mealObject = state.weeklyPlan[sourceSlotId];
-
       if (mealObject) {
         state.weeklyPlan[destSlotId] = { ...mealObject };
       } else {

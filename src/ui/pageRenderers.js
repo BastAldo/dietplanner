@@ -259,7 +259,7 @@ async function cacheAllPackages() {
     const manifests = await Promise.all(manifestPromises);
 
     manifests.forEach(m => {
-      m.url = new URL(Object.values(packageIndex).find(p => p.includes(m.id)), state.contentHubUrl).href;
+      m.url = new URL(Object.values(packageIndex).find(p => p.endsWith(`${m.id}/manifest.json`)), state.contentHubUrl).href;
     });
 
     setUiState({
