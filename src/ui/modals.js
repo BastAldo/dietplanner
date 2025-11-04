@@ -7,6 +7,7 @@ import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
 import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
 import { openIngredientEditorModal } from './modals/ingredientEditorModal.js';
 import { openMealEditorModal } from './modals/mealEditorModal.js';
+import { openPackagePreviewModal } from './modals/packagePreviewModal.js';
 
 export {
   showConfirmModal,
@@ -18,5 +19,6 @@ export {
   openWorkoutEditorModal,
   openManualWorkoutModal,
   openIngredientEditorModal,
-  openMealEditorModal
+  openMealEditorModal,
+  openPackagePreviewModal
 };

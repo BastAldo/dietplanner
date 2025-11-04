@@ -74,7 +74,7 @@
         </div>
   </div>
 </div>
-<div id="recipe-modal" class="modal-overlay modal-hidden">
+<div id="recipe-modal" class_name="modal-overlay modal-hidden">
   <div class="modal-content">
       <div class="modal-header">
         <h3 id="recipe-modal-title"></h3>
@@ -181,6 +181,19 @@
       </div>
       <div class="modal-footer">
           <button type="submit" form="meal-editor-form" id="meal-editor-save-btn" class="btn btn-primary"></button>
+      </div>
+  </div>
+ </div>
+<div id="package-preview-modal" class="modal-overlay modal-hidden">
+  <div class="modal-content modal-content-large">
+      <div class="modal-header">
+        <h3 id="package-preview-title">Anteprima Pacchetto</h3>
+        <button class="modal-close-btn" data-target="package-preview-modal"></button>
+      </div>
+      <div id="package-preview-body" class="modal-body">
+      </div>
+      <div class="modal-footer">
+          <button id="package-preview-install-btn" class="btn btn-primary">Installa Pacchetto</button>
       </div>
   </div>
  </div>

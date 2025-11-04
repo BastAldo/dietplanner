@@ -1,633 +1,29 @@
-commit_message: "feat(core, ui): Correzione bug calorie e refactoring filtri libreria"
+commit_message: "feat(explore): Implementa anteprima pacchetto e aggiorna UI card"
 rationale: |
-  Questo commit implementa il piano d'azione approvato e affronta due problemi principali: un bug critico nel calcolo delle calorie e un miglioramento strategico dell'esperienza utente (UX) per le sezioni "Esplora" e "Libreria".
+  Questo commit completa la "Fase 2" delle funzionalità discusse, introducendo la capacità di visualizzare un'anteprima dei pacchetti nella sezione "Esplora" prima di installarli.
 
-  1.  **Correzione Bug Calorie (src/core/state.js):**
-      - Le funzioni `addMeal` e `updateMeal` sono state modificate. Ora, dopo aver aggiunto o aggiornato un pasto nello state, viene immediatamente richiamata la funzione `processMealsWithCalories` sull'intera `masterMealList`.
-      - Questo assicura che qualsiasi pasto (nuovo o modificato) abbia sempre le sue calorie (min/max) calcolate e aggiornate, risolvendo il bug per cui i nuovi pasti mostravano 0 calorie.
+  1.  **Nuovo Modale Anteprima (templates/modals.html, styles/modals.css):**
+      - È stato aggiunto un nuovo modale (`package-preview-modal`) per visualizzare il contenuto dei pacchetti.
+      - Questo modale ha un corpo scorrevole (`package-preview-body`) per elencare pasti, ingredienti ed esercizi, e un footer con un pulsante di installazione.
+      - Sono stati aggiunti gli stili necessari per il layout del modale e per le liste di anteprima.
 
-  2.  **Auto-Tagging Pacchetti (src/core/state.js):**
-      - La funzione `setPlannerConfig` ora accetta un `sourceId` (come l'ID del pacchetto, es. "protocollo_paleo").
-      - Quando si importano nuovi pasti da un pacchetto, a questi viene automaticamente aggiunta un'etichetta (es. `pkg:protocollo_paleo`).
-      - Questo crea un sistema di "pacchetti installati" basato su etichette, che abilita le funzionalità di filtro richieste senza modifiche architetturali invasive.
+  2.  **Logica Modale (src/ui/modals/packagePreviewModal.js):**
+      - È stato creato un nuovo modulo per gestire la logica di anteprima.
+      - La funzione `openPackagePreviewModal` riceve il manifest del pacchetto, mostra il modale e avvia il recupero (fetch) dei contenuti (`pasti.json`, `ingredienti.json`, `esercizi.json`).
+      - Visualizza i contenuti recuperati in sezioni distinte.
+      - Il pulsante "Installa" nel modale è collegato a `fetchAndMergePackage` per completare l'installazione, fornendo un flusso utente coerente.
 
-  3.  **Miglioramento UX "Esplora" (src/api/configService.js):**
-      - Modificata `fetchAndMergePackage` per passare l'ID del manifest a `setPlannerConfig` (per l'auto-tagging).
-      - Dopo un'importazione riuscita da "Esplora", l'utente viene ora reindirizzato automaticamente alla "Libreria" (`setView('library')`). Questo chiude il ciclo di interazione e fornisce un feedback immediato, mostrando all'utente i contenuti appena aggiunti.
+  3.  **Aggiornamento Esportazioni Modali (src/ui/modals.js):**
+      - Il nuovo modulo `packagePreviewModal` è ora esportato tramite il file indice principale `src/ui/modals.js`.
 
-  4.  **Filtri Avanzati (Libreria e Modale Pasti):**
-      - **Libreria (src/ui/pageRenderers.js):** La barra di ricerca della libreria ora cerca sia nel *nome* del pasto sia nelle sue *etichette*. Il placeholder è stato aggiornato per riflettere questa capacità (`Cerca in pasti (per nome o etichetta)...`).
-      - **Modale Selezione Pasti (templates/modals.html, styles/modals.css, src/ui/modals/selectionModal.js):** È stata aggiunta una barra di ricerca e filtro al modale di selezione dei pasti. Questa barra filtra l'elenco dei pasti in tempo reale, cercando sia per nome che per etichetta, inclusi i nuovi tag `pkg:...`.
+  4.  **Aggiornamento UI "Esplora" (src/ui/pageRenderers.js, styles/explore.css):**
+      - In `renderExplorePage`, l'HTML della `explore-card` è stato modificato per includere un nuovo pulsante "Anteprima" (`.btn-preview-package`) accanto a "Aggiungi alla Libreria".
+      - È stato aggiunto un contenitore `.explore-card-actions` per gestire i due pulsanti.
+      - Il gestore di eventi click nella `renderExplorePage` è stato aggiornato per delegare correttamente le azioni:
+          - `.btn-add-package` chiama `fetchAndMergePackage` (come prima).
+          - `.btn-preview-package` ora chiama `openPackagePreviewModal`, passando il manifest completo del pacchetto (ottenuto mappando l'URL all'oggetto `pkg` nello state).
+      - Gli stili in `styles/explore.css` sono stati aggiornati per supportare il nuovo contenitore `.explore-card-actions`.
 patches:
-  - file: src/api/configService.js
-    content: |
-      import { UI_TEXT } from '../config/uiText.js';
-      import { log } from '../utils/logger.js';
-      import { setPlannerConfig, setView } from '../core/state.js';
-      import { showNotification } from '../ui/notifications.js';
-
-      async function fetchJson(url) {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`${UI_TEXT.API_FETCH_ERROR} ${url}: ${response.status}`);
-        }
-        const textContent = await response.text();
-        try {
-          return JSON.parse(textContent);
-        } catch (e) {
-          log('API_SERVICE', `Errore nel parsing del JSON da ${url}`, {
-            error: e.message,
-            content: textContent.substring(0, 150)
-          });
-          throw new Error(UI_TEXT.API_INVALID_JSON);
-        }
-      }
-
-      export async function fetchAndParseConfig(mealsUrl) {
-          if (!mealsUrl) throw new Error(UI_TEXT.CONFIG_URL_EMPTY_ERROR);
-
-          try {
-              const mealsConfig = await fetchJson(mealsUrl);
-              if (!mealsConfig.meals || !Array.isArray(mealsConfig.meals)) {
-                  throw new Error(UI_TEXT.API_INVALID_MEALS_FILE);
-              }
-
-              const baseUrl = new URL(mealsUrl);
-              const basePath = baseUrl.pathname.substring(0, baseUrl.pathname.lastIndexOf('/'));
-
-              const ingredientsUrl = `${baseUrl.origin}${basePath}/ingredienti.json`;
-              const ingredientsConfig = await fetchJson(ingredientsUrl);
-              if (!ingredientsConfig.ingredienti || !Array.isArray(ingredientsConfig.ingredienti)) {
-                  throw new Error(UI_TEXT.API_INVALID_INGREDIENTS_FILE);
-              }
-
-              let exercises = [];
-              try {
-                  const exercisesUrl = `${baseUrl.origin}${basePath}/esercizi.json`;
-                  const exercisesConfig = await fetchJson(exercisesUrl);
-                  if (exercisesConfig.esercizi && Array.isArray(exercisesConfig.esercizi)) {
-                      exercises = exercisesConfig.esercizi;
-                  }
-              } catch (e) {
-                  log('API_SERVICE', UI_TEXT.API_EXERCISES_FILE_WARN, e.message);
-              }
-
-              return {
-                  rules: mealsConfig.rules || [],
-                  meals: mealsConfig.meals,
-                  ingredienti: ingredientsConfig.ingredienti,
-                  esercizi: exercises
-              };
-
-          } catch (error) {
-              console.error("Fallimento nel caricamento della configurazione completa:", error.message);
-              // Lancia l'errore specifico (che ora è pulito) invece di uno generico
-              throw new Error(error.message || UI_TEXT.API_CONFIG_LOAD_FAIL);
-          }
-      }
-
-      export async function fetchAndMergePackage(packageUrl) {
-        log('API_SERVICE', 'Fetching and merging content package', { packageUrl });
-        try {
-          const packageManifest = await fetchJson(packageUrl);
-          const contentPromises = [];
-
-          if (packageManifest.ingredientiUrl) {
-            contentPromises.push(fetchJson(new URL(packageManifest.ingredientiUrl, packageUrl).href));
-          } else { contentPromises.push(Promise.resolve({ ingredienti: [] })); }
-
-          if (packageManifest.pastiUrl) {
-            contentPromises.push(fetchJson(new URL(packageManifest.pastiUrl, packageUrl).href));
-          } else { contentPromises.push(Promise.resolve({ meals: [] })); }
-
-          if (packageManifest.eserciziUrl) {
-            contentPromises.push(fetchJson(new URL(packageManifest.eserciziUrl, packageUrl).href));
-          } else { contentPromises.push(Promise.resolve({ esercizi: [] })); }
-
-          const [ingredientsData, mealsData, exercisesData] = await Promise.all(contentPromises);
-
-          const mergedConfig = {
-            ingredienti: ingredientsData.ingredienti || [],
-            meals: mealsData.meals || [],
-            esercizi: exercisesData.esercizi || []
-          };
-
-          // Pass the merged data to setPlannerConfig, which handles the "intelligent merge"
-          setPlannerConfig(mergedConfig, packageManifest.id || null);
-          showNotification(UI_TEXT.EXPLORE_PACKAGE_LOAD_SUCCESS, 'success');
-          setView('library');
-
-        } catch (error) {
-          console.error("Failed to load and merge content package:", error);
-          showNotification(error.message || UI_TEXT.EXPLORE_PACKAGE_LOAD_FAIL, 'error');
-        }
-      }
-  - file: src/core/state.js
-    content: |
-      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS } from '../utils/constants.js';
-      import { processMealsWithCalories } from './calorieCalculator.js';
-      import { resetWorkoutState } from './trainer.js';
-      import { log } from '../utils/logger.js';
-
-      let state = {
-        rules: [],
-        masterMealList: [],
-        masterIngredientList: [],
-        masterWorkoutList: [],
-        weeklyPlan: {},
-        weeklyWorkouts: {},
-        workoutHistory: {},
-        biometricData: [],
-        userProfile: {},
-        userGoals: {},
-        contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
-        recipeBaseUrl: '',
-        focusedDate: new Date(),
-        debugMode: false,
-        ui: {
-          currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
-          activeLibraryTab: 'ingredients',
-          librarySearchTerm: '',
-          lastWorkoutSummary: null,
-          charts: {
-            currentRangeFilter: 30,
-            dateOffset: 0,
-            selectedBiometric: 'weight',
-            plannerChartType: 'bar'
-          },
-          explore: {
-            packages: [],
-            searchTerm: '',
-            activeTags: [],
-            sortOrder: 'default'
-          }
-        }
-      };
-
-      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-
-      const getWeekStartDate = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-        return new Date(d.setDate(diff));
-      };
-
-      export const getState = () => ({ ...state });
-      export const setState = (newState) => {
-        state = { ...state, ...newState };
-        notify();
-      }
-      export const setUiState = (uiChanges) => {
-        state.ui = { ...state.ui, ...uiChanges };
-        notify();
-      }
-
-      export function getMealsForType(mealType) {
-        return state.masterMealList.filter(meal => {
-          if (meal.tipoPasto === 'Tutti') return true;
-          if (Array.isArray(meal.tipoPasto)) {
-            return meal.tipoPasto.includes(mealType);
-          }
-          return meal.tipoPasto === mealType;
-        });
-      }
-
-      export function getExerciseForPlanner(slotId, instanceId) {
-        const workoutList = state.weeklyWorkouts[slotId] || [];
-        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function getExerciseFromHistory(date, startTime, instanceId) {
-        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
-        if (!workout) return null;
-        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
-      }
-
-      export function toggleDebugMode() {
-        state.debugMode = !state.debugMode;
-        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
-      }
-
-      export function setPlannerConfig(config, sourceId) {
-        log('State', 'Merging new planner config', { sourceId });
-        state.rules = config.rules || [];
-        const ingredients = config.ingredienti || [];
-        const meals = config.meals || [];
-        state.masterWorkoutList = config.esercizi || [];
-
-        ingredients.forEach(ing => {
-          if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
-            state.masterIngredientList.push(ing);
-          }
-        });
-
-        const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
-
-        meals.forEach(meal => {
-          if (!state.masterMealList.some(existing => existing.id === meal.id)) {
-            if (packageTag) { // Add tag if new and from a package
-              meal.etichette = [...(meal.etichette || []), packageTag];
-            }
-            state.masterMealList.push(meal);
-          }
-        });
-
-        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function setContentHubUrl(url) {
-        log('State', 'Setting new Content Hub URL', { url });
-        state.contentHubUrl = url;
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
-        notify();
-      }
-
-      export function saveStateToLocalStorage() {
-        log('State', 'Saving all application state to localStorage');
-        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
-        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
-        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
-        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
-        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
-        localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
-        localStorage.setItem(LOCAL_STORAGE_KEY_MEALS, JSON.stringify(state.masterMealList));
-      }
-
-      export function loadStateFromLocalStorage() {
-        log('State', 'Loading all application state from localStorage');
-        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
-        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
-        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
-        let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
-        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
-        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
-        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
-        const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
-        const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
-
-        if (url) {
-            // Migration for existing users with the old, incorrect URL without the repo name
-            if (url === 'https://itbiohackerhub-max.github.io/') {
-                log('State', 'Migrating incorrect legacy hub URL.');
-                url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
-                localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
-            }
-            state.contentHubUrl = url;
-        }
-
-        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
-        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
-        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
-        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
-        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
-        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
-        if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
-        if (meals) { try { state.masterMealList = JSON.parse(meals); } catch (e) { console.error("Error parsing masterMealList", e); state.masterMealList = []; } }
-      }
-
-      export function setAppState(backupData) {
-        log('State', 'Restoring application state from backup');
-        state.weeklyPlan = backupData.weeklyPlan || {};
-        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
-        state.workoutHistory = backupData.workoutHistory || {};
-        state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
-        state.biometricData = backupData.biometricData || [];
-        state.userProfile = backupData.userProfile || {};
-        state.userGoals = backupData.userGoals || {};
-        state.masterIngredientList = backupData.masterIngredientList || [];
-        state.masterMealList = backupData.masterMealList || [];
-        saveStateToLocalStorage();
-        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
-        notify();
-      }
-
-      export function saveUserProfile(profile) {
-        log('State', 'Saving user profile', { profile });
-        state.userProfile = profile;
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function saveUserGoals(goals) {
-          log('State', 'Saving user goals', { goals });
-          state.userGoals = goals;
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function addOrUpdateBiometricEntry(entry) {
-        log('State', 'Adding or updating biometric entry', { entry });
-        const index = state.biometricData.findIndex(e => e.date === entry.date);
-        if (index > -1) {
-          state.biometricData[index] = entry;
-        } else {
-          state.biometricData.push(entry);
-        }
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addMultipleBiometricEntries(newEntries) {
-        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
-        state.biometricData = [...state.biometricData, ...newEntries];
-        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function deleteBiometricEntry(date) {
-        log('State', 'Deleting biometric entry', { date });
-        state.biometricData = state.biometricData.filter(e => e.date !== date);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addIngredient(ingredientData) {
-        log('State', 'Adding new ingredient', { ingredientData });
-        state.masterIngredientList.push(ingredientData);
-        state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateIngredient(ingredientId, updatedData) {
-        log('State', 'Updating ingredient', { ingredientId, updatedData });
-        const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
-        if (index > -1) {
-          state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
-          state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
-          saveStateToLocalStorage();
-          notify();
-        }
-      }
-
-      export function deleteIngredient(ingredientId) {
-        log('State', 'Deleting ingredient', { ingredientId });
-        state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function addMeal(mealData) {
-        log('State', 'Adding new meal', { mealData });
-        state.masterMealList.push(mealData);
-        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
-        state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateMeal(mealId, updatedData) {
-        log('State', 'Updating meal', { mealId, updatedData });
-        const index = state.masterMealList.findIndex(m => m.id === mealId);
-        if (index > -1) {
-          state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
-          state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
-          state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
-          saveStateToLocalStorage();
-          notify();
-        }
-      }
-
-      export function deleteMeal(mealId) {
-        log('State', 'Deleting meal', { mealId });
-        state.masterMealList = state.masterMealList.filter(m => m.id !== mealId);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyPlan(slotId, mealId) {
-        log('State', 'Updating weekly plan', { slotId, mealId });
-        if (mealId) {
-          const meal = state.masterMealList.find(m => m.id === mealId);
-          if (meal) {
-            state.weeklyPlan[slotId] = { ...meal };
-          }
-        } else {
-          delete state.weeklyPlan[slotId];
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
-        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
-          if (!state.weeklyWorkouts[slotId]) {
-              state.weeklyWorkouts[slotId] = [];
-          }
-
-          if (exerciseId) {
-              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
-              if (exercise) {
-                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
-                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
-              }
-          } else if (instanceId) {
-              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
-              if (state.weeklyWorkouts[slotId].length === 0) {
-                  delete state.weeklyWorkouts[slotId];
-              }
-          }
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
-        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
-          if (!state.weeklyWorkouts[slotId]) return;
-
-          const workoutList = state.weeklyWorkouts[slotId];
-          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
-
-          if (exerciseIndex > -1) {
-              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
-              if (newValues.defaultTempo) {
-                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
-              }
-              workoutList[exerciseIndex] = updatedExercise;
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
-        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
-          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
-          const workoutList = state.weeklyWorkouts[slotId];
-          const [movedItem] = workoutList.splice(oldIndex, 1);
-          workoutList.splice(newIndex, 0, movedItem);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function resetCurrentWeek() {
-        log('State', 'Resetting current week');
-        const weekStart = getWeekStartDate(state.focusedDate);
-        for (let i = 0; i < 7; i++) {
-            const date = new Date(weekStart);
-            date.setDate(date.getDate() + i);
-            const isoDate = toISODateString(date);
-
-            MEAL_TYPES.forEach(mealType => {
-                const slotId = `${isoDate}-${mealType}`;
-                if (state.weeklyPlan[slotId]) {
-                    delete state.weeklyPlan[slotId];
-                }
-            });
-
-            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
-            if (state.weeklyWorkouts[workoutSlotId]) {
-                delete state.weeklyWorkouts[workoutSlotId];
-            }
-
-            if (state.workoutHistory[isoDate]) {
-                delete state.workoutHistory[isoDate];
-            }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function navigateWeek(direction) {
-        log('State', 'Navigating week', { direction });
-        const newDate = new Date(state.focusedDate);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        state.focusedDate = newDate;
-        notify();
-      }
-
-      export function setView(view) {
-        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
-        if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals', 'explore'].includes(view)) {
-          state.ui.currentView = view;
-          notify();
-        }
-      }
-
-      export function setLastWorkoutSummary(summary) {
-        log('State', 'Setting last workout summary');
-        state.ui.lastWorkoutSummary = summary;
-        notify();
-      }
-
-      export function addWorkoutToHistory(summary) {
-        log('State', 'Adding structured workout to history', { date: summary.date });
-        if (summary && summary.date) {
-            if (!state.workoutHistory[summary.date]) {
-                state.workoutHistory[summary.date] = [];
-            }
-            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
-            saveStateToLocalStorage();
-            notify();
-        }
-      }
-
-      export function addManualWorkoutToHistory(date, activityData) {
-          log('State', 'Adding manual workout to history', { date, activityData });
-          if (!state.workoutHistory[date]) {
-              state.workoutHistory[date] = [];
-          }
-          const manualWorkout = {
-              type: 'manual',
-              date: date,
-              startTime: Date.now(),
-              ...activityData
-          };
-          state.workoutHistory[date].push(manualWorkout);
-          saveStateToLocalStorage();
-          notify();
-      }
-
-      export function deleteWorkoutFromHistory(date, startTime) {
-          log('State', 'Deleting workout from history', { date, startTime });
-          if (state.workoutHistory[date]) {
-              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
-              if (state.workoutHistory[date].length === 0) {
-                  delete state.workoutHistory[date];
-              }
-              saveStateToLocalStorage();
-              notify();
-          }
-      }
-
-      export function updateWorkoutInHistory(date, startTime, updates) {
-          log('State', 'Updating workout in history', { date, startTime, updates });
-          if (state.workoutHistory[date]) {
-              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-              if (workoutIndex > -1) {
-                  state.workoutHistory[date][workoutIndex] = {
-                      ...state.workoutHistory[date][workoutIndex],
-                      ...updates
-                  };
-                  saveStateToLocalStorage();
-                  notify();
-              }
-          }
-      }
-
-      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
-        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
-        if (!state.workoutHistory[date]) return;
-
-        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
-        if (workoutIndex === -1) return;
-
-        const workout = state.workoutHistory[date][workoutIndex];
-        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
-        if (exerciseIndex === -1) return;
-
-        workout.exercises[exerciseIndex].setsData = newSetsData;
-        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
-        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
-        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
-        saveStateToLocalStorage();
-        notify();
-      }
-
-      export function copyPreviousWeek() {
-        log('State', 'Copying previous week');
-        const currentWeekStart = getWeekStartDate(state.focusedDate);
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
-
-        for (let i = 0; i < 7; i++) {
-          const sourceDate = new Date(prevWeekStart);
-          sourceDate.setDate(sourceDate.getDate() + i);
-          const sourceISO = toISODateString(sourceDate);
-
-          const destDate = new Date(currentWeekStart);
-          destDate.setDate(destDate.getDate() + i);
-          const destISO = toISODateString(destDate);
-
-          MEAL_TYPES.forEach(mealType => {
-            const sourceSlotId = `${sourceISO}-${mealType}`;
-            const destSlotId = `${destISO}-${mealType}`;
-            const mealObject = state.weeklyPlan[sourceSlotId];
-            if (mealObject) {
-              state.weeklyPlan[destSlotId] = { ...mealObject };
-            } else {
-              delete state.weeklyPlan[destSlotId];
-            }
-          });
-
-          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
-          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
-          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
-          if (workoutList && Array.isArray(workoutList)) {
-              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
-          } else {
-              delete state.weeklyWorkouts[destWorkoutSlot];
-          }
-        }
-        saveStateToLocalStorage();
-        notify();
-      }
   - file: src/ui/pageRenderers.js
     content: |
       import { calculateBMR } from '../core/calculations.js';
@@ -639,6 +35,7 @@ patches:
       import { fetchAndMergePackage } from '../api/configService.js';
       import { log } from '../utils/logger.js';
       import { getState, setUiState } from '../core/state.js';
+      import { openPackagePreviewModal } from './modals.js';
 
       async function fetchJson(url) {
         const response = await fetch(url);
@@ -966,95 +363,249 @@ patches:
               <div class="explore-card-body">
                 <h3>${pkg.title}</h3>
                 <p>${pkg.description}</p>
-                <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
+                <div class="explore-card-actions">
+                  <button class="btn btn-secondary btn-preview-package" data-url="${pkg.url}">Anteprima</button>
+                  <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
+                </div>
               </div>
             </div>
           `).join('');
 
-          gridContainer.querySelectorAll('.btn-add-package').forEach(button => {
+          gridContainer.querySelectorAll('.btn-add-package, .btn-preview-package').forEach(button => {
             button.addEventListener('click', (e) => {
-              fetchAndMergePackage(e.currentTarget.dataset.url);
+              const packageUrl = e.currentTarget.dataset.url;
+              const pkg = packages.find(p => p.url === packageUrl);
+              if (!pkg) return;
+
+              if (e.currentTarget.classList.contains('btn-add-package')) {
+                fetchAndMergePackage(packageUrl);
+              } else {
+                openPackagePreviewModal(pkg);
+              }
             });
           });
         }
       }
-  - file: src/ui/modals/selectionModal.js
+  - file: src/ui/modals.js
     content: |
-      import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
-      import { UI_TEXT } from '../../config/uiText.js';
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
+      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
+      import { openIngredientEditorModal } from './modals/ingredientEditorModal.js';
+      import { openMealEditorModal } from './modals/mealEditorModal.js';
+      import { openPackagePreviewModal } from './modals/packagePreviewModal.js';
+
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutEditorModal,
+        openManualWorkoutModal,
+        openIngredientEditorModal,
+        openMealEditorModal,
+        openPackagePreviewModal
+      };
+  - file: src/ui/modals/packagePreviewModal.js
+    content: |
+      import { fetchAndMergePackage } from '../../api/configService.js';
       import { log } from '../../utils/logger.js';
-      import { formatIngredients } from '../../utils/formatters.js';
-      import { openDayEditorModal } from './dayEditorModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
 
-      export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
-        log('Modals', 'Opening meal selection modal', { slotId });
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        
-        const list = selectionModal.querySelector('#selection-modal-list');
-        const searchInput = selectionModal.querySelector('#selection-modal-search');
-
-        function renderList(filterTerm = '') {
-            const lowerCaseFilter = filterTerm.toLowerCase().trim();
-            const filteredMeals = relevantMeals.filter(meal => {
-                if (lowerCaseFilter === '') return true;
-                const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseFilter);
-                const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseFilter));
-                return nameMatch || tagMatch;
-            });
-            
-            const noMealsText = filterTerm ? `Nessun pasto trovato per "${filterTerm}".` : UI_TEXT.NO_MEALS_AVAILABLE;
-            list.innerHTML = filteredMeals.length > 0 
-                ? filteredMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') 
-                : `<p class="placeholder-text">${noMealsText}</p>`;
+      async function fetchJson(url) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) return null;
+          return await response.json();
+        } catch (e) {
+          log('PackagePreview', 'Failed to fetch JSON', { url, e });
+          return null;
         }
-
-        searchInput.value = '';
-        searchInput.oninput = (e) => {
-            renderList(e.target.value);
-        };
-        
-        renderList();
-        
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openDayEditorModal(returnIsoDate);
-        };
-
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { 
-            updateWeeklyPlan(slotId, item.dataset.mealId); 
-            closeAndReturn(); 
-          }
-        };
-        selectionModal.classList.remove('modal-hidden');
       }
 
-      export function openWorkoutSelectionModal(slotId, returnIsoDate) {
-        log('Modals', 'Opening workout selection modal', { slotId });
-        const state = getState();
-        const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
-        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
-        const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-        
-        const closeAndReturn = () => {
-          workoutSelectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
+      function renderPreviewList(title, items, key) {
+        if (!items || items.length === 0) return '';
+        return `
+          <div class="preview-section">
+            <h4>${title} (${items.length})</h4>
+            <ul class="preview-list">
+              ${items.map(item => `<li>${item[key]}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      export async function openPackagePreviewModal(packageManifest) {
+        log('Modals', 'Opening package preview modal', { packageManifest });
+        const modal = document.getElementById('package-preview-modal');
+        const titleEl = modal.querySelector('#package-preview-title');
+        const bodyEl = modal.querySelector('#package-preview-body');
+        const installBtn = modal.querySelector('#package-preview-install-btn');
+
+        titleEl.textContent = `Anteprima: ${packageManifest.title}`;
+        bodyEl.innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
+        modal.classList.remove('modal-hidden');
+
+        // Setup install button
+        installBtn.dataset.url = packageManifest.url;
+        installBtn.onclick = (e) => {
+          fetchAndMergePackage(e.currentTarget.dataset.url);
+          modal.classList.add('modal-hidden');
         };
 
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
-            closeAndReturn();
-          }
-        };
-        workoutSelectionModal.classList.remove('modal-hidden');
+        // Fetch content
+        const [ingredientsData, mealsData, exercisesData] = await Promise.all([
+          packageManifest.ingredientiUrl ? fetchJson(new URL(packageManifest.ingredientiUrl, packageManifest.url).href) : Promise.resolve(null),
+          packageManifest.pastiUrl ? fetchJson(new URL(packageManifest.pastiUrl, packageManifest.url).href) : Promise.resolve(null),
+          packageManifest.eserciziUrl ? fetchJson(new URL(packageManifest.eserciziUrl, packageManifest.url).href) : Promise.resolve(null)
+        ]);
+
+        const ingredients = ingredientsData?.ingredienti || [];
+        const meals = mealsData?.meals || [];
+        const exercises = exercisesData?.esercizi || [];
+
+        // Render content
+        let html = '';
+        html += renderPreviewList('Pasti', meals, 'nomePasto');
+        html += renderPreviewList('Ingredienti', ingredients, 'nome');
+        html += renderPreviewList('Esercizi', exercises, 'name');
+
+        if (html === '') {
+          bodyEl.innerHTML = '<p class="placeholder-text">Questo pacchetto non contiene elementi visualizzabili.</p>';
+        } else {
+          bodyEl.innerHTML = html;
+        }
+      }
+  - file: styles/explore.css
+    content: |
+      /* --- EXPLORE VIEW --- */
+      #explore-page > h3 {
+        color: var(--primary-color);
+        margin-bottom: 1.5rem;
+        text-align: center;
+      }
+
+      .explore-controls {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        align-items: end;
+      }
+
+      .explore-controls .form-group {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .explore-controls label {
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+        color: var(--text-color-muted);
+      }
+
+      .explore-controls select {
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 1rem;
+        background-color: var(--card-color);
+        color: var(--text-color);
+      }
+
+      .explore-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+        justify-content: center;
+      }
+
+      .tag-filter-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+        background-color: transparent;
+        color: var(--text-color-muted);
+      }
+
+      .tag-filter-btn.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+        font-weight: bold;
+      }
+
+      .explore-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+      }
+
+      .explore-card {
+        background-color: var(--card-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      .explore-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+      }
+
+      .explore-card-image {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .explore-card-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+      }
+
+      .explore-card-body h3 {
+        color: var(--primary-color);
+        margin-bottom: 0.75rem;
+      }
+
+      .explore-card-body p {
+        font-size: 0.95rem;
+        color: var(--text-color-muted);
+        line-height: 1.6;
+        flex-grow: 1;
+        margin-bottom: 1.5rem;
+      }
+
+      .explore-card-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: auto; /* Pushes buttons to the bottom */
+      }
+
+      .explore-card-actions .btn {
+        flex-grow: 1;
+      }
+
+      @media (min-width: 768px) {
+        .explore-controls {
+          grid-template-columns: 2fr 1fr;
+        }
       }
   - file: styles/modals.css
     content: |
@@ -1240,11 +791,39 @@ patches:
         padding-top: 1rem;
       }
 
+      /* --- PACKAGE PREVIEW MODAL --- */
+      #package-preview-body {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+      .preview-section h4 {
+        color: var(--secondary-color);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .preview-list {
+        list-style-type: none;
+        padding-left: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .preview-list li {
+        padding: 0.5rem;
+        background-color: var(--bg-color);
+        border-radius: 4px;
+      }
+
       @media (min-width: 600px) {
         .structured-form {
           grid-template-columns: 1fr 1fr;
         }
         .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
+        #package-preview-body {
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
       }
 
       @media (max-width: 480px) {
@@ -1341,7 +920,7 @@ patches:
               </div>
         </div>
       </div>
-      <div id="recipe-modal" class="modal-overlay modal-hidden">
+      <div id="recipe-modal" class_name="modal-overlay modal-hidden">
         <div class="modal-content">
             <div class="modal-header">
               <h3 id="recipe-modal-title"></h3>
@@ -1451,5 +1030,18 @@ patches:
             </div>
         </div>
        </div>
+      <div id="package-preview-modal" class="modal-overlay modal-hidden">
+        <div class="modal-content modal-content-large">
+            <div class="modal-header">
+              <h3 id="package-preview-title">Anteprima Pacchetto</h3>
+              <button class="modal-close-btn" data-target="package-preview-modal"></button>
+            </div>
+            <div id="package-preview-body" class="modal-body">
+            </div>
+            <div class="modal-footer">
+                <button id="package-preview-install-btn" class="btn btn-primary">Installa Pacchetto</button>
+            </div>
+        </div>
+       </div>
 commands:
-  - "echo 'Patch applicata: Bug calorie corretto, filtri libreria e UX Esplora migliorati.'"
+  - "echo 'Patch per anteprima pacchetto applicata.'"

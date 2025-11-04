@@ -7,6 +7,7 @@ import { formatIngredientsSummary } from '../utils/formatters.js';
 import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
 import { getState, setUiState } from '../core/state.js';
+import { openPackagePreviewModal } from './modals.js';
 
 async function fetchJson(url) {
   const response = await fetch(url);
@@ -334,14 +335,25 @@ export async function renderExplorePage() {
         <div class="explore-card-body">
           <h3>${pkg.title}</h3>
           <p>${pkg.description}</p>
-          <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
+          <div class="explore-card-actions">
+            <button class="btn btn-secondary btn-preview-package" data-url="${pkg.url}">Anteprima</button>
+            <button class="btn btn-primary btn-add-package" data-url="${pkg.url}">${UI_TEXT.EXPLORE_ADD_TO_LIBRARY}</button>
+          </div>
         </div>
       </div>
     `).join('');
 
-    gridContainer.querySelectorAll('.btn-add-package').forEach(button => {
+    gridContainer.querySelectorAll('.btn-add-package, .btn-preview-package').forEach(button => {
       button.addEventListener('click', (e) => {
-        fetchAndMergePackage(e.currentTarget.dataset.url);
+        const packageUrl = e.currentTarget.dataset.url;
+        const pkg = packages.find(p => p.url === packageUrl);
+        if (!pkg) return;
+
+        if (e.currentTarget.classList.contains('btn-add-package')) {
+          fetchAndMergePackage(packageUrl);
+        } else {
+          openPackagePreviewModal(pkg);
+        }
       });
     });
   }
