@@ -1,8 +1,11 @@
 <div id="trainer-page" class="page-view hidden">
     <header class="trainer-header">
-        <div class="trainer-header-placeholder"></div>
+        <div class="trainer-header-placeholder">
+            <button id="trainer-skip-bwd-btn" class="btn-icon"></button>
+        </div>
         <h2 id="trainer-title">Allenamento</h2>
         <div class="trainer-header-controls">
+            <button id="trainer-skip-fwd-btn" class="btn-icon"></button>
             <button id="audio-toggle-btn"></button>
             <button id="trainer-end-btn" class="btn-icon"></button>
         </div>
@@ -24,7 +27,25 @@
             <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
             <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
             <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
-            <button id="trainer-manual-rep-btn" class="btn btn-primary btn-large hidden"></button>
+            
+            <div id="trainer-logging-controls" class="trainer-logging-controls hidden">
+                <div class="logging-inputs-grid">
+                    <div class="form-group">
+                        <label for="trainer-log-weight">Peso (kg)</label>
+                        <input type="number" id="trainer-log-weight" name="weight" min="0" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label for="trainer-log-reps">Reps</label>
+                        <input type="number" id="trainer-log-reps" name="reps" min="0">
+                    </div>
+                </div>
+                <div class="form-group-checkbox">
+                    <input type="checkbox" id="trainer-log-failure" name="failure">
+                    <label for="trainer-log-failure">A Cedimento</label>
+                </div>
+                <button id="trainer-confirm-set-btn" class="btn btn-primary btn-large">CONFERMA SET</button>
+            </div>
+
         </div>
     </div>
 </div>

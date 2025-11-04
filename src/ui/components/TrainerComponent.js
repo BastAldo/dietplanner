@@ -1,5 +1,5 @@
 import { getWorkoutState, updateState } from '../../core/trainer/state.js';
-import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, incrementManualRep } from '../../core/trainer.js';
+import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, confirmCurrentSet, skipPhase } from '../../core/trainer.js';
 import { setView } from '../../core/state.js';
 import { log } from '../../utils/logger.js';
 import { UI_TEXT } from '../../config/uiText.js';
@@ -22,11 +22,19 @@ export class TrainerComponent {
             btnStart: this.container.querySelector('#trainer-start-btn'),
             btnPause: this.container.querySelector('#trainer-pause-btn'),
             btnResume: this.container.querySelector('#trainer-resume-btn'),
-            btnManualRep: this.container.querySelector('#trainer-manual-rep-btn'),
             btnAudio: this.container.querySelector('#audio-toggle-btn'),
             btnEnd: this.container.querySelector('#trainer-end-btn'),
+            btnSkipBwd: this.container.querySelector('#trainer-skip-bwd-btn'),
+            btnSkipFwd: this.container.querySelector('#trainer-skip-fwd-btn'),
 
             ringContainer: this.container.querySelector('#timer-ring-container'),
+            
+            // Controlli Logging
+            loggingControls: this.container.querySelector('#trainer-logging-controls'),
+            loggingWeightInput: this.container.querySelector('#trainer-log-weight'),
+            loggingRepsInput: this.container.querySelector('#trainer-log-reps'),
+            loggingFailureInput: this.container.querySelector('#trainer-log-failure'),
+            btnConfirmSet: this.container.querySelector('#trainer-confirm-set-btn'),
         };
 
         this.ringProgress = null;
@@ -39,8 +47,13 @@ export class TrainerComponent {
     mount() {
         this.createTimerRing();
         this.container.addEventListener('click', this.boundHandleControls);
-        this.elements.btnManualRep.textContent = UI_TEXT.TRAINER_MANUAL_REP_BTN_LABEL;
         this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
+        this.elements.btnSkipBwd.innerHTML = renderIcon('SKIP_BWD', {width: 24, height: 24}); // Assumendo esista 'SKIP_BWD'
+        this.elements.btnSkipFwd.innerHTML = renderIcon('SKIP_FWD', {width: 24, height: 24}); // Assumendo esista 'SKIP_FWD'
+        // Fallback se icone non esistono
+        if (!this.elements.btnSkipBwd.innerHTML) this.elements.btnSkipBwd.innerHTML = '<<';
+        if (!this.elements.btnSkipFwd.innerHTML) this.elements.btnSkipFwd.innerHTML = '>>';
+
         this.updateAudioButton(getWorkoutState().isAudioEnabled);
     }
 
@@ -94,8 +107,17 @@ export class TrainerComponent {
             case 'trainer-pause-btn': pauseWorkout(); break;
             case 'trainer-resume-btn': resumeWorkout(); break;
             case 'trainer-end-btn': this._handleEndWorkoutFlow(); break;
-            case 'trainer-manual-rep-btn': incrementManualRep(); break;
             case 'audio-toggle-btn': this.toggleAudio(); break;
+            case 'trainer-skip-bwd-btn': skipPhase(-1); break;
+            case 'trainer-skip-fwd-btn': skipPhase(1); break;
+            case 'trainer-confirm-set-btn':
+                const setDataFromUI = {
+                  weight: parseFloat(this.elements.loggingWeightInput.value) || 0,
+                  reps: parseInt(this.elements.loggingRepsInput.value) || 0,
+                  to_failure: this.elements.loggingFailureInput.checked
+                };
+                confirmCurrentSet(setDataFromUI);
+                break;
         }
     }
 
@@ -170,7 +192,8 @@ export class TrainerComponent {
             this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
-            this.elements.btnManualRep.classList.add('hidden');
+            this.elements.loggingControls.classList.add('hidden');
+            this.elements.ringContainer.classList.remove('hidden');
             return;
         };
 
@@ -185,6 +208,8 @@ export class TrainerComponent {
             this.elements.btnStart.classList.add('hidden');
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
+            this.elements.loggingControls.classList.add('hidden');
+            this.elements.ringContainer.classList.remove('hidden');
             return;
         }
 
@@ -192,7 +217,7 @@ export class TrainerComponent {
         this.elements.exerciseName.textContent = exercise.name;
         this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentPhase.context);
 
-        if ((currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'manual_rep') && currentPhase.context.rep) {
+        if ((currentPhase.type === 'movement' || currentPhase.type === 'static_hold') && currentPhase.context.rep) {
           this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${currentPhase.context.rep}`;
           this.elements.repDisplay.classList.remove('hidden-rep');
         } else {
@@ -211,23 +236,28 @@ export class TrainerComponent {
 
 
         this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-        this.elements.btnPause.classList.toggle('hidden', status !== 'running');
         this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-        this.elements.btnManualRep.classList.toggle('hidden', !(status === 'running' && currentPhase.type === 'manual_rep'));
 
         // --- Main Render Logic ---
         this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
         this.ringProgress.classList.remove('is-rest');
 
+        const isLoggingPhase = (status === 'running' && currentPhase.type === 'logging');
+        const isGuidedPhase = (status === 'running' && (currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'rest'));
 
-        if (status === 'running' || status === 'paused') {
+        this.elements.ringContainer.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
+        this.elements.loggingControls.classList.toggle('hidden', !isLoggingPhase);
+        this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
+
+
+        if (status === 'running') {
             if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
             else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
-            else if (currentPhase.type === 'manual_rep') this.renderManualReps(state, currentPhase);
+            else if (currentPhase.type === 'logging') this.renderManualReps(state, currentPhase);
             else if (currentPhase.type === 'rest') this.renderRest(state, currentPhase);
             else this.ringText.textContent = ''; // For audio/speech phases
         }
-
+        
         if(status === 'paused') {
           this.renderPaused();
         }
@@ -256,12 +286,12 @@ export class TrainerComponent {
     }
 
     renderManualReps(state, phase) {
-        const repsCompleted = phase.repsCompleted || 0;
-        const targetReps = phase.context.reps;
-        const progressPercent = (targetReps > 0) ? (repsCompleted / targetReps) * 100 : 0;
-        this.ringText.textContent = repsCompleted;
-        this.ringText.classList.add('is-rep-count');
-        this.updateTimerRing(progressPercent);
+        // Pre-compila i campi per la modalità logging
+        this.elements.loggingWeightInput.value = phase.context.weight || 0;
+        // Usa repMin come default, altrimenti rep, altrimenti 0
+        const defaultReps = phase.context.repsMin || phase.context.reps || 0;
+        this.elements.loggingRepsInput.value = defaultReps;
+        this.elements.loggingFailureInput.checked = false;
     }
 
     renderRest(state, phase) {
@@ -276,6 +306,7 @@ export class TrainerComponent {
     }
 
     renderPaused() {
+        this.elements.ringContainer.classList.remove('hidden');
         this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
         this.ringText.classList.add('is-phase', 'flashing');
     }
@@ -284,11 +315,21 @@ export class TrainerComponent {
         const { exercise, set } = context;
         if (!exercise || !set) return '';
         let details = `${UI_TEXT.TRAINER_SET_LABEL} ${set} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${exercise.defaultSets}`;
-        if (exercise.execution_mode === 'tempo_guided' || exercise.execution_mode === 'manual_reps') {
+        
+        if (exercise.execution_mode === 'guided_tempo') {
             details += ` | ${exercise.defaultReps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-        } else if (exercise.execution_mode === 'static_hold') {
+        } else if (exercise.execution_mode === 'guided_static') {
             details += ` | ${exercise.defaultDuration}s`;
+        } else if (exercise.execution_mode === 'logging') {
+            if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
+                details += ` | ${exercise.defaultRepsMin}-${exercise.defaultRepsMax} ${UI_TEXT.TRAINER_REPS_LABEL}`;
+            } else if (exercise.defaultRepsMin) {
+                details += ` | ${exercise.defaultRepsMin}+ ${UI_TEXT.TRAINER_REPS_LABEL}`;
+            } else {
+                details += ` | ${UI_TEXT.TRAINER_REPS_LABEL}`;
+            }
         }
+
         if (exercise.defaultWeight) {
             details += ` @ ${exercise.defaultWeight}kg`;
         }

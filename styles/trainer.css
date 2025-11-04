@@ -131,6 +131,7 @@
     align-items: center;
     flex-grow: 1;
     min-height: 280px;
+    width: 100%;
 }
 
 .timer-ring-container {
@@ -205,4 +206,76 @@
 .btn-large {
     padding: 1rem 2rem;
     font-size: 1.25rem;
+}
+
+/* --- Stili per Logging Manuale --- */
+#trainer-logging-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 350px;
+  margin: 1rem 0;
+}
+
+.logging-inputs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+#trainer-logging-controls .form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+#trainer-logging-controls .form-group label {
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-color-muted);
+}
+
+#trainer-logging-controls .form-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1.25rem;
+  background-color: var(--card-color);
+  color: var(--text-color);
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: bold;
+}
+
+/* Stile per rimuovere le frecce dagli input numerici */
+#trainer-logging-controls input[type=number] {
+  -moz-appearance: textfield;
+}
+#trainer-logging-controls input[type=number]::-webkit-outer-spin-button,
+#trainer-logging-controls input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.form-group-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.form-group-checkbox label {
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.form-group-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--primary-color);
+}
+
+#trainer-logging-controls .btn-large {
+  width: 100%;
 }
