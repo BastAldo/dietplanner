@@ -19,6 +19,7 @@ export class TrainerComponent {
             repDisplay: this.container.querySelector('#current-rep-display'),
             upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
 
+            trainerMainControls: this.container.querySelector('#trainer-main-controls'),
             btnStart: this.container.querySelector('#trainer-start-btn'),
             btnPause: this.container.querySelector('#trainer-pause-btn'),
             btnResume: this.container.querySelector('#trainer-resume-btn'),
@@ -26,6 +27,7 @@ export class TrainerComponent {
             btnEnd: this.container.querySelector('#trainer-end-btn'),
             btnSkipBwd: this.container.querySelector('#trainer-skip-bwd-btn'),
             btnSkipFwd: this.container.querySelector('#trainer-skip-fwd-btn'),
+            btnConfirmSet: this.container.querySelector('#trainer-confirm-set-btn'),
 
             ringContainer: this.container.querySelector('#timer-ring-container'),
             ringSvg: null, // Verrà popolato da createTimerRing
@@ -35,7 +37,6 @@ export class TrainerComponent {
             loggingWeightInput: this.container.querySelector('#trainer-log-weight'),
             loggingRepsInput: this.container.querySelector('#trainer-log-reps'),
             loggingFailureInput: this.container.querySelector('#trainer-log-failure'),
-            btnConfirmSet: this.container.querySelector('#trainer-confirm-set-btn'),
         };
 
         this.ringProgress = null;
@@ -193,9 +194,10 @@ export class TrainerComponent {
             this.elements.upcomingDisplay.innerHTML = '';
             this.updateTimerRing(0);
             this.ringText.textContent = '';
-            this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
+            this.elements.btnStart.classList.remove('hidden');
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
+            this.elements.btnConfirmSet.classList.add('hidden');
             this.elements.loggingControls.classList.add('hidden');
             this.elements.ringSvg.classList.remove('hidden');
             this.ringText.classList.remove('hidden');
@@ -214,6 +216,7 @@ export class TrainerComponent {
             this.elements.btnStart.classList.add('hidden');
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
+            this.elements.btnConfirmSet.classList.add('hidden');
             this.elements.loggingControls.classList.add('hidden');
             this.elements.ringSvg.classList.remove('hidden');
             this.ringText.classList.remove('hidden');
@@ -243,9 +246,6 @@ export class TrainerComponent {
         }
 
 
-        this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-        this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-
         // --- Main Render Logic ---
         this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing', 'hidden');
         this.ringProgress.classList.remove('is-rest', 'hidden');
@@ -259,7 +259,11 @@ export class TrainerComponent {
         this.ringText.classList.toggle('hidden', isLoggingPhase || status === 'paused');
         this.ringProgress.classList.toggle('hidden', isLoggingPhase || status === 'paused');
         
+        // Gestione Bottoni Principali
+        this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
+        this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
         this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
+        this.elements.btnConfirmSet.classList.toggle('hidden', !isLoggingPhase);
 
 
         if (status === 'running') {

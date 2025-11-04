@@ -154,6 +154,7 @@
     fill: var(--text-color);
     text-anchor: middle;
 }
+.timer-ring-display.hidden { display: none; }
 
 .timer-ring-display.is-timer,
 .timer-ring-display.is-rep-count {
@@ -181,6 +182,7 @@
     transform-origin: 50% 50%;
     transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
 }
+.timer-ring-progress.hidden { display: none; }
 
 .timer-ring-progress.is-rest {
     stroke: var(--secondary-color);
@@ -222,8 +224,8 @@
   flex-direction: column;
   gap: 1.5rem;
   width: 100%;
-  max-width: 350px;
-  padding: 0 1.5rem; /* Aggiunge padding laterale per non toccare i bordi del ring */
+  max-width: 240px; /* Ridotto per stare dentro l'anello */
+  padding: 0 1.5rem;
 }
 
 #trainer-logging-controls.hidden {
@@ -231,14 +233,16 @@
 }
 
 .logging-inputs-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex; /* Cambiato da grid a flex */
+  justify-content: center;
   gap: 1rem;
 }
 
 #trainer-logging-controls .form-group {
   display: flex;
   flex-direction: column;
+  max-width: 100px; /* Rimpicciolisce i box */
+  flex-grow: 1;
 }
 
 #trainer-logging-controls .form-group label {
@@ -270,24 +274,54 @@
   margin: 0;
 }
 
-.form-group-checkbox {
+/* Stili Checkbox Personalizzato */
+.form-group-checkbox.custom-checkbox {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
+  cursor: pointer;
 }
-
-.form-group-checkbox label {
+.custom-checkbox label {
   font-size: 1rem;
   color: var(--text-color);
+  position: relative;
+  padding-left: 32px; /* Spazio per il box finto */
+  line-height: 24px;
+  user-select: none;
 }
-
-.form-group-checkbox input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--primary-color);
+.custom-checkbox input[type="checkbox"] {
+  display: none; /* Nasconde la checkbox reale */
 }
-
-#trainer-logging-controls .btn-large {
-  width: 100%;
+.custom-checkbox label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-color);
+  background: var(--card-color);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+.custom-checkbox label::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 4px;
+  width: 6px;
+  height: 12px;
+  border: solid var(--bg-color);
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.custom-checkbox input[type="checkbox"]:checked + label::before {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+.custom-checkbox input[type="checkbox"]:checked + label::after {
+  opacity: 1;
 }
