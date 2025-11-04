@@ -35,20 +35,34 @@ export function calculateBMR(userProfile, weight) {
   return Math.round(bmr);
 }
 
-export function calculateWorkoutCalories(workoutSummary, userWeight) {
+export function calculateWorkoutCalories(workoutSummary, userProfile, userWeight) {
   if (!workoutSummary || !userWeight || !workoutSummary.exercises || workoutSummary.exercises.length === 0) {
     return 0;
   }
 
   const weightKg = parseFloat(userWeight);
   if (isNaN(weightKg) || weightKg <= 0) return 0;
+  
+  // Calcola il BMR per usarlo come base se il MET non è disponibile
+  const bmr = calculateBMR(userProfile, userWeight);
+  const metBaseline = bmr ? (bmr / 24) / weightKg : 1; // MET a riposo (approssimato)
 
   let totalCalories = 0;
 
   workoutSummary.exercises.forEach(exercise => {
-    const met = exercise.met_value;
-    // totalTime for each exercise is in milliseconds
-    const durationHours = exercise.totalTime / (1000 * 60 * 60);
+    // Usa il MET specifico dell'esercizio se disponibile, altrimenti un MET generico per "strength training"
+    const met = exercise.met_value || (metBaseline * 3.5); // 3.5 è un MET generico per pesi
+    
+    // totalTime for each exercise is in milliseconds (solo per modalità guidate)
+    let durationHours = exercise.totalTime / (1000 * 60 * 60);
+
+    // Per la modalità 'logging', la durata non è tracciata, quindi stimiamo
+    if (durationHours === 0 && exercise.setsData.length > 0) {
+      // Stima: 2.5 secondi per rep + riposo
+      const activeTimeSeconds = exercise.setsData.reduce((acc, set) => acc + (set.reps * 2.5), 0);
+      const restTimeSeconds = (exercise.setsData.length - 1) * exercise.defaultRest;
+      durationHours = (activeTimeSeconds + restTimeSeconds) / 3600;
+    }
 
     if (typeof met === 'number' && met > 0 && durationHours > 0) {
       // Formula: Kcal = MET * Peso(kg) * Durata(ore)

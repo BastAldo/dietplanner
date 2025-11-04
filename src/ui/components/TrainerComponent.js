@@ -28,6 +28,7 @@ export class TrainerComponent {
             btnSkipFwd: this.container.querySelector('#trainer-skip-fwd-btn'),
 
             ringContainer: this.container.querySelector('#timer-ring-container'),
+            ringSvg: null, // Verrà popolato da createTimerRing
             
             // Controlli Logging
             loggingControls: this.container.querySelector('#trainer-logging-controls'),
@@ -48,11 +49,8 @@ export class TrainerComponent {
         this.createTimerRing();
         this.container.addEventListener('click', this.boundHandleControls);
         this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
-        this.elements.btnSkipBwd.innerHTML = renderIcon('SKIP_BWD', {width: 24, height: 24}); // Assumendo esista 'SKIP_BWD'
-        this.elements.btnSkipFwd.innerHTML = renderIcon('SKIP_FWD', {width: 24, height: 24}); // Assumendo esista 'SKIP_FWD'
-        // Fallback se icone non esistono
-        if (!this.elements.btnSkipBwd.innerHTML) this.elements.btnSkipBwd.innerHTML = '<<';
-        if (!this.elements.btnSkipFwd.innerHTML) this.elements.btnSkipFwd.innerHTML = '>>';
+        this.elements.btnSkipBwd.innerHTML = renderIcon('SKIP_BWD', {width: 24, height: 24});
+        this.elements.btnSkipFwd.innerHTML = renderIcon('SKIP_FWD', {width: 24, height: 24});
 
         this.updateAudioButton(getWorkoutState().isAudioEnabled);
     }
@@ -135,7 +133,7 @@ export class TrainerComponent {
 
     createTimerRing() {
         if (this.elements.ringContainer.querySelector('svg')) return;
-        this.elements.ringContainer.innerHTML = '';
+        this.elements.ringContainer.innerHTML = ''; // Pulisce prima di aggiungere
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
         const svgSize = (RING_RADIUS + 12) * 2;
@@ -162,7 +160,11 @@ export class TrainerComponent {
         svg.appendChild(backgroundCircle);
         svg.appendChild(progressCircle);
         svg.appendChild(text);
-        this.elements.ringContainer.prepend(svg);
+        this.elements.ringContainer.prepend(svg); // Aggiunge l'SVG
+        this.elements.ringContainer.appendChild(this.elements.loggingControls); // Assicura che i controlli siano dopo l'SVG
+        
+        // Salva i riferimenti
+        this.elements.ringSvg = svg;
         this.ringProgress = progressCircle;
         this.ringText = text;
     }
@@ -181,7 +183,7 @@ export class TrainerComponent {
     }
 
     render(state) {
-        if (!this.ringText || !state.fullExecutionQueue || state.fullExecutionQueue.length === 0) {
+        if (!this.ringText || !this.elements.ringSvg || !state.fullExecutionQueue || state.fullExecutionQueue.length === 0) {
             // Handle pre-start or empty state
             this.elements.exerciseName.textContent = state.exerciseQueue[0]?.name || 'Pronto per iniziare';
             this.elements.exerciseDetails.textContent = '';
@@ -193,7 +195,7 @@ export class TrainerComponent {
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
             this.elements.loggingControls.classList.add('hidden');
-            this.elements.ringContainer.classList.remove('hidden');
+            this.elements.ringSvg.classList.remove('hidden');
             return;
         };
 
@@ -209,7 +211,7 @@ export class TrainerComponent {
             this.elements.btnPause.classList.add('hidden');
             this.elements.btnResume.classList.add('hidden');
             this.elements.loggingControls.classList.add('hidden');
-            this.elements.ringContainer.classList.remove('hidden');
+            this.elements.ringSvg.classList.remove('hidden');
             return;
         }
 
@@ -245,7 +247,7 @@ export class TrainerComponent {
         const isLoggingPhase = (status === 'running' && currentPhase.type === 'logging');
         const isGuidedPhase = (status === 'running' && (currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'rest'));
 
-        this.elements.ringContainer.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
+        this.elements.ringSvg.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
         this.elements.loggingControls.classList.toggle('hidden', !isLoggingPhase);
         this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
 
@@ -306,7 +308,8 @@ export class TrainerComponent {
     }
 
     renderPaused() {
-        this.elements.ringContainer.classList.remove('hidden');
+        this.elements.ringSvg.classList.remove('hidden');
+        this.elements.loggingControls.classList.add('hidden');
         this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
         this.ringText.classList.add('is-phase', 'flashing');
     }

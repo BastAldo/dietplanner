@@ -39,8 +39,16 @@ async function runWorkoutLoop() {
               await runTimerAnimation(phase.duration_ms);
               break;
           case 'set_completed':
-              // Per le modalità guidate, raccoglie i dati pianificati
-              collectSetData();
+              // BUG FIX: Controlla se la fase precedente era 'logging'.
+              // Se lo era, i dati sono GIÀ stati salvati da confirmCurrentSet.
+              const prevPhaseIndex = Math.max(0, currentIndex - 1);
+              const prevPhase = currentState.fullExecutionQueue[prevPhaseIndex];
+              
+              if (prevPhase.type !== 'logging') {
+                  // Solo le modalità guidate (movement, static_hold)
+                  // devono salvare i dati qui.
+                  collectSetData();
+              }
               break;
           case 'logging':
               // Pausa il loop e attende la conferma manuale dalla UI
@@ -102,7 +110,7 @@ export function initializeWorkout(plannedExercises, isoDate) {
 
 export function collectSetData(setDataFromUI = null) {
     const state = getWorkoutState();
-    // Usa l'indice corrente, o l'indice precedente se 'set_completed' segue una fase
+    // Usa l'indice corrente
     let phaseIndex = state.currentQueueIndex;
     let currentPhase = state.fullExecutionQueue[phaseIndex];
 
@@ -133,11 +141,17 @@ export function collectSetData(setDataFromUI = null) {
       };
     } else {
       // Modalità Guidata: Dati arrivano dal context (piano)
+      let duration = 0;
+      // 'movement' (tempo) e 'static_hold' (durata) usano lastTimerDuration
+      if (currentPhase.type === 'movement' || currentPhase.type === 'static_hold') {
+        duration = state.lastTimerDuration || 0;
+      }
+
       setData = {
         exerciseId: exercise.instanceId,
         set: set,
         reps: currentPhase.context.reps, // Reps pianificate
-        duration: state.lastTimerDuration || 0, // Durata dall'animation engine
+        duration: duration,
         rest: exercise.defaultRest,
         weight: currentPhase.context.weight || 0
       };
@@ -270,7 +284,7 @@ function createWorkoutSummary(finalState) {
     const globalState = getGlobalState();
     const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
     if (latestWeight) {
-      summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+      summary.totalCaloriesBurned = calculateWorkoutCalories(summary, globalState.userProfile, latestWeight);
     }
 
     return summary;

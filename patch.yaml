@@ -1,19 +1,23 @@
-commit_message: "fix(trainer): Corregge infinite loop in runWorkoutLoop"
+commit_message: "fix(trainer): Corregge bug debriefing e migliora UI trainer/modale"
 rationale: |
-  Questo commit corregge un bug critico introdotto nella precedente modifica (Fase 1), dove il `runWorkoutLoop` in `src/core/trainer.js` entrava in un loop infinito.
+  Questo commit implementa le correzioni e i miglioramenti dell'interfaccia utente come richiesto.
 
-  **Problema:**
-  Il loop `while` utilizzava una variabile di iterazione locale (`i`) e la confrontava con il `currentQueueIndex` memorizzato nello stato. La logica di aggiornamento e confronto tra queste due variabili era difettosa e causava un reset dell'indice a 0 ad ogni iterazione, bloccando il trainer sulla prima fase (come visto nei log di debug: `[Trainer-Loop] Executing phase 0: speech`).
+  1.  **Correzione Bug Debriefing "Incompleto" (`src/core/trainer.js`):**
+      * È stato identificato un bug per cui gli allenamenti in modalità "logging" venivano segnati come "incompleti".
+      * Causa: La funzione `collectSetData` veniva chiamata due volte: una correttamente da `confirmCurrentSet` (con i dati della UI) e una seconda volta, in modo errato, dalla fase `set_completed` (senza dati, creando un set "fantasma").
+      * Soluzione: Il `case 'set_completed'` nel `runWorkoutLoop` è stato modificato. Ora include un controllo per verificare se la fase *precedente* era di tipo `logging`. Se lo era, `collectSetData` non viene chiamato, prevenendo la registrazione duplicata e risolvendo il bug del debriefing.
 
-  **Soluzione:**
-  1.  **Rimozione della variabile locale `i`:** Il `runWorkoutLoop` è stato rifattorizzato per utilizzare `getWorkoutState().currentQueueIndex` come unica fonte di verità per l'indice della coda.
-  2.  **Gestione del Loop:**
-      * Il loop `while (getWorkoutState().status === 'running')` ora controlla l'indice corrente (`currentIndex`) all'inizio di ogni iterazione.
-      * Se l'indice è fuori dai limiti (`>= fullExecutionQueue.length`), il loop si interrompe e l'allenamento termina.
-      * La fase viene eseguita.
-      * **Incremento Corretto:** Alla fine dell'iterazione, controlliamo se l'indice è stato modificato da una funzione esterna (come `skipPhase`). Se non è stato modificato, incrementiamo `currentQueueIndex` nello stato (`updateState({ currentQueueIndex: currentIndex + 1 })`).
-  
-  Questo approccio risolve l'infinite loop e garantisce che il loop e la funzione `skipPhase` operino in modo coeso sulla stessa variabile di stato (`currentQueueIndex`), come previsto dall'architettura "Dual Mode".
+  2.  **Miglioramento UI Trainer (`templates/trainer.html`, `styles/trainer.css`, `src/ui/components/TrainerComponent.js`):**
+      * L'interfaccia utente per la modalità "logging" (input di peso, reps e checkbox "a cedimento") è stata spostata *all'interno* del `timer-ring-container`.
+      * `styles/trainer.css` è stato aggiornato per posizionare questi controlli in modo assoluto al centro del contenitore.
+      * `TrainerComponent.js` è stato aggiornato:
+          * Ora, invece di nascondere l'intero contenitore, nasconde selettivamente l'elemento `<svg>` del timer o i controlli di `logging` (che ora condividono lo stesso spazio).
+          * `createTimerRing` ora memorizza un riferimento all'SVG (`this.elements.ringSvg`).
+          * `renderPaused` è stato aggiornato per garantire che l'SVG sia visibile e i controlli di logging siano nascosti durante la pausa.
+
+  3.  **Correzione Stile Select (`styles/modals.css`, `src/ui/modals/exerciseEditorModal.js`):**
+      * Per risolvere l'incoerenza stilistica, è stato aggiunto uno stile CSS in `styles/modals.css` che si applica a tutti gli elementi `select` all'interno di un `.form-group`.
+      * Questo stile uniforma l'aspetto del menu a discesa "Modalità Esecuzione" per farlo corrispondere agli altri campi di input (`--bg-color`, `--card-color`, ecc.), come richiesto dalla `docs/03_STYLE_GUIDE.md`. Non è stato necessario modificare `exerciseEditorModal.js`.
 patches:
   - file: src/core/trainer.js
     content: |
@@ -58,8 +62,16 @@ patches:
                     await runTimerAnimation(phase.duration_ms);
                     break;
                 case 'set_completed':
-                    // Per le modalità guidate, raccoglie i dati pianificati
-                    collectSetData();
+                    // BUG FIX: Controlla se la fase precedente era 'logging'.
+                    // Se lo era, i dati sono GIÀ stati salvati da confirmCurrentSet.
+                    const prevPhaseIndex = Math.max(0, currentIndex - 1);
+                    const prevPhase = currentState.fullExecutionQueue[prevPhaseIndex];
+                    
+                    if (prevPhase.type !== 'logging') {
+                        // Solo le modalità guidate (movement, static_hold)
+                        // devono salvare i dati qui.
+                        collectSetData();
+                    }
                     break;
                 case 'logging':
                     // Pausa il loop e attende la conferma manuale dalla UI
@@ -121,7 +133,7 @@ patches:
 
       export function collectSetData(setDataFromUI = null) {
           const state = getWorkoutState();
-          // Usa l'indice corrente, o l'indice precedente se 'set_completed' segue una fase
+          // Usa l'indice corrente
           let phaseIndex = state.currentQueueIndex;
           let currentPhase = state.fullExecutionQueue[phaseIndex];
 
@@ -152,11 +164,17 @@ patches:
             };
           } else {
             // Modalità Guidata: Dati arrivano dal context (piano)
+            let duration = 0;
+            // 'movement' (tempo) e 'static_hold' (durata) usano lastTimerDuration
+            if (currentPhase.type === 'movement' || currentPhase.type === 'static_hold') {
+              duration = state.lastTimerDuration || 0;
+            }
+
             setData = {
               exerciseId: exercise.instanceId,
               set: set,
               reps: currentPhase.context.reps, // Reps pianificate
-              duration: state.lastTimerDuration || 0, // Durata dall'animation engine
+              duration: duration,
               rest: exercise.defaultRest,
               weight: currentPhase.context.weight || 0
             };
@@ -289,7 +307,7 @@ patches:
           const globalState = getGlobalState();
           const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
           if (latestWeight) {
-            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, globalState.userProfile, latestWeight);
           }
 
           return summary;
@@ -321,4 +339,1047 @@ patches:
         stopAllAnimations();
         resetWorkoutState();
         setView('planner');
+      }
+  - file: templates/trainer.html
+    content: |
+      <div id="trainer-page" class="page-view hidden">
+          <header class="trainer-header">
+              <div class="trainer-header-placeholder">
+                  <button id="trainer-skip-bwd-btn" class="btn-icon"></button>
+              </div>
+              <h2 id="trainer-title">Allenamento</h2>
+              <div class="trainer-header-controls">
+                  <button id="trainer-skip-fwd-btn" class="btn-icon"></button>
+                  <button id="audio-toggle-btn"></button>
+                  <button id="trainer-end-btn" class="btn-icon"></button>
+              </div>
+          </header>
+          <div class="trainer-body">
+              <div class="exercise-info-container">
+                  <h3 id="current-exercise-name"></h3>
+                  <p id="current-exercise-details"></p>
+                  <p id="current-rep-display"></p>
+                  <div id="upcoming-exercise-display"></div>
+              </div>
+
+              <div id="trainer-display-modes">
+                  <div id="timer-ring-container" class="timer-ring-container">
+                      <div id="trainer-logging-controls" class="trainer-logging-controls hidden">
+                          <div class="logging-inputs-grid">
+                              <div class="form-group">
+                                  <label for="trainer-log-weight">Peso (kg)</label>
+                                  <input type="number" id="trainer-log-weight" name="weight" min="0" step="0.5">
+                              </div>
+                              <div class="form-group">
+                                  <label for="trainer-log-reps">Reps</label>
+                                  <input type="number" id="trainer-log-reps" name="reps" min="0">
+                              </div>
+                          </div>
+                          <div class="form-group-checkbox">
+                              <input type="checkbox" id="trainer-log-failure" name="failure">
+                              <label for="trainer-log-failure">A Cedimento</label>
+                          </div>
+                          <button id="trainer-confirm-set-btn" class="btn btn-primary btn-large">CONFERMA SET</button>
+                      </div>
+                  </div>
+              </div>
+
+              <div id="trainer-main-controls" class="trainer-controls">
+                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
+                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
+                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
+              </div>
+          </div>
+      </div>
+  - file: src/ui/components/TrainerComponent.js
+    content: |
+      import { getWorkoutState, updateState } from '../../core/trainer/state.js';
+      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, confirmCurrentSet, skipPhase } from '../../core/trainer.js';
+      import { setView } from '../../core/state.js';
+      import { log } from '../../utils/logger.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+      import { showConfirmModal } from '../modals.js';
+
+      const RING_RADIUS = 128;
+      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+      export class TrainerComponent {
+          constructor(containerElement) {
+              this.container = containerElement;
+
+              this.elements = {
+                  exerciseName: this.container.querySelector('#current-exercise-name'),
+                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
+                  repDisplay: this.container.querySelector('#current-rep-display'),
+                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
+
+                  btnStart: this.container.querySelector('#trainer-start-btn'),
+                  btnPause: this.container.querySelector('#trainer-pause-btn'),
+                  btnResume: this.container.querySelector('#trainer-resume-btn'),
+                  btnAudio: this.container.querySelector('#audio-toggle-btn'),
+                  btnEnd: this.container.querySelector('#trainer-end-btn'),
+                  btnSkipBwd: this.container.querySelector('#trainer-skip-bwd-btn'),
+                  btnSkipFwd: this.container.querySelector('#trainer-skip-fwd-btn'),
+
+                  ringContainer: this.container.querySelector('#timer-ring-container'),
+                  ringSvg: null, // Verrà popolato da createTimerRing
+                  
+                  // Controlli Logging
+                  loggingControls: this.container.querySelector('#trainer-logging-controls'),
+                  loggingWeightInput: this.container.querySelector('#trainer-log-weight'),
+                  loggingRepsInput: this.container.querySelector('#trainer-log-reps'),
+                  loggingFailureInput: this.container.querySelector('#trainer-log-failure'),
+                  btnConfirmSet: this.container.querySelector('#trainer-confirm-set-btn'),
+              };
+
+              this.ringProgress = null;
+              this.ringText = null;
+
+              // Bind the event handler once in the constructor
+              this.boundHandleControls = this.handleControls.bind(this);
+          }
+
+          mount() {
+              this.createTimerRing();
+              this.container.addEventListener('click', this.boundHandleControls);
+              this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
+              this.elements.btnSkipBwd.innerHTML = renderIcon('SKIP_BWD', {width: 24, height: 24});
+              this.elements.btnSkipFwd.innerHTML = renderIcon('SKIP_FWD', {width: 24, height: 24});
+
+              this.updateAudioButton(getWorkoutState().isAudioEnabled);
+          }
+
+          destroy() {
+              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
+              this.container.removeEventListener('click', this.boundHandleControls);
+              if (this.elements.ringContainer) {
+                  this.elements.ringContainer.innerHTML = '';
+              }
+              log('TrainerComponent', 'Component destroyed.');
+          }
+
+          _handleEndWorkoutFlow() {
+            showConfirmModal({
+                title: UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
+                message: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
+                buttons: [
+                    {
+                        text: UI_TEXT.SAVE_AND_END_BTN,
+                        className: 'btn btn-primary',
+                        callback: endWorkout
+                    },
+                    {
+                        text: UI_TEXT.DISCARD_WORKOUT_BTN,
+                        className: 'btn btn-danger',
+                        callback: discardWorkout
+                    },
+                    {
+                        text: UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
+                        className: 'btn btn-secondary',
+                        callback: null // Just closes the modal
+                    }
+                ]
+            });
+          }
+
+          async handleControls(e) {
+              const target = e.target.closest('button');
+              if (!target) return;
+
+              const targetId = target.id;
+              log('TrainerComponent', `Control button clicked: ${targetId}`);
+              switch (targetId) {
+                  case 'trainer-start-btn':
+                      target.disabled = true;
+                      await startWorkout();
+                      if(this.elements.btnStart) {
+                        this.elements.btnStart.disabled = false;
+                      }
+                      break;
+                  case 'trainer-pause-btn': pauseWorkout(); break;
+                  case 'trainer-resume-btn': resumeWorkout(); break;
+                  case 'trainer-end-btn': this._handleEndWorkoutFlow(); break;
+                  case 'audio-toggle-btn': this.toggleAudio(); break;
+                  case 'trainer-skip-bwd-btn': skipPhase(-1); break;
+                  case 'trainer-skip-fwd-btn': skipPhase(1); break;
+                  case 'trainer-confirm-set-btn':
+                      const setDataFromUI = {
+                        weight: parseFloat(this.elements.loggingWeightInput.value) || 0,
+                        reps: parseInt(this.elements.loggingRepsInput.value) || 0,
+                        to_failure: this.elements.loggingFailureInput.checked
+                      };
+                      confirmCurrentSet(setDataFromUI);
+                      break;
+              }
+          }
+
+          toggleAudio() {
+              const currentState = getWorkoutState();
+              const newState = !currentState.isAudioEnabled;
+              updateState({ isAudioEnabled: newState });
+              this.updateAudioButton(newState);
+          }
+
+          updateAudioButton(isAudioEnabled) {
+              this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
+              this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
+          }
+
+          createTimerRing() {
+              if (this.elements.ringContainer.querySelector('svg')) return;
+              this.elements.ringContainer.innerHTML = ''; // Pulisce prima di aggiungere
+              const svgNS = 'http://www.w3.org/2000/svg';
+              const svg = document.createElementNS(svgNS, 'svg');
+              const svgSize = (RING_RADIUS + 12) * 2;
+              svg.setAttribute('width', svgSize);
+              svg.setAttribute('height', svgSize);
+              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
+              const center = svgSize / 2;
+              const backgroundCircle = document.createElementNS(svgNS, 'circle');
+              backgroundCircle.setAttribute('cx', center);
+              backgroundCircle.setAttribute('cy', center);
+              backgroundCircle.setAttribute('r', RING_RADIUS);
+              backgroundCircle.setAttribute('class', 'timer-ring-bg');
+              const progressCircle = document.createElementNS(svgNS, 'circle');
+              progressCircle.setAttribute('cx', center);
+              progressCircle.setAttribute('cy', center);
+              progressCircle.setAttribute('r', RING_RADIUS);
+              progressCircle.setAttribute('class', 'timer-ring-progress');
+              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
+              const text = document.createElementNS(svgNS, 'text');
+              text.setAttribute('x', '50%');
+              text.setAttribute('y', '50%');
+              text.setAttribute('dy', '.3em');
+              text.setAttribute('class', 'timer-ring-display');
+              svg.appendChild(backgroundCircle);
+              svg.appendChild(progressCircle);
+              svg.appendChild(text);
+              this.elements.ringContainer.prepend(svg); // Aggiunge l'SVG
+              this.elements.ringContainer.appendChild(this.elements.loggingControls); // Assicura che i controlli siano dopo l'SVG
+              
+              // Salva i riferimenti
+              this.elements.ringSvg = svg;
+              this.ringProgress = progressCircle;
+              this.ringText = text;
+          }
+
+          updateTimerRing(percent) {
+              if (!this.ringProgress) return;
+              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
+              this.ringProgress.style.strokeDashoffset = offset;
+          }
+
+          formatTime(ms) {
+              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+              return `${minutes}:${seconds}`;
+          }
+
+          render(state) {
+              if (!this.ringText || !this.elements.ringSvg || !state.fullExecutionQueue || state.fullExecutionQueue.length === 0) {
+                  // Handle pre-start or empty state
+                  this.elements.exerciseName.textContent = state.exerciseQueue[0]?.name || 'Pronto per iniziare';
+                  this.elements.exerciseDetails.textContent = '';
+                  this.elements.repDisplay.classList.add('hidden-rep');
+                  this.elements.upcomingDisplay.innerHTML = '';
+                  this.updateTimerRing(0);
+                  this.ringText.textContent = '';
+                  this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
+                  this.elements.btnPause.classList.add('hidden');
+                  this.elements.btnResume.classList.add('hidden');
+                  this.elements.loggingControls.classList.add('hidden');
+                  this.elements.ringSvg.classList.remove('hidden');
+                  return;
+              };
+
+              const { fullExecutionQueue, currentQueueIndex, status } = state;
+              const currentPhase = fullExecutionQueue[currentQueueIndex];
+
+              if (!currentPhase || !currentPhase.context || !currentPhase.context.exercise) {
+                  this.elements.exerciseName.textContent = 'Allenamento Completato';
+                  this.elements.exerciseDetails.textContent = '';
+                  this.elements.repDisplay.classList.add('hidden-rep');
+                  this.elements.upcomingDisplay.innerHTML = '';
+                  this.elements.btnStart.classList.add('hidden');
+                  this.elements.btnPause.classList.add('hidden');
+                  this.elements.btnResume.classList.add('hidden');
+                  this.elements.loggingControls.classList.add('hidden');
+                  this.elements.ringSvg.classList.remove('hidden');
+                  return;
+              }
+
+              const { exercise } = currentPhase.context;
+              this.elements.exerciseName.textContent = exercise.name;
+              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentPhase.context);
+
+              if ((currentPhase.type === 'movement' || currentPhase.type === 'static_hold') && currentPhase.context.rep) {
+                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${currentPhase.context.rep}`;
+                this.elements.repDisplay.classList.remove('hidden-rep');
+              } else {
+                this.elements.repDisplay.classList.add('hidden-rep');
+              }
+
+              const nextExercisePhase = fullExecutionQueue.find((phase, index) => {
+                  return index > currentQueueIndex && phase.context && phase.context.exercise && phase.context.exercise.instanceId !== exercise.instanceId;
+              });
+
+              if (nextExercisePhase && nextExercisePhase.context && nextExercisePhase.context.exercise) {
+                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${nextExercisePhase.context.exercise.name}`;
+              } else {
+                this.elements.upcomingDisplay.innerHTML = '';
+              }
+
+
+              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
+              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
+
+              // --- Main Render Logic ---
+              this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
+              this.ringProgress.classList.remove('is-rest');
+
+              const isLoggingPhase = (status === 'running' && currentPhase.type === 'logging');
+              const isGuidedPhase = (status === 'running' && (currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'rest'));
+
+              this.elements.ringSvg.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
+              this.elements.loggingControls.classList.toggle('hidden', !isLoggingPhase);
+              this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
+
+
+              if (status === 'running') {
+                  if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
+                  else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
+                  else if (currentPhase.type === 'logging') this.renderManualReps(state, currentPhase);
+                  else if (currentPhase.type === 'rest') this.renderRest(state, currentPhase);
+                  else this.ringText.textContent = ''; // For audio/speech phases
+              }
+              
+              if(status === 'paused') {
+                this.renderPaused();
+              }
+          }
+
+          renderPhase(state, phase) {
+              const { phaseTimeElapsed } = state;
+              const phaseNameDisplay = phase.phase.replace('pre-', '').toUpperCase();
+              const isPrePhase = phase.phase.startsWith('pre-');
+
+              this.ringText.textContent = phaseNameDisplay;
+              this.ringText.classList.add('is-phase');
+              this.ringText.classList.toggle('flashing', isPrePhase);
+
+              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
+              this.updateTimerRing(isPrePhase ? 100 : progressPercent);
+          }
+
+          renderStaticHold(state, phase) {
+              const { phaseTimeElapsed } = state;
+              const timeRemaining = phase.duration_ms - phaseTimeElapsed;
+              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
+              this.ringText.textContent = this.formatTime(timeRemaining);
+              this.ringText.classList.add('is-timer');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderManualReps(state, phase) {
+              // Pre-compila i campi per la modalità logging
+              this.elements.loggingWeightInput.value = phase.context.weight || 0;
+              // Usa repMin come default, altrimenti rep, altrimenti 0
+              const defaultReps = phase.context.repsMin || phase.context.reps || 0;
+              this.elements.loggingRepsInput.value = defaultReps;
+              this.elements.loggingFailureInput.checked = false;
+          }
+
+          renderRest(state, phase) {
+              const { phaseTimeElapsed } = state;
+              const timeRemaining = phase.duration_ms - phaseTimeElapsed;
+              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
+
+              this.ringText.textContent = this.formatTime(timeRemaining);
+              this.ringText.classList.add('is-timer');
+              this.ringProgress.classList.add('is-rest');
+              this.updateTimerRing(progressPercent);
+          }
+
+          renderPaused() {
+              this.elements.ringSvg.classList.remove('hidden');
+              this.elements.loggingControls.classList.add('hidden');
+              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
+              this.ringText.classList.add('is-phase', 'flashing');
+          }
+
+          formatExerciseDetails(context) {
+              const { exercise, set } = context;
+              if (!exercise || !set) return '';
+              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${set} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${exercise.defaultSets}`;
+              
+              if (exercise.execution_mode === 'guided_tempo') {
+                  details += ` | ${exercise.defaultReps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
+              } else if (exercise.execution_mode === 'guided_static') {
+                  details += ` | ${exercise.defaultDuration}s`;
+              } else if (exercise.execution_mode === 'logging') {
+                  if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
+                      details += ` | ${exercise.defaultRepsMin}-${exercise.defaultRepsMax} ${UI_TEXT.TRAINER_REPS_LABEL}`;
+                  } else if (exercise.defaultRepsMin) {
+                      details += ` | ${exercise.defaultRepsMin}+ ${UI_TEXT.TRAINER_REPS_LABEL}`;
+                  } else {
+                      details += ` | ${UI_TEXT.TRAINER_REPS_LABEL}`;
+                  }
+              }
+
+              if (exercise.defaultWeight) {
+                  details += ` @ ${exercise.defaultWeight}kg`;
+              }
+              return details;
+          }
+      }
+  - file: styles/trainer.css
+    content: |
+      /* --- TRAINER VIEW STYLES --- */
+      #trainer-page {
+          height: calc(100vh - 60px);
+          display: flex;
+          flex-direction: column;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+      }
+
+      .trainer-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1rem;
+          background-color: var(--card-color);
+          border-bottom: 1px solid var(--border-color);
+          flex-shrink: 0;
+          gap: 1rem;
+      }
+
+      .trainer-header h2 {
+          font-size: 1.25rem;
+          color: var(--primary-color);
+          flex-grow: 1;
+          min-width: 0;
+          text-align: center;
+      }
+
+      .trainer-header-controls, .trainer-header-placeholder {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+          flex-basis: 80px; /* Give side elements a basis to help centering */
+      }
+      .trainer-header-controls { justify-content: flex-end; }
+      .trainer-header-placeholder { justify-content: flex-start; }
+
+
+      .btn-icon {
+        background: none;
+        border: none;
+        color: var(--text-color-muted);
+        cursor: pointer;
+        padding: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+      }
+      .btn-icon:hover {
+        background-color: rgba(255,255,255,0.1);
+        color: var(--text-color);
+      }
+      #trainer-end-btn {
+        color: var(--danger-color);
+      }
+       #trainer-end-btn:hover {
+        background-color: rgba(239, 83, 80, 0.1);
+      }
+
+      #audio-toggle-btn {
+          background: none;
+          border: none;
+          color: var(--text-color-muted);
+          cursor: pointer;
+          padding: 0.5rem;
+      }
+
+      #audio-toggle-btn.active {
+          color: var(--primary-color);
+      }
+
+      .trainer-body {
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          align-items: center;
+          padding: 1rem;
+          text-align: center;
+          position: relative;
+          overflow-y: auto;
+      }
+
+      .exercise-info-container {
+          margin-top: 1rem;
+          margin-bottom: 1rem;
+      }
+
+      #current-exercise-name {
+          font-size: 2rem;
+          font-weight: bold;
+          min-height: 1.2em;
+      }
+
+      #current-exercise-details {
+          font-size: 1.25rem;
+          color: var(--text-color-muted);
+          margin-bottom: 0.5rem;
+          min-height: 1.2em;
+      }
+
+      #current-rep-display {
+        font-size: 1rem;
+        color: var(--secondary-color);
+        font-weight: bold;
+        min-height: 1.2em;
+      }
+
+      #current-rep-display.hidden-rep {
+        visibility: hidden;
+      }
+
+      #upcoming-exercise-display {
+        font-size: 0.9rem;
+        color: var(--text-color-muted);
+        margin-top: 0.75rem;
+        font-style: italic;
+      }
+
+      #upcoming-exercise-display strong {
+        color: var(--text-color);
+        font-style: normal;
+      }
+
+      #trainer-display-modes {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          flex-grow: 1;
+          min-height: 280px;
+          width: 100%;
+      }
+
+      .timer-ring-container {
+          width: 280px;
+          height: 280px;
+          position: relative;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin: 1rem 0;
+      }
+
+      .timer-ring-container svg.hidden {
+        display: none;
+      }
+
+      .timer-ring-display {
+          font-size: 3rem;
+          font-weight: bold;
+          fill: var(--text-color);
+          text-anchor: middle;
+      }
+
+      .timer-ring-display.is-timer,
+      .timer-ring-display.is-rep-count {
+          font-family: 'Courier New', Courier, monospace;
+      }
+
+      .timer-ring-display.is-phase {
+          font-size: 2.5rem;
+          text-transform: uppercase;
+      }
+
+
+      .timer-ring-bg {
+          fill: none;
+          stroke: var(--card-color);
+          stroke-width: 12;
+      }
+
+      .timer-ring-progress {
+          fill: none;
+          stroke: var(--primary-color);
+          stroke-width: 12;
+          stroke-linecap: round;
+          transform: rotate(-90deg);
+          transform-origin: 50% 50%;
+          transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
+      }
+
+      .timer-ring-progress.is-rest {
+          stroke: var(--secondary-color);
+      }
+
+      @keyframes flash {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .flashing {
+        animation: flash 1.4s infinite;
+        fill: var(--primary-color);
+      }
+
+      .trainer-controls {
+          display: flex;
+          gap: 1rem;
+          justify-content: center;
+          align-items: center;
+          margin-top: 1rem;
+          height: 80px;
+          width: 100%;
+          padding-bottom: 1rem;
+      }
+
+      .btn-large {
+          padding: 1rem 2rem;
+          font-size: 1.25rem;
+      }
+
+      /* --- Stili per Logging Manuale --- */
+      #trainer-logging-controls {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        width: 100%;
+        max-width: 350px;
+        padding: 0 1.5rem; /* Aggiunge padding laterale per non toccare i bordi del ring */
+      }
+
+      #trainer-logging-controls.hidden {
+        display: none;
+      }
+
+      .logging-inputs-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      #trainer-logging-controls .form-group {
+        display: flex;
+        flex-direction: column;
+      }
+
+      #trainer-logging-controls .form-group label {
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+        color: var(--text-color-muted);
+      }
+
+      #trainer-logging-controls .form-group input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 1.25rem;
+        background-color: var(--card-color);
+        color: var(--text-color);
+        text-align: center;
+        font-family: 'Courier New', Courier, monospace;
+        font-weight: bold;
+      }
+
+      /* Stile per rimuovere le frecce dagli input numerici */
+      #trainer-logging-controls input[type=number] {
+        -moz-appearance: textfield;
+      }
+      #trainer-logging-controls input[type=number]::-webkit-outer-spin-button,
+      #trainer-logging-controls input[type=number]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      .form-group-checkbox {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+
+      .form-group-checkbox label {
+        font-size: 1rem;
+        color: var(--text-color);
+      }
+
+      .form-group-checkbox input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        accent-color: var(--primary-color);
+      }
+
+      #trainer-logging-controls .btn-large {
+        width: 100%;
+      }
+  - file: styles/modals.css
+    content: |
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
+
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
+
+      /* Stile per le <select> nei modali */
+      .form-group select {
+          padding: 0.75rem;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          font-size: 1rem;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          appearance: none;
+          -webkit-appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23aaa'%3E%3Cpath d='M8 11.5a.5.5 0 0 1-.35-.15l-4-4a.5.5 0 0 1 .7-.7L8 10.29l3.65-3.64a.5.5 0 0 1 .7.7l-4 4a.5.5 0 0 1-.35.15z'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 0.75rem center;
+          background-size: 1em;
+          padding-right: 2.5rem; /* Spazio per la freccia */
+      }
+      .form-group select:focus {
+          outline: none;
+          border-color: var(--primary-color);
+      }
+
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
+      }
+      .editor-section-body {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .meal-details, .workout-summary {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .meal-info, .exercise-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .meal-details__name {
+        font-weight: 500;
+      }
+      .meal-actions, .workout-summary-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+
+      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+      .workout-editor-list .draggable-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        min-height: 70px;
+      }
+      .workout-editor-list .meal-actions { margin-left: auto; }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
+      }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
+      }
+      #exercise-editor-form .reps-range-group { grid-column: 3 / 7; }
+
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
+      }
+
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+      /* --- MEAL EDITOR MODAL --- */
+      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
+      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      .meal-type-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .meal-type-chip {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+      }
+      .meal-type-chip.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+      }
+      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
+      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
+      .meal-editor-ingredient-row label { display: none; }
+      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
+          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
+      }
+      .meal-editor-ingredient-row .btn-remove-ingredient {
+          background: none; border: none; color: var(--danger-color); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+      }
+      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
+      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
+
+      /* --- MODAL SEARCH BAR & FILTERS --- */
+      .modal-search-bar-container {
+        padding: 0 1.5rem 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .modal-search-bar-container .library-search-bar {
+        width: 100%;
+        margin: 0;
+      }
+      .tag-filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem 0 1.5rem;
+      }
+      .tag-filter-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+        background-color: transparent;
+        color: var(--text-color-muted);
+      }
+      .tag-filter-btn.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+        font-weight: bold;
+      }
+      #selection-modal .modal-body {
+        padding-top: 1rem;
+      }
+
+      /* --- PACKAGE PREVIEW MODAL --- */
+      #package-preview-body {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+      .preview-section h4 {
+        color: var(--secondary-color);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .preview-list {
+        list-style-type: none;
+        padding-left: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .preview-list li {
+        padding: 0.5rem;
+        background-color: var(--bg-color);
+        border-radius: 4px;
+      }
+
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
+        }
+        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
+        #package-preview-body {
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+      }
+
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
+      }
+  - file: src/core/calculations.js
+    content: |
+      export function calculateAge(dateString) {
+        if (!dateString) return null;
+        const birthDate = new Date(dateString);
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      }
+
+      export function calculateBMR(userProfile, weight) {
+        if (!userProfile || !weight || !userProfile.dateOfBirth || !userProfile.height || !userProfile.gender) {
+          return null;
+        }
+
+        const age = calculateAge(userProfile.dateOfBirth);
+        const height = parseFloat(userProfile.height);
+        const weightFloat = parseFloat(weight);
+
+        if (isNaN(age) || isNaN(height) || isNaN(weightFloat)) return null;
+
+        let bmr;
+        // Formula Mifflin-St Jeor: P = 10m + 6.25h - 5a + s
+        // m = peso in kg, h = altezza in cm, a = età in anni, s è +5 per uomini e -161 per donne.
+        if (userProfile.gender === 'male') {
+          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) + 5;
+        } else if (userProfile.gender === 'female') {
+          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) - 161;
+        } else {
+          return null; // Gender not specified or invalid
+        }
+
+        return Math.round(bmr);
+      }
+
+      export function calculateWorkoutCalories(workoutSummary, userProfile, userWeight) {
+        if (!workoutSummary || !userWeight || !workoutSummary.exercises || workoutSummary.exercises.length === 0) {
+          return 0;
+        }
+
+        const weightKg = parseFloat(userWeight);
+        if (isNaN(weightKg) || weightKg <= 0) return 0;
+        
+        // Calcola il BMR per usarlo come base se il MET non è disponibile
+        const bmr = calculateBMR(userProfile, userWeight);
+        const metBaseline = bmr ? (bmr / 24) / weightKg : 1; // MET a riposo (approssimato)
+
+        let totalCalories = 0;
+
+        workoutSummary.exercises.forEach(exercise => {
+          // Usa il MET specifico dell'esercizio se disponibile, altrimenti un MET generico per "strength training"
+          const met = exercise.met_value || (metBaseline * 3.5); // 3.5 è un MET generico per pesi
+          
+          // totalTime for each exercise is in milliseconds (solo per modalità guidate)
+          let durationHours = exercise.totalTime / (1000 * 60 * 60);
+
+          // Per la modalità 'logging', la durata non è tracciata, quindi stimiamo
+          if (durationHours === 0 && exercise.setsData.length > 0) {
+            // Stima: 2.5 secondi per rep + riposo
+            const activeTimeSeconds = exercise.setsData.reduce((acc, set) => acc + (set.reps * 2.5), 0);
+            const restTimeSeconds = (exercise.setsData.length - 1) * exercise.defaultRest;
+            durationHours = (activeTimeSeconds + restTimeSeconds) / 3600;
+          }
+
+          if (typeof met === 'number' && met > 0 && durationHours > 0) {
+            // Formula: Kcal = MET * Peso(kg) * Durata(ore)
+            const caloriesBurned = met * weightKg * durationHours;
+            totalCalories += caloriesBurned;
+          }
+        });
+
+        return Math.round(totalCalories);
       }
