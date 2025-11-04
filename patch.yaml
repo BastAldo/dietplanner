@@ -1,782 +1,324 @@
-commit_message: "feat(trainer): Architettura Dual Mode - Fase 2 - Interfaccia"
+commit_message: "fix(trainer): Corregge infinite loop in runWorkoutLoop"
 rationale: |
-  Questo commit risolve l'errore `SyntaxError` (relativo a `incrementManualRep`) e implementa la **Fase 2** completa dell'architettura "Dual Mode" per il trainer.
+  Questo commit corregge un bug critico introdotto nella precedente modifica (Fase 1), dove il `runWorkoutLoop` in `src/core/trainer.js` entrava in un loop infinito.
 
-  Come da piano approvato, questo aggiornamento introduce l'interfaccia utente necessaria per supportare entrambe le modalità di allenamento (Guidata e Logging).
+  **Problema:**
+  Il loop `while` utilizzava una variabile di iterazione locale (`i`) e la confrontava con il `currentQueueIndex` memorizzato nello stato. La logica di aggiornamento e confronto tra queste due variabili era difettosa e causava un reset dell'indice a 0 ad ogni iterazione, bloccando il trainer sulla prima fase (come visto nei log di debug: `[Trainer-Loop] Executing phase 0: speech`).
 
-  1.  **`src/ui/components/TrainerComponent.js`:**
-      * **Correzione Errore:** L'importazione è stata corretta. `incrementManualRep` (che non esiste più) è stato rimosso e sostituito con le nuove funzioni `confirmCurrentSet` e `skipPhase` importate da `../../core/trainer.js`.
-      * **Logica `handleControls`:**
-          * I `case` per i nuovi bottoni `trainer-skip-bwd-btn` e `trainer-skip-fwd-btn` sono stati aggiunti e mappati a `skipPhase(-1)` e `skipPhase(1)`.
-          * Il `case` per `trainer-confirm-set-btn` è stato aggiunto. Questa è la nuova logica core per la modalità `logging`: legge i valori dai campi di input (peso, reps, cedimento), crea un oggetto `setDataFromUI` e lo passa a `confirmCurrentSet`.
-          * Il `case` per il vecchio `trainer-manual-rep-btn` è stato rimosso.
-      * **Logica `render`:**
-          * La funzione `render` è stata completamente riscritta per essere "consapevole" delle due modalità (`guided_*` vs `logging`).
-          * Se la fase è `logging`, ora nasconde il timer ad anello (`ringContainer`) e mostra la nuova UI di logging (`loggingControls`).
-          * Se la fase è `guided_tempo`, `static_hold` o `rest`, fa il contrario: mostra il timer e nasconde la UI di logging.
-          * I campi di logging (`#trainer-log-weight`, `#trainer-log-reps`) vengono pre-compilati con i valori pianificati (`repsMin`, `weight`) all'inizio di ogni set.
-          * La visibilità del bottone "Pausa" è stata corretta: ora si nasconde durante la modalità `logging` (poiché l'utente è già in una fase di "pausa" manuale).
-      * **Logica `formatExerciseDetails`:**
-          * Aggiornata per mostrare correttamente i "rep range" (es. "8-12 Reps") quando si è in modalità `logging`.
-
-  2.  **`templates/trainer.html`:**
-      * **Header:** Aggiunti i bottoni "Skip Indietro" (`#trainer-skip-bwd-btn`) e "Skip Avanti" (`#trainer-skip-fwd-btn`) all'header per la navigazione della coda.
-      * **Controlli Principali:**
-          * Il vecchio `#trainer-manual-rep-btn` è stato rimosso.
-          * È stato aggiunto il nuovo contenitore `#trainer-logging-controls`.
-          * Questo contenitore include gli input per "Peso", "Reps", la checkbox "A Cedimento" e il bottone "Conferma Set". È nascosto (`hidden`) di default e sarà gestito da `TrainerComponent.js`.
-
-  3.  **`styles/trainer.css`:**
-      * Aggiunti nuovi stili per `#trainer-logging-controls` per formattare la nuova UI di logging (input e checkbox) in modo che sia grande, leggibile e allineata con la `docs/03_STYLE_GUIDE.md`.
-      * Aggiunti stili per i nuovi bottoni di skip nell'header, assicurando che siano correttamente allineati.
+  **Soluzione:**
+  1.  **Rimozione della variabile locale `i`:** Il `runWorkoutLoop` è stato rifattorizzato per utilizzare `getWorkoutState().currentQueueIndex` come unica fonte di verità per l'indice della coda.
+  2.  **Gestione del Loop:**
+      * Il loop `while (getWorkoutState().status === 'running')` ora controlla l'indice corrente (`currentIndex`) all'inizio di ogni iterazione.
+      * Se l'indice è fuori dai limiti (`>= fullExecutionQueue.length`), il loop si interrompe e l'allenamento termina.
+      * La fase viene eseguita.
+      * **Incremento Corretto:** Alla fine dell'iterazione, controlliamo se l'indice è stato modificato da una funzione esterna (come `skipPhase`). Se non è stato modificato, incrementiamo `currentQueueIndex` nello stato (`updateState({ currentQueueIndex: currentIndex + 1 })`).
+  
+  Questo approccio risolve l'infinite loop e garantisce che il loop e la funzione `skipPhase` operino in modo coeso sulla stessa variabile di stato (`currentQueueIndex`), come previsto dall'architettura "Dual Mode".
 patches:
-  - file: templates/trainer.html
+  - file: src/core/trainer.js
     content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <div class="trainer-header-placeholder">
-                  <button id="trainer-skip-bwd-btn" class="btn-icon"></button>
-              </div>
-              <h2 id="trainer-title">Allenamento</h2>
-              <div class="trainer-header-controls">
-                  <button id="trainer-skip-fwd-btn" class="btn-icon"></button>
-                  <button id="audio-toggle-btn"></button>
-                  <button id="trainer-end-btn" class="btn-icon"></button>
-              </div>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-                  <p id="current-rep-display"></p>
-                  <div id="upcoming-exercise-display"></div>
-              </div>
+      import { setView, setLastWorkoutSummary, addWorkoutToHistory, getState as getGlobalState } from './state.js';
+      import { log } from '../utils/logger.js';
+      import { getWorkoutState, resetState, updateState } from './trainer/state.js';
+      import { runTimerAnimation, stopAllAnimations } from './trainer/animation.js';
+      import { buildFullWorkoutQueue } from './trainer/queueBuilder.js';
+      import { calculateWorkoutCalories } from './calculations.js';
+      import { speak, playStartCue, playTick } from '../utils/audioFeedback.js';
+      import { UI_TEXT } from '../config/uiText.js';
 
-              <div id="trainer-display-modes">
-                  <div id="timer-ring-container" class="timer-ring-container">
-                  </div>
-              </div>
+      // This is the "Director d'Orchestra"
+      async function runWorkoutLoop() {
+        while (getWorkoutState().status === 'running') {
+            let currentState = getWorkoutState();
+            let currentIndex = currentState.currentQueueIndex;
 
-              <div id="trainer-main-controls" class="trainer-controls">
-                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
-                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
-                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
-                  
-                  <div id="trainer-logging-controls" class="trainer-logging-controls hidden">
-                      <div class="logging-inputs-grid">
-                          <div class="form-group">
-                              <label for="trainer-log-weight">Peso (kg)</label>
-                              <input type="number" id="trainer-log-weight" name="weight" min="0" step="0.5">
-                          </div>
-                          <div class="form-group">
-                              <label for="trainer-log-reps">Reps</label>
-                              <input type="number" id="trainer-log-reps" name="reps" min="0">
-                          </div>
-                      </div>
-                      <div class="form-group-checkbox">
-                          <input type="checkbox" id="trainer-log-failure" name="failure">
-                          <label for="trainer-log-failure">A Cedimento</label>
-                      </div>
-                      <button id="trainer-confirm-set-btn" class="btn btn-primary btn-large">CONFERMA SET</button>
-                  </div>
+            if (currentIndex >= currentState.fullExecutionQueue.length) {
+                log('Trainer-Loop', 'Coda di esecuzione terminata.');
+                break; // Esce dal loop se abbiamo finito
+            }
 
-              </div>
-          </div>
-      </div>
-  - file: src/ui/components/TrainerComponent.js
-    content: |
-      import { getWorkoutState, updateState } from '../../core/trainer/state.js';
-      import { startWorkout, pauseWorkout, resumeWorkout, endWorkout, discardWorkout, confirmCurrentSet, skipPhase } from '../../core/trainer.js';
-      import { setView } from '../../core/state.js';
-      import { log } from '../../utils/logger.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
-      import { showConfirmModal } from '../modals.js';
+            const phase = currentState.fullExecutionQueue[currentIndex];
+            log('Trainer-Loop', `Executing phase ${currentIndex}:`, phase.type);
 
-      const RING_RADIUS = 128;
-      const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-      export class TrainerComponent {
-          constructor(containerElement) {
-              this.container = containerElement;
-
-              this.elements = {
-                  exerciseName: this.container.querySelector('#current-exercise-name'),
-                  exerciseDetails: this.container.querySelector('#current-exercise-details'),
-                  repDisplay: this.container.querySelector('#current-rep-display'),
-                  upcomingDisplay: this.container.querySelector('#upcoming-exercise-display'),
-
-                  btnStart: this.container.querySelector('#trainer-start-btn'),
-                  btnPause: this.container.querySelector('#trainer-pause-btn'),
-                  btnResume: this.container.querySelector('#trainer-resume-btn'),
-                  btnAudio: this.container.querySelector('#audio-toggle-btn'),
-                  btnEnd: this.container.querySelector('#trainer-end-btn'),
-                  btnSkipBwd: this.container.querySelector('#trainer-skip-bwd-btn'),
-                  btnSkipFwd: this.container.querySelector('#trainer-skip-fwd-btn'),
-
-                  ringContainer: this.container.querySelector('#timer-ring-container'),
-                  
-                  // Controlli Logging
-                  loggingControls: this.container.querySelector('#trainer-logging-controls'),
-                  loggingWeightInput: this.container.querySelector('#trainer-log-weight'),
-                  loggingRepsInput: this.container.querySelector('#trainer-log-reps'),
-                  loggingFailureInput: this.container.querySelector('#trainer-log-failure'),
-                  btnConfirmSet: this.container.querySelector('#trainer-confirm-set-btn'),
-              };
-
-              this.ringProgress = null;
-              this.ringText = null;
-
-              // Bind the event handler once in the constructor
-              this.boundHandleControls = this.handleControls.bind(this);
-          }
-
-          mount() {
-              this.createTimerRing();
-              this.container.addEventListener('click', this.boundHandleControls);
-              this.elements.btnEnd.innerHTML = renderIcon('STOP', {width: 28, height: 28});
-              this.elements.btnSkipBwd.innerHTML = renderIcon('SKIP_BWD', {width: 24, height: 24}); // Assumendo esista 'SKIP_BWD'
-              this.elements.btnSkipFwd.innerHTML = renderIcon('SKIP_FWD', {width: 24, height: 24}); // Assumendo esista 'SKIP_FWD'
-              // Fallback se icone non esistono
-              if (!this.elements.btnSkipBwd.innerHTML) this.elements.btnSkipBwd.innerHTML = '<<';
-              if (!this.elements.btnSkipFwd.innerHTML) this.elements.btnSkipFwd.innerHTML = '>>';
-
-              this.updateAudioButton(getWorkoutState().isAudioEnabled);
-          }
-
-          destroy() {
-              log('TrainerComponent', 'Destroying component and cleaning up DOM...');
-              this.container.removeEventListener('click', this.boundHandleControls);
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
-              }
-              log('TrainerComponent', 'Component destroyed.');
-          }
-
-          _handleEndWorkoutFlow() {
-            showConfirmModal({
-                title: UI_TEXT.TERMINATE_WORKOUT_CONFIRM_TITLE,
-                message: UI_TEXT.TERMINATE_WORKOUT_PROMPT_MSG,
-                buttons: [
-                    {
-                        text: UI_TEXT.SAVE_AND_END_BTN,
-                        className: 'btn btn-primary',
-                        callback: endWorkout
-                    },
-                    {
-                        text: UI_TEXT.DISCARD_WORKOUT_BTN,
-                        className: 'btn btn-danger',
-                        callback: discardWorkout
-                    },
-                    {
-                        text: UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
-                        className: 'btn btn-secondary',
-                        callback: null // Just closes the modal
+            switch (phase.type) {
+                case 'speech':
+                    if (getWorkoutState().isAudioEnabled && phase.text) {
+                        if(phase.await) await speak(phase.text);
+                        else speak(phase.text);
                     }
-                ]
-            });
+                    break;
+                case 'audio':
+                    if (getWorkoutState().isAudioEnabled) {
+                        if (phase.cue === 'tick') playTick();
+                    }
+                    break;
+                case 'movement':
+                case 'rest':
+                case 'static_hold':
+                    await runTimerAnimation(phase.duration_ms);
+                    break;
+                case 'set_completed':
+                    // Per le modalità guidate, raccoglie i dati pianificati
+                    collectSetData();
+                    break;
+                case 'logging':
+                    // Pausa il loop e attende la conferma manuale dalla UI
+                    await new Promise(resolve => {
+                        updateState({ resolveCurrentSetPromise: resolve });
+                    });
+                    // Quando la promise si risolve (tramite confirmCurrentSet),
+                    // i dati sono GIÀ stati raccolti da confirmCurrentSet.
+                    break;
+            }
+            
+            // Controlla lo stato DOPO qualsiasi operazione 'await'
+            const stateAfterAwait = getWorkoutState();
+            if (stateAfterAwait.status !== 'running') {
+                log('Trainer', 'Workout loop terminated (paused or finished).');
+                return; // Esce dalla funzione
+            }
+
+            // Incrementa l'indice solo se non è stato modificato da un'altra funzione (es. skipPhase)
+            if (stateAfterAwait.currentQueueIndex === currentIndex) {
+                updateState({ currentQueueIndex: currentIndex + 1 });
+            }
+            // Se l'indice è stato modificato (es. skip), il loop while ricomincerà
+            // e leggerà il nuovo 'currentQueueIndex' all'inizio.
+        }
+        
+        // Se il loop completa naturalmente (uscendo dal while), termina l'allenamento
+        if (getWorkoutState().status === 'running') {
+            endWorkout();
+        }
+      }
+
+      export function resetWorkoutState() {
+        log('Trainer', 'Resetting workout state.');
+        stopAllAnimations();
+        resetState();
+      }
+
+      export function initializeWorkout(plannedExercises, isoDate) {
+        if (!plannedExercises || plannedExercises.length === 0) {
+            return;
+        }
+        resetWorkoutState();
+
+        const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
+
+        const initialState = {
+            workoutDate: isoDate,
+            exerciseQueue: JSON.parse(JSON.stringify(plannedExercises)),
+            fullExecutionQueue: fullExecutionQueue,
+            currentQueueIndex: 0,
+            status: 'idle',
+            startTime: 0,
+            setsData: []
+        };
+        updateState(initialState);
+        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+      }
+
+      export function collectSetData(setDataFromUI = null) {
+          const state = getWorkoutState();
+          // Usa l'indice corrente, o l'indice precedente se 'set_completed' segue una fase
+          let phaseIndex = state.currentQueueIndex;
+          let currentPhase = state.fullExecutionQueue[phaseIndex];
+
+          // Se la fase corrente è 'set_completed', i dati sono nella fase precedente
+          if (currentPhase && currentPhase.type === 'set_completed') {
+            phaseIndex = Math.max(0, phaseIndex - 1);
+            currentPhase = state.fullExecutionQueue[phaseIndex];
+          }
+          
+          if (!currentPhase || !currentPhase.context) {
+            log('Trainer', 'collectSetData failed: phase or context not found.', { currentPhase });
+            return;
           }
 
-          async handleControls(e) {
-              const target = e.target.closest('button');
-              if (!target) return;
+          const { exercise, set } = currentPhase.context;
 
-              const targetId = target.id;
-              log('TrainerComponent', `Control button clicked: ${targetId}`);
-              switch (targetId) {
-                  case 'trainer-start-btn':
-                      target.disabled = true;
-                      await startWorkout();
-                      if(this.elements.btnStart) {
-                        this.elements.btnStart.disabled = false;
-                      }
-                      break;
-                  case 'trainer-pause-btn': pauseWorkout(); break;
-                  case 'trainer-resume-btn': resumeWorkout(); break;
-                  case 'trainer-end-btn': this._handleEndWorkoutFlow(); break;
-                  case 'audio-toggle-btn': this.toggleAudio(); break;
-                  case 'trainer-skip-bwd-btn': skipPhase(-1); break;
-                  case 'trainer-skip-fwd-btn': skipPhase(1); break;
-                  case 'trainer-confirm-set-btn':
-                      const setDataFromUI = {
-                        weight: parseFloat(this.elements.loggingWeightInput.value) || 0,
-                        reps: parseInt(this.elements.loggingRepsInput.value) || 0,
-                        to_failure: this.elements.loggingFailureInput.checked
-                      };
-                      confirmCurrentSet(setDataFromUI);
-                      break;
-              }
+          let setData;
+          if (setDataFromUI) {
+            // Modalità Logging: Dati arrivano dalla UI
+            setData = {
+              exerciseId: exercise.instanceId,
+              set: set,
+              reps: setDataFromUI.reps,
+              duration: 0, // La modalità logging non è basata sul tempo
+              rest: exercise.defaultRest,
+              weight: setDataFromUI.weight,
+              to_failure: setDataFromUI.to_failure || false
+            };
+          } else {
+            // Modalità Guidata: Dati arrivano dal context (piano)
+            setData = {
+              exerciseId: exercise.instanceId,
+              set: set,
+              reps: currentPhase.context.reps, // Reps pianificate
+              duration: state.lastTimerDuration || 0, // Durata dall'animation engine
+              rest: exercise.defaultRest,
+              weight: currentPhase.context.weight || 0
+            };
           }
 
-          toggleAudio() {
-              const currentState = getWorkoutState();
-              const newState = !currentState.isAudioEnabled;
-              updateState({ isAudioEnabled: newState });
-              this.updateAudioButton(newState);
+          const newSetsData = [...state.setsData, setData];
+          updateState({ setsData: newSetsData, lastTimerDuration: 0 }); // Resetta lastTimerDuration
+          log('Trainer', 'Set data collected', { setData });
+      }
+
+      export async function startWorkout() {
+        const state = getWorkoutState();
+        log('Interactions', 'Start workout button clicked', { date: state.workoutDate });
+        if (state.status !== 'idle') return;
+
+        if (getWorkoutState().isAudioEnabled) {
+            playStartCue();
+        }
+
+        // Small delay to allow the sound cue to play before any potential UI lag
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        if (getWorkoutState().status !== 'idle') {
+            log('Trainer', 'Workout start aborted, status changed during start cue.');
+            return;
+        }
+
+        updateState({ status: 'running', startTime: Date.now() });
+        runWorkoutLoop(); // Start the master loop
+        log('Trainer', 'Workout started.');
+      }
+
+      export function pauseWorkout() {
+        const state = getWorkoutState();
+        if (state.status === 'running') {
+            updateState({ status: 'paused' });
+            log('Trainer', 'Workout paused.');
+        }
+      }
+
+      export function resumeWorkout() {
+        const state = getWorkoutState();
+        if (state.status === 'paused') {
+            updateState({ status: 'running' });
+            log('Trainer', 'Workout resumed.');
+            // Rilancia il loop principale. Questo è sicuro perché il loop
+            // stesso leggerà lo stato 'currentQueueIndex' e riprenderà da lì.
+            // Se era in attesa di una promise, l'animazione riprenderà da sola.
+            runWorkoutLoop();
+        }
+      }
+
+      export function confirmCurrentSet(setDataFromUI) {
+          const state = getWorkoutState();
+          if (state.status !== 'running') return;
+
+          // Raccogli i dati del set appena completato
+          collectSetData(setDataFromUI);
+
+          // Sblocca il `runWorkoutLoop` che è in `await`
+          if (state.resolveCurrentSetPromise) {
+              state.resolveCurrentSetPromise();
+              updateState({ resolveCurrentSetPromise: null });
+          }
+      }
+
+      export function skipPhase(direction = 1) {
+          stopAllAnimations(); // Interrompe qualsiasi timer (es. riposo)
+          const state = getWorkoutState();
+          if (state.status !== 'running') return;
+
+          log('Trainer', 'Skipping phase', { direction });
+
+          // Se siamo in attesa di conferma set, sblocca la promise
+          if (state.resolveCurrentSetPromise) {
+              log('Trainer', 'Skipping an awaiting set confirmation');
+              state.resolveCurrentSetPromise();
+              updateState({ resolveCurrentSetPromise: null });
           }
 
-          updateAudioButton(isAudioEnabled) {
-              this.elements.btnAudio.innerHTML = renderIcon(isAudioEnabled ? 'AUDIO_ON' : 'AUDIO_OFF');
-              this.elements.btnAudio.classList.toggle('active', isAudioEnabled);
+          let newIndex = state.currentQueueIndex + direction;
+          
+          if (newIndex >= state.fullExecutionQueue.length) {
+              endWorkout(); // Se skippiamo l'ultima fase, finisce l'allenamento
+          } else if (newIndex < 0) {
+              newIndex = 0; // Non andare prima dell'inizio
+              updateState({ currentQueueIndex: newIndex });
+          } else {
+              updateState({ currentQueueIndex: newIndex });
           }
+      }
 
-          createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) return;
-              this.elements.ringContainer.innerHTML = '';
-              const svgNS = 'http://www.w3.org/2000/svg';
-              const svg = document.createElementNS(svgNS, 'svg');
-              const svgSize = (RING_RADIUS + 12) * 2;
-              svg.setAttribute('width', svgSize);
-              svg.setAttribute('height', svgSize);
-              svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
-              const center = svgSize / 2;
-              const backgroundCircle = document.createElementNS(svgNS, 'circle');
-              backgroundCircle.setAttribute('cx', center);
-              backgroundCircle.setAttribute('cy', center);
-              backgroundCircle.setAttribute('r', RING_RADIUS);
-              backgroundCircle.setAttribute('class', 'timer-ring-bg');
-              const progressCircle = document.createElementNS(svgNS, 'circle');
-              progressCircle.setAttribute('cx', center);
-              progressCircle.setAttribute('cy', center);
-              progressCircle.setAttribute('r', RING_RADIUS);
-              progressCircle.setAttribute('class', 'timer-ring-progress');
-              progressCircle.style.strokeDasharray = RING_CIRCUMFERENCE;
-              const text = document.createElementNS(svgNS, 'text');
-              text.setAttribute('x', '50%');
-              text.setAttribute('y', '50%');
-              text.setAttribute('dy', '.3em');
-              text.setAttribute('class', 'timer-ring-display');
-              svg.appendChild(backgroundCircle);
-              svg.appendChild(progressCircle);
-              svg.appendChild(text);
-              this.elements.ringContainer.prepend(svg);
-              this.ringProgress = progressCircle;
-              this.ringText = text;
-          }
 
-          updateTimerRing(percent) {
-              if (!this.ringProgress) return;
-              const offset = RING_CIRCUMFERENCE - (percent / 100) * RING_CIRCUMFERENCE;
-              this.ringProgress.style.strokeDashoffset = offset;
-          }
+      function createWorkoutSummary(finalState) {
+          const totalTime = Date.now() - finalState.startTime;
+          let totalTonnage = 0;
 
-          formatTime(ms) {
-              const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-              const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
-              const seconds = (totalSeconds % 60).toString().padStart(2, '0');
-              return `${minutes}:${seconds}`;
-          }
+          const exercisesWithDetails = finalState.exerciseQueue.map(exercise => {
+              const setsForThisExercise = finalState.setsData.filter(d => d.exerciseId === exercise.instanceId);
+              const setsCompleted = setsForThisExercise.length;
+              const totalExerciseTime = setsForThisExercise.reduce((acc, set) => acc + (set.duration || 0), 0);
+              const exerciseTonnage = setsForThisExercise.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+              totalTonnage += exerciseTonnage;
 
-          render(state) {
-              if (!this.ringText || !state.fullExecutionQueue || state.fullExecutionQueue.length === 0) {
-                  // Handle pre-start or empty state
-                  this.elements.exerciseName.textContent = state.exerciseQueue[0]?.name || 'Pronto per iniziare';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.updateTimerRing(0);
-                  this.ringText.textContent = '';
-                  this.elements.btnStart.classList.toggle('hidden', state.status !== 'idle');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  this.elements.loggingControls.classList.add('hidden');
-                  this.elements.ringContainer.classList.remove('hidden');
-                  return;
+              return {
+                  ...exercise,
+                  setsCompleted: setsCompleted,
+                  setsData: setsForThisExercise,
+                  totalTime: totalExerciseTime,
+                  tonnage: exerciseTonnage
               };
+          });
 
-              const { fullExecutionQueue, currentQueueIndex, status } = state;
-              const currentPhase = fullExecutionQueue[currentQueueIndex];
+          const totalSets = exercisesWithDetails.reduce((acc, ex) => acc + ex.setsCompleted, 0);
+          const totalExerciseTime = exercisesWithDetails.reduce((acc, ex) => acc + ex.totalTime, 0);
+          const totalRestTime = finalState.setsData.reduce((acc, set) => acc + (set.rest || 0) * 1000, 0);
 
-              if (!currentPhase || !currentPhase.context || !currentPhase.context.exercise) {
-                  this.elements.exerciseName.textContent = 'Allenamento Completato';
-                  this.elements.exerciseDetails.textContent = '';
-                  this.elements.repDisplay.classList.add('hidden-rep');
-                  this.elements.upcomingDisplay.innerHTML = '';
-                  this.elements.btnStart.classList.add('hidden');
-                  this.elements.btnPause.classList.add('hidden');
-                  this.elements.btnResume.classList.add('hidden');
-                  this.elements.loggingControls.classList.add('hidden');
-                  this.elements.ringContainer.classList.remove('hidden');
-                  return;
-              }
+          const summary = {
+              date: finalState.workoutDate,
+              totalTime,
+              totalSets,
+              totalExerciseTime,
+              totalRestTime,
+              totalTonnage,
+              exercises: exercisesWithDetails,
+              startTime: finalState.startTime,
+              totalCaloriesBurned: 0
+          };
 
-              const { exercise } = currentPhase.context;
-              this.elements.exerciseName.textContent = exercise.name;
-              this.elements.exerciseDetails.textContent = this.formatExerciseDetails(currentPhase.context);
-
-              if ((currentPhase.type === 'movement' || currentPhase.type === 'static_hold') && currentPhase.context.rep) {
-                this.elements.repDisplay.textContent = `${UI_TEXT.TRAINER_REP_LABEL} ${currentPhase.context.rep}`;
-                this.elements.repDisplay.classList.remove('hidden-rep');
-              } else {
-                this.elements.repDisplay.classList.add('hidden-rep');
-              }
-
-              const nextExercisePhase = fullExecutionQueue.find((phase, index) => {
-                  return index > currentQueueIndex && phase.context && phase.context.exercise && phase.context.exercise.instanceId !== exercise.instanceId;
-              });
-
-              if (nextExercisePhase && nextExercisePhase.context && nextExercisePhase.context.exercise) {
-                this.elements.upcomingDisplay.innerHTML = `<strong>${UI_TEXT.TRAINER_UPCOMING_LABEL}</strong> ${nextExercisePhase.context.exercise.name}`;
-              } else {
-                this.elements.upcomingDisplay.innerHTML = '';
-              }
-
-
-              this.elements.btnStart.classList.toggle('hidden', status !== 'idle');
-              this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
-
-              // --- Main Render Logic ---
-              this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
-              this.ringProgress.classList.remove('is-rest');
-
-              const isLoggingPhase = (status === 'running' && currentPhase.type === 'logging');
-              const isGuidedPhase = (status === 'running' && (currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'rest'));
-
-              this.elements.ringContainer.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
-              this.elements.loggingControls.classList.toggle('hidden', !isLoggingPhase);
-              this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
-
-
-              if (status === 'running') {
-                  if (currentPhase.type === 'movement') this.renderPhase(state, currentPhase);
-                  else if (currentPhase.type === 'static_hold') this.renderStaticHold(state, currentPhase);
-                  else if (currentPhase.type === 'logging') this.renderManualReps(state, currentPhase);
-                  else if (currentPhase.type === 'rest') this.renderRest(state, currentPhase);
-                  else this.ringText.textContent = ''; // For audio/speech phases
-              }
-              
-              if(status === 'paused') {
-                this.renderPaused();
-              }
+          const globalState = getGlobalState();
+          const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
+          if (latestWeight) {
+            summary.totalCaloriesBurned = calculateWorkoutCalories(summary, latestWeight);
           }
 
-          renderPhase(state, phase) {
-              const { phaseTimeElapsed } = state;
-              const phaseNameDisplay = phase.phase.replace('pre-', '').toUpperCase();
-              const isPrePhase = phase.phase.startsWith('pre-');
-
-              this.ringText.textContent = phaseNameDisplay;
-              this.ringText.classList.add('is-phase');
-              this.ringText.classList.toggle('flashing', isPrePhase);
-
-              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
-              this.updateTimerRing(isPrePhase ? 100 : progressPercent);
-          }
-
-          renderStaticHold(state, phase) {
-              const { phaseTimeElapsed } = state;
-              const timeRemaining = phase.duration_ms - phaseTimeElapsed;
-              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
-              this.ringText.textContent = this.formatTime(timeRemaining);
-              this.ringText.classList.add('is-timer');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderManualReps(state, phase) {
-              // Pre-compila i campi per la modalità logging
-              this.elements.loggingWeightInput.value = phase.context.weight || 0;
-              // Usa repMin come default, altrimenti rep, altrimenti 0
-              const defaultReps = phase.context.repsMin || phase.context.reps || 0;
-              this.elements.loggingRepsInput.value = defaultReps;
-              this.elements.loggingFailureInput.checked = false;
-          }
-
-          renderRest(state, phase) {
-              const { phaseTimeElapsed } = state;
-              const timeRemaining = phase.duration_ms - phaseTimeElapsed;
-              const progressPercent = (phase.duration_ms > 0) ? (phaseTimeElapsed / phase.duration_ms) * 100 : 0;
-
-              this.ringText.textContent = this.formatTime(timeRemaining);
-              this.ringText.classList.add('is-timer');
-              this.ringProgress.classList.add('is-rest');
-              this.updateTimerRing(progressPercent);
-          }
-
-          renderPaused() {
-              this.elements.ringContainer.classList.remove('hidden');
-              this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
-              this.ringText.classList.add('is-phase', 'flashing');
-          }
-
-          formatExerciseDetails(context) {
-              const { exercise, set } = context;
-              if (!exercise || !set) return '';
-              let details = `${UI_TEXT.TRAINER_SET_LABEL} ${set} ${UI_TEXT.TRAINER_OF_SETS_LABEL} ${exercise.defaultSets}`;
-              
-              if (exercise.execution_mode === 'guided_tempo') {
-                  details += ` | ${exercise.defaultReps} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-              } else if (exercise.execution_mode === 'guided_static') {
-                  details += ` | ${exercise.defaultDuration}s`;
-              } else if (exercise.execution_mode === 'logging') {
-                  if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
-                      details += ` | ${exercise.defaultRepsMin}-${exercise.defaultRepsMax} ${UI_TEXT.TRAINER_REPS_LABEL}`;
-                  } else if (exercise.defaultRepsMin) {
-                      details += ` | ${exercise.defaultRepsMin}+ ${UI_TEXT.TRAINER_REPS_LABEL}`;
-                  } else {
-                      details += ` | ${UI_TEXT.TRAINER_REPS_LABEL}`;
-                  }
-              }
-
-              if (exercise.defaultWeight) {
-                  details += ` @ ${exercise.defaultWeight}kg`;
-              }
-              return details;
-          }
-      }
-  - file: styles/trainer.css
-    content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
+          return summary;
       }
 
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          gap: 1rem;
+      export function endWorkout() {
+        const finalState = getWorkoutState();
+        if (finalState.status === 'finished') {
+            log('Trainer', 'Workout already finished, not saving again.');
+            return;
+        }
+        stopAllAnimations();
+        updateState({ status: 'finished' });
+
+        if (finalState.startTime === 0) {
+            log('Trainer', 'Workout ended prematurely, not saving summary.');
+            setView('planner');
+            return;
+        }
+        const summary = createWorkoutSummary(finalState);
+        setLastWorkoutSummary(summary);
+        addWorkoutToHistory(summary);
+
+        setView('debriefing');
       }
 
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-          flex-grow: 1;
-          min-width: 0;
-          text-align: center;
-      }
-
-      .trainer-header-controls, .trainer-header-placeholder {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-          flex-basis: 80px; /* Give side elements a basis to help centering */
-      }
-      .trainer-header-controls { justify-content: flex-end; }
-      .trainer-header-placeholder { justify-content: flex-start; }
-
-
-      .btn-icon {
-        background: none;
-        border: none;
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-      }
-      .btn-icon:hover {
-        background-color: rgba(255,255,255,0.1);
-        color: var(--text-color);
-      }
-      #trainer-end-btn {
-        color: var(--danger-color);
-      }
-       #trainer-end-btn:hover {
-        background-color: rgba(239, 83, 80, 0.1);
-      }
-
-      #audio-toggle-btn {
-          background: none;
-          border: none;
-          color: var(--text-color-muted);
-          cursor: pointer;
-          padding: 0.5rem;
-      }
-
-      #audio-toggle-btn.active {
-          color: var(--primary-color);
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-          overflow-y: auto;
-      }
-
-      .exercise-info-container {
-          margin-top: 1rem;
-          margin-bottom: 1rem;
-      }
-
-      #current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-          min-height: 1.2em;
-      }
-
-      #current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-          min-height: 1.2em;
-      }
-
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-        min-height: 1.2em;
-      }
-
-      #current-rep-display.hidden-rep {
-        visibility: hidden;
-      }
-
-      #upcoming-exercise-display {
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        margin-top: 0.75rem;
-        font-style: italic;
-      }
-
-      #upcoming-exercise-display strong {
-        color: var(--text-color);
-        font-style: normal;
-      }
-
-      #trainer-display-modes {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          flex-grow: 1;
-          min-height: 280px;
-          width: 100%;
-      }
-
-      .timer-ring-container {
-          width: 280px;
-          height: 280px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-display {
-          font-size: 3rem;
-          font-weight: bold;
-          fill: var(--text-color);
-          text-anchor: middle;
-      }
-
-      .timer-ring-display.is-timer,
-      .timer-ring-display.is-rep-count {
-          font-family: 'Courier New', Courier, monospace;
-      }
-
-      .timer-ring-display.is-phase {
-          font-size: 2.5rem;
-          text-transform: uppercase;
-      }
-
-
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 12;
-      }
-
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 12;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
-      }
-
-      .timer-ring-progress.is-rest {
-          stroke: var(--secondary-color);
-      }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .flashing {
-        animation: flash 1.4s infinite;
-        fill: var(--primary-color);
-      }
-
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px;
-          width: 100%;
-          padding-bottom: 1rem;
-      }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
-
-      /* --- Stili per Logging Manuale --- */
-      #trainer-logging-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-        width: 100%;
-        max-width: 350px;
-        margin: 1rem 0;
-      }
-
-      .logging-inputs-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-      }
-
-      #trainer-logging-controls .form-group {
-        display: flex;
-        flex-direction: column;
-      }
-
-      #trainer-logging-controls .form-group label {
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-      }
-
-      #trainer-logging-controls .form-group input {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 1.25rem;
-        background-color: var(--card-color);
-        color: var(--text-color);
-        text-align: center;
-        font-family: 'Courier New', Courier, monospace;
-        font-weight: bold;
-      }
-
-      /* Stile per rimuovere le frecce dagli input numerici */
-      #trainer-logging-controls input[type=number] {
-        -moz-appearance: textfield;
-      }
-      #trainer-logging-controls input[type=number]::-webkit-outer-spin-button,
-      #trainer-logging-controls input[type=number]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-
-      .form-group-checkbox {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-      }
-
-      .form-group-checkbox label {
-        font-size: 1rem;
-        color: var(--text-color);
-      }
-
-      .form-group-checkbox input[type="checkbox"] {
-        width: 20px;
-        height: 20px;
-        accent-color: var(--primary-color);
-      }
-
-      #trainer-logging-controls .btn-large {
-        width: 100%;
-      }
-  - file: src/ui/icons.js
-    content: |
-      const ICONS = {
-        APP_LOGO: '<path d="M4.1 38.3C1 41.2 0 45.1 0 49.2V462.8c0 4.1 1 7.9 4.1 10.9s6.8 4.1 10.9 4.1H497c4.1 0 7.9-1 10.9-4.1s4.1-6.8 4.1-10.9V49.2c0-4.1-1-7.9-4.1-10.9s-6.8-4.1-10.9-4.1H15C10.9 34.2 5.1 35.2 4.1 38.3zM48 168H464v208H48V168zm0-48H464v32H48V120z"/>',
-        PLANNER: '<path d="M224 64C241.7 64 256 78.3 256 96L256 128L384 128L384 96C384 78.3 398.3 64 416 64C433.7 64 448 78.3 448 96L448 128L480 128C515.3 128 544 156.7 544 192L544 480C544 515.3 515.3 544 480 544L160 544C124.7 544 96 515.3 96 480L96 192C96 156.7 124.7 128 160 128L192 128L192 96C192 78.3 206.3 64 224 64zM160 304L160 336C160 344.8 167.2 352 176 352L208 352C216.8 352 224 344.8 224 336L224 304C224 295.2 216.8 288 208 288L176 288C167.2 288 160 295.2 160 304zM288 304L288 336C288 344.8 295.2 352 304 352L336 352C344.8 352 352 344.8 352 336L352 304C352 295.2 344.8 288 336 288L304 288C295.2 288 288 295.2 288 304zM432 288C423.2 288 416 295.2 416 304L416 336C416 344.8 423.2 352 432 352L464 352C472.8 352 480 344.8 480 336L480 304C480 295.2 472.8 288 464 288L432 288zM160 432L160 464C160 472.8 167.2 480 176 480L208 480C216.8 480 224 472.8 224 464L224 432C224 423.2 216.8 416 208 416L176 416C167.2 416 160 423.2 160 432zM304 416C295.2 416 288 423.2 288 432L288 464C288 472.8 295.2 480 304 480L336 480C344.8 480 352 472.8 352 464L352 432C352 423.2 344.8 416 336 416L304 416zM416 432L416 464C416 472.8 423.2 480 432 480L464 480C472.8 480 480 472.8 480 464L480 432C480 423.2 472.8 416 464 416L432 416C423.2 416 416 423.2 416 432z"/>',
-        PROFILE: '<path d="M320 312C386.3 312 440 258.3 440 192C440 125.7 386.3 72 320 72C253.7 72 200 125.7 200 192C200 258.3 253.7 312 320 312zM290.3 368C191.8 368 112 447.8 112 546.3C112 562.7 125.3 576 141.7 576L498.3 576C514.7 576 528 562.7 528 546.3C528 447.8 448.2 368 349.7 368L290.3 368z"/>',
-        WEIGHT_SCALE: '<path d="M212.6 256C209.6 245.9 208 235.1 208 224C208 162.1 258.1 112 320 112C381.9 112 432 162.1 432 224C432 235.1 430.4 245.9 427.4 256L356.4 256L381 211.7C387.4 200.1 383.3 185.5 371.7 179.1C360.1 172.7 345.5 176.8 339.1 188.4L301.5 256.1L212.7 256.1zM224 96L160 96C124.7 96 96 124.7 96 160L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 160C544 124.7 515.3 96 480 96L416 96C389.3 75.9 356 64 320 64C284 64 250.7 75.9 224 96z"/>',
-        DUMBBELL: '<path d="M96 176C96 149.5 117.5 128 144 128C170.5 128 192 149.5 192 176L192 288L448 288L448 176C448 149.5 469.5 128 496 128C522.5 128 544 149.5 544 176L544 192L560 192C586.5 192 608 213.5 608 240L608 288C625.7 288 640 302.3 640 320C640 337.7 625.7 352 608 352L608 400C608 426.5 586.5 448 560 448L544 448L544 464C544 490.5 522.5 512 496 512C469.5 512 448 490.5 448 464L448 352L192 352L192 464C192 490.5 170.5 512 144 512C117.5 512 96 490.5 96 464L96 448L80 448C53.5 448 32 426.5 32 400L32 352C14.3 352 0 337.7 0 320C0 302.3 14.3 288 32 288L32 240C32 213.5 53.5 192 80 192L96 192L96 176z"/>',
-        BAR_CHART: '<path d="M256 144C256 117.5 277.5 96 304 96L336 96C362.5 96 384 117.5 384 144L384 496C384 522.5 362.5 544 336 544L304 544C277.5 544 256 522.5 256 496L256 144zM64 336C64 309.5 85.5 288 112 288L144 288C170.5 288 192 309.5 192 336L192 496C192 522.5 170.5 544 144 544L112 544C85.5 544 64 522.5 64 496L64 336zM496 160L528 160C554.5 160 576 181.5 576 208L576 496C576 522.5 554.5 544 528 544L496 544C469.5 544 448 522.5 448 496L448 208C448 181.5 469.5 160 496 160z"/>',
-        INFO: '<path d="M320 576C461.4 576 576 461.4 576 320C576 178.6 461.4 64 320 64C178.6 64 64 178.6 64 320C64 461.4 178.6 576 320 576zM288 224C288 206.3 302.3 192 320 192C337.7 192 352 206.3 352 224C352 241.7 337.7 256 320 256C302.3 256 288 241.7 288 224zM280 288L328 288C341.3 288 352 298.7 352 312L352 400L360 400C373.3 400 384 410.7 384 424C384 437.3 373.3 448 360 448L280 448C266.7 448 256 437.3 256 424C256 410.7 266.7 400 280 400L304 400L304 336L280 336C266.7 336 256 325.3 256 312C256 298.7 266.7 288 280 288z"/>',
-        LOG_VIEW: '<path d="M480 576L192 576C139 576 96 533 96 480L96 160C96 107 139 64 192 64L496 64C522.5 64 544 85.5 544 112L544 400C544 420.9 530.6 438.7 512 445.3L512 512C529.7 512 544 526.3 544 544C544 561.7 529.7 576 512 576L480 576zM192 448C174.3 448 160 462.3 160 480C160 497.7 174.3 512 192 512L448 512L448 448L192 448zM224 216C224 229.3 234.7 240 248 240L424 240C437.3 240 448 229.3 448 216C448 202.7 437.3 192 424 192L248 192C234.7 192 224 202.7 224 216zM248 288C234.7 288 224 298.7 224 312C224 325.3 234.7 336 248 336L424 336C437.3 336 448 325.3 448 312C448 298.7 437.3 288 424 288L248 288z"/>',
-        RECIPE: '<path d="M142 66.2C150.5 62.3 160.5 63.7 167.6 69.8L208 104.4L248.4 69.8C257.4 62.1 270.7 62.1 279.6 69.8L320 104.4L360.4 69.8C369.4 62.1 382.6 62.1 391.6 69.8L432 104.4L472.4 69.8C479.5 63.7 489.5 62.3 498 66.2C506.5 70.1 512 78.6 512 88L512 552C512 561.4 506.5 569.9 498 573.8C489.5 577.7 479.5 576.3 472.4 570.2L432 535.6L391.6 570.2C382.6 577.9 369.4 577.9 360.4 570.2L320 535.6L279.6 570.2C270.6 577.9 257.3 577.9 248.4 570.2L208 535.6L167.6 570.2C160.5 576.3 150.5 577.7 142 573.8C133.5 569.9 128 561.4 128 552L128 88C128 78.6 133.5 70.1 142 66.2zM232 200C218.7 200 208 210.7 208 224C208 237.3 218.7 248 232 248L408 248C421.3 248 432 237.3 432 224C432 210.7 421.3 200 408 200L232 200zM208 416C208 429.3 218.7 440 232 440L408 440C421.3 440 432 429.3 432 416C432 402.7 421.3 392 408 392L232 392C218.7 392 208 402.7 208 416zM232 296C218.7 296 208 306.7 208 320C208 333.3 218.7 344 232 344L408 344C421.3 344 432 333.3 432 320C432 306.7 421.3 296 408 296L232 296z"/>',
-        TRASH: '<path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32l21.2 339c1.6 25.3 22.6 45 47.9 45h245.8c25.3 0 46.3-19.7 47.9-45L416 128z"/>',
-        CLOSE: '<path d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/>',
-        KEBAB_MENU: '<path d="M320 208C289.1 208 264 182.9 264 152C264 121.1 289.1 96 320 96C350.9 96 376 121.1 376 152C376 182.9 350.9 208 320 208zM320 432C350.9 432 376 457.1 376 488C376 518.9 350.9 544 320 544C289.1 544 264 518.9 264 488C264 457.1 289.1 432 320 432zM376 320C376 350.9 350.9 376 320 376C289.1 376 264 350.9 264 320C264 289.1 289.1 264 320 264C350.9 264 376 289.1 376 320z"/>',
-        BOOK: '<path d="M568 32H128C92.7 32 64 60.7 64 96V512c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V96c0-35.3-28.7-64-64-64zM128 512V96h320v352c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32zm352-32c0 17.7-14.3 32-32 32H416V96h32c17.7 0 32 14.3 32 32V480z"/>',
-        EDIT: '<path d="M535.6 85.7C513.7 63.8 478.3 63.8 456.4 85.7L432 110.1L529.9 208L554.3 183.6C576.2 161.7 576.2 126.3 554.3 104.4L535.6 85.7zM236.4 305.7C230.3 311.8 225.6 319.3 222.9 327.6L193.3 416.4C190.4 425 192.7 434.5 199.1 441C205.5 447.5 215 449.7 223.7 446.8L312.5 417.2C320.7 414.5 328.2 409.8 334.4 403.7L496 241.9L398.1 144L236.4 305.7zM160 128C107 128 64 171 64 224L64 480C64 533 107 576 160 576L416 576C469 576 512 533 512 480L512 384C512 366.3 497.7 352 480 352C462.3 352 448 366.3 448 384L448 480C448 497.7 433.7 512 416 512L160 512C142.3 512 128 497.7 128 480L128 224C128 206.3 142.3 192 160 192L256 192C273.7 192 288 177.7 288 160C288 142.3 273.7 128 256 128L160 128z"/>',
-        DRAG_HANDLE: '<path d="M96 160C96 142.3 110.3 128 128 128L512 128C529.7 128 544 142.3 544 160C544 177.7 529.7 192 512 192L128 192C110.3 192 96 177.7 96 160zM96 320C96 302.3 110.3 288 128 288L512 288C529.7 288 544 302.3 544 320C544 337.7 529.7 352 512 352L128 352C110.3 352 96 337.7 96 320zM544 480C544 497.7 529.7 512 512 512L128 512C110.3 512 96 497.7 96 480C96 462.3 110.3 448 128 448L512 448C529.7 448 544 462.3 544 480z"/>',
-        GOAL: '<path d="M512 320C512 214 426 128 320 128C214 128 128 214 128 320C128 426 214 512 320 512C426 512 512 426 512 320zM64 320C64 178.6 178.6 64 320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576C178.6 576 64 461.4 64 320zM320 400C364.2 400 400 364.2 400 320C400 275.8 364.2 240 320 240C275.8 240 240 275.8 240 320C240 364.2 275.8 400 320 400zM320 176C399.5 176 464 240.5 464 320C464 399.5 399.5 464 320 464C240.5 464 176 399.5 176 320C176 240.5 240.5 176 320 176zM288 320C288 302.3 302.3 288 320 288C337.7 288 352 302.3 352 320C352 337.7 337.7 352 320 352C302.3 352 288 337.7 288 320z"/>',
-        AUDIO_ON: '<path d="M533.6 96.5C523.3 88.1 508.2 89.7 499.8 100C491.4 110.3 493 125.4 503.3 133.8C557.5 177.8 592 244.8 592 320C592 395.2 557.5 462.2 503.3 506.3C493 514.7 491.5 529.8 499.8 540.1C508.1 550.4 523.3 551.9 533.6 543.6C598.5 490.7 640 410.2 640 320C640 229.8 598.5 149.2 533.6 96.5zM473.1 171C462.8 162.6 447.7 164.2 439.3 174.5C430.9 184.8 432.5 199.9 442.8 208.3C475.3 234.7 496 274.9 496 320C496 365.1 475.3 405.3 442.8 431.8C432.5 440.2 431 455.3 439.3 465.6C447.6 475.9 462.8 477.4 473.1 469.1C516.3 433.9 544 380.2 544 320.1C544 260 516.3 206.3 473.1 171.1zM412.6 245.5C402.3 237.1 387.2 238.7 378.8 249C370.4 259.3 372 274.4 382.3 282.8C393.1 291.6 400 305 400 320C400 335 393.1 348.4 382.3 357.3C372 365.7 370.5 380.8 378.8 391.1C387.1 401.4 402.3 402.9 412.6 394.6C434.1 376.9 448 350.1 448 320C448 289.9 434.1 263.1 412.6 245.5zM80 416L128 416L262.1 535.2C268.5 540.9 276.7 544 285.2 544C304.4 544 320 528.4 320 509.2L320 130.8C320 111.6 304.4 96 285.2 96C276.7 96 268.5 99.1 262.1 104.8L128 224L80 224C53.5 224 32 245.5 32 272L32 368C32 394.5 53.5 416 80 416z"/>',
-        AUDIO_OFF: '<path d="M80 416L128 416L262.1 535.2C268.5 540.9 276.7 544 285.2 544C304.4 544 320 528.4 320 509.2L320 130.8C320 111.6 304.4 96 285.2 96C276.7 96 268.5 99.1 262.1 104.8L128 224L80 224C53.5 224 32 245.5 32 272L32 368C32 394.5 53.5 416 80 416zM399 239C389.6 248.4 389.6 263.6 399 272.9L446 319.9L399 366.9C389.6 376.3 389.6 391.5 399 400.8C408.4 410.1 423.6 410.2 432.9 400.8L479.9 353.8L526.9 400.8C536.3 410.2 551.5 410.2 560.8 400.8C570.1 391.4 570.2 376.2 560.8 366.9L513.8 319.9L560.8 272.9C570.2 263.5 570.2 248.3 560.8 239C551.4 229.7 536.2 229.6 526.9 239L479.9 286L432.9 239C423.5 229.6 408.3 229.6 399 239z"/>',
-        HAMBURGER: '<path d="M32 96c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zm0 128c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32zM32 352c-17.7 0-32 14.3-32 32s14.3 32 32 32h384c17.7 0 32-14.3 32-32s-14.3-32-32-32H32z"/>',
-        SPEAKER: '<path d="M187.2 100.9C174.8 94.1 159.8 94.4 147.6 101.6C135.4 108.8 128 121.9 128 136L128 504C128 518.1 135.5 531.2 147.6 538.4C159.7 545.6 174.8 545.9 187.2 539.1L523.2 355.1C536 348.1 544 334.6 544 320C544 305.4 536 291.9 523.2 284.9L187.2 100.9z"/>',
-        STOP: '<path d="M512 64C547.3 64 576 92.7 576 128V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V128C0 92.7 28.7 64 64 64H512z"/>',
-        EXPAND: '<path d="M264 96L120 96C106.7 96 96 106.7 96 120L96 264C96 273.7 101.8 282.5 110.8 286.2C119.8 289.9 130.1 287.8 137 281L177 241L256 320L177 399L137 359C130.1 352.1 119.8 350.1 110.8 353.8C101.8 357.5 96 366.3 96 376L96 520C96 533.3 106.7 544 120 544L264 544C273.7 544 282.5 538.2 286.2 529.2C289.9 520.2 287.9 509.9 281 503L241 463L320 384L399 463L359 503C352.1 509.9 350.1 520.2 353.8 529.2C357.5 538.2 366.3 544 376 544L520 544C533.3 544 544 533.3 544 520L544 376C544 366.3 538.2 357.5 529.2 353.8C520.2 350.1 509.9 352.1 503 359L463 399L384 320L463 241L503 281C509.9 287.9 520.2 289.9 529.2 286.2C538.2 282.5 544 273.7 544 264L544 120C544 106.7 533.3 96 520 96L376 96C366.3 96 357.5 101.8 353.8 110.8C350.1 119.8 352.2 130.1 359 137L399 177L320 256L241 177L281 137C287.9 130.1 289.9 119.8 286.2 110.8C282.5 101.8 273.7 96 264 96z"/>',
-        LIBRARY: '<path d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H224c35.3 0 64-28.7 64-64V64c0-35.3-28.7-64-64-64H64zM64 448V64H224V448H64zM384 64c0-35.3-28.7-64-64-64H304c-8.8 0-16 7.2-16 16s7.2 16 16 16h16c17.7 0 32 14.3 32 32V448c0 17.7-14.3 32-32 32H304c-8.8 0-16 7.2-16 16s7.2 16 16 16h16c35.3 0 64-28.7 64-64V64zM512 64c0-35.3-28.7-64-64-64H432c-8.8 0-16 7.2-16 16s7.2 16 16 16h16c17.7 0 32 14.3 32 32V448c0 17.7-14.3 32-32 32H432c-8.8 0-16 7.2-16 16s7.2 16 16 16h16c35.3 0 64-28.7 64-64V64z"/>',
-        EXPLORE: '<path d="M320 0C187.6 0 80 107.6 80 240c0 49.6 15.2 95.1 41.1 133.3L3.5 533.3c-4.7 4.7-4.7 12.3 0 17l17 17c4.7 4.7 12.3 4.7 17 0l159.9-159.9C224.9 424.8 270.4 440 320 440c132.4 0 240-107.6 240-240S452.4 0 320 0zm0 400c-88.2 0-160-71.8-160-160S231.8 80 320 80s160 71.8 160 160-71.8 160-160 160z"/>',
-        SKIP_BWD: '<path d="M11.6 246.6c-4-4.2-4.1-10.8-.1-15.1L188.9 76.1c6.6-6.6 17.4-6.6 24 0l177.3 155.4c4.1 3.6 4.5 9.7 1 14.2c-3.5 4.5-9.6 5.2-14.2 1.1L216 112.1L54.7 251c-4.4 3.8-10.4 3.5-14.4-.1l-28.7-34.3zM11.6 462.6c-4-4.2-4.1-10.8-.1-15.1L188.9 292.1c6.6-6.6 17.4-6.6 24 0l177.3 155.4c4.1 3.6 4.5 9.7 1 14.2c-3.5 4.5-9.6 5.2-14.2 1.1L216 328.1L54.7 467c-4.4 3.8-10.4 3.5-14.4-.1l-28.7-34.3z"/>',
-        SKIP_FWD: '<path d="M365.3 251L204 112.1L242.1 91c4.5-3.5 10.6-2.8 14.2 1.1c3.6 4.1 3.2 10.2-1 14.2L78.7 361.9c-6.6 6.6-17.4 6.6-24 0L-102.7 206.6c-4.1-4.2-4.1-10.8 0-15.1l28.7-34.3c4-4.2 10.1-4.6 14.4-.1L64 192L225.3 53.1c6.6-6.6 17.4-6.6 24 0l102.7 155.4c4.1 4.2 4.1 10.8 0 15.1l-28.7 34.3c-4.1 4.2-10.7 4.5-15.1.1z"/>'
-      };
-
-      const viewBoxes = {
-        APP_LOGO: '0 0 512 512',
-        PLANNER: '0 0 544 544',
-        PROFILE: '0 0 528 576',
-        WEIGHT_SCALE: '0 0 640 512',
-        DUMBBELL: '0 0 640 640',
-        BAR_CHART: '0 0 640 640',
-        SHARE: '0 0 544 576',
-        INFO: '0 0 576 576',
-        LOG_VIEW: '0 0 544 576',
-        RECIPE: '0 0 640 640',
-        TRASH: '0 0 448 512',
-        CLOSE: '0 0 640 512',
-        KEBAB_MENU: '0 0 376 544',
-        BOOK: '0 0 576 576',
-        EDIT: '0 0 640 640',
-        DRAG_HANDLE: '0 0 640 640',
-        GOAL: '0 0 640 640',
-        AUDIO_ON: '0 0 640 640',
-        AUDIO_OFF: '0 0 640 640',
-        HAMBURGER: '0 0 448 512',
-        SPEAKER: '0 0 640 640',
-        STOP: '0 0 576 512',
-        EXPAND: '0 0 640 640',
-        LIBRARY: '0 0 512 512',
-        EXPLORE: '0 0 560 560',
-        SKIP_BWD: '0 0 384 512',
-        SKIP_FWD: '0 0 384 512'
-      };
-
-      // Correzione per SKIP_BWD e SKIP_FWD (semplici frecce)
-      ICONS.SKIP_BWD = '<path d="M22.1 228.1c-6.3-6.3-6.3-16.5 0-22.8L194.3 32.9C213.2 14.1 243 28.4 243 53.9V458.1c0 25.5-29.8 39.8-48.8 21.1L22.1 228.1z"/>';
-      ICONS.SKIP_FWD = '<path d="M365.9 228.1c6.3-6.3 6.3-16.5 0-22.8L193.7 32.9C174.8 14.1 145 28.4 145 53.9V458.1c0 25.5 29.8 39.8 48.8 21.1L365.9 228.1z"/>';
-      viewBoxes.SKIP_BWD = '0 0 256 512';
-      viewBoxes.SKIP_FWD = '0 0 384 512';
-
-
-      export function renderIcon(name, { width = 24, height = 24, classes = '' } = {}) {
-        const iconPath = ICONS[name];
-        if (!iconPath) return '';
-        const viewBox = viewBoxes[name] || '0 0 512 512';
-        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="currentColor" width="${width}" height="${height}" ${classes ? `class="${classes}"` : ''}>${iconPath}</svg>`;
+      export function discardWorkout() {
+        log('Trainer', 'Discarding workout.');
+        stopAllAnimations();
+        resetWorkoutState();
+        setView('planner');
       }

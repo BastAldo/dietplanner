@@ -9,27 +9,17 @@ import { UI_TEXT } from '../config/uiText.js';
 
 // This is the "Director d'Orchestra"
 async function runWorkoutLoop() {
-  const initialState = getWorkoutState();
-  if (initialState.status !== 'running') return;
-
-  let i = initialState.currentQueueIndex;
-
-  while (i < initialState.fullExecutionQueue.length) {
+  while (getWorkoutState().status === 'running') {
       let currentState = getWorkoutState();
-      if (currentState.status !== 'running') {
-          log('Trainer', 'Workout loop terminated (paused or finished).');
-          return;
-      }
-      
-      // Assicura che l'indice dello stato sia aggiornato
-      if (i !== currentState.currentQueueIndex) {
-        i = currentState.currentQueueIndex;
+      let currentIndex = currentState.currentQueueIndex;
+
+      if (currentIndex >= currentState.fullExecutionQueue.length) {
+          log('Trainer-Loop', 'Coda di esecuzione terminata.');
+          break; // Esce dal loop se abbiamo finito
       }
 
-      updateState({ currentQueueIndex: i });
-      const phase = currentState.fullExecutionQueue[i];
-
-      log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
+      const phase = currentState.fullExecutionQueue[currentIndex];
+      log('Trainer-Loop', `Executing phase ${currentIndex}:`, phase.type);
 
       switch (phase.type) {
           case 'speech':
@@ -62,14 +52,22 @@ async function runWorkoutLoop() {
               break;
       }
       
-      // Avanza all'indice successivo solo se lo stato è ancora 'running'
-      // Questo previene un doppio incremento se `skipPhase` è stato chiamato
-      if (getWorkoutState().status === 'running' && getWorkoutState().currentQueueIndex === i) {
-        i++;
+      // Controlla lo stato DOPO qualsiasi operazione 'await'
+      const stateAfterAwait = getWorkoutState();
+      if (stateAfterAwait.status !== 'running') {
+          log('Trainer', 'Workout loop terminated (paused or finished).');
+          return; // Esce dalla funzione
       }
+
+      // Incrementa l'indice solo se non è stato modificato da un'altra funzione (es. skipPhase)
+      if (stateAfterAwait.currentQueueIndex === currentIndex) {
+          updateState({ currentQueueIndex: currentIndex + 1 });
+      }
+      // Se l'indice è stato modificato (es. skip), il loop while ricomincerà
+      // e leggerà il nuovo 'currentQueueIndex' all'inizio.
   }
   
-  // Se il loop completa naturalmente, termina l'allenamento
+  // Se il loop completa naturalmente (uscendo dal while), termina l'allenamento
   if (getWorkoutState().status === 'running') {
       endWorkout();
   }
@@ -104,8 +102,20 @@ export function initializeWorkout(plannedExercises, isoDate) {
 
 export function collectSetData(setDataFromUI = null) {
     const state = getWorkoutState();
-    const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
-    if (!currentPhase || !currentPhase.context) return;
+    // Usa l'indice corrente, o l'indice precedente se 'set_completed' segue una fase
+    let phaseIndex = state.currentQueueIndex;
+    let currentPhase = state.fullExecutionQueue[phaseIndex];
+
+    // Se la fase corrente è 'set_completed', i dati sono nella fase precedente
+    if (currentPhase && currentPhase.type === 'set_completed') {
+      phaseIndex = Math.max(0, phaseIndex - 1);
+      currentPhase = state.fullExecutionQueue[phaseIndex];
+    }
+    
+    if (!currentPhase || !currentPhase.context) {
+      log('Trainer', 'collectSetData failed: phase or context not found.', { currentPhase });
+      return;
+    }
 
     const { exercise, set } = currentPhase.context;
 
@@ -173,17 +183,10 @@ export function resumeWorkout() {
   if (state.status === 'paused') {
       updateState({ status: 'running' });
       log('Trainer', 'Workout resumed.');
-      // Il loop `runWorkoutLoop` riprenderà automaticamente
-      // perché `state.status` è di nuovo 'running'.
-      // Ma se era in attesa di una promise (animazione),
-      // l'animazione riprenderà da sola.
-      // Se era in attesa della promise `logging`,
-      // non fa nulla finché l'utente non conferma.
-      // Se era tra le fasi, il loop `while` riprende.
-      // Per sicurezza, se non è in attesa di nulla, facciamo ripartire il loop.
-      if (!state.resolveCurrentSetPromise) {
-        runWorkoutLoop();
-      }
+      // Rilancia il loop principale. Questo è sicuro perché il loop
+      // stesso leggerà lo stato 'currentQueueIndex' e riprenderà da lì.
+      // Se era in attesa di una promise, l'animazione riprenderà da sola.
+      runWorkoutLoop();
   }
 }
 
@@ -216,10 +219,6 @@ export function skipPhase(direction = 1) {
     }
 
     let newIndex = state.currentQueueIndex + direction;
-
-    // Logica per saltare al prossimo *set* o *esercizio*
-    // In modalità guidata, potremmo voler saltare alla prossima fase "importante"
-    // Per ora, saltiamo solo alla fase successiva/precedente
     
     if (newIndex >= state.fullExecutionQueue.length) {
         endWorkout(); // Se skippiamo l'ultima fase, finisce l'allenamento
