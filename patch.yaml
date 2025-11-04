@@ -1,23 +1,22 @@
-commit_message: "fix(trainer): Corregge bug debriefing e migliora UI trainer/modale"
+commit_message: "fix(trainer): Corregge bug stato, salvataggio dati e UI logging"
 rationale: |
-  Questo commit implementa le correzioni e i miglioramenti dell'interfaccia utente come richiesto.
+  Questo commit risolve tre bug critici e migliora l'interfaccia utente del trainer come da richiesta.
 
-  1.  **Correzione Bug Debriefing "Incompleto" (`src/core/trainer.js`):**
-      * È stato identificato un bug per cui gli allenamenti in modalità "logging" venivano segnati come "incompleti".
-      * Causa: La funzione `collectSetData` veniva chiamata due volte: una correttamente da `confirmCurrentSet` (con i dati della UI) e una seconda volta, in modo errato, dalla fase `set_completed` (senza dati, creando un set "fantasma").
-      * Soluzione: Il `case 'set_completed'` nel `runWorkoutLoop` è stato modificato. Ora include un controllo per verificare se la fase *precedente* era di tipo `logging`. Se lo era, `collectSetData` non viene chiamato, prevenendo la registrazione duplicata e risolvendo il bug del debriefing.
+  1.  **Bug Critico (Stato): Correzione Allenamento Orfano (`src/core/trainer.js`)**
+      * **Problema:** Se un utente navigava via dalla vista trainer mentre un allenamento in modalità "logging" era in attesa di conferma (`await new Promise...`), la promise non veniva mai risolta. Questo lasciava il `runWorkoutLoop` del vecchio allenamento in esecuzione in background, impedendo l'avvio di nuovi allenamenti.
+      * **Soluzione:** La funzione `resetWorkoutState` (chiamata quando si esce dalla vista) è stata modificata. Ora controlla se `getWorkoutState().resolveCurrentSetPromise` esiste e, in caso affermativo, lo chiama (risolvendo la promise). Questo termina forzatamente qualsiasi loop orfano e pulisce lo stato, permettendo l'avvio di nuovi allenamenti.
 
-  2.  **Miglioramento UI Trainer (`templates/trainer.html`, `styles/trainer.css`, `src/ui/components/TrainerComponent.js`):**
-      * L'interfaccia utente per la modalità "logging" (input di peso, reps e checkbox "a cedimento") è stata spostata *all'interno* del `timer-ring-container`.
-      * `styles/trainer.css` è stato aggiornato per posizionare questi controlli in modo assoluto al centro del contenitore.
-      * `TrainerComponent.js` è stato aggiornato:
-          * Ora, invece di nascondere l'intero contenitore, nasconde selettivamente l'elemento `<svg>` del timer o i controlli di `logging` (che ora condividono lo stesso spazio).
-          * `createTimerRing` ora memorizza un riferimento all'SVG (`this.elements.ringSvg`).
-          * `renderPaused` è stato aggiornato per garantire che l'SVG sia visibile e i controlli di logging siano nascosti durante la pausa.
+  2.  **Bug Critico (Dati): Correzione Salvataggio Tempo (`src/ui/modals/exerciseEditorModal.js`)**
+      * **Problema:** Nel modale di modifica dell'esercizio, i dati "Tempo" (salita, tenuta, discesa) venivano salvati solo se l'esercizio li aveva già (`if (exercise.defaultTempo)`), impedendo di impostarli per la prima volta.
+      * **Soluzione:** La condizione in `saveHandler` è stata corretta. Ora controlla la modalità di esecuzione selezionata (`if (newValues.execution_mode === EXECUTION_MODES.GUIDED_TEMPO)`). Questo assicura che i dati "Tempo" vengano salvati correttamente ogni volta che la modalità "Guidato (Tempo)" è attiva.
 
-  3.  **Correzione Stile Select (`styles/modals.css`, `src/ui/modals/exerciseEditorModal.js`):**
-      * Per risolvere l'incoerenza stilistica, è stato aggiunto uno stile CSS in `styles/modals.css` che si applica a tutti gli elementi `select` all'interno di un `.form-group`.
-      * Questo stile uniforma l'aspetto del menu a discesa "Modalità Esecuzione" per farlo corrispondere agli altri campi di input (`--bg-color`, `--card-color`, ecc.), come richiesto dalla `docs/03_STYLE_GUIDE.md`. Non è stato necessario modificare `exerciseEditorModal.js`.
+  3.  **Bug (Audit): Correzione Calcolo Calorie (`src/core/trainer.js`)**
+      * **Problema:** La funzione `createWorkoutSummary` chiamava `calculateWorkoutCalories(summary, latestWeight)` senza passare il `userProfile`. Questo impediva il calcolo del BMR e falsava la stima delle calorie.
+      * **Soluzione:** La chiamata è stata corretta in `calculateWorkoutCalories(summary, globalState.userProfile, latestWeight)`, fornendo tutti i dati necessari.
+
+  4.  **Miglioramento UI: Logging Interno al Ring (`src/ui/components/TrainerComponent.js`)**
+      * **Problema:** La UI di logging (peso/reps) nascondeva l'intero anello SVG, contrariamente alla richiesta di visualizzarla *all'interno*.
+      * **Soluzione:** La logica di `render` in `TrainerComponent.js` è stata aggiornata. Ora l'anello SVG di sfondo rimane sempre visibile. La funzione nasconde/mostra selettivamente solo gli elementi *dinamici* (il testo/progress del timer) *oppure* i controlli di logging, che ora condividono lo stesso spazio centrale.
 patches:
   - file: src/core/trainer.js
     content: |
@@ -107,6 +106,15 @@ patches:
       export function resetWorkoutState() {
         log('Trainer', 'Resetting workout state.');
         stopAllAnimations();
+
+        // BUG FIX: Risolvi qualsiasi promise "orfana" della modalità logging
+        // per terminare qualsiasi loop `runWorkoutLoop` in attesa.
+        const currentState = getWorkoutState();
+        if (currentState.resolveCurrentSetPromise) {
+            log('Trainer', 'Resolving orphaned logging promise.');
+            currentState.resolveCurrentSetPromise();
+        }
+
         resetState();
       }
 
@@ -114,7 +122,7 @@ patches:
         if (!plannedExercises || plannedExercises.length === 0) {
             return;
         }
-        resetWorkoutState();
+        resetWorkoutState(); // Resetta prima di inizializzare
 
         const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
 
@@ -307,6 +315,7 @@ patches:
           const globalState = getGlobalState();
           const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
           if (latestWeight) {
+            // BUG FIX: Passa il globalState.userProfile necessario per il calcolo BMR
             summary.totalCaloriesBurned = calculateWorkoutCalories(summary, globalState.userProfile, latestWeight);
           }
 
@@ -340,57 +349,218 @@ patches:
         resetWorkoutState();
         setView('planner');
       }
-  - file: templates/trainer.html
+  - file: src/ui/modals/exerciseEditorModal.js
     content: |
-      <div id="trainer-page" class="page-view hidden">
-          <header class="trainer-header">
-              <div class="trainer-header-placeholder">
-                  <button id="trainer-skip-bwd-btn" class="btn-icon"></button>
-              </div>
-              <h2 id="trainer-title">Allenamento</h2>
-              <div class="trainer-header-controls">
-                  <button id="trainer-skip-fwd-btn" class="btn-icon"></button>
-                  <button id="audio-toggle-btn"></button>
-                  <button id="trainer-end-btn" class="btn-icon"></button>
-              </div>
-          </header>
-          <div class="trainer-body">
-              <div class="exercise-info-container">
-                  <h3 id="current-exercise-name"></h3>
-                  <p id="current-exercise-details"></p>
-                  <p id="current-rep-display"></p>
-                  <div id="upcoming-exercise-display"></div>
-              </div>
+      import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+      import { showNotification } from '../notifications.js';
 
-              <div id="trainer-display-modes">
-                  <div id="timer-ring-container" class="timer-ring-container">
-                      <div id="trainer-logging-controls" class="trainer-logging-controls hidden">
-                          <div class="logging-inputs-grid">
-                              <div class="form-group">
-                                  <label for="trainer-log-weight">Peso (kg)</label>
-                                  <input type="number" id="trainer-log-weight" name="weight" min="0" step="0.5">
-                              </div>
-                              <div class="form-group">
-                                  <label for="trainer-log-reps">Reps</label>
-                                  <input type="number" id="trainer-log-reps" name="reps" min="0">
-                              </div>
-                          </div>
-                          <div class="form-group-checkbox">
-                              <input type="checkbox" id="trainer-log-failure" name="failure">
-                              <label for="trainer-log-failure">A Cedimento</label>
-                          </div>
-                          <button id="trainer-confirm-set-btn" class="btn btn-primary btn-large">CONFERMA SET</button>
-                      </div>
-                  </div>
-              </div>
+      const EXECUTION_MODES = {
+        GUIDED_TEMPO: 'guided_tempo',
+        GUIDED_STATIC: 'guided_static',
+        LOGGING: 'logging'
+      };
 
-              <div id="trainer-main-controls" class="trainer-controls">
-                  <button id="trainer-start-btn" class="btn btn-primary btn-large hidden">AVVIA</button>
-                  <button id="trainer-pause-btn" class="btn btn-secondary btn-large hidden">PAUSA</button>
-                  <button id="trainer-resume-btn" class="btn btn-primary btn-large hidden">RIPRENDI</button>
+      // Funzione helper per gestire la visibilità dei campi
+      function toggleFormFields(form, mode) {
+        form.querySelector('.reps-group').style.display = 'none';
+        form.querySelector('.duration-group').style.display = 'none';
+        form.querySelector('.tempo-group').style.display = 'none';
+        form.querySelector('.reps-range-group').style.display = 'none';
+
+        if (mode === EXECUTION_MODES.GUIDED_TEMPO) {
+          form.querySelector('.reps-group').style.display = 'flex';
+          form.querySelector('.tempo-group').style.display = 'grid';
+        } else if (mode === EXECUTION_MODES.GUIDED_STATIC) {
+          form.querySelector('.duration-group').style.display = 'flex';
+        } else if (mode === EXECUTION_MODES.LOGGING) {
+          form.querySelector('.reps-range-group').style.display = 'grid';
+        }
+      }
+
+      function renderPlannerForm(body, exercise) {
+        // Normalizza i dati dell'esercizio per la prima apertura
+        let currentMode = exercise.execution_mode || EXECUTION_MODES.GUIDED_TEMPO;
+        if (exercise.type === 'time' && !exercise.execution_mode) {
+          currentMode = EXECUTION_MODES.GUIDED_STATIC;
+        }
+        
+        body.innerHTML = `
+          <form id="exercise-editor-form">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label for="ex-edit-mode">Modalità Esecuzione</label>
+              <select id="ex-edit-mode" name="execution_mode">
+                <option value="${EXECUTION_MODES.GUIDED_TEMPO}" ${currentMode === EXECUTION_MODES.GUIDED_TEMPO ? 'selected' : ''}>Guidato (Tempo)</option>
+                <option value="${EXECUTION_MODES.GUIDED_STATIC}" ${currentMode === EXECUTION_MODES.GUIDED_STATIC ? 'selected' : ''}>Guidato (Durata)</option>
+                <option value="${EXECUTION_MODES.LOGGING}" ${currentMode === EXECUTION_MODES.LOGGING ? 'selected' : ''}>Logging (Manuale)</option>
+              </select>
+            </div>
+
+            <div class="form-group sets-group">
+              <label for="ex-edit-sets">Serie</label>
+              <input type="number" id="ex-edit-sets" name="sets" min="1" value="${exercise.defaultSets}">
+            </div>
+
+            <div class="form-group reps-group">
+              <label for="ex-edit-reps">Ripetizioni</label>
+              <input type="number" id="ex-edit-reps" name="reps" min="1" value="${exercise.defaultReps || ''}">
+            </div>
+
+            <div class="form-group duration-group">
+              <label for="ex-edit-duration">Durata (s)</label>
+              <input type="number" id="ex-edit-duration" name="duration" min="1" value="${exercise.defaultDuration || ''}">
+            </div>
+
+            <div class="reps-range-group" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="form-group">
+                <label for="ex-edit-reps-min">Rep Min</label>
+                <input type="number" id="ex-edit-reps-min" name="reps_min" min="1" value="${exercise.defaultRepsMin || ''}">
               </div>
-          </div>
-      </div>
+              <div class="form-group">
+                <label for="ex-edit-reps-max">Rep Max</label>
+                <input type="number" id="ex-edit-reps-max" name="reps_max" min="1" value="${exercise.defaultRepsMax || ''}">
+              </div>
+            </div>
+
+            <div class="form-group rest-group">
+              <label for="ex-edit-rest">Riposo (s)</label>
+              <input type="number" id="ex-edit-rest" name="rest" min="0" value="${exercise.defaultRest}">
+            </div>
+            <div class="form-group weight-group">
+              <label for="ex-edit-weight" id="ex-edit-weight-label">${UI_TEXT.EXERCISE_WEIGHT_LABEL}</label>
+              <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5" value="${exercise.defaultWeight || 0}">
+            </div>
+
+            <div class="tempo-group" style="display: ${exercise.defaultTempo ? 'grid' : 'none'};">
+              <div class="form-group">
+                <label for="ex-edit-tempo-up">Salita (s)</label>
+                <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5" value="${exercise.defaultTempo?.up || 0}">
+              </div>
+              <div class="form-group">
+                <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">${UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL}</label>
+                <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5" value="${exercise.defaultTempo?.hold || 0}">
+              </div>
+              <div class="form-group">
+                <label for="ex-edit-tempo-down">Discesa (s)</label>
+                <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5" value="${exercise.defaultTempo?.down || 0}">
+              </div>
+            </div>
+          </form>
+        `;
+        
+        // Imposta la visibilità iniziale
+        const form = body.querySelector('#exercise-editor-form');
+        toggleFormFields(form, currentMode);
+        
+        // Aggiungi listener per il cambio di modalità
+        form.querySelector('#ex-edit-mode').addEventListener('change', (e) => {
+          toggleFormFields(form, e.target.value);
+        });
+      }
+
+      function renderLogForm(body, exercise) {
+        const showWeight = exercise.defaultWeight || exercise.setsData.some(s => s.weight > 0);
+        let formHTML = `<form id="logged-exercise-form" class="structured-form">`;
+        formHTML += exercise.setsData.map((set, index) => {
+            const weightInput = showWeight ? `
+                <div class="form-group">
+                    <label for="set-weight-${index}">${UI_TEXT.LOGGED_EXERCISE_WEIGHT_LABEL}</label>
+                    <input type="number" id="set-weight-${index}" name="weight_${index}" value="${set.weight || 0}" min="0" step="0.1">
+                </div>
+            ` : '';
+            return `
+                <div class="set-editor-row">
+                    <span class="set-editor-label">${UI_TEXT.LOGGED_EXERCISE_SET_LABEL} ${index + 1}</span>
+                    <div class="form-group">
+                        <label for="set-reps-${index}">${UI_TEXT.LOGGED_EXERCISE_REPS_LABEL}</label>
+                        <input type="number" id="set-reps-${index}" name="reps_${index}" value="${set.reps || 0}" min="0">
+                    </div>
+                    ${weightInput}
+                </div>
+            `;
+        }).join('');
+        formHTML += '</form>';
+        body.innerHTML = formHTML;
+      }
+
+      export function openExerciseEditorModal(config) {
+        const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
+        log('Modals', 'Opening exercise editor modal', { config });
+
+        const modal = document.getElementById('exercise-editor-modal');
+        const body = modal.querySelector('#exercise-editor-body');
+        const saveBtn = modal.querySelector('#exercise-editor-save-btn');
+        let form;
+        let saveHandler;
+
+        if (context === 'history') {
+            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+            saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
+            renderLogForm(body, exercise);
+            form = body.querySelector('#logged-exercise-form');
+
+            saveHandler = (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const newSetsData = [...exercise.setsData].map((set, index) => ({
+                    ...set,
+                    reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
+                    weight: parseFloat(formData.get(`weight_${index}`)) || 0,
+                }));
+
+                updateExerciseSetsInHistory(date, startTime, exercise.instanceId, newSetsData);
+                showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
+                modal.classList.add('modal-hidden');
+            };
+
+        } else if (context === 'planner') {
+            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+            renderPlannerForm(body, exercise);
+            form = body.querySelector('#exercise-editor-form');
+
+            saveHandler = (e) => {
+                e.preventDefault();
+                const newValues = {
+                    execution_mode: form.elements.execution_mode.value,
+                    defaultSets: parseInt(form.elements.sets.value),
+                    defaultRest: parseInt(form.elements.rest.value),
+                    defaultWeight: parseFloat(form.elements.weight.value),
+                    // Resetta tutti i valori specifici della modalità
+                    defaultReps: null,
+                    defaultDuration: null,
+                    defaultRepsMin: null,
+                    defaultRepsMax: null,
+                    defaultTempo: exercise.defaultTempo // Preserva l'oggetto tempo se esiste
+                };
+
+                if (newValues.execution_mode === EXECUTION_MODES.GUIDED_TEMPO) {
+                    newValues.defaultReps = parseInt(form.elements.reps.value);
+                    // BUG FIX: Salva i dati del tempo se la modalità è GUIDED_TEMPO
+                    newValues.defaultTempo = {
+                        up: parseInt(form.elements.tempo_up.value),
+                        hold: parseInt(form.elements.tempo_hold.value),
+                        down: parseInt(form.elements.tempo_down.value)
+                    };
+                } else if (newValues.execution_mode === EXECUTION_MODES.GUIDED_STATIC) {
+                    newValues.defaultDuration = parseInt(form.elements.duration.value);
+                } else if (newValues.execution_mode === EXECUTION_MODES.LOGGING) {
+                    newValues.defaultRepsMin = parseInt(form.elements.reps_min.value);
+                    newValues.defaultRepsMax = parseInt(form.elements.reps_max.value);
+                }
+                
+                updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
+                modal.classList.add('modal-hidden');
+                openWorkoutEditorModal(returnIsoDate);
+            };
+        }
+
+        saveBtn.replaceWith(saveBtn.cloneNode(true));
+        document.getElementById('exercise-editor-save-btn').addEventListener('click', saveHandler, { once: true });
+        modal.classList.remove('modal-hidden');
+      }
   - file: src/ui/components/TrainerComponent.js
     content: |
       import { getWorkoutState, updateState } from '../../core/trainer/state.js';
@@ -453,9 +623,7 @@ patches:
           destroy() {
               log('TrainerComponent', 'Destroying component and cleaning up DOM...');
               this.container.removeEventListener('click', this.boundHandleControls);
-              if (this.elements.ringContainer) {
-                  this.elements.ringContainer.innerHTML = '';
-              }
+              // Non svuotare l'HTML, la vista viene riutilizzata
               log('TrainerComponent', 'Component destroyed.');
           }
 
@@ -527,7 +695,9 @@ patches:
           }
 
           createTimerRing() {
-              if (this.elements.ringContainer.querySelector('svg')) return;
+              // Non ricreare se esiste già
+              if (this.elements.ringSvg) return;
+
               this.elements.ringContainer.innerHTML = ''; // Pulisce prima di aggiungere
               const svgNS = 'http://www.w3.org/2000/svg';
               const svg = document.createElementNS(svgNS, 'svg');
@@ -556,7 +726,9 @@ patches:
               svg.appendChild(progressCircle);
               svg.appendChild(text);
               this.elements.ringContainer.prepend(svg); // Aggiunge l'SVG
-              this.elements.ringContainer.appendChild(this.elements.loggingControls); // Assicura che i controlli siano dopo l'SVG
+              
+              // Riappende i controlli di logging che sono già nel DOM ma fuori dal container
+              this.elements.ringContainer.appendChild(this.elements.loggingControls); 
               
               // Salva i riferimenti
               this.elements.ringSvg = svg;
@@ -591,6 +763,8 @@ patches:
                   this.elements.btnResume.classList.add('hidden');
                   this.elements.loggingControls.classList.add('hidden');
                   this.elements.ringSvg.classList.remove('hidden');
+                  this.ringText.classList.remove('hidden');
+                  this.ringProgress.classList.remove('hidden');
                   return;
               };
 
@@ -607,6 +781,8 @@ patches:
                   this.elements.btnResume.classList.add('hidden');
                   this.elements.loggingControls.classList.add('hidden');
                   this.elements.ringSvg.classList.remove('hidden');
+                  this.ringText.classList.remove('hidden');
+                  this.ringProgress.classList.remove('hidden');
                   return;
               }
 
@@ -636,14 +812,18 @@ patches:
               this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
 
               // --- Main Render Logic ---
-              this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
-              this.ringProgress.classList.remove('is-rest');
+              this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing', 'hidden');
+              this.ringProgress.classList.remove('is-rest', 'hidden');
+              this.elements.ringSvg.classList.remove('hidden');
 
               const isLoggingPhase = (status === 'running' && currentPhase.type === 'logging');
               const isGuidedPhase = (status === 'running' && (currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'rest'));
 
-              this.elements.ringSvg.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
+              // UI per "inputs DENTRO l'anello"
               this.elements.loggingControls.classList.toggle('hidden', !isLoggingPhase);
+              this.ringText.classList.toggle('hidden', isLoggingPhase || status === 'paused');
+              this.ringProgress.classList.toggle('hidden', isLoggingPhase || status === 'paused');
+              
               this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
 
 
@@ -705,6 +885,9 @@ patches:
           renderPaused() {
               this.elements.ringSvg.classList.remove('hidden');
               this.elements.loggingControls.classList.add('hidden');
+              this.ringText.classList.remove('hidden');
+              this.ringProgress.classList.remove('hidden');
+
               this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
               this.ringText.classList.add('is-phase', 'flashing');
           }
@@ -733,301 +916,6 @@ patches:
               }
               return details;
           }
-      }
-  - file: styles/trainer.css
-    content: |
-      /* --- TRAINER VIEW STYLES --- */
-      #trainer-page {
-          height: calc(100vh - 60px);
-          display: flex;
-          flex-direction: column;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-      }
-
-      .trainer-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          background-color: var(--card-color);
-          border-bottom: 1px solid var(--border-color);
-          flex-shrink: 0;
-          gap: 1rem;
-      }
-
-      .trainer-header h2 {
-          font-size: 1.25rem;
-          color: var(--primary-color);
-          flex-grow: 1;
-          min-width: 0;
-          text-align: center;
-      }
-
-      .trainer-header-controls, .trainer-header-placeholder {
-          display: flex;
-          gap: 0.5rem;
-          align-items: center;
-          flex-basis: 80px; /* Give side elements a basis to help centering */
-      }
-      .trainer-header-controls { justify-content: flex-end; }
-      .trainer-header-placeholder { justify-content: flex-start; }
-
-
-      .btn-icon {
-        background: none;
-        border: none;
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-      }
-      .btn-icon:hover {
-        background-color: rgba(255,255,255,0.1);
-        color: var(--text-color);
-      }
-      #trainer-end-btn {
-        color: var(--danger-color);
-      }
-       #trainer-end-btn:hover {
-        background-color: rgba(239, 83, 80, 0.1);
-      }
-
-      #audio-toggle-btn {
-          background: none;
-          border: none;
-          color: var(--text-color-muted);
-          cursor: pointer;
-          padding: 0.5rem;
-      }
-
-      #audio-toggle-btn.active {
-          color: var(--primary-color);
-      }
-
-      .trainer-body {
-          flex-grow: 1;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          padding: 1rem;
-          text-align: center;
-          position: relative;
-          overflow-y: auto;
-      }
-
-      .exercise-info-container {
-          margin-top: 1rem;
-          margin-bottom: 1rem;
-      }
-
-      #current-exercise-name {
-          font-size: 2rem;
-          font-weight: bold;
-          min-height: 1.2em;
-      }
-
-      #current-exercise-details {
-          font-size: 1.25rem;
-          color: var(--text-color-muted);
-          margin-bottom: 0.5rem;
-          min-height: 1.2em;
-      }
-
-      #current-rep-display {
-        font-size: 1rem;
-        color: var(--secondary-color);
-        font-weight: bold;
-        min-height: 1.2em;
-      }
-
-      #current-rep-display.hidden-rep {
-        visibility: hidden;
-      }
-
-      #upcoming-exercise-display {
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-        margin-top: 0.75rem;
-        font-style: italic;
-      }
-
-      #upcoming-exercise-display strong {
-        color: var(--text-color);
-        font-style: normal;
-      }
-
-      #trainer-display-modes {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          flex-grow: 1;
-          min-height: 280px;
-          width: 100%;
-      }
-
-      .timer-ring-container {
-          width: 280px;
-          height: 280px;
-          position: relative;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: 1rem 0;
-      }
-
-      .timer-ring-container svg.hidden {
-        display: none;
-      }
-
-      .timer-ring-display {
-          font-size: 3rem;
-          font-weight: bold;
-          fill: var(--text-color);
-          text-anchor: middle;
-      }
-
-      .timer-ring-display.is-timer,
-      .timer-ring-display.is-rep-count {
-          font-family: 'Courier New', Courier, monospace;
-      }
-
-      .timer-ring-display.is-phase {
-          font-size: 2.5rem;
-          text-transform: uppercase;
-      }
-
-
-      .timer-ring-bg {
-          fill: none;
-          stroke: var(--card-color);
-          stroke-width: 12;
-      }
-
-      .timer-ring-progress {
-          fill: none;
-          stroke: var(--primary-color);
-          stroke-width: 12;
-          stroke-linecap: round;
-          transform: rotate(-90deg);
-          transform-origin: 50% 50%;
-          transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
-      }
-
-      .timer-ring-progress.is-rest {
-          stroke: var(--secondary-color);
-      }
-
-      @keyframes flash {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
-      .flashing {
-        animation: flash 1.4s infinite;
-        fill: var(--primary-color);
-      }
-
-      .trainer-controls {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          align-items: center;
-          margin-top: 1rem;
-          height: 80px;
-          width: 100%;
-          padding-bottom: 1rem;
-      }
-
-      .btn-large {
-          padding: 1rem 2rem;
-          font-size: 1.25rem;
-      }
-
-      /* --- Stili per Logging Manuale --- */
-      #trainer-logging-controls {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-        width: 100%;
-        max-width: 350px;
-        padding: 0 1.5rem; /* Aggiunge padding laterale per non toccare i bordi del ring */
-      }
-
-      #trainer-logging-controls.hidden {
-        display: none;
-      }
-
-      .logging-inputs-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-      }
-
-      #trainer-logging-controls .form-group {
-        display: flex;
-        flex-direction: column;
-      }
-
-      #trainer-logging-controls .form-group label {
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-      }
-
-      #trainer-logging-controls .form-group input {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 1.25rem;
-        background-color: var(--card-color);
-        color: var(--text-color);
-        text-align: center;
-        font-family: 'Courier New', Courier, monospace;
-        font-weight: bold;
-      }
-
-      /* Stile per rimuovere le frecce dagli input numerici */
-      #trainer-logging-controls input[type=number] {
-        -moz-appearance: textfield;
-      }
-      #trainer-logging-controls input[type=number]::-webkit-outer-spin-button,
-      #trainer-logging-controls input[type=number]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-
-      .form-group-checkbox {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
-      }
-
-      .form-group-checkbox label {
-        font-size: 1rem;
-        color: var(--text-color);
-      }
-
-      .form-group-checkbox input[type="checkbox"] {
-        width: 20px;
-        height: 20px;
-        accent-color: var(--primary-color);
-      }
-
-      #trainer-logging-controls .btn-large {
-        width: 100%;
       }
   - file: styles/modals.css
     content: |
@@ -1305,81 +1193,4 @@ patches:
           flex-grow: 1;
         }
         .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
-      }
-  - file: src/core/calculations.js
-    content: |
-      export function calculateAge(dateString) {
-        if (!dateString) return null;
-        const birthDate = new Date(dateString);
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        return age;
-      }
-
-      export function calculateBMR(userProfile, weight) {
-        if (!userProfile || !weight || !userProfile.dateOfBirth || !userProfile.height || !userProfile.gender) {
-          return null;
-        }
-
-        const age = calculateAge(userProfile.dateOfBirth);
-        const height = parseFloat(userProfile.height);
-        const weightFloat = parseFloat(weight);
-
-        if (isNaN(age) || isNaN(height) || isNaN(weightFloat)) return null;
-
-        let bmr;
-        // Formula Mifflin-St Jeor: P = 10m + 6.25h - 5a + s
-        // m = peso in kg, h = altezza in cm, a = età in anni, s è +5 per uomini e -161 per donne.
-        if (userProfile.gender === 'male') {
-          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) + 5;
-        } else if (userProfile.gender === 'female') {
-          bmr = (10 * weightFloat) + (6.25 * height) - (5 * age) - 161;
-        } else {
-          return null; // Gender not specified or invalid
-        }
-
-        return Math.round(bmr);
-      }
-
-      export function calculateWorkoutCalories(workoutSummary, userProfile, userWeight) {
-        if (!workoutSummary || !userWeight || !workoutSummary.exercises || workoutSummary.exercises.length === 0) {
-          return 0;
-        }
-
-        const weightKg = parseFloat(userWeight);
-        if (isNaN(weightKg) || weightKg <= 0) return 0;
-        
-        // Calcola il BMR per usarlo come base se il MET non è disponibile
-        const bmr = calculateBMR(userProfile, userWeight);
-        const metBaseline = bmr ? (bmr / 24) / weightKg : 1; // MET a riposo (approssimato)
-
-        let totalCalories = 0;
-
-        workoutSummary.exercises.forEach(exercise => {
-          // Usa il MET specifico dell'esercizio se disponibile, altrimenti un MET generico per "strength training"
-          const met = exercise.met_value || (metBaseline * 3.5); // 3.5 è un MET generico per pesi
-          
-          // totalTime for each exercise is in milliseconds (solo per modalità guidate)
-          let durationHours = exercise.totalTime / (1000 * 60 * 60);
-
-          // Per la modalità 'logging', la durata non è tracciata, quindi stimiamo
-          if (durationHours === 0 && exercise.setsData.length > 0) {
-            // Stima: 2.5 secondi per rep + riposo
-            const activeTimeSeconds = exercise.setsData.reduce((acc, set) => acc + (set.reps * 2.5), 0);
-            const restTimeSeconds = (exercise.setsData.length - 1) * exercise.defaultRest;
-            durationHours = (activeTimeSeconds + restTimeSeconds) / 3600;
-          }
-
-          if (typeof met === 'number' && met > 0 && durationHours > 0) {
-            // Formula: Kcal = MET * Peso(kg) * Durata(ore)
-            const caloriesBurned = met * weightKg * durationHours;
-            totalCalories += caloriesBurned;
-          }
-        });
-
-        return Math.round(totalCalories);
       }

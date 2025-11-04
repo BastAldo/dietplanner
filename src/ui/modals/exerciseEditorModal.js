@@ -179,11 +179,18 @@ export function openExerciseEditorModal(config) {
               defaultReps: null,
               defaultDuration: null,
               defaultRepsMin: null,
-              defaultRepsMax: null
+              defaultRepsMax: null,
+              defaultTempo: exercise.defaultTempo // Preserva l'oggetto tempo se esiste
           };
 
           if (newValues.execution_mode === EXECUTION_MODES.GUIDED_TEMPO) {
               newValues.defaultReps = parseInt(form.elements.reps.value);
+              // BUG FIX: Salva i dati del tempo se la modalità è GUIDED_TEMPO
+              newValues.defaultTempo = {
+                  up: parseInt(form.elements.tempo_up.value),
+                  hold: parseInt(form.elements.tempo_hold.value),
+                  down: parseInt(form.elements.tempo_down.value)
+              };
           } else if (newValues.execution_mode === EXECUTION_MODES.GUIDED_STATIC) {
               newValues.defaultDuration = parseInt(form.elements.duration.value);
           } else if (newValues.execution_mode === EXECUTION_MODES.LOGGING) {
@@ -191,13 +198,6 @@ export function openExerciseEditorModal(config) {
               newValues.defaultRepsMax = parseInt(form.elements.reps_max.value);
           }
           
-          if (exercise.defaultTempo) {
-              newValues.defaultTempo = {
-                  up: parseInt(form.elements.tempo_up.value),
-                  hold: parseInt(form.elements.tempo_hold.value),
-                  down: parseInt(form.elements.tempo_down.value)
-              };
-          }
           updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
           modal.classList.add('modal-hidden');
           openWorkoutEditorModal(returnIsoDate);

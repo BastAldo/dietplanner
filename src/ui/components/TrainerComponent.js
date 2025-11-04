@@ -58,9 +58,7 @@ export class TrainerComponent {
     destroy() {
         log('TrainerComponent', 'Destroying component and cleaning up DOM...');
         this.container.removeEventListener('click', this.boundHandleControls);
-        if (this.elements.ringContainer) {
-            this.elements.ringContainer.innerHTML = '';
-        }
+        // Non svuotare l'HTML, la vista viene riutilizzata
         log('TrainerComponent', 'Component destroyed.');
     }
 
@@ -132,7 +130,9 @@ export class TrainerComponent {
     }
 
     createTimerRing() {
-        if (this.elements.ringContainer.querySelector('svg')) return;
+        // Non ricreare se esiste già
+        if (this.elements.ringSvg) return;
+
         this.elements.ringContainer.innerHTML = ''; // Pulisce prima di aggiungere
         const svgNS = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNS, 'svg');
@@ -161,7 +161,9 @@ export class TrainerComponent {
         svg.appendChild(progressCircle);
         svg.appendChild(text);
         this.elements.ringContainer.prepend(svg); // Aggiunge l'SVG
-        this.elements.ringContainer.appendChild(this.elements.loggingControls); // Assicura che i controlli siano dopo l'SVG
+        
+        // Riappende i controlli di logging che sono già nel DOM ma fuori dal container
+        this.elements.ringContainer.appendChild(this.elements.loggingControls); 
         
         // Salva i riferimenti
         this.elements.ringSvg = svg;
@@ -196,6 +198,8 @@ export class TrainerComponent {
             this.elements.btnResume.classList.add('hidden');
             this.elements.loggingControls.classList.add('hidden');
             this.elements.ringSvg.classList.remove('hidden');
+            this.ringText.classList.remove('hidden');
+            this.ringProgress.classList.remove('hidden');
             return;
         };
 
@@ -212,6 +216,8 @@ export class TrainerComponent {
             this.elements.btnResume.classList.add('hidden');
             this.elements.loggingControls.classList.add('hidden');
             this.elements.ringSvg.classList.remove('hidden');
+            this.ringText.classList.remove('hidden');
+            this.ringProgress.classList.remove('hidden');
             return;
         }
 
@@ -241,14 +247,18 @@ export class TrainerComponent {
         this.elements.btnResume.classList.toggle('hidden', status !== 'paused');
 
         // --- Main Render Logic ---
-        this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing');
-        this.ringProgress.classList.remove('is-rest');
+        this.ringText.classList.remove('is-timer', 'is-phase', 'is-rep-count', 'flashing', 'hidden');
+        this.ringProgress.classList.remove('is-rest', 'hidden');
+        this.elements.ringSvg.classList.remove('hidden');
 
         const isLoggingPhase = (status === 'running' && currentPhase.type === 'logging');
         const isGuidedPhase = (status === 'running' && (currentPhase.type === 'movement' || currentPhase.type === 'static_hold' || currentPhase.type === 'rest'));
 
-        this.elements.ringSvg.classList.toggle('hidden', isLoggingPhase || status === 'idle' || status === 'paused');
+        // UI per "inputs DENTRO l'anello"
         this.elements.loggingControls.classList.toggle('hidden', !isLoggingPhase);
+        this.ringText.classList.toggle('hidden', isLoggingPhase || status === 'paused');
+        this.ringProgress.classList.toggle('hidden', isLoggingPhase || status === 'paused');
+        
         this.elements.btnPause.classList.toggle('hidden', !isGuidedPhase || status === 'paused');
 
 
@@ -310,6 +320,9 @@ export class TrainerComponent {
     renderPaused() {
         this.elements.ringSvg.classList.remove('hidden');
         this.elements.loggingControls.classList.add('hidden');
+        this.ringText.classList.remove('hidden');
+        this.ringProgress.classList.remove('hidden');
+
         this.ringText.textContent = UI_TEXT.TRAINER_PAUSED_LABEL;
         this.ringText.classList.add('is-phase', 'flashing');
     }

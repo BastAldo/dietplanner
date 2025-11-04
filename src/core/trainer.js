@@ -84,6 +84,15 @@ async function runWorkoutLoop() {
 export function resetWorkoutState() {
   log('Trainer', 'Resetting workout state.');
   stopAllAnimations();
+
+  // BUG FIX: Risolvi qualsiasi promise "orfana" della modalità logging
+  // per terminare qualsiasi loop `runWorkoutLoop` in attesa.
+  const currentState = getWorkoutState();
+  if (currentState.resolveCurrentSetPromise) {
+      log('Trainer', 'Resolving orphaned logging promise.');
+      currentState.resolveCurrentSetPromise();
+  }
+
   resetState();
 }
 
@@ -91,7 +100,7 @@ export function initializeWorkout(plannedExercises, isoDate) {
   if (!plannedExercises || plannedExercises.length === 0) {
       return;
   }
-  resetWorkoutState();
+  resetWorkoutState(); // Resetta prima di inizializzare
 
   const fullExecutionQueue = buildFullWorkoutQueue(plannedExercises);
 
@@ -284,6 +293,7 @@ function createWorkoutSummary(finalState) {
     const globalState = getGlobalState();
     const latestWeight = globalState.biometricData.length > 0 ? globalState.biometricData[0].weight : null;
     if (latestWeight) {
+      // BUG FIX: Passa il globalState.userProfile necessario per il calcolo BMR
       summary.totalCaloriesBurned = calculateWorkoutCalories(summary, globalState.userProfile, latestWeight);
     }
 
