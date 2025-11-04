@@ -57,23 +57,25 @@ export function buildFullWorkoutQueue(exercisePlan) {
   }
 
   exercisePlan.forEach((exercise, exerciseIndex) => {
-    const execution_mode = exercise.execution_mode || 'tempo_guided';
+    const execution_mode = exercise.execution_mode || 'guided_tempo'; // Default a 'guided_tempo'
 
     for (let set = 1; set <= exercise.defaultSets; set++) {
       const context = {
         exercise,
         set,
-        reps: exercise.defaultReps,
+        reps: exercise.defaultReps, // Usato da guided_tempo
+        repsMin: exercise.defaultRepsMin, // Usato da logging
+        repsMax: exercise.defaultRepsMax, // Usato da logging
         weight: exercise.defaultWeight
       };
 
-      if (execution_mode === 'tempo_guided') {
+      if (execution_mode === 'guided_tempo') {
           fullQueue.push(...interpretTemplate(TEMPO_GUIDED_FLOW, exercise, context));
-      } else if (execution_mode === 'static_hold') {
+      } else if (execution_mode === 'guided_static') {
           fullQueue.push({ type: 'static_hold', duration_ms: exercise.defaultDuration * 1000, context });
           fullQueue.push({ type: 'set_completed', context });
-      } else if (execution_mode === 'manual_reps') {
-          fullQueue.push({ type: 'manual_rep', context });
+      } else if (execution_mode === 'logging') { // Sostituisce 'manual_reps'
+          fullQueue.push({ type: 'logging', context }); // Nuova fase 'logging'
           fullQueue.push({ type: 'set_completed', context });
       }
 

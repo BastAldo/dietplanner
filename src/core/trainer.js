@@ -9,17 +9,25 @@ import { UI_TEXT } from '../config/uiText.js';
 
 // This is the "Director d'Orchestra"
 async function runWorkoutLoop() {
-  const state = getWorkoutState();
-  if (state.status !== 'running') return;
+  const initialState = getWorkoutState();
+  if (initialState.status !== 'running') return;
 
-  for (let i = state.currentQueueIndex; i < state.fullExecutionQueue.length; i++) {
-      if (getWorkoutState().status !== 'running') {
-          log('Trainer', 'Workout loop terminated.');
+  let i = initialState.currentQueueIndex;
+
+  while (i < initialState.fullExecutionQueue.length) {
+      let currentState = getWorkoutState();
+      if (currentState.status !== 'running') {
+          log('Trainer', 'Workout loop terminated (paused or finished).');
           return;
+      }
+      
+      // Assicura che l'indice dello stato sia aggiornato
+      if (i !== currentState.currentQueueIndex) {
+        i = currentState.currentQueueIndex;
       }
 
       updateState({ currentQueueIndex: i });
-      const phase = state.fullExecutionQueue[i];
+      const phase = currentState.fullExecutionQueue[i];
 
       log('Trainer-Loop', `Executing phase ${i}:`, phase.type);
 
@@ -31,9 +39,9 @@ async function runWorkoutLoop() {
               }
               break;
           case 'audio':
-               if (getWorkoutState().isAudioEnabled) {
+              if (getWorkoutState().isAudioEnabled) {
                   if (phase.cue === 'tick') playTick();
-               }
+              }
               break;
           case 'movement':
           case 'rest':
@@ -41,26 +49,27 @@ async function runWorkoutLoop() {
               await runTimerAnimation(phase.duration_ms);
               break;
           case 'set_completed':
+              // Per le modalità guidate, raccoglie i dati pianificati
               collectSetData();
               break;
-          case 'manual_rep':
-              // This phase is handled by user interaction via incrementManualRep
-              // We wait here until the rep count is met
+          case 'logging':
+              // Pausa il loop e attende la conferma manuale dalla UI
               await new Promise(resolve => {
-                  const checkReps = () => {
-                      const currentState = getWorkoutState();
-                      const currentPhase = currentState.fullExecutionQueue[currentState.currentQueueIndex];
-                      if (!currentPhase || currentPhase.repsCompleted >= currentPhase.context.reps) {
-                          document.removeEventListener('workoutStateChange', checkReps);
-                          resolve();
-                      }
-                  };
-                  document.addEventListener('workoutStateChange', checkReps);
+                  updateState({ resolveCurrentSetPromise: resolve });
               });
+              // Quando la promise si risolve (tramite confirmCurrentSet),
+              // i dati sono GIÀ stati raccolti da confirmCurrentSet.
               break;
       }
+      
+      // Avanza all'indice successivo solo se lo stato è ancora 'running'
+      // Questo previene un doppio incremento se `skipPhase` è stato chiamato
+      if (getWorkoutState().status === 'running' && getWorkoutState().currentQueueIndex === i) {
+        i++;
+      }
   }
-  // If the loop completes naturally, end the workout
+  
+  // Se il loop completa naturalmente, termina l'allenamento
   if (getWorkoutState().status === 'running') {
       endWorkout();
   }
@@ -93,24 +102,39 @@ export function initializeWorkout(plannedExercises, isoDate) {
   document.dispatchEvent(new CustomEvent('workoutStateChange'));
 }
 
-export function collectSetData() {
+export function collectSetData(setDataFromUI = null) {
     const state = getWorkoutState();
     const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
     if (!currentPhase || !currentPhase.context) return;
 
-    const { exercise, set, reps, weight } = currentPhase.context;
+    const { exercise, set } = currentPhase.context;
 
-    const setData = {
+    let setData;
+    if (setDataFromUI) {
+      // Modalità Logging: Dati arrivano dalla UI
+      setData = {
         exerciseId: exercise.instanceId,
         set: set,
-        reps: reps,
-        duration: state.lastTimerDuration || 0, // Duration from animation engine
+        reps: setDataFromUI.reps,
+        duration: 0, // La modalità logging non è basata sul tempo
         rest: exercise.defaultRest,
-        weight: weight || 0
-    };
+        weight: setDataFromUI.weight,
+        to_failure: setDataFromUI.to_failure || false
+      };
+    } else {
+      // Modalità Guidata: Dati arrivano dal context (piano)
+      setData = {
+        exerciseId: exercise.instanceId,
+        set: set,
+        reps: currentPhase.context.reps, // Reps pianificate
+        duration: state.lastTimerDuration || 0, // Durata dall'animation engine
+        rest: exercise.defaultRest,
+        weight: currentPhase.context.weight || 0
+      };
+    }
 
     const newSetsData = [...state.setsData, setData];
-    updateState({ setsData: newSetsData });
+    updateState({ setsData: newSetsData, lastTimerDuration: 0 }); // Resetta lastTimerDuration
     log('Trainer', 'Set data collected', { setData });
 }
 
@@ -149,21 +173,64 @@ export function resumeWorkout() {
   if (state.status === 'paused') {
       updateState({ status: 'running' });
       log('Trainer', 'Workout resumed.');
+      // Il loop `runWorkoutLoop` riprenderà automaticamente
+      // perché `state.status` è di nuovo 'running'.
+      // Ma se era in attesa di una promise (animazione),
+      // l'animazione riprenderà da sola.
+      // Se era in attesa della promise `logging`,
+      // non fa nulla finché l'utente non conferma.
+      // Se era tra le fasi, il loop `while` riprende.
+      // Per sicurezza, se non è in attesa di nulla, facciamo ripartire il loop.
+      if (!state.resolveCurrentSetPromise) {
+        runWorkoutLoop();
+      }
   }
 }
 
-export function incrementManualRep() {
+export function confirmCurrentSet(setDataFromUI) {
     const state = getWorkoutState();
     if (state.status !== 'running') return;
 
-    const currentPhase = state.fullExecutionQueue[state.currentQueueIndex];
-    if (currentPhase && currentPhase.type === 'manual_rep') {
-        const newRepCount = (currentPhase.repsCompleted || 0) + 1;
-        currentPhase.repsCompleted = newRepCount;
-        // Dispatch change to notify the waiting promise in the loop
-        document.dispatchEvent(new CustomEvent('workoutStateChange'));
+    // Raccogli i dati del set appena completato
+    collectSetData(setDataFromUI);
+
+    // Sblocca il `runWorkoutLoop` che è in `await`
+    if (state.resolveCurrentSetPromise) {
+        state.resolveCurrentSetPromise();
+        updateState({ resolveCurrentSetPromise: null });
     }
 }
+
+export function skipPhase(direction = 1) {
+    stopAllAnimations(); // Interrompe qualsiasi timer (es. riposo)
+    const state = getWorkoutState();
+    if (state.status !== 'running') return;
+
+    log('Trainer', 'Skipping phase', { direction });
+
+    // Se siamo in attesa di conferma set, sblocca la promise
+    if (state.resolveCurrentSetPromise) {
+        log('Trainer', 'Skipping an awaiting set confirmation');
+        state.resolveCurrentSetPromise();
+        updateState({ resolveCurrentSetPromise: null });
+    }
+
+    let newIndex = state.currentQueueIndex + direction;
+
+    // Logica per saltare al prossimo *set* o *esercizio*
+    // In modalità guidata, potremmo voler saltare alla prossima fase "importante"
+    // Per ora, saltiamo solo alla fase successiva/precedente
+    
+    if (newIndex >= state.fullExecutionQueue.length) {
+        endWorkout(); // Se skippiamo l'ultima fase, finisce l'allenamento
+    } else if (newIndex < 0) {
+        newIndex = 0; // Non andare prima dell'inizio
+        updateState({ currentQueueIndex: newIndex });
+    } else {
+        updateState({ currentQueueIndex: newIndex });
+    }
+}
+
 
 function createWorkoutSummary(finalState) {
     const totalTime = Date.now() - finalState.startTime;

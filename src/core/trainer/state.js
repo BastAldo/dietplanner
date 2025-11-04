@@ -9,6 +9,7 @@ const initialWorkoutState = {
   startTime: 0,
   setsData: [], // Array to store data for each completed set
   isAudioEnabled: true,
+  resolveCurrentSetPromise: null, // Promise resolver per la modalità logging
 };
 
 let workoutState = { ...initialWorkoutState };
