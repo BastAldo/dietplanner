@@ -22,6 +22,7 @@ let state = {
     currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
     activeLibraryTab: 'ingredients',
     librarySearchTerm: '',
+    libraryActiveFilter: null,
     lastWorkoutSummary: null,
     charts: {
       currentRangeFilter: 30,
@@ -56,6 +57,12 @@ export const setState = (newState) => {
 export const setUiState = (uiChanges) => {
   state.ui = { ...state.ui, ...uiChanges };
   notify();
+}
+
+export function getPackageTags() {
+  const allTags = state.masterMealList.flatMap(meal => meal.etichette || []);
+  const pkgTags = allTags.filter(tag => tag && tag.startsWith('pkg:'));
+  return [...new Set(pkgTags)];
 }
 
 export function getMealsForType(mealType) {

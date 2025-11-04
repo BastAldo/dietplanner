@@ -165,17 +165,37 @@
 .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
 .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
 
-/* --- MODAL SEARCH BAR --- */
+/* --- MODAL SEARCH BAR & FILTERS --- */
 .modal-search-bar-container {
   padding: 0 1.5rem 1rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
 }
-/* Riusa la classe esistente per lo stile della barra */
 .modal-search-bar-container .library-search-bar {
   width: 100%;
   margin: 0;
 }
-/* Assicura che il body-list non abbia padding superiore quando c'è la barra */
+.tag-filter-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 0 1.5rem;
+}
+.tag-filter-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  background-color: transparent;
+  color: var(--text-color-muted);
+}
+.tag-filter-btn.active {
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+  border-color: var(--primary-color);
+  font-weight: bold;
+}
 #selection-modal .modal-body {
   padding-top: 1rem;
 }

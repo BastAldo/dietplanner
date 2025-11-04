@@ -6,7 +6,7 @@ import { renderCharts } from './charts.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
 import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
-import { getState, setUiState } from '../core/state.js';
+import { getState, setUiState, getPackageTags } from '../core/state.js';
 import { openPackagePreviewModal } from './modals.js';
 
 async function fetchJson(url) {
@@ -213,8 +213,27 @@ export function renderRecipesPage(state) {
   }).join('');
 }
 
+function renderPackageFilters(state) {
+  const { libraryActiveFilter } = state.ui;
+  const pkgTags = getPackageTags();
+  const tagsContainer = document.getElementById('library-tag-filters');
+  
+  if (pkgTags.length === 0) {
+    tagsContainer.innerHTML = '';
+    return;
+  }
+
+  let tagsHtml = `<button class="tag-filter-btn ${!libraryActiveFilter ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>`;
+  tagsHtml += pkgTags.map(tag => {
+    const tagName = tag.replace('pkg:', '');
+    return `<button class="tag-filter-btn ${libraryActiveFilter === tag ? 'active' : ''}" data-tag="${tag}">${tagName}</button>`;
+  }).join('');
+  
+  tagsContainer.innerHTML = tagsHtml;
+}
+
 export function renderLibraryPage(state) {
-  const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
+  const { activeLibraryTab = 'ingredients', librarySearchTerm = '', libraryActiveFilter } = state.ui;
   const searchInput = document.getElementById('library-search-input');
   searchInput.value = librarySearchTerm;
   searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti (per nome)' : 'pasti (per nome o etichetta)'}...`;
@@ -230,11 +249,23 @@ export function renderLibraryPage(state) {
     ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
   }
 
+  renderPackageFilters(state);
+
   const mealList = document.getElementById('meal-list');
   const filteredMeals = state.masterMealList.filter(meal => {
-      const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm);
-      const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
-      return nameMatch || tagMatch;
+      // Filtro Pacchetto
+      if (libraryActiveFilter && (!meal.etichette || !meal.etichette.includes(libraryActiveFilter))) {
+        return false;
+      }
+      
+      // Filtro Ricerca
+      if (lowerCaseSearchTerm !== '') {
+        const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm);
+        const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
+        if (!nameMatch && !tagMatch) return false;
+      }
+      
+      return true;
   });
 
   if (filteredMeals.length > 0) {

@@ -15,7 +15,21 @@ function handleLibraryClick(e) {
     log('Interactions-Library', 'Tab changed', { newView });
     setUiState({
       ...state.ui,
-      activeLibraryTab: newView
+      activeLibraryTab: newView,
+      libraryActiveFilter: null,
+    });
+    return;
+  }
+
+  // Package Tag filter
+  const tagFilterBtn = e.target.closest('.tag-filter-btn');
+  if (tagFilterBtn && tagFilterBtn.dataset.tag) {
+    const tag = tagFilterBtn.dataset.tag;
+    const newFilter = tag === 'all' ? null : tag;
+    log('Interactions-Library', 'Package filter changed', { newFilter });
+    setUiState({
+      ...state.ui,
+      libraryActiveFilter: newFilter,
     });
     return;
   }

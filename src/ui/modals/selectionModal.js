@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan, updateWeeklyWorkout } from '../../core/state.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout, getPackageTags } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { formatIngredients } from '../../utils/formatters.js';
@@ -13,17 +13,46 @@ export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
   
   const list = selectionModal.querySelector('#selection-modal-list');
   const searchInput = selectionModal.querySelector('#selection-modal-search');
+  const tagsContainer = selectionModal.querySelector('#selection-modal-tag-filters');
+  
+  let activeTagFilter = null;
+  let searchTerm = '';
 
-  function renderList(filterTerm = '') {
-      const lowerCaseFilter = filterTerm.toLowerCase().trim();
+  function renderPackageTags() {
+      const pkgTags = getPackageTags();
+      if (pkgTags.length === 0) {
+        tagsContainer.innerHTML = '';
+        return;
+      }
+      tagsContainer.innerHTML = `
+        <button class="tag-filter-btn active" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>
+        ${pkgTags.map(tag => {
+          const tagName = tag.replace('pkg:', '');
+          return `<button class="tag-filter-btn" data-tag="${tag}">${tagName}</button>`;
+        }).join('')}
+      `;
+  }
+
+  function renderList() {
+      const lowerCaseSearch = searchTerm.toLowerCase().trim();
+      
       const filteredMeals = relevantMeals.filter(meal => {
-          if (lowerCaseFilter === '') return true;
-          const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseFilter);
-          const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseFilter));
-          return nameMatch || tagMatch;
+          // Filtro Pacchetto
+          if (activeTagFilter && (!meal.etichette || !meal.etichette.includes(activeTagFilter))) {
+              return false;
+          }
+          
+          // Filtro Ricerca
+          if (lowerCaseSearch !== '') {
+            const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearch);
+            const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearch));
+            if (!nameMatch && !tagMatch) return false;
+          }
+
+          return true;
       });
       
-      const noMealsText = filterTerm ? `Nessun pasto trovato per "${filterTerm}".` : UI_TEXT.NO_MEALS_AVAILABLE;
+      const noMealsText = searchTerm ? `Nessun pasto trovato per "${searchTerm}".` : UI_TEXT.NO_MEALS_AVAILABLE;
       list.innerHTML = filteredMeals.length > 0 
           ? filteredMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') 
           : `<p class="placeholder-text">${noMealsText}</p>`;
@@ -31,9 +60,23 @@ export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
 
   searchInput.value = '';
   searchInput.oninput = (e) => {
-      renderList(e.target.value);
+      searchTerm = e.target.value;
+      renderList();
+  };
+
+  tagsContainer.onclick = (e) => {
+    const target = e.target.closest('.tag-filter-btn');
+    if (!target) return;
+    
+    tagsContainer.querySelectorAll('.tag-filter-btn').forEach(btn => btn.classList.remove('active'));
+    target.classList.add('active');
+    
+    const tag = target.dataset.tag;
+    activeTagFilter = tag === 'all' ? null : tag;
+    renderList();
   };
   
+  renderPackageTags();
   renderList();
   
   const closeAndReturn = () => {

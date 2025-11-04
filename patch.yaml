@@ -1,29 +1,801 @@
-commit_message: "feat(explore): Implementa anteprima pacchetto e aggiorna UI card"
+commit_message: "feat(ui): Implementa filtri pacchetto in libreria e modale pasti"
 rationale: |
-  Questo commit completa la "Fase 2" delle funzionalità discusse, introducendo la capacità di visualizzare un'anteprima dei pacchetti nella sezione "Esplora" prima di installarli.
+  Questo commit completa l'implementazione della strategia di "auto-tagging" (Fase Finale) aggiungendo l'interfaccia utente necessaria per filtrare i contenuti per pacchetto.
 
-  1.  **Nuovo Modale Anteprima (templates/modals.html, styles/modals.css):**
-      - È stato aggiunto un nuovo modale (`package-preview-modal`) per visualizzare il contenuto dei pacchetti.
-      - Questo modale ha un corpo scorrevole (`package-preview-body`) per elencare pasti, ingredienti ed esercizi, e un footer con un pulsante di installazione.
-      - Sono stati aggiunti gli stili necessari per il layout del modale e per le liste di anteprima.
+  1.  **Gestione Stato (src/core/state.js):**
+      - Aggiunta la proprietà `libraryActiveFilter: null` all'oggetto `state.ui` per tracciare il filtro del pacchetto attualmente selezionato nella libreria.
+      - Creata la nuova funzione `getPackageTags()` che scansiona `state.masterMealList`, estrae tutti i tag univoci che iniziano con `pkg:`, e li restituisce. Questo implementa il requisito "vedere tutti i pacchetti installati" in modo dinamico.
 
-  2.  **Logica Modale (src/ui/modals/packagePreviewModal.js):**
-      - È stato creato un nuovo modulo per gestire la logica di anteprima.
-      - La funzione `openPackagePreviewModal` riceve il manifest del pacchetto, mostra il modale e avvia il recupero (fetch) dei contenuti (`pasti.json`, `ingredienti.json`, `esercizi.json`).
-      - Visualizza i contenuti recuperati in sezioni distinte.
-      - Il pulsante "Installa" nel modale è collegato a `fetchAndMergePackage` per completare l'installazione, fornendo un flusso utente coerente.
+  2.  **UI Libreria (templates/library.html, styles/library.css, src/ui/pageRenderers.js):**
+      - Aggiunto un contenitore `<div id="library-tag-filters" ...></div>` in `templates/library.html` per ospitare i filtri-chip.
+      - Aggiunti stili in `styles/library.css` per `.tag-filter-container` e `.tag-filter-btn` (riutilizzando lo stile di 'explore').
+      - `renderLibraryPage` (in `src/ui/pageRenderers.js`) ora chiama `getPackageTags()` e popola i filtri-chip.
+      - La logica di filtraggio in `renderLibraryPage` è stata aggiornata per filtrare i pasti in base sia al termine di ricerca (nome/etichetta) sia al `libraryActiveFilter` (pacchetto) selezionato.
 
-  3.  **Aggiornamento Esportazioni Modali (src/ui/modals.js):**
-      - Il nuovo modulo `packagePreviewModal` è ora esportato tramite il file indice principale `src/ui/modals.js`.
+  3.  **Interazioni Libreria (src/ui/interactions/libraryInteractions.js):**
+      - `handleLibraryClick` è stato esteso per gestire i click sui nuovi `.tag-filter-btn`.
+      - I click su questi pulsanti ora aggiornano lo stato `state.ui.libraryActiveFilter` tramite `setUiState`, causando un re-render automatico della libreria filtrata.
 
-  4.  **Aggiornamento UI "Esplora" (src/ui/pageRenderers.js, styles/explore.css):**
-      - In `renderExplorePage`, l'HTML della `explore-card` è stato modificato per includere un nuovo pulsante "Anteprima" (`.btn-preview-package`) accanto a "Aggiungi alla Libreria".
-      - È stato aggiunto un contenitore `.explore-card-actions` per gestire i due pulsanti.
-      - Il gestore di eventi click nella `renderExplorePage` è stato aggiornato per delegare correttamente le azioni:
-          - `.btn-add-package` chiama `fetchAndMergePackage` (come prima).
-          - `.btn-preview-package` ora chiama `openPackagePreviewModal`, passando il manifest completo del pacchetto (ottenuto mappando l'URL all'oggetto `pkg` nello state).
-      - Gli stili in `styles/explore.css` sono stati aggiornati per supportare il nuovo contenitore `.explore-card-actions`.
+  4.  **UI Modale Selezione Pasti (templates/modals.html, styles/modals.css, src/ui/modals/selectionModal.js):**
+      - Aggiunto un contenitore `<div id="selection-modal-tag-filters" ...></div>` in `templates/modals.html`.
+      - Aggiunti stili in `styles/modals.css` per il nuovo contenitore.
+      - `openSelectionModal` (in `src/ui/modals/selectionModal.js`) è stato modificato radicalmente:
+          - Ora gestisce uno stato locale (`activeTagFilter`) per il filtro del pacchetto.
+          - Popola i filtri-chip chiamando `getPackageTags()`.
+          - Aggiunge un listener di eventi click per i chip, che aggiorna `activeTagFilter` e richiama `renderList`.
+          - `renderList` ora filtra l'elenco dei pasti in base a tre criteri: termine di ricerca, etichetta pacchetto attiva e tipo di pasto.
+
+  Questa implementazione completa il flusso utente: Scoperta -> Installazione (con auto-tagging) -> Visualizzazione e Filtro.
 patches:
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterIngredientList: [],
+        masterWorkoutList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        debugMode: false,
+        ui: {
+          currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
+          activeLibraryTab: 'ingredients',
+          librarySearchTerm: '',
+          libraryActiveFilter: null,
+          lastWorkoutSummary: null,
+          charts: {
+            currentRangeFilter: 30,
+            dateOffset: 0,
+            selectedBiometric: 'weight',
+            plannerChartType: 'bar'
+          },
+          explore: {
+            packages: [],
+            searchTerm: '',
+            activeTags: [],
+            sortOrder: 'default'
+          }
+        }
+      };
+
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+
+      export const getState = () => ({ ...state });
+      export const setState = (newState) => {
+        state = { ...state, ...newState };
+        notify();
+      }
+      export const setUiState = (uiChanges) => {
+        state.ui = { ...state.ui, ...uiChanges };
+        notify();
+      }
+
+      export function getPackageTags() {
+        const allTags = state.masterMealList.flatMap(meal => meal.etichette || []);
+        const pkgTags = allTags.filter(tag => tag && tag.startsWith('pkg:'));
+        return [...new Set(pkgTags)];
+      }
+
+      export function getMealsForType(mealType) {
+        return state.masterMealList.filter(meal => {
+          if (meal.tipoPasto === 'Tutti') return true;
+          if (Array.isArray(meal.tipoPasto)) {
+            return meal.tipoPasto.includes(mealType);
+          }
+          return meal.tipoPasto === mealType;
+        });
+      }
+
+      export function getExerciseForPlanner(slotId, instanceId) {
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function getExerciseFromHistory(date, startTime, instanceId) {
+        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+        if (!workout) return null;
+        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+      }
+
+      export function setPlannerConfig(config, sourceId) {
+        log('State', 'Merging new planner config', { sourceId });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        state.masterWorkoutList = config.esercizi || [];
+
+        ingredients.forEach(ing => {
+          if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
+            state.masterIngredientList.push(ing);
+          }
+        });
+
+        const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
+
+        meals.forEach(meal => {
+          if (!state.masterMealList.some(existing => existing.id === meal.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              meal.etichette = [...(meal.etichette || []), packageTag];
+            }
+            state.masterMealList.push(meal);
+          }
+        });
+
+        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function setContentHubUrl(url) {
+        log('State', 'Setting new Content Hub URL', { url });
+        state.contentHubUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+        localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_MEALS, JSON.stringify(state.masterMealList));
+      }
+
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+        const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
+        const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
+
+        if (url) {
+            // Migration for existing users with the old, incorrect URL without the repo name
+            if (url === 'https://itbiohackerhub-max.github.io/') {
+                log('State', 'Migrating incorrect legacy hub URL.');
+                url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+                localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
+            }
+            state.contentHubUrl = url;
+        }
+
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+        if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
+        if (meals) { try { state.masterMealList = JSON.parse(meals); } catch (e) { console.error("Error parsing masterMealList", e); state.masterMealList = []; } }
+      }
+
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        state.masterIngredientList = backupData.masterIngredientList || [];
+        state.masterMealList = backupData.masterMealList || [];
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
+        notify();
+      }
+
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addMultipleBiometricEntries(newEntries) {
+        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
+        state.biometricData = [...state.biometricData, ...newEntries];
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addIngredient(ingredientData) {
+        log('State', 'Adding new ingredient', { ingredientData });
+        state.masterIngredientList.push(ingredientData);
+        state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateIngredient(ingredientId, updatedData) {
+        log('State', 'Updating ingredient', { ingredientId, updatedData });
+        const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
+        if (index > -1) {
+          state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
+          state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+
+      export function deleteIngredient(ingredientId) {
+        log('State', 'Deleting ingredient', { ingredientId });
+        state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function addMeal(mealData) {
+        log('State', 'Adding new meal', { mealData });
+        state.masterMealList.push(mealData);
+        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+        state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateMeal(mealId, updatedData) {
+        log('State', 'Updating meal', { mealId, updatedData });
+        const index = state.masterMealList.findIndex(m => m.id === mealId);
+        if (index > -1) {
+          state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
+          state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+          state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+
+      export function deleteMeal(mealId) {
+        log('State', 'Deleting meal', { mealId });
+        state.masterMealList = state.masterMealList.filter(m => m.id !== mealId);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+
+          if (exerciseId) {
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) {
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+
+            if (state.workoutHistory[isoDate]) {
+                delete state.workoutHistory[isoDate];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
+        if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals', 'explore'].includes(view)) {
+          state.ui.currentView = view;
+          notify();
+        }
+      }
+
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.ui.lastWorkoutSummary = summary;
+        notify();
+      }
+
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+
+      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
+        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
+        if (!state.workoutHistory[date]) return;
+
+        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+        if (workoutIndex === -1) return;
+
+        const workout = state.workoutHistory[date][workoutIndex];
+        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
+        if (exerciseIndex === -1) return;
+
+        workout.exercises[exerciseIndex].setsData = newSetsData;
+        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
+        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
+        saveStateToLocalStorage();
+        notify();
+      }
+
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: src/ui/interactions/libraryInteractions.js
+    content: |
+      import { log } from '../../utils/logger.js';
+      import { openIngredientEditorModal, openMealEditorModal } from '../modals.js';
+      import { showConfirmModal } from '../modals.js';
+      import { deleteIngredient, deleteMeal, getState, setUiState } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { showNotification } from '../notifications.js';
+
+      function handleLibraryClick(e) {
+        const state = getState();
+
+        // Tab switching
+        const tabBtn = e.target.closest('.btn-view');
+        if (tabBtn && tabBtn.dataset.view) {
+          const newView = tabBtn.dataset.view;
+          log('Interactions-Library', 'Tab changed', { newView });
+          setUiState({
+            ...state.ui,
+            activeLibraryTab: newView,
+            libraryActiveFilter: null,
+          });
+          return;
+        }
+
+        // Package Tag filter
+        const tagFilterBtn = e.target.closest('.tag-filter-btn');
+        if (tagFilterBtn && tagFilterBtn.dataset.tag) {
+          const tag = tagFilterBtn.dataset.tag;
+          const newFilter = tag === 'all' ? null : tag;
+          log('Interactions-Library', 'Package filter changed', { newFilter });
+          setUiState({
+            ...state.ui,
+            libraryActiveFilter: newFilter,
+          });
+          return;
+        }
+
+        // --- Ingredient Actions ---
+        if (state.ui.activeLibraryTab === 'ingredients') {
+          const addBtn = e.target.closest('#add-ingredient-btn');
+          if (addBtn) {
+            log('Interactions-Library', 'Add new ingredient button clicked');
+            openIngredientEditorModal();
+            return;
+          }
+
+          const item = e.target.closest('.library-item');
+          if (!item) return;
+
+          const ingredientId = item.dataset.id;
+          const ingredient = state.masterIngredientList.find(ing => ing.id === ingredientId);
+          if (!ingredient) return;
+
+          const editBtn = e.target.closest('.btn-edit');
+          if (editBtn) {
+            log('Interactions-Library', 'Edit ingredient button clicked', { ingredientId });
+            openIngredientEditorModal(ingredient);
+            return;
+          }
+
+          const deleteBtn = e.target.closest('.btn-delete');
+          if (deleteBtn) {
+            log('Interactions-Library', 'Delete ingredient button clicked', { ingredientId });
+            showConfirmModal({
+              title: UI_TEXT.INGREDIENT_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.INGREDIENT_DELETE_CONFIRM_MSG} "${ingredient.nome}"?`,
+              onConfirm: () => {
+                deleteIngredient(ingredientId);
+                showNotification(UI_TEXT.INGREDIENT_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
+        }
+
+        // --- Meal Actions ---
+        if (state.ui.activeLibraryTab === 'meals') {
+          const addMealBtn = e.target.closest('#add-meal-btn');
+          if (addMealBtn) {
+            log('Interactions-Library', 'Add new meal button clicked');
+            openMealEditorModal();
+            return;
+          }
+
+          const mealItem = e.target.closest('.library-item');
+          if (!mealItem) return;
+
+          const mealId = mealItem.dataset.id;
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (!meal) return;
+
+          const editMealBtn = e.target.closest('.btn-edit');
+          if (editMealBtn) {
+            log('Interactions-Library', 'Edit meal button clicked', { mealId });
+            openMealEditorModal(meal);
+            return;
+          }
+
+          const deleteMealBtn = e.target.closest('.btn-delete');
+          if (deleteMealBtn) {
+            log('Interactions-Library', 'Delete meal button clicked', { mealId });
+            showConfirmModal({
+              title: UI_TEXT.MEAL_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.MEAL_DELETE_CONFIRM_MSG} "${meal.nomePasto}"?`,
+              onConfirm: () => {
+                deleteMeal(mealId);
+                showNotification(UI_TEXT.MEAL_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
+        }
+      }
+
+      function handleSearchInput(e) {
+        const searchTerm = e.target.value;
+        const currentState = getState();
+        setUiState({
+          ...currentState.ui,
+          librarySearchTerm: searchTerm
+        });
+      }
+
+      export function initializeLibraryListeners() {
+        log('Interactions', 'Initializing library listeners');
+        const libraryPage = document.getElementById('library-page');
+        if (libraryPage) {
+          libraryPage.addEventListener('click', handleLibraryClick);
+          const searchInput = document.getElementById('library-search-input');
+          searchInput.addEventListener('input', handleSearchInput);
+        }
+      }
+  - file: src/ui/modals/selectionModal.js
+    content: |
+      import { getState, updateWeeklyPlan, updateWeeklyWorkout, getPackageTags } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { log } from '../../utils/logger.js';
+      import { formatIngredients } from '../../utils/formatters.js';
+      import { openDayEditorModal } from './dayEditorModal.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+
+      export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
+        log('Modals', 'Opening meal selection modal', { slotId });
+        const mealType = slotId.substring(11);
+        const selectionModal = document.getElementById('selection-modal');
+        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+        
+        const list = selectionModal.querySelector('#selection-modal-list');
+        const searchInput = selectionModal.querySelector('#selection-modal-search');
+        const tagsContainer = selectionModal.querySelector('#selection-modal-tag-filters');
+        
+        let activeTagFilter = null;
+        let searchTerm = '';
+
+        function renderPackageTags() {
+            const pkgTags = getPackageTags();
+            if (pkgTags.length === 0) {
+              tagsContainer.innerHTML = '';
+              return;
+            }
+            tagsContainer.innerHTML = `
+              <button class="tag-filter-btn active" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>
+              ${pkgTags.map(tag => {
+                const tagName = tag.replace('pkg:', '');
+                return `<button class="tag-filter-btn" data-tag="${tag}">${tagName}</button>`;
+              }).join('')}
+            `;
+        }
+
+        function renderList() {
+            const lowerCaseSearch = searchTerm.toLowerCase().trim();
+            
+            const filteredMeals = relevantMeals.filter(meal => {
+                // Filtro Pacchetto
+                if (activeTagFilter && (!meal.etichette || !meal.etichette.includes(activeTagFilter))) {
+                    return false;
+                }
+                
+                // Filtro Ricerca
+                if (lowerCaseSearch !== '') {
+                  const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearch);
+                  const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearch));
+                  if (!nameMatch && !tagMatch) return false;
+                }
+
+                return true;
+            });
+            
+            const noMealsText = searchTerm ? `Nessun pasto trovato per "${searchTerm}".` : UI_TEXT.NO_MEALS_AVAILABLE;
+            list.innerHTML = filteredMeals.length > 0 
+                ? filteredMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') 
+                : `<p class="placeholder-text">${noMealsText}</p>`;
+        }
+
+        searchInput.value = '';
+        searchInput.oninput = (e) => {
+            searchTerm = e.target.value;
+            renderList();
+        };
+
+        tagsContainer.onclick = (e) => {
+          const target = e.target.closest('.tag-filter-btn');
+          if (!target) return;
+          
+          tagsContainer.querySelectorAll('.tag-filter-btn').forEach(btn => btn.classList.remove('active'));
+          target.classList.add('active');
+          
+          const tag = target.dataset.tag;
+          activeTagFilter = tag === 'all' ? null : tag;
+          renderList();
+        };
+        
+        renderPackageTags();
+        renderList();
+        
+        const closeAndReturn = () => {
+          selectionModal.classList.add('modal-hidden');
+          if (returnIsoDate) openDayEditorModal(returnIsoDate);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if(item) { 
+            updateWeeklyPlan(slotId, item.dataset.mealId); 
+            closeAndReturn(); 
+          }
+        };
+        selectionModal.classList.remove('modal-hidden');
+      }
+
+      export function openWorkoutSelectionModal(slotId, returnIsoDate) {
+        log('Modals', 'Opening workout selection modal', { slotId });
+        const state = getState();
+        const workoutSelectionModal = document.getElementById('workout-selection-modal');
+        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
+        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
+        const relevantWorkouts = state.masterWorkoutList;
+        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
+        
+        const closeAndReturn = () => {
+          workoutSelectionModal.classList.add('modal-hidden');
+          if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
+        };
+
+        list.onclick = e => {
+          const item = e.target.closest('.selection-item');
+          if (item) {
+            updateWeeklyWorkout(slotId, item.dataset.exerciseId);
+            closeAndReturn();
+          }
+        };
+        workoutSelectionModal.classList.remove('modal-hidden');
+      }
   - file: src/ui/pageRenderers.js
     content: |
       import { calculateBMR } from '../core/calculations.js';
@@ -34,7 +806,7 @@ patches:
       import { formatIngredientsSummary } from '../utils/formatters.js';
       import { fetchAndMergePackage } from '../api/configService.js';
       import { log } from '../utils/logger.js';
-      import { getState, setUiState } from '../core/state.js';
+      import { getState, setUiState, getPackageTags } from '../core/state.js';
       import { openPackagePreviewModal } from './modals.js';
 
       async function fetchJson(url) {
@@ -241,8 +1013,27 @@ patches:
         }).join('');
       }
 
+      function renderPackageFilters(state) {
+        const { libraryActiveFilter } = state.ui;
+        const pkgTags = getPackageTags();
+        const tagsContainer = document.getElementById('library-tag-filters');
+        
+        if (pkgTags.length === 0) {
+          tagsContainer.innerHTML = '';
+          return;
+        }
+
+        let tagsHtml = `<button class="tag-filter-btn ${!libraryActiveFilter ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>`;
+        tagsHtml += pkgTags.map(tag => {
+          const tagName = tag.replace('pkg:', '');
+          return `<button class="tag-filter-btn ${libraryActiveFilter === tag ? 'active' : ''}" data-tag="${tag}">${tagName}</button>`;
+        }).join('');
+        
+        tagsContainer.innerHTML = tagsHtml;
+      }
+
       export function renderLibraryPage(state) {
-        const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
+        const { activeLibraryTab = 'ingredients', librarySearchTerm = '', libraryActiveFilter } = state.ui;
         const searchInput = document.getElementById('library-search-input');
         searchInput.value = librarySearchTerm;
         searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti (per nome)' : 'pasti (per nome o etichetta)'}...`;
@@ -258,11 +1049,23 @@ patches:
           ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
         }
 
+        renderPackageFilters(state);
+
         const mealList = document.getElementById('meal-list');
         const filteredMeals = state.masterMealList.filter(meal => {
-            const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm);
-            const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
-            return nameMatch || tagMatch;
+            // Filtro Pacchetto
+            if (libraryActiveFilter && (!meal.etichette || !meal.etichette.includes(libraryActiveFilter))) {
+              return false;
+            }
+            
+            // Filtro Ricerca
+            if (lowerCaseSearchTerm !== '') {
+              const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm);
+              const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
+              if (!nameMatch && !tagMatch) return false;
+            }
+            
+            return true;
         });
 
         if (filteredMeals.length > 0) {
@@ -386,130 +1189,23 @@ patches:
           });
         }
       }
-  - file: src/ui/modals.js
+  - file: styles/library.css
     content: |
-      import { showConfirmModal } from './modals/confirmModal.js';
-      import { openDayEditorModal } from './modals/dayEditorModal.js';
-      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
-      import { showRecipeModal } from './modals/recipeModal.js';
-      import { openSelectionModal, openWorkoutSelectionModal } from './modals/selectionModal.js';
-      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
-      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
-      import { openIngredientEditorModal } from './modals/ingredientEditorModal.js';
-      import { openMealEditorModal } from './modals/mealEditorModal.js';
-      import { openPackagePreviewModal } from './modals/packagePreviewModal.js';
-
-      export {
-        showConfirmModal,
-        openDayEditorModal,
-        openExerciseEditorModal,
-        showRecipeModal,
-        openSelectionModal,
-        openWorkoutSelectionModal,
-        openWorkoutEditorModal,
-        openManualWorkoutModal,
-        openIngredientEditorModal,
-        openMealEditorModal,
-        openPackagePreviewModal
-      };
-  - file: src/ui/modals/packagePreviewModal.js
-    content: |
-      import { fetchAndMergePackage } from '../../api/configService.js';
-      import { log } from '../../utils/logger.js';
-
-      async function fetchJson(url) {
-        try {
-          const response = await fetch(url);
-          if (!response.ok) return null;
-          return await response.json();
-        } catch (e) {
-          log('PackagePreview', 'Failed to fetch JSON', { url, e });
-          return null;
-        }
+      /* --- LIBRARY PAGE --- */
+      #library-page > h3 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
       }
 
-      function renderPreviewList(title, items, key) {
-        if (!items || items.length === 0) return '';
-        return `
-          <div class="preview-section">
-            <h4>${title} (${items.length})</h4>
-            <ul class="preview-list">
-              ${items.map(item => `<li>${item[key]}</li>`).join('')}
-            </ul>
-          </div>
-        `;
-      }
-
-      export async function openPackagePreviewModal(packageManifest) {
-        log('Modals', 'Opening package preview modal', { packageManifest });
-        const modal = document.getElementById('package-preview-modal');
-        const titleEl = modal.querySelector('#package-preview-title');
-        const bodyEl = modal.querySelector('#package-preview-body');
-        const installBtn = modal.querySelector('#package-preview-install-btn');
-
-        titleEl.textContent = `Anteprima: ${packageManifest.title}`;
-        bodyEl.innerHTML = '<p class="placeholder-text">Caricamento contenuti...</p>';
-        modal.classList.remove('modal-hidden');
-
-        // Setup install button
-        installBtn.dataset.url = packageManifest.url;
-        installBtn.onclick = (e) => {
-          fetchAndMergePackage(e.currentTarget.dataset.url);
-          modal.classList.add('modal-hidden');
-        };
-
-        // Fetch content
-        const [ingredientsData, mealsData, exercisesData] = await Promise.all([
-          packageManifest.ingredientiUrl ? fetchJson(new URL(packageManifest.ingredientiUrl, packageManifest.url).href) : Promise.resolve(null),
-          packageManifest.pastiUrl ? fetchJson(new URL(packageManifest.pastiUrl, packageManifest.url).href) : Promise.resolve(null),
-          packageManifest.eserciziUrl ? fetchJson(new URL(packageManifest.eserciziUrl, packageManifest.url).href) : Promise.resolve(null)
-        ]);
-
-        const ingredients = ingredientsData?.ingredienti || [];
-        const meals = mealsData?.meals || [];
-        const exercises = exercisesData?.esercizi || [];
-
-        // Render content
-        let html = '';
-        html += renderPreviewList('Pasti', meals, 'nomePasto');
-        html += renderPreviewList('Ingredienti', ingredients, 'nome');
-        html += renderPreviewList('Esercizi', exercises, 'name');
-
-        if (html === '') {
-          bodyEl.innerHTML = '<p class="placeholder-text">Questo pacchetto non contiene elementi visualizzabili.</p>';
-        } else {
-          bodyEl.innerHTML = html;
-        }
-      }
-  - file: styles/explore.css
-    content: |
-      /* --- EXPLORE VIEW --- */
-      #explore-page > h3 {
-        color: var(--primary-color);
-        margin-bottom: 1.5rem;
-        text-align: center;
-      }
-
-      .explore-controls {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-        align-items: end;
-      }
-
-      .explore-controls .form-group {
+      .library-controls {
         display: flex;
         flex-direction: column;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
       }
 
-      .explore-controls label {
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-        color: var(--text-color-muted);
-      }
-
-      .explore-controls select {
+      .library-search-bar {
+        width: 100%;
         padding: 0.75rem;
         border: 1px solid var(--border-color);
         border-radius: 8px;
@@ -518,12 +1214,16 @@ patches:
         color: var(--text-color);
       }
 
-      .explore-tags {
+      .library-search-bar:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+
+      .tag-filter-container {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-        margin-bottom: 2rem;
-        justify-content: center;
+        margin-bottom: 0.5rem;
       }
 
       .tag-filter-btn {
@@ -544,68 +1244,72 @@ patches:
         font-weight: bold;
       }
 
-      .explore-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1.5rem;
+      .library-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
       }
 
-      .explore-card {
-        background-color: var(--card-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        overflow: hidden;
+      .library-section {
+        margin-bottom: 2rem;
+      }
+
+      .library-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+          padding: 1rem;
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          margin-bottom: 0.75rem;
+      }
+
+      .library-item-info {
         display: flex;
         flex-direction: column;
-        transition: transform 0.2s, box-shadow 0.2s;
-      }
-
-      .explore-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-      }
-
-      .explore-card-image {
-        width: 100%;
-        height: 180px;
-        object-fit: cover;
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      .explore-card-body {
-        padding: 1.5rem;
-        display: flex;
-        flex-direction: column;
+        gap: 0.25rem;
         flex-grow: 1;
+        min-width: 0;
       }
 
-      .explore-card-body h3 {
-        color: var(--primary-color);
-        margin-bottom: 0.75rem;
+      .library-item-info__name {
+        font-weight: 500;
+        word-break: break-word;
       }
-
-      .explore-card-body p {
-        font-size: 0.95rem;
+      .library-item-info__details {
+        font-size: 0.85rem;
         color: var(--text-color-muted);
-        line-height: 1.6;
-        flex-grow: 1;
-        margin-bottom: 1.5rem;
+        word-break: break-word;
       }
 
-      .explore-card-actions {
+      .library-item-actions {
         display: flex;
-        gap: 0.75rem;
-        margin-top: auto; /* Pushes buttons to the bottom */
+        gap: 0.5rem;
+        flex-shrink: 0;
       }
 
-      .explore-card-actions .btn {
-        flex-grow: 1;
+      .library-item-actions button {
+        background: none;
+        border: none;
+        color: var(--text-color-muted);
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-
-      @media (min-width: 768px) {
-        .explore-controls {
-          grid-template-columns: 2fr 1fr;
-        }
+      .library-item-actions button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+      .library-item-actions .btn-edit:hover {
+        color: var(--primary-color);
+      }
+      .library-item-actions .btn-delete:hover {
+        color: var(--danger-color);
       }
   - file: styles/modals.css
     content: |
@@ -776,17 +1480,37 @@ patches:
       .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
       .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
 
-      /* --- MODAL SEARCH BAR --- */
+      /* --- MODAL SEARCH BAR & FILTERS --- */
       .modal-search-bar-container {
         padding: 0 1.5rem 1rem 1.5rem;
         border-bottom: 1px solid var(--border-color);
       }
-      /* Riusa la classe esistente per lo stile della barra */
       .modal-search-bar-container .library-search-bar {
         width: 100%;
         margin: 0;
       }
-      /* Assicura che il body-list non abbia padding superiore quando c'è la barra */
+      .tag-filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem 0 1.5rem;
+      }
+      .tag-filter-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+        background-color: transparent;
+        color: var(--text-color-muted);
+      }
+      .tag-filter-btn.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+        font-weight: bold;
+      }
       #selection-modal .modal-body {
         padding-top: 1rem;
       }
@@ -842,6 +1566,36 @@ patches:
         }
         .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
       }
+  - file: templates/library.html
+    content: |
+      <div id="library-page" class="page-view hidden">
+          <h3>La Mia Libreria</h3>
+
+          <div class="library-controls">
+              <input type="search" id="library-search-input" class="library-search-bar" placeholder="Cerca in ingredienti...">
+              <div id="library-tag-filters" class="tag-filter-container"></div>
+              <div class="view-switcher">
+                  <button id="library-tab-ingredients" class="btn-view active" data-view="ingredients">Ingredienti</button>
+                  <button id="library-tab-meals" class="btn-view" data-view="meals">Pasti</button>
+              </div>
+          </div>
+
+          <div id="library-content-ingredients" class="library-content">
+            <div class="library-header">
+              <h4>Ingredienti</h4>
+              <button id="add-ingredient-btn" class="btn btn-primary">Nuovo</button>
+            </div>
+            <div id="ingredient-list"></div>
+          </div>
+
+          <div id="library-content-meals" class="library-content hidden">
+            <div class="library-header">
+              <h4>Pasti</h4>
+              <button id="add-meal-btn" class="btn btn-primary">Nuovo</button>
+            </div>
+            <div id="meal-list"></div>
+          </div>
+      </div>
   - file: templates/modals.html
     content: |
       <div id="info-modal" class="modal-overlay modal-hidden">
@@ -865,6 +1619,7 @@ patches:
               <div class="modal-search-bar-container">
                 <input type="search" id="selection-modal-search" class="library-search-bar" placeholder="Cerca per nome o etichetta...">
               </div>
+              <div id="selection-modal-tag-filters" class="tag-filter-container"></div>
               <div id="selection-modal-list" class="modal-body selection-list"></div>
           </div>
       </div>
@@ -920,7 +1675,7 @@ patches:
               </div>
         </div>
       </div>
-      <div id="recipe-modal" class_name="modal-overlay modal-hidden">
+      <div id="recipe-modal" class="modal-overlay modal-hidden">
         <div class="modal-content">
             <div class="modal-header">
               <h3 id="recipe-modal-title"></h3>
@@ -1044,4 +1799,4 @@ patches:
         </div>
        </div>
 commands:
-  - "echo 'Patch per anteprima pacchetto applicata.'"
+  - "echo 'Patch applicata: Filtri pacchetto visibili implementati.'"
