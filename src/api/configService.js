@@ -1,6 +1,6 @@
 import { UI_TEXT } from '../config/uiText.js';
 import { log } from '../utils/logger.js';
-import { setPlannerConfig } from '../core/state.js';
+import { setPlannerConfig, setView } from '../core/state.js';
 import { showNotification } from '../ui/notifications.js';
 
 async function fetchJson(url) {
@@ -90,8 +90,9 @@ export async function fetchAndMergePackage(packageUrl) {
     };
 
     // Pass the merged data to setPlannerConfig, which handles the "intelligent merge"
-    setPlannerConfig(mergedConfig, null);
+    setPlannerConfig(mergedConfig, packageManifest.id || null);
     showNotification(UI_TEXT.EXPLORE_PACKAGE_LOAD_SUCCESS, 'success');
+    setView('library');
 
   } catch (error) {
     console.error("Failed to load and merge content package:", error);

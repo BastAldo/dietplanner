@@ -10,8 +10,31 @@ export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
   const mealType = slotId.substring(11);
   const selectionModal = document.getElementById('selection-modal');
   selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
+  
   const list = selectionModal.querySelector('#selection-modal-list');
-  list.innerHTML = relevantMeals.length > 0 ? relevantMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') : `<p>${UI_TEXT.NO_MEALS_AVAILABLE}</p>`;
+  const searchInput = selectionModal.querySelector('#selection-modal-search');
+
+  function renderList(filterTerm = '') {
+      const lowerCaseFilter = filterTerm.toLowerCase().trim();
+      const filteredMeals = relevantMeals.filter(meal => {
+          if (lowerCaseFilter === '') return true;
+          const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseFilter);
+          const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseFilter));
+          return nameMatch || tagMatch;
+      });
+      
+      const noMealsText = filterTerm ? `Nessun pasto trovato per "${filterTerm}".` : UI_TEXT.NO_MEALS_AVAILABLE;
+      list.innerHTML = filteredMeals.length > 0 
+          ? filteredMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') 
+          : `<p class="placeholder-text">${noMealsText}</p>`;
+  }
+
+  searchInput.value = '';
+  searchInput.oninput = (e) => {
+      renderList(e.target.value);
+  };
+  
+  renderList();
   
   const closeAndReturn = () => {
     selectionModal.classList.add('modal-hidden');

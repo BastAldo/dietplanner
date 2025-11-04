@@ -165,6 +165,21 @@
 .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
 .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
 
+/* --- MODAL SEARCH BAR --- */
+.modal-search-bar-container {
+  padding: 0 1.5rem 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+/* Riusa la classe esistente per lo stile della barra */
+.modal-search-bar-container .library-search-bar {
+  width: 100%;
+  margin: 0;
+}
+/* Assicura che il body-list non abbia padding superiore quando c'è la barra */
+#selection-modal .modal-body {
+  padding-top: 1rem;
+}
+
 @media (min-width: 600px) {
   .structured-form {
     grid-template-columns: 1fr 1fr;

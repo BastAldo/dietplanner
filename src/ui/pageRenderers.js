@@ -216,7 +216,7 @@ export function renderLibraryPage(state) {
   const { activeLibraryTab = 'ingredients', librarySearchTerm = '' } = state.ui;
   const searchInput = document.getElementById('library-search-input');
   searchInput.value = librarySearchTerm;
-  searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti' : 'pasti'}...`;
+  searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti (per nome)' : 'pasti (per nome o etichetta)'}...`;
   document.querySelectorAll('#library-page .btn-view').forEach(btn => btn.classList.toggle('active', btn.dataset.view === activeLibraryTab));
   document.querySelectorAll('.library-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab)));
   const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
@@ -230,7 +230,12 @@ export function renderLibraryPage(state) {
   }
 
   const mealList = document.getElementById('meal-list');
-  const filteredMeals = state.masterMealList.filter(meal => meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm));
+  const filteredMeals = state.masterMealList.filter(meal => {
+      const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearchTerm);
+      const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
+      return nameMatch || tagMatch;
+  });
+
   if (filteredMeals.length > 0) {
     mealList.innerHTML = filteredMeals.map(meal => {
       const calorieText = (meal.calories_min && meal.calories_max) ? (meal.calories_min === meal.calories_max ? `${meal.calories_min} kcal` : `${meal.calories_min} - ${meal.calories_max} kcal`) : 'Calorie non calcolate';

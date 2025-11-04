@@ -84,8 +84,8 @@ export function toggleDebugMode() {
   console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
 }
 
-export function setPlannerConfig(config, url) {
-  log('State', 'Merging new planner config', { url });
+export function setPlannerConfig(config, sourceId) {
+  log('State', 'Merging new planner config', { sourceId });
   state.rules = config.rules || [];
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
@@ -97,8 +97,13 @@ export function setPlannerConfig(config, url) {
     }
   });
 
+  const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
+
   meals.forEach(meal => {
     if (!state.masterMealList.some(existing => existing.id === meal.id)) {
+      if (packageTag) { // Add tag if new and from a package
+        meal.etichette = [...(meal.etichette || []), packageTag];
+      }
       state.masterMealList.push(meal);
     }
   });
@@ -246,6 +251,7 @@ export function deleteIngredient(ingredientId) {
 export function addMeal(mealData) {
   log('State', 'Adding new meal', { mealData });
   state.masterMealList.push(mealData);
+  state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
   state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
   saveStateToLocalStorage();
   notify();
@@ -256,6 +262,7 @@ export function updateMeal(mealId, updatedData) {
   const index = state.masterMealList.findIndex(m => m.id === mealId);
   if (index > -1) {
     state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
+    state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
     state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
     saveStateToLocalStorage();
     notify();
