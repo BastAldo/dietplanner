@@ -16,17 +16,27 @@ function formatFullDate(isoDate) {
 function formatExerciseDetails(exercise) {
   const sets = exercise.defaultSets;
   const rest = exercise.defaultRest;
-  let details;
+  let details = `${sets} x `;
 
-  if (exercise.type === 'reps') {
-      const reps = exercise.defaultReps;
-      details = `${sets} x ${reps} | Riposo: ${rest}s`;
-  } else if (exercise.type === 'time') {
-      const duration = exercise.defaultDuration;
-      details = `${sets} x ${duration}s | Riposo: ${rest}s`;
+  // Gestisce reps, rep-range, o durata in base alla modalità
+  if (exercise.execution_mode === 'logging') {
+      if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
+          details += `${exercise.defaultRepsMin}-${exercise.defaultRepsMax}`;
+      } else if (exercise.defaultRepsMin) {
+          details += `${exercise.defaultRepsMin}+`;
+      } else {
+          details += `Reps`; // Fallback
+      }
+  } else if (exercise.execution_mode === 'guided_static' || exercise.type === 'time') {
+      details += `${exercise.defaultDuration}s`;
+  } else {
+      // Default a 'guided_tempo' o vecchio formato 'reps'
+      details += `${exercise.defaultReps || 'Reps'}`;
   }
+  
+  details += ` | Riposo: ${rest}s`;
 
-  if (exercise.defaultTempo) {
+  if (exercise.defaultTempo && exercise.execution_mode === 'guided_tempo') {
       const { up, hold, down } = exercise.defaultTempo;
       details += ` | Tempo: ${up}-${hold}-${down}`;
   }
