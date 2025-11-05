@@ -85,7 +85,7 @@ export function openDayEditorModal(isoDate) {
       workoutDetailsHTML = `<div class="workout-summary-actions">
                               <button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button>
                               <button class="btn-add-from-template btn btn-secondary">${UI_TEXT.ADD_FROM_TEMPLATE_BTN}</button>
-                              <button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>
+                              <button class="btn btn-secondary btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>
                             </div>`;
   }
 

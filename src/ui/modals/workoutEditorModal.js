@@ -1,4 +1,4 @@
-import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner, addWorkoutTemplate } from '../../core/state.js';
+import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner, addWorkoutTemplate, clearWeeklyWorkout } from '../../core/state.js';
 import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
@@ -6,6 +6,7 @@ import { log } from '../../utils/logger.js';
 import { openWorkoutSelectionModal } from './selectionModal.js';
 import { openExerciseEditorModal } from './exerciseEditorModal.js';
 import { showNotification } from '../notifications.js';
+import { showConfirmModal } from './confirmModal.js';
 
 let sortableInstance = null;
 
@@ -50,6 +51,7 @@ export function openWorkoutEditorModal(isoDate) {
   const modal = document.getElementById('workout-editor-modal');
   modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
   modal.querySelector('#workout-editor-save-template-btn').textContent = UI_TEXT.SAVE_TEMPLATE_BTN;
+  modal.querySelector('#workout-editor-clear-btn').textContent = UI_TEXT.CLEAR_WORKOUT_BTN;
   const body = modal.querySelector('#workout-editor-body');
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
   const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
@@ -86,13 +88,15 @@ export function openWorkoutEditorModal(isoDate) {
       }
   });
 
-  // Rimuovi vecchi listener per evitare duplicati
+  // --- Gestione Listener Footer ---
   const footer = modal.querySelector('.modal-footer');
-  const oldBtn = footer.querySelector('#workout-editor-save-template-btn');
-  const newBtn = oldBtn.cloneNode(true);
-  oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+  
+  // Bottone Salva Scheda
+  const oldSaveBtn = footer.querySelector('#workout-editor-save-template-btn');
+  const newSaveBtn = oldSaveBtn.cloneNode(true);
+  oldSaveBtn.parentNode.replaceChild(newSaveBtn, oldSaveBtn);
 
-  newBtn.onclick = () => {
+  newSaveBtn.onclick = () => {
     const currentWorkoutList = getState().weeklyWorkouts[workoutSlotId] || [];
     if (currentWorkoutList.length === 0) {
       showNotification('Aggiungi almeno un esercizio prima di salvare la scheda.', 'error');
@@ -104,6 +108,30 @@ export function openWorkoutEditorModal(isoDate) {
       showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
     }
   };
+
+  // Bottone Pulisci Allenamento
+  const oldClearBtn = footer.querySelector('#workout-editor-clear-btn');
+  const newClearBtn = oldClearBtn.cloneNode(true);
+  oldClearBtn.parentNode.replaceChild(newClearBtn, oldClearBtn);
+  
+  newClearBtn.onclick = () => {
+    const currentWorkoutList = getState().weeklyWorkouts[workoutSlotId] || [];
+    if (currentWorkoutList.length === 0) {
+      showNotification('L\'allenamento è già vuoto.', 'info');
+      return;
+    }
+    showConfirmModal({
+      title: UI_TEXT.CLEAR_WORKOUT_CONFIRM_TITLE,
+      message: UI_TEXT.CLEAR_WORKOUT_CONFIRM_MSG,
+      onConfirm: () => {
+        clearWeeklyWorkout(workoutSlotId);
+        showNotification(UI_TEXT.CLEAR_WORKOUT_SUCCESS, 'success');
+        openWorkoutEditorModal(isoDate); // Refresh this modal
+      },
+      type: 'danger'
+    });
+  };
+  // --- Fine Gestione Listener Footer ---
 
   body.onclick = e => {
       const btnAddExercise = e.target.closest('.btn-add-exercise');

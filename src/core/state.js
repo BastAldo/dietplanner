@@ -366,6 +366,15 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
     notify();
 }
 
+export function clearWeeklyWorkout(slotId) {
+  log('State', 'Clearing weekly workout', { slotId });
+  if (state.weeklyWorkouts[slotId]) {
+    delete state.weeklyWorkouts[slotId];
+    saveStateToLocalStorage();
+    notify();
+  }
+}
+
 export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
   log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
     if (!state.weeklyWorkouts[slotId]) return;

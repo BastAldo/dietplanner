@@ -85,6 +85,11 @@
   gap: 0.5rem;
   flex-shrink: 0;
 }
+.workout-summary-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
 .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
 .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
@@ -103,6 +108,23 @@
 .workout-editor-list .meal-actions { margin-left: auto; }
 .meal-actions .btn-remove-exercise { color: var(--danger-color); }
 .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+
+.modal-footer.workout-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.btn-danger-text {
+  color: var(--danger-color);
+  border-color: var(--danger-color);
+}
+.btn-danger-text:hover {
+  color: var(--danger-color) !important;
+  background-color: rgba(239, 83, 80, 0.1) !important;
+  border-color: var(--danger-color) !important;
+  opacity: 1;
+}
 
 #exercise-editor-form {
   display: grid;

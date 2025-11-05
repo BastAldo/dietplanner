@@ -54,6 +54,36 @@
   font-weight: bold;
 }
 
+/* Stili per le Tab Orizzontali */
+.view-switcher {
+  display: flex;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden; /* Per arrotondare gli angoli del container */
+}
+.view-switcher .btn-view {
+  flex-grow: 1;
+  border: none;
+  border-radius: 0;
+  padding: 0.75rem 1rem;
+  background-color: transparent;
+  color: var(--text-color-muted);
+  font-weight: bold;
+  transition: all 0.2s;
+}
+.view-switcher .btn-view:not(:last-child) {
+  border-right: 1px solid var(--border-color);
+}
+.view-switcher .btn-view.active {
+  background-color: var(--primary-color);
+  color: var(--bg-color);
+}
+.view-switcher .btn-view:hover:not(.active) {
+  background-color: var(--card-color);
+  color: var(--text-color);
+}
+
+
 .library-header {
   display: flex;
   justify-content: space-between;
