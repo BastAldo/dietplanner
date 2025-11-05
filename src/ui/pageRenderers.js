@@ -236,11 +236,24 @@ export function renderLibraryPage(state) {
   const { activeLibraryTab = 'ingredients', librarySearchTerm = '', libraryActiveFilter } = state.ui;
   const searchInput = document.getElementById('library-search-input');
   searchInput.value = librarySearchTerm;
-  searchInput.placeholder = `Cerca in ${activeLibraryTab === 'ingredients' ? 'ingredienti (per nome)' : 'pasti (per nome o etichetta)'}...`;
+  
+  const tabs = {
+    'ingredients': 'ingredienti (per nome)',
+    'meals': 'pasti (per nome o etichetta)',
+    'templates': 'schede (per nome)'
+  };
+  searchInput.placeholder = `Cerca in ${tabs[activeLibraryTab] || 'ingredienti'}...`;
+
   document.querySelectorAll('#library-page .btn-view').forEach(btn => btn.classList.toggle('active', btn.dataset.view === activeLibraryTab));
   document.querySelectorAll('.library-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.includes(activeLibraryTab)));
+  
+  document.getElementById('library-tab-ingredients').textContent = 'Ingredienti';
+  document.getElementById('library-tab-meals').textContent = 'Pasti';
+  document.getElementById('library-tab-templates').textContent = UI_TEXT.NAV_TEMPLATES;
+
   const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
 
+  // Render Ingredients
   const ingredientList = document.getElementById('ingredient-list');
   const filteredIngredients = state.masterIngredientList.filter(ing => ing.nome.toLowerCase().includes(lowerCaseSearchTerm));
   if (filteredIngredients.length > 0) {
@@ -249,8 +262,17 @@ export function renderLibraryPage(state) {
     ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
   }
 
-  renderPackageFilters(state);
+  // Render Package Filters (solo per pasti)
+  const tagsContainer = document.getElementById('library-tag-filters');
+  if (activeLibraryTab === 'meals') {
+    renderPackageFilters(state);
+    tagsContainer.classList.remove('hidden');
+  } else {
+    tagsContainer.classList.add('hidden');
+  }
 
+
+  // Render Meals
   const mealList = document.getElementById('meal-list');
   const filteredMeals = state.masterMealList.filter(meal => {
       // Filtro Pacchetto
@@ -275,6 +297,27 @@ export function renderLibraryPage(state) {
     }).join('');
   } else {
     mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
+  }
+
+  // Render Templates
+  const templateList = document.getElementById('template-list');
+  const filteredTemplates = state.masterWorkoutTemplateList.filter(t => t.name.toLowerCase().includes(lowerCaseSearchTerm));
+  if (filteredTemplates.length > 0) {
+    templateList.innerHTML = filteredTemplates.map(template => {
+      const exerciseCount = template.exercises.length;
+      const plural = exerciseCount === 1 ? 'esercizio' : 'esercizi';
+      return `<div class="library-item" data-id="${template.id}">
+                <div class="library-item-info">
+                  <span class="library-item-info__name">${template.name}</span>
+                  <span class="library-item-info__details">${exerciseCount} ${plural}</span>
+                </div>
+                <div class="library-item-actions">
+                  <button class="btn-delete-template" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
+                </div>
+              </div>`;
+    }).join('');
+  } else {
+    templateList.innerHTML = `<p class="placeholder-text">${UI_TEXT.NO_TEMPLATES_AVAILABLE}</p>`;
   }
 }
 

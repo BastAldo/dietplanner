@@ -6,6 +6,7 @@ export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
 export const LOCAL_STORAGE_KEY_GOALS = 'healtyproUserGoals';
 export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
 export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
+export const LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES = 'healtyproWorkoutTemplates';
 export const LOCAL_STORAGE_KEY_INGREDIENTS = 'healtyproUserIngredients';
 export const LOCAL_STORAGE_KEY_MEALS = 'healtyproUserMeals';
 export const WEEK_STARTS_ON_MONDAY = 1;

@@ -1,10 +1,11 @@
-import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner } from '../../core/state.js';
+import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner, addWorkoutTemplate } from '../../core/state.js';
 import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
 import { log } from '../../utils/logger.js';
 import { openWorkoutSelectionModal } from './selectionModal.js';
 import { openExerciseEditorModal } from './exerciseEditorModal.js';
+import { showNotification } from '../notifications.js';
 
 let sortableInstance = null;
 
@@ -48,6 +49,7 @@ export function openWorkoutEditorModal(isoDate) {
   const state = getState();
   const modal = document.getElementById('workout-editor-modal');
   modal.querySelector('#workout-editor-title').textContent = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(isoDate)}`;
+  modal.querySelector('#workout-editor-save-template-btn').textContent = UI_TEXT.SAVE_TEMPLATE_BTN;
   const body = modal.querySelector('#workout-editor-body');
   const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
   const plannedWorkoutList = state.weeklyWorkouts[workoutSlotId] || [];
@@ -83,6 +85,25 @@ export function openWorkoutEditorModal(isoDate) {
           reorderWorkoutExercises(workoutSlotId, evt.oldIndex, evt.newIndex);
       }
   });
+
+  // Rimuovi vecchi listener per evitare duplicati
+  const footer = modal.querySelector('.modal-footer');
+  const oldBtn = footer.querySelector('#workout-editor-save-template-btn');
+  const newBtn = oldBtn.cloneNode(true);
+  oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+
+  newBtn.onclick = () => {
+    const currentWorkoutList = getState().weeklyWorkouts[workoutSlotId] || [];
+    if (currentWorkoutList.length === 0) {
+      showNotification('Aggiungi almeno un esercizio prima di salvare la scheda.', 'error');
+      return;
+    }
+    const templateName = prompt(UI_TEXT.SAVE_TEMPLATE_PROMPT);
+    if (templateName && templateName.trim() !== '') {
+      addWorkoutTemplate(templateName.trim(), currentWorkoutList);
+      showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
+    }
+  };
 
   body.onclick = e => {
       const btnAddExercise = e.target.closest('.btn-add-exercise');

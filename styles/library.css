@@ -32,6 +32,9 @@
   gap: 0.5rem;
   margin-bottom: 0.5rem;
 }
+.tag-filter-container.hidden {
+  display: none;
+}
 
 .tag-filter-btn {
   padding: 0.5rem 1rem;
@@ -115,6 +118,7 @@
 .library-item-actions .btn-edit:hover {
   color: var(--primary-color);
 }
-.library-item-actions .btn-delete:hover {
+.library-item-actions .btn-delete:hover,
+.library-item-actions .btn-delete-template:hover {
   color: var(--danger-color);
 }

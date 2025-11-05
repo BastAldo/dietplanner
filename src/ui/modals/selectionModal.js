@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan, updateWeeklyWorkout, getPackageTags } from '../../core/state.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout, getPackageTags, addWorkoutTemplateToDay } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { formatIngredients } from '../../utils/formatters.js';
@@ -116,4 +116,36 @@ export function openWorkoutSelectionModal(slotId, returnIsoDate) {
     }
   };
   workoutSelectionModal.classList.remove('modal-hidden');
+}
+
+export function openWorkoutTemplateSelectionModal(slotId, returnIsoDate) {
+  log('Modals', 'Opening workout template selection modal', { slotId });
+  const state = getState();
+  const templateSelectionModal = document.getElementById('workout-template-selection-modal');
+  templateSelectionModal.querySelector('#workout-template-selection-modal-title').textContent = UI_TEXT.SELECT_TEMPLATE_TITLE;
+  const list = templateSelectionModal.querySelector('#workout-template-selection-modal-list');
+  const relevantTemplates = state.masterWorkoutTemplateList;
+  
+  list.innerHTML = relevantTemplates.length > 0 
+      ? relevantTemplates.map(template => 
+          `<div class="selection-item" data-template-id="${template.id}">
+              <h4>${template.name}</h4>
+              <p>${template.exercises.length} ${template.exercises.length === 1 ? 'esercizio' : 'esercizi'}</p>
+          </div>`
+        ).join('') 
+      : `<p class="placeholder-text">${UI_TEXT.NO_TEMPLATES_AVAILABLE}</p>`;
+  
+  const closeAndReturn = () => {
+    templateSelectionModal.classList.add('modal-hidden');
+    if (returnIsoDate) openDayEditorModal(returnIsoDate);
+  };
+
+  list.onclick = e => {
+    const item = e.target.closest('.selection-item');
+    if (item) {
+      addWorkoutTemplateToDay(slotId, parseFloat(item.dataset.templateId));
+      closeAndReturn();
+    }
+  };
+  templateSelectionModal.classList.remove('modal-hidden');
 }

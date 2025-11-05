@@ -4,7 +4,7 @@ import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
 import { log } from '../../utils/logger.js';
 import { showRecipeModal } from './recipeModal.js';
-import { openSelectionModal } from './selectionModal.js';
+import { openSelectionModal, openWorkoutTemplateSelectionModal } from './selectionModal.js';
 import { openWorkoutEditorModal } from './workoutEditorModal.js';
 import { openManualWorkoutModal } from './manualWorkoutModal.js';
 import { formatIngredients } from '../../utils/formatters.js';
@@ -73,9 +73,20 @@ export function openDayEditorModal(isoDate) {
   let workoutDetailsHTML;
   if (plannedWorkoutList.length > 0) {
       const plural = plannedWorkoutList.length > 1 ? 'Esercizi' : 'Esercizio';
-      workoutDetailsHTML = `<div class="workout-summary"><span>${plannedWorkoutList.length} ${plural}</span><div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button></div></div>`;
+      workoutDetailsHTML = `<div class="workout-summary">
+                              <span>${plannedWorkoutList.length} ${plural}</span>
+                              <div class="workout-summary-actions">
+                                <button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button>
+                                <button class="btn-add-from-template btn btn-secondary">${UI_TEXT.ADD_FROM_TEMPLATE_BTN}</button>
+                                <button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button>
+                              </div>
+                            </div>`;
   } else {
-      workoutDetailsHTML = `<div class="workout-summary-actions"><button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button><button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button></div>`;
+      workoutDetailsHTML = `<div class="workout-summary-actions">
+                              <button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button>
+                              <button class="btn-add-from-template btn btn-secondary">${UI_TEXT.ADD_FROM_TEMPLATE_BTN}</button>
+                              <button class="btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>
+                            </div>`;
   }
 
   const workoutSlotHTML = `<div class="editor-section">
@@ -90,6 +101,7 @@ export function openDayEditorModal(isoDate) {
     const btnRemoveMeal = e.target.closest('.btn-remove-meal');
     const btnRecipe = e.target.closest('.btn-view-recipe');
     const btnAddExercise = e.target.closest('.btn-add-exercise');
+    const btnAddFromTemplate = e.target.closest('.btn-add-from-template');
     const btnManageWorkout = e.target.closest('.btn-manage-workout');
     const btnLogActivity = e.target.closest('.btn-log-activity');
 
@@ -107,6 +119,10 @@ export function openDayEditorModal(isoDate) {
     else if (btnAddExercise) {
       dayEditorModal.classList.add('modal-hidden');
       openWorkoutEditorModal(isoDate);
+    }
+    else if (btnAddFromTemplate) {
+      dayEditorModal.classList.add('modal-hidden');
+      openWorkoutTemplateSelectionModal(workoutSlotId, isoDate);
     }
     else if (btnManageWorkout) {
       dayEditorModal.classList.add('modal-hidden');

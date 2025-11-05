@@ -1,7 +1,7 @@
 import { log } from '../../utils/logger.js';
 import { openIngredientEditorModal, openMealEditorModal } from '../modals.js';
 import { showConfirmModal } from '../modals.js';
-import { deleteIngredient, deleteMeal, getState, setUiState } from '../../core/state.js';
+import { deleteIngredient, deleteMeal, getState, setUiState, deleteWorkoutTemplate } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { showNotification } from '../notifications.js';
 
@@ -105,6 +105,31 @@ function handleLibraryClick(e) {
         onConfirm: () => {
           deleteMeal(mealId);
           showNotification(UI_TEXT.MEAL_DELETE_SUCCESS, 'success');
+        },
+        type: 'danger'
+      });
+      return;
+    }
+  }
+
+  // --- Template Actions ---
+  if (state.ui.activeLibraryTab === 'templates') {
+    const templateItem = e.target.closest('.library-item');
+    if (!templateItem) return;
+
+    const templateId = parseFloat(templateItem.dataset.id);
+    const template = state.masterWorkoutTemplateList.find(t => t.id === templateId);
+    if (!template) return;
+
+    const deleteTemplateBtn = e.target.closest('.btn-delete-template');
+    if (deleteTemplateBtn) {
+      log('Interactions-Library', 'Delete template button clicked', { templateId });
+      showConfirmModal({
+        title: UI_TEXT.TEMPLATE_DELETE_CONFIRM_TITLE,
+        message: `${UI_TEXT.TEMPLATE_DELETE_CONFIRM_MSG} "${template.name}"?`,
+        onConfirm: () => {
+          deleteWorkoutTemplate(templateId);
+          showNotification(UI_TEXT.TEMPLATE_DELETE_SUCCESS, 'success');
         },
         type: 'danger'
       });

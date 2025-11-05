@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS, LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
 import { log } from '../utils/logger.js';
@@ -8,6 +8,7 @@ let state = {
   masterMealList: [],
   masterIngredientList: [],
   masterWorkoutList: [],
+  masterWorkoutTemplateList: [],
   weeklyPlan: {},
   weeklyWorkouts: {},
   workoutHistory: {},
@@ -132,6 +133,7 @@ export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
   localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
   localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+  localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, JSON.stringify(state.masterWorkoutTemplateList));
   localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
   localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
   localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
@@ -144,6 +146,7 @@ export function loadStateFromLocalStorage() {
   const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
   const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
   const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+  const templates = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES);
   let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
   const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
   const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
@@ -164,6 +167,7 @@ export function loadStateFromLocalStorage() {
   if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
   if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
   if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+  if (templates) { try { state.masterWorkoutTemplateList = JSON.parse(templates); } catch (e) { console.error("Error parsing masterWorkoutTemplateList", e); state.masterWorkoutTemplateList = []; } }
   if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
   if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
   if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
@@ -176,6 +180,7 @@ export function setAppState(backupData) {
   state.weeklyPlan = backupData.weeklyPlan || {};
   state.weeklyWorkouts = backupData.weeklyWorkouts || {};
   state.workoutHistory = backupData.workoutHistory || {};
+  state.masterWorkoutTemplateList = backupData.masterWorkoutTemplateList || [];
   state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
@@ -279,6 +284,48 @@ export function updateMeal(mealId, updatedData) {
 export function deleteMeal(mealId) {
   log('State', 'Deleting meal', { mealId });
   state.masterMealList = state.masterMealList.filter(m => m.id !== mealId);
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function addWorkoutTemplate(templateName, exercises) {
+  log('State', 'Adding new workout template', { templateName });
+  const newTemplate = {
+    id: Date.now() + Math.random(),
+    name: templateName,
+    exercises: JSON.parse(JSON.stringify(exercises)) // Deep copy
+  };
+  state.masterWorkoutTemplateList.push(newTemplate);
+  state.masterWorkoutTemplateList.sort((a, b) => a.name.localeCompare(b.name));
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function deleteWorkoutTemplate(templateId) {
+  log('State', 'Deleting workout template', { templateId });
+  state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id !== templateId);
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function addWorkoutTemplateToDay(slotId, templateId) {
+  log('State', 'Adding workout template to day', { slotId, templateId });
+  const template = state.masterWorkoutTemplateList.find(t => t.id === templateId);
+  if (!template) return;
+
+  // Deep copy exercises from template to ensure unique instanceIds
+  const exercisesToAdd = JSON.parse(JSON.stringify(template.exercises));
+  
+  // Ensure new instanceIds for all exercises being added
+  exercisesToAdd.forEach(ex => {
+    ex.instanceId = Date.now() + Math.random();
+  });
+
+  if (!state.weeklyWorkouts[slotId]) {
+      state.weeklyWorkouts[slotId] = [];
+  }
+  
+  state.weeklyWorkouts[slotId] = [...state.weeklyWorkouts[slotId], ...exercisesToAdd];
   saveStateToLocalStorage();
   notify();
 }
