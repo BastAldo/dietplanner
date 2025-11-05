@@ -61,7 +61,9 @@ export const setUiState = (uiChanges) => {
 }
 
 export function getPackageTags() {
-  const allTags = state.masterMealList.flatMap(meal => meal.etichette || []);
+  const mealTags = state.masterMealList.flatMap(meal => meal.etichette || []);
+  const ingredientTags = state.masterIngredientList.flatMap(ing => ing.etichette || []);
+  const allTags = [...mealTags, ...ingredientTags];
   const pkgTags = allTags.filter(tag => tag && tag.startsWith('pkg:'));
   return [...new Set(pkgTags)];
 }
@@ -98,14 +100,17 @@ export function setPlannerConfig(config, sourceId) {
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
   state.masterWorkoutList = config.esercizi || [];
+  
+  const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
 
   ingredients.forEach(ing => {
     if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
+      if (packageTag) { // Add tag if new and from a package
+        ing.etichette = [...(ing.etichette || []), packageTag];
+      }
       state.masterIngredientList.push(ing);
     }
   });
-
-  const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
 
   meals.forEach(meal => {
     if (!state.masterMealList.some(existing => existing.id === meal.id)) {

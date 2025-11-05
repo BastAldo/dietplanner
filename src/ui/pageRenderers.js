@@ -178,7 +178,7 @@ export function renderDebriefingPage(state) {
 
   statsContainer.innerHTML = `
       <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_TOTAL_TIME}</span><span class="stat-value">${formatDuration(summary.totalTime)}</span></div>
-      <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span><span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span></div>
+      <div class="stat-item"><span class_=("stat-label")>${UI_TEXT.DEBRIEFING_EXERCISE_TIME}</span><span class="stat-value">${formatDuration(summary.totalExerciseTime)}</span></div>
       <div class="stat-item"><span class="stat-label">${UI_TEXT.DEBRIEFING_REST_TIME}</span><span class="stat-value">${formatDuration(summary.totalRestTime)}</span></div>
       ${caloriesBurnedHTML}
       ${tonnageHTML}
@@ -238,7 +238,7 @@ export function renderLibraryPage(state) {
   searchInput.value = librarySearchTerm;
   
   const tabs = {
-    'ingredients': 'ingredienti (per nome)',
+    'ingredients': 'ingredienti (per nome o etichetta)',
     'meals': 'pasti (per nome o etichetta)',
     'templates': 'schede (per nome)'
   };
@@ -253,24 +253,36 @@ export function renderLibraryPage(state) {
 
   const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
 
-  // Render Ingredients
-  const ingredientList = document.getElementById('ingredient-list');
-  const filteredIngredients = state.masterIngredientList.filter(ing => ing.nome.toLowerCase().includes(lowerCaseSearchTerm));
-  if (filteredIngredients.length > 0) {
-    ingredientList.innerHTML = filteredIngredients.map(ing => `<div class="library-item" data-id="${ing.id}"><div class="library-item-info"><span class="library-item-info__name">${ing.nome}</span><span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`).join('');
-  } else {
-    ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
-  }
-
-  // Render Package Filters (solo per pasti)
+  // Render Package Filters (solo per pasti e ingredienti)
   const tagsContainer = document.getElementById('library-tag-filters');
-  if (activeLibraryTab === 'meals') {
+  if (activeLibraryTab === 'meals' || activeLibraryTab === 'ingredients') {
     renderPackageFilters(state);
     tagsContainer.classList.remove('hidden');
   } else {
     tagsContainer.classList.add('hidden');
   }
 
+  // Render Ingredients
+  const ingredientList = document.getElementById('ingredient-list');
+  const filteredIngredients = state.masterIngredientList.filter(ing => {
+      // Filtro Pacchetto
+      if (libraryActiveFilter && (!ing.etichette || !ing.etichette.includes(libraryActiveFilter))) {
+        return false;
+      }
+      // Filtro Ricerca
+      if (lowerCaseSearchTerm !== '') {
+        const nameMatch = ing.nome.toLowerCase().includes(lowerCaseSearchTerm);
+        const tagMatch = ing.etichette && ing.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
+        if (!nameMatch && !tagMatch) return false;
+      }
+      return true;
+  });
+
+  if (filteredIngredients.length > 0) {
+    ingredientList.innerHTML = filteredIngredients.map(ing => `<div class="library-item" data-id="${ing.id}"><div class="library-item-info"><span class="library-item-info__name">${ing.nome}</span><span class="library-item-info__details">${ing.kcal_per_100g} kcal / 100g ${ing.g_per_pezzo ? `| ${ing.g_per_pezzo}g per pezzo` : ''}</span></div><div class="library-item-actions"><button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button><button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button></div></div>`).join('');
+  } else {
+    ingredientList.innerHTML = `<p class="placeholder-text">Nessun ingrediente trovato.</p>`;
+  }
 
   // Render Meals
   const mealList = document.getElementById('meal-list');

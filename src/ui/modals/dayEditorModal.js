@@ -76,16 +76,16 @@ export function openDayEditorModal(isoDate) {
       workoutDetailsHTML = `<div class="workout-summary">
                               <span>${plannedWorkoutList.length} ${plural}</span>
                               <div class="workout-summary-actions">
-                                <button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button>
-                                <button class="btn-add-from-template btn btn-secondary">${UI_TEXT.ADD_FROM_TEMPLATE_BTN}</button>
-                                <button class="btn-manage-workout btn btn-secondary">${UI_TEXT.MANAGE_WORKOUT_BTN}</button>
+                                <button class="btn-log-activity btn-icon" title="${UI_TEXT.LOG_ACTIVITY_BTN}">${renderIcon('PLANNER')}</button>
+                                <button class="btn-add-from-template btn-icon" title="${UI_TEXT.ADD_FROM_TEMPLATE_BTN}">${renderIcon('BOOK')}</button>
+                                <button class="btn-manage-workout btn-icon" title="${UI_TEXT.MANAGE_WORKOUT_BTN}">${renderIcon('DUMBBELL')}</button>
                               </div>
                             </div>`;
   } else {
       workoutDetailsHTML = `<div class="workout-summary-actions">
-                              <button class="btn-log-activity btn btn-secondary">${UI_TEXT.LOG_ACTIVITY_BTN}</button>
-                              <button class="btn-add-from-template btn btn-secondary">${UI_TEXT.ADD_FROM_TEMPLATE_BTN}</button>
-                              <button class="btn btn-secondary btn-add-exercise" data-slot-id="${workoutSlotId}">${UI_TEXT.ADD_EXERCISE_BTN}</button>
+                              <button class="btn-log-activity btn-icon" title="${UI_TEXT.LOG_ACTIVITY_BTN}">${renderIcon('PLANNER')}</button>
+                              <button class="btn-add-from-template btn-icon" title="${UI_TEXT.ADD_FROM_TEMPLATE_BTN}">${renderIcon('BOOK')}</button>
+                              <button class="btn-add-exercise btn-icon" data-slot-id="${workoutSlotId}" title="${UI_TEXT.ADD_EXERCISE_BTN}">${renderIcon('DUMBBELL')}</button>
                             </div>`;
   }
 

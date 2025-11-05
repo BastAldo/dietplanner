@@ -1,4 +1,4 @@
-import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID } from '../utils/constants.js';
+import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID, OPTIONAL_MEAL_TYPES } from '../utils/constants.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
@@ -33,9 +33,21 @@ function formatMealCalories(meal) {
   return `${minCals} - ${maxCals} ${kcalLabel}`;
 }
 
-function calculateDailyCalories(isoDate, weeklyPlan) {
+function getActiveMealSlots(userProfile) {
+  const activeMealSlots = [...MEAL_TYPES];
+  Object.keys(OPTIONAL_MEAL_TYPES).forEach(key => {
+    if (userProfile[key]) {
+      activeMealSlots.push(OPTIONAL_MEAL_TYPES[key]);
+    }
+  });
+  return activeMealSlots;
+}
+
+function calculateDailyCalories(isoDate, weeklyPlan, userProfile) {
   let min = 0, max = 0;
-  MEAL_TYPES.forEach(type => {
+  const activeMealSlots = getActiveMealSlots(userProfile);
+  
+  activeMealSlots.forEach(type => {
     const meal = weeklyPlan[`${isoDate}-${type}`];
     if (meal && typeof meal.calories_min === 'number') {
       const minCals = Number(meal.calories_min) || 0;
@@ -76,7 +88,7 @@ function formatDuration(ms) {
 
 function renderPlannerSummaryWidget(state, weekStart) {
   const widgetContainer = document.getElementById('planner-summary-widget');
-  const { userGoals, biometricData, workoutHistory } = state;
+  const { userGoals, biometricData, workoutHistory, userProfile, weeklyPlan } = state;
   let totalCaloriesConsumed = 0;
   let dayCount = 0;
   let completedWorkouts = 0;
@@ -89,8 +101,10 @@ function renderPlannerSummaryWidget(state, weekStart) {
 
       let dailyMin = 0;
       let hasMeals = false;
-      MEAL_TYPES.forEach(type => {
-          const meal = state.weeklyPlan[`${isoDate}-${type}`];
+      const activeMealSlots = getActiveMealSlots(userProfile);
+      
+      activeMealSlots.forEach(type => {
+          const meal = weeklyPlan[`${isoDate}-${type}`];
           if (meal) {
               dailyMin += Number(meal.calories_min) || 0;
               hasMeals = true;
@@ -160,9 +174,12 @@ function renderPlannerSummaryWidget(state, weekStart) {
 
 function renderTodayWidget(state, todayISO) {
   const widget = document.getElementById('today-widget');
-  const dailyCalories = calculateDailyCalories(todayISO, state.weeklyPlan);
-  const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${todayISO}-${type}`] })).filter(item => item.meal);
-  const workoutList = state.weeklyWorkouts[`${todayISO}-${WORKOUT_SLOT_ID}`];
+  const { userProfile, weeklyPlan, weeklyWorkouts } = state;
+  const dailyCalories = calculateDailyCalories(todayISO, weeklyPlan, userProfile);
+  
+  const activeMealSlots = getActiveMealSlots(userProfile);
+  const dayMeals = activeMealSlots.map(type => ({ type, meal: weeklyPlan[`${todayISO}-${type}`] })).filter(item => item.meal);
+  const workoutList = weeklyWorkouts[`${todayISO}-${WORKOUT_SLOT_ID}`];
 
   let mealsHtml = dayMeals.map(item => `
     <div class="today-meal-item">
@@ -184,7 +201,7 @@ function renderTodayWidget(state, todayISO) {
       <span>${dailyCalories}</span>
     </div>
     <div class="today-widget-body">
-      ${mealsHtml}
+      ${mealsHtml.length > 0 ? mealsHtml : '<p class="placeholder-text">Nessun pasto pianificato per oggi.</p>'}
       ${workoutHtml}
     </div>
   `;
@@ -193,14 +210,16 @@ function renderTodayWidget(state, todayISO) {
 function renderCalendarView(state, weekStart) {
   const calendarGrid = document.getElementById('calendar-grid');
   const todayISO = toISODateString(new Date());
+  const { userProfile, weeklyPlan, weeklyWorkouts } = state;
+  
   calendarGrid.innerHTML = '';
   for (let i = 0; i < 7; i++) {
     const dayDate = new Date(weekStart);
     dayDate.setDate(dayDate.getDate() + i);
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
-    const dailyCalories = calculateDailyCalories(isoDate, state.weeklyPlan);
-    const workoutList = state.weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
+    const dailyCalories = calculateDailyCalories(isoDate, weeklyPlan, userProfile);
+    const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
 
     let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
     let workoutButtonHTML = '';
@@ -228,6 +247,8 @@ function renderCalendarView(state, weekStart) {
 function renderLogView(state, weekStart) {
   const logView = document.getElementById('log-view');
   const todayISO = toISODateString(new Date());
+  const { userProfile, weeklyPlan, workoutHistory, masterMealList, recipeBaseUrl } = state;
+  
   let logViewHTML = '';
   let hasContent = false;
 
@@ -235,8 +256,10 @@ function renderLogView(state, weekStart) {
     const dayDate = new Date(weekStart);
     dayDate.setDate(dayDate.getDate() + i);
     const isoDate = toISODateString(dayDate);
-    const dayMeals = MEAL_TYPES.map(type => ({ type, meal: state.weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-    const completedWorkouts = state.workoutHistory[isoDate] || [];
+    
+    const activeMealSlots = getActiveMealSlots(userProfile);
+    const dayMeals = activeMealSlots.map(type => ({ type, meal: weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
+    const completedWorkouts = workoutHistory[isoDate] || [];
 
     if (dayMeals.length > 0 || completedWorkouts.length > 0) {
       hasContent = true;
@@ -244,7 +267,7 @@ function renderLogView(state, weekStart) {
       dayLogHTML += `
         <div class="log-day-header">
           <h3>${formatFullDate(isoDate)}</h3>
-          <span class="log-day__total-calories">${calculateDailyCalories(isoDate, state.weeklyPlan)}</span>
+          <span class="log-day__total-calories">${calculateDailyCalories(isoDate, weeklyPlan, userProfile)}</span>
         </div>
         <div class="log-day-body">
       `;
