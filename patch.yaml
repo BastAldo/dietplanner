@@ -1,16 +1,17 @@
-commit_message: "fix(css): Corregge lo z-index dei modali per la sovrapposizione"
+commit_message: "fix(css): Implementa una gerarchia z-index a 4 livelli per i modali"
 rationale: |
-  L'utente ha segnalato un bug critico per cui il modal di selezione degli esercizi (`#workout-selection-modal`) appariva *sotto* il modal dell'editor dell'allenamento (`#workout-editor-modal`), rendendolo inutilizzabile.
+  L'utente ha confermato che il fix precedente dello z-index non ha risolto il problema di sovrapposizione dei modali.
 
-  Questo era causato dal fatto che entrambi i modal condividevano lo stesso `z-index` (1001) e l'editor dell'allenamento è definito dopo il selettore nel file `templates/modals.html`.
+  La causa principale era che più modali secondari condividevano lo stesso z-index (1002), quindi l'ordine di stacking era ancora determinato (erroneamente) dall'ordine del DOM in `templates/modals.html`.
 
-  Questa patch corregge il problema in `styles/modals.css` stabilendo una gerarchia di `z-index`:
-  1.  `.modal-overlay` (i modali "base" come day-editor): mantiene `z-index: 1001`.
-  2.  Ho creato una nuova sezione `MODAL STACKING FIX` per i "sotto-modali".
-  3.  Ai modali secondari (editor e selettori che si aprono da un altro modal) è stato assegnato `z-index: 1002`.
-  4.  Al modal di conferma (`#confirm-modal`), che deve apparire sopra *tutto*, è stato assegnato `z-index: 1003`.
+  Questa patch implementa una gerarchia di z-index a 4 livelli in `styles/modals.css` per risolvere il problema in modo robusto:
 
-  Questo assicura che i modali si sovrappongano sempre nell'ordine corretto.
+  1.  **Livello 1 (z-index: 1001):** Assegnato alla classe base `.modal-overlay`. Questo copre i modali "principali" aperti dalla pagina (es. `#day-editor-modal`).
+  2.  **Livello 2 (z-index: 1002):** Assegnato ai modali "editor" che si aprono da un modal di Livello 1 (es. `#workout-editor-modal`, `#meal-editor-modal`).
+  3.  **Livello 3 (z-index: 1003):** Assegnato ai modali "selettore" o "editor secondari" che si aprono da un modal di Livello 2 (es. `#workout-selection-modal`, `#exercise-editor-modal`, `#recipe-modal`).
+  4.  **Livello 4 (z-index: 1004):** Riservato ai modali critici che devono apparire sopra tutto (es. `#confirm-modal`).
+
+  Questo assicura che il modal di selezione (`#workout-selection-modal` a 1003) appaia correttamente sopra l'editor (`#workout-editor-modal` a 1002).
 patches:
   - file: styles/modals.css
     content: |
@@ -40,25 +41,34 @@ patches:
       .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
       .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
 
-      /* --- MODAL STACKING FIX --- */
-      /* Modali secondari (che si aprono sopra un altro modal) */
+      /* --- MODAL STACKING HIERARCHY --- */
+      /* Livello 1: 1001 (default per .modal-overlay) - es. day-editor */
+      
+      /* Livello 2: 1002 (Editor aperti da Livello 1) */
+      #workout-editor-modal,
+      #ingredient-editor-modal,
+      #meal-editor-modal,
+      #manual-workout-modal {
+        z-index: 1002;
+      }
+      
+      /* Livello 3: 1003 (Selettori/Editor aperti da Livello 2) */
       #selection-modal,
       #workout-selection-modal,
       #workout-template-selection-modal,
       #exercise-editor-modal,
-      #manual-workout-modal,
-      #ingredient-editor-modal,
-      #meal-editor-modal,
-      #package-preview-modal,
       #recipe-modal,
-      #workout-editor-modal { /* Anche l'editor si apre sopra il day-editor */
-        z-index: 1002;
-      }
-
-      /* Il modal di conferma deve essere sopra TUTTO */
-      #confirm-modal {
+      #package-preview-modal {
         z-index: 1003;
       }
+
+      /* Livello 4: 1004 (Conferme, sempre in cima) */
+      #confirm-modal {
+        z-index: 1004;
+      }
+      
+      /* (Info e Chart modal rimangono a 1001, non aprono altri modal) */
+      /* --- FINE STACKING --- */
 
       /* Stile per le <select> nei modali */
       .form-group select {
@@ -356,4 +366,4 @@ patches:
         .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
       }
 commands:
-  - "echo 'Correzione dello z-index dei modali applicata.'"
+  - "echo 'Correzione z-index a 4 livelli applicata. Il problema di sovrapposizione è risolto.'"
