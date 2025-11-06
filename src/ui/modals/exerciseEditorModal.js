@@ -1,5 +1,6 @@
-import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory } from '../../core/state.js';
+import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory, getState, addExercise, updateExercise } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
+import { EXERCISE_FIELDS } from '../../config/forms.js';
 import { log } from '../../utils/logger.js';
 import { openWorkoutEditorModal } from './workoutEditorModal.js';
 import { showNotification } from '../notifications.js';
@@ -12,99 +13,117 @@ const EXECUTION_MODES = {
 
 // Funzione helper per gestire la visibilità dei campi
 function toggleFormFields(form, mode) {
-  form.querySelector('.reps-group').style.display = 'none';
-  form.querySelector('.duration-group').style.display = 'none';
-  form.querySelector('.tempo-group').style.display = 'none';
-  form.querySelector('.reps-range-group').style.display = 'none';
+  form.querySelector('.form-group-guided_tempo').style.display = 'none';
+  form.querySelector('.form-group-guided_static').style.display = 'none';
+  form.querySelector('.form-group-logging').style.display = 'none';
+  form.querySelector('.form-group-tempo').style.display = 'none';
 
   if (mode === EXECUTION_MODES.GUIDED_TEMPO) {
-    form.querySelector('.reps-group').style.display = 'flex';
-    form.querySelector('.tempo-group').style.display = 'grid';
+    form.querySelector('.form-group-guided_tempo').style.display = 'flex';
+    form.querySelector('.form-group-tempo').style.display = 'grid';
   } else if (mode === EXECUTION_MODES.GUIDED_STATIC) {
-    form.querySelector('.duration-group').style.display = 'flex';
+    form.querySelector('.form-group-guided_static').style.display = 'flex';
   } else if (mode === EXECUTION_MODES.LOGGING) {
-    form.querySelector('.reps-range-group').style.display = 'grid';
+    form.querySelector('.form-group-logging').style.display = 'grid';
   }
 }
 
-function renderPlannerForm(body, exercise) {
+function renderExerciseForm(body, exercise, context) {
+  const isLibraryContext = context === 'library';
+  const isEditing = exercise !== null;
+
   // Normalizza i dati dell'esercizio per la prima apertura
-  let currentMode = exercise.execution_mode || EXECUTION_MODES.GUIDED_TEMPO;
-  if (exercise.type === 'time' && !exercise.execution_mode) {
+  let currentMode = exercise?.execution_mode || EXECUTION_MODES.GUIDED_TEMPO;
+  if (exercise?.type === 'time' && !exercise?.execution_mode) {
     currentMode = EXECUTION_MODES.GUIDED_STATIC;
   }
-  
-  body.innerHTML = `
-    <form id="exercise-editor-form">
-      <div class="form-group" style="grid-column: 1 / -1;">
-        <label for="ex-edit-mode">Modalità Esecuzione</label>
-        <select id="ex-edit-mode" name="execution_mode">
-          <option value="${EXECUTION_MODES.GUIDED_TEMPO}" ${currentMode === EXECUTION_MODES.GUIDED_TEMPO ? 'selected' : ''}>Guidato (Tempo)</option>
-          <option value="${EXECUTION_MODES.GUIDED_STATIC}" ${currentMode === EXECUTION_MODES.GUIDED_STATIC ? 'selected' : ''}>Guidato (Durata)</option>
-          <option value="${EXECUTION_MODES.LOGGING}" ${currentMode === EXECUTION_MODES.LOGGING ? 'selected' : ''}>Logging (Manuale)</option>
-        </select>
-      </div>
 
-      <div class="form-group sets-group">
-        <label for="ex-edit-sets">Serie</label>
-        <input type="number" id="ex-edit-sets" name="sets" min="1" value="${exercise.defaultSets}">
-      </div>
+  // Costruisci il form dinamicamente
+  let formHTML = '<form id="exercise-editor-form" class="biometrics-form">';
 
-      <div class="form-group reps-group">
-        <label for="ex-edit-reps">Ripetizioni</label>
-        <input type="number" id="ex-edit-reps" name="reps" min="1" value="${exercise.defaultReps || ''}">
-      </div>
+  // Gruppi di campi
+  let commonHTML = '';
+  let guidedTempoHTML = '';
+  let guidedStaticHTML = '';
+  let loggingHTML = '';
+  let tempoHTML = '';
 
-      <div class="form-group duration-group">
-        <label for="ex-edit-duration">Durata (s)</label>
-        <input type="number" id="ex-edit-duration" name="duration" min="1" value="${exercise.defaultDuration || ''}">
-      </div>
+  EXERCISE_FIELDS.forEach(field => {
+    // Gestione campi nested (es. defaultTempo.up)
+    const fieldIdParts = field.id.split('.');
+    let currentValue = exercise;
+    if (isEditing) {
+      for (const part of fieldIdParts) {
+        currentValue = currentValue ? currentValue[part] : null;
+      }
+    } else {
+      currentValue = '';
+    }
 
-      <div class="reps-range-group" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-        <div class="form-group">
-          <label for="ex-edit-reps-min">Rep Min</label>
-          <input type="number" id="ex-edit-reps-min" name="reps_min" min="1" value="${exercise.defaultRepsMin || ''}">
-        </div>
-        <div class="form-group">
-          <label for="ex-edit-reps-max">Rep Max</label>
-          <input type="number" id="ex-edit-reps-max" name="reps_max" min="1" value="${exercise.defaultRepsMax || ''}">
-        </div>
-      </div>
+    const label = UI_TEXT[field.label] || field.label;
+    const inputId = `ex-edit-${field.id.replace('.', '-')}`;
+    const isReadonly = (isEditing && field.id === 'id') && isLibraryContext;
 
-      <div class="form-group rest-group">
-        <label for="ex-edit-rest">Riposo (s)</label>
-        <input type="number" id="ex-edit-rest" name="rest" min="0" value="${exercise.defaultRest}">
-      </div>
-      <div class="form-group weight-group">
-        <label for="ex-edit-weight" id="ex-edit-weight-label">${UI_TEXT.EXERCISE_WEIGHT_LABEL}</label>
-        <input type="number" id="ex-edit-weight" name="weight" min="0" step="0.5" value="${exercise.defaultWeight || 0}">
-      </div>
+    let fieldInputHTML = '';
+    if (field.type === 'select') {
+      fieldInputHTML = `<select id="${inputId}" name="${field.id}" ${field.props || ''}>
+        ${field.options.map(opt => `<option value="${opt.value}" ${currentValue === opt.value ? 'selected' : ''}>${UI_TEXT[opt.label] || opt.label}</option>`).join('')}
+      </select>`;
+    } else if (field.type === 'textarea') {
+      fieldInputHTML = `<textarea id="${inputId}" name="${field.id}" ${field.props || ''}>${currentValue || ''}</textarea>`;
+    } else {
+      fieldInputHTML = `<input type="${field.type}" id="${inputId}" name="${field.id}" value="${currentValue || ''}" ${field.props || ''} ${isReadonly ? 'readonly' : ''}>`;
+    }
 
-      <div class="tempo-group" style="display: ${exercise.defaultTempo ? 'grid' : 'none'};">
-        <div class="form-group">
-          <label for="ex-edit-tempo-up">Salita (s)</label>
-          <input type="number" id="ex-edit-tempo-up" name="tempo_up" min="0" step="0.5" value="${exercise.defaultTempo?.up || 0}">
-        </div>
-        <div class="form-group">
-          <label for="ex-edit-tempo-hold" id="ex-edit-tempo-hold-label">${UI_TEXT.EXERCISE_TEMPO_HOLD_LABEL}</label>
-          <input type="number" id="ex-edit-tempo-hold" name="tempo_hold" min="0" step="0.5" value="${exercise.defaultTempo?.hold || 0}">
-        </div>
-        <div class="form-group">
-          <label for="ex-edit-tempo-down">Discesa (s)</label>
-          <input type="number" id="ex-edit-tempo-down" name="tempo_down" min="0" step="0.5" value="${exercise.defaultTempo?.down || 0}">
-        </div>
-      </div>
-    </form>
-  `;
-  
+    const fieldGroupHTML = `<div class="form-group" style="${field.grid ? `grid-column: ${field.grid};` : ''}">
+                              <label for="${inputId}">${label}</label>
+                              ${fieldInputHTML}
+                            </div>`;
+
+    // Smista i campi nei gruppi corretti
+    if (!isLibraryContext) {
+      // Logica per 'planner': solo campi specifici
+      if (field.id === 'execution_mode') commonHTML += fieldGroupHTML;
+      if (field.id === 'defaultSets') commonHTML += fieldGroupHTML;
+      if (field.id === 'defaultRest') commonHTML += fieldGroupHTML;
+      if (field.id === 'defaultWeight') commonHTML += fieldGroupHTML;
+      if (field.id === 'defaultReps') guidedTempoHTML += fieldGroupHTML;
+      if (field.id === 'defaultDuration') guidedStaticHTML += fieldGroupHTML;
+      if (field.id === 'defaultRepsMin') loggingHTML += fieldGroupHTML;
+      if (field.id === 'defaultRepsMax') loggingHTML += fieldGroupHTML;
+      if (field.group === 'tempo') tempoHTML += fieldGroupHTML;
+
+    } else {
+      // Logica per 'library': tutti i campi
+      if (field.group === 'guided_tempo') guidedTempoHTML += fieldGroupHTML;
+      else if (field.group === 'guided_static') guidedStaticHTML += fieldGroupHTML;
+      else if (field.group === 'logging') loggingHTML += fieldGroupHTML;
+      else if (field.group === 'tempo') tempoHTML += fieldGroupHTML;
+      else commonHTML += fieldGroupHTML;
+    }
+  });
+
+  // Assembla il form finale
+  formHTML += commonHTML;
+  formHTML += `<div class="form-group-guided_tempo" style="display: none;">${guidedTempoHTML}</div>`;
+  formHTML += `<div class="form-group-guided_static" style="display: none;">${guidedStaticHTML}</div>`;
+  formHTML += `<div class="form-group-logging" style="grid-column: 1 / -1; display: none; grid-template-columns: 1fr 1fr; gap: 1rem;">${loggingHTML}</div>`;
+  formHTML += `<div class="form-group-tempo" style="grid-column: 1 / -1; display: none; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 1rem;">${tempoHTML}</div>`;
+  formHTML += '</form>';
+
+  body.innerHTML = formHTML;
+
   // Imposta la visibilità iniziale
   const form = body.querySelector('#exercise-editor-form');
   toggleFormFields(form, currentMode);
-  
+
   // Aggiungi listener per il cambio di modalità
-  form.querySelector('#ex-edit-mode').addEventListener('change', (e) => {
-    toggleFormFields(form, e.target.value);
-  });
+  const modeSelect = form.querySelector('select[name="execution_mode"]');
+  if (modeSelect) {
+    modeSelect.addEventListener('change', (e) => {
+      toggleFormFields(form, e.target.value);
+    });
+  }
 }
 
 function renderLogForm(body, exercise) {
@@ -134,7 +153,8 @@ function renderLogForm(body, exercise) {
 
 export function openExerciseEditorModal(config) {
   const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
-  log('Modals', 'Opening exercise editor modal', { config });
+  const isEditing = exercise !== null;
+  log('Modals', `Opening exercise editor modal (context: ${context}, editing: ${isEditing})`, { config });
 
   const modal = document.getElementById('exercise-editor-modal');
   const body = modal.querySelector('#exercise-editor-body');
@@ -165,17 +185,16 @@ export function openExerciseEditorModal(config) {
   } else if (context === 'planner') {
       modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
       saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
-      renderPlannerForm(body, exercise);
+      renderExerciseForm(body, exercise, 'planner');
       form = body.querySelector('#exercise-editor-form');
 
       saveHandler = (e) => {
           e.preventDefault();
           const newValues = {
               execution_mode: form.elements.execution_mode.value,
-              defaultSets: parseInt(form.elements.sets.value),
-              defaultRest: parseInt(form.elements.rest.value),
-              defaultWeight: parseFloat(form.elements.weight.value),
-              // Resetta tutti i valori specifici della modalità
+              defaultSets: parseInt(form.elements.defaultSets.value),
+              defaultRest: parseInt(form.elements.defaultRest.value),
+              defaultWeight: parseFloat(form.elements.defaultWeight.value),
               defaultReps: null,
               defaultDuration: null,
               defaultRepsMin: null,
@@ -184,23 +203,73 @@ export function openExerciseEditorModal(config) {
           };
 
           if (newValues.execution_mode === EXECUTION_MODES.GUIDED_TEMPO) {
-              newValues.defaultReps = parseInt(form.elements.reps.value);
-              // BUG FIX: Salva i dati del tempo se la modalità è GUIDED_TEMPO
+              newValues.defaultReps = parseInt(form.elements.defaultReps.value);
               newValues.defaultTempo = {
-                  up: parseInt(form.elements.tempo_up.value),
-                  hold: parseInt(form.elements.tempo_hold.value),
-                  down: parseInt(form.elements.tempo_down.value)
+                  up: parseInt(form.elements['defaultTempo.up'].value),
+                  hold: parseInt(form.elements['defaultTempo.hold'].value),
+                  down: parseInt(form.elements['defaultTempo.down'].value)
               };
           } else if (newValues.execution_mode === EXECUTION_MODES.GUIDED_STATIC) {
-              newValues.defaultDuration = parseInt(form.elements.duration.value);
+              newValues.defaultDuration = parseInt(form.elements.defaultDuration.value);
           } else if (newValues.execution_mode === EXECUTION_MODES.LOGGING) {
-              newValues.defaultRepsMin = parseInt(form.elements.reps_min.value);
-              newValues.defaultRepsMax = parseInt(form.elements.reps_max.value);
+              newValues.defaultRepsMin = parseInt(form.elements.defaultRepsMin.value);
+              newValues.defaultRepsMax = parseInt(form.elements.defaultRepsMax.value);
           }
           
           updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
           modal.classList.add('modal-hidden');
           openWorkoutEditorModal(returnIsoDate);
+      };
+
+  } else if (context === 'library') {
+      modal.querySelector('#exercise-editor-title').textContent = isEditing ? UI_TEXT.EXERCISE_EDIT_TITLE : UI_TEXT.EXERCISE_NEW_TITLE;
+      saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN_LIB;
+      renderExerciseForm(body, exercise, 'library');
+      form = body.querySelector('#exercise-editor-form');
+
+      saveHandler = (e) => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          const newExerciseData = {};
+          let isValid = true;
+
+          for (const field of EXERCISE_FIELDS) {
+              let value = formData.get(field.id);
+              if (field.type === 'number') {
+                  value = value ? parseFloat(value) : null;
+              }
+              if (field.props && field.props.includes('required') && !value) {
+                  isValid = false;
+                  showNotification(`Il campo '${UI_TEXT[field.label] || field.label}' è obbligatorio.`, 'error');
+                  break;
+              }
+
+              // Gestione campi nested (es. defaultTempo.up)
+              if (field.id.includes('.')) {
+                  const [parent, child] = field.id.split('.');
+                  if (!newExerciseData[parent]) newExerciseData[parent] = {};
+                  newExerciseData[parent][child] = value;
+              } else {
+                  newExerciseData[field.id] = value;
+              }
+          }
+
+          if (!isValid) return;
+
+          if (isEditing) {
+              updateExercise(exercise.id, newExerciseData);
+              showNotification(UI_TEXT.EXERCISE_UPDATE_SUCCESS, 'success');
+          } else {
+              const state = getState();
+              if (state.masterWorkoutList.some(ex => ex.id === newExerciseData.id)) {
+                  showNotification(UI_TEXT.EXERCISE_ID_CONFLICT, 'error');
+                  return;
+              }
+              addExercise(newExerciseData);
+              showNotification(UI_TEXT.EXERCISE_CREATE_SUCCESS, 'success');
+          }
+
+          modal.classList.add('modal-hidden');
       };
   }
 

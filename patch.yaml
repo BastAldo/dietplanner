@@ -1,10 +1,25 @@
-commit_message: "fix(config): Corregge errori di sintassi multipli in uiText.js"
+commit_message: "feat(library): Implementa creazione e modifica esercizi (Fase 2c)"
 rationale: |
-  Questa patch corregge due errori di sintassi (typo) nel file `src/config/uiText.js` che sono stati introdotti durante le modifiche precedenti:
-  1.  **Riga 138:** Corretto `id:D:` in `{ id: 'PLANNER_SUMMARY_AVG_KCAL', ... }`.
-  2.  **Riga 182:** Corretto `id:Gent:` in `{ id: 'CHARTS_GOAL_ESTIMATE_LABEL', ... }`.
+  Implemento la Fase 2c per completare il CRUD (Create, Read, Update, Delete) per gli Esercizi nella Libreria.
 
-  Ho verificato il resto del file per assicurarmi che non ci siano altri errori di sintassi evidenti.
+  1.  **`src/config/uiText.js`**: Aggiunti i nuovi testi necessari per il modal editor degli esercizi (`EXERCISE_NEW_TITLE`, `EXERCISE_EDIT_TITLE`, `EXERCISE_SAVE_BTN_LIB`, `EXERCISE_CREATE_SUCCESS`, `EXERCISE_UPDATE_SUCCESS`, `EXERCISE_ID_CONFLICT`) e per il form (`EXERCISE_FIELD_...`).
+  2.  **`src/config/forms.js`**: Aggiunta la definizione `EXERCISE_FIELDS` per descrivere la struttura del form di un esercizio. Questo centralizza la logica del form.
+  3.  **`src/ui/modals/exerciseEditorModal.js`**:
+      * File refattorizzato pesantemente per gestire il nuovo `config.context: 'library'`.
+      * Ora importa `addExercise`, `updateExercise` da `state.js` e `EXERCISE_FIELDS` da `forms.js`.
+      * La funzione `renderPlannerForm` è stata rinominata e generalizzata in `renderExerciseForm` per costruire il form dinamicamente da `EXERCISE_FIELDS`.
+      * La logica `toggleFormFields` è stata aggiornata per gestire i nuovi ID del form.
+      * La funzione `openExerciseEditorModal` ora gestisce 3 contesti:
+          * **`planner` (vecchio)**: Salva le modifiche (es. sets, reps) a un'istanza di esercizio in un giorno.
+          * **`history` (vecchio)**: Salva le modifiche ai dati di un esercizio già registrato.
+          * **`library` (nuovo)**: Permette di creare un *nuovo* esercizio (`addExercise`) o modificare un esercizio *master* (`updateExercise`) nella libreria.
+      * L'handler di salvataggio ora gestisce la raccolta di *tutti* i dati dal form quando `context === 'library'` e chiama le funzioni appropriate di `state.js`.
+  4.  **`src/ui/interactions/libraryInteractions.js`**:
+      * Importato `openExerciseEditorModal`.
+      * Nella `handleLibraryClick` (tab 'exercises'), i pulsanti `#add-exercise-btn` e `.btn-edit` sono ora collegati.
+      * `#add-exercise-btn` apre il modal in modalità creazione: `openExerciseEditorModal({ context: 'library', exercise: null })`.
+      * `.btn-edit` apre il modal in modalità modifica: `openExerciseEditorModal({ context: 'library', exercise: exercise })`.
+  5.  **`src/ui/modals.js`**: Aggiunta `openExerciseEditorModal` all'export per renderla disponibile agli altri moduli.
 patches:
   - file: src/config/uiText.js
     content: |
@@ -76,7 +91,7 @@ patches:
         { id: 'MANAGE_WORKOUT_BTN', text: 'Gestisci' },
         { id: 'START_WORKOUT_BTN', text: 'Avvia Allenamento' },
         { id: 'WORKOUT_EDITOR_TITLE', text: 'Editor Allenamento' },
-        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio' },
+        { id: 'EXERCISE_EDITOR_TITLE', text: 'Modifica Esercizio (Planner)' },
         { id: 'EXERCISE_SAVE_BTN', text: 'Salva Modifiche' },
         { id: 'EXERCISE_TEMPO_HOLD_LABEL', text: 'Tenuta (s)' },
         { id: 'EXERCISE_WEIGHT_LABEL', text: 'Peso (kg)' },
@@ -149,7 +164,7 @@ patches:
         { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti' },
         { id: 'PLANNER_SUMMARY_CALORIES_BURNED', text: 'Kcal Bruciate' },
         { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Kg mancanti' },
-        { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
+        { id:ANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
         { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
         { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
         { id: 'MANUAL_WORKOUT_DISTANCE_LABEL', text: 'Distanza (km)' },
@@ -212,6 +227,30 @@ patches:
         { id: 'EXERCISE_DELETE_CONFIRM_TITLE', text: 'Elimina Esercizio' },
         { id: 'EXERCISE_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare l\'esercizio' },
         { id: 'EXERCISE_DELETE_SUCCESS', text: 'Esercizio eliminato.' },
+        { id: 'EXERCISE_NEW_TITLE', text: 'Nuovo Esercizio' },
+        { id: 'EXERCISE_EDIT_TITLE', text: 'Modifica Esercizio' },
+        { id: 'EXERCISE_SAVE_BTN_LIB', text: 'Salva Esercizio' },
+        { id: 'EXERCISE_CREATE_SUCCESS', text: 'Esercizio creato con successo!' },
+        { id: 'EXERCISE_UPDATE_SUCCESS', text: 'Esercizio aggiornato con successo!' },
+        { id: 'EXERCISE_ID_CONFLICT', text: 'Esiste già un esercizio con questo ID.' },
+        { id: 'EXERCISE_FIELD_ID', text: 'ID Univoco (es. squat_bilanciere)' },
+        { id: 'EXERCISE_FIELD_NAME', text: 'Nome Esercizio (es. Squat con Bilanciere)' },
+        { id: 'EXERCISE_FIELD_DESC', text: 'Descrizione (opzionale)' },
+        { id: 'EXERCISE_FIELD_MET', text: 'Valore MET (opzionale, per stima calorie)' },
+        { id: 'EXERCISE_FIELD_MODE', text: 'Modalità Esecuzione' },
+        { id: 'EXERCISE_FIELD_MODE_GUIDED_TEMPO', text: 'Guidato (Tempo)' },
+        { id: 'EXERCISE_FIELD_MODE_GUIDED_STATIC', text: 'Guidato (Durata)' },
+        { id: 'EXERCISE_FIELD_MODE_LOGGING', text: 'Logging (Manuale)' },
+        { id: 'EXERCISE_FIELD_SETS', text: 'Serie (default)' },
+        { id: 'EXERCISE_FIELD_REPS', text: 'Ripetizioni (default)' },
+        { id: 'EXERCISE_FIELD_REPS_MIN', text: 'Rep Min (default)' },
+        { id: 'EXERCISE_FIELD_REPS_MAX', text: 'Rep Max (default)' },
+        { id: 'EXERCISE_FIELD_DURATION', text: 'Durata (s) (default)' },
+        { id: 'EXERCISE_FIELD_REST', text: 'Riposo (s) (default)' },
+        { id: 'EXERCISE_FIELD_WEIGHT', text: 'Peso (kg) (default)' },
+        { id: 'EXERCISE_FIELD_TEMPO_UP', text: 'Salita (s) (default)' },
+        { id: 'EXERCISE_FIELD_TEMPO_HOLD', text: 'Tenuta (s) (default)' },
+        { id: 'EXERCISE_FIELD_TEMPO_DOWN', text: 'Discesa (s) (default)' },
         { id: 'TEMPLATE_SAVE_SUCCESS', text: 'Scheda salvata con successo!' },
         { id: 'TEMPLATE_DELETE_SUCCESS', text: 'Scheda eliminata.' },
         { id: 'TEMPLATE_DELETE_CONFIRM_TITLE', text: 'Elimina Scheda' },
@@ -239,5 +278,579 @@ patches:
         acc[id] = text;
         return acc;
       }, {});
+  - file: src/config/forms.js
+    content: |
+      export const PROFILE_FIELDS = [
+        { id: 'firstName', label: 'Nome', type: 'text' },
+        { id: 'lastName', label: 'Cognome', type: 'text' },
+        { id: 'nickname', label: 'Nickname', type: 'text' },
+        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
+        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
+        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] },
+        {
+          id: 'plannerPrefs',
+          label: 'Preferenze Planner',
+          type: 'checkbox-group',
+          options: [
+            { id: 'enablePreWorkout', label: 'Attiva slot Pre-Workout' },
+            { id: 'enablePostWorkout', label: 'Attiva slot Post-Workout' },
+            { id: 'enablePreNanna', label: 'Attiva slot Pre-Nanna' },
+          ]
+        }
+      ];
+      
+      export const BIOMETRIC_FIELDS = [
+        { id: 'date', label: 'Data', type: 'date', props: 'required' },
+        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
+        { id: 'muscleMass', label: 'Massa M. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
+        { id: 'notes', label: 'Note', type: 'textarea' }
+      ];
+      
+      export const INGREDIENT_FIELDS = [
+        { id: 'id', label: 'ID Univoco', type: 'text', props: 'required' },
+        { id: 'nome', label: 'Nome', type: 'text', props: 'required' },
+        { id: 'kcal_per_100g', label: 'Kcal / 100g', type: 'number', props: 'required min="0"' },
+        { id: 'g_per_pezzo', label: 'Grammi per pezzo (opzionale)', type: 'number', props: 'min="0"' }
+      ];
+      
+      export const EXERCISE_FIELDS = [
+        { id: 'id', label: 'EXERCISE_FIELD_ID', type: 'text', props: 'required', grid: '1 / -1' },
+        { id: 'name', label: 'EXERCISE_FIELD_NAME', type: 'text', props: 'required', grid: '1 / -1' },
+        { id: 'description', label: 'EXERCISE_FIELD_DESC', type: 'textarea', grid: '1 / -1' },
+        { id: 'met_value', label: 'EXERCISE_FIELD_MET', type: 'number', props: 'min="0" step="0.1"', grid: '1 / -1' },
+        {
+          id: 'execution_mode',
+          label: 'EXERCISE_FIELD_MODE',
+          type: 'select',
+          grid: '1 / -1',
+          options: [
+            { value: 'guided_tempo', label: 'EXERCISE_FIELD_MODE_GUIDED_TEMPO' },
+            { value: 'guided_static', label: 'EXERCISE_FIELD_MODE_GUIDED_STATIC' },
+            { value: 'logging', label: 'EXERCISE_FIELD_MODE_LOGGING' }
+          ]
+        },
+        { id: 'defaultSets', label: 'EXERCISE_FIELD_SETS', type: 'number', props: 'min="1"', group: 'common-group' },
+        { id: 'defaultRest', label: 'EXERCISE_FIELD_REST', type: 'number', props: 'min="0"', group: 'common-group' },
+        { id: 'defaultWeight', label: 'EXERCISE_FIELD_WEIGHT', type: 'number', props: 'min="0" step="0.5"', group: 'common-group' },
+        { id: 'defaultReps', label: 'EXERCISE_FIELD_REPS', type: 'number', props: 'min="1"', group: 'guided_tempo' },
+        { id: 'defaultDuration', label: 'EXERCISE_FIELD_DURATION', type: 'number', props: 'min="1"', group: 'guided_static' },
+        { id: 'defaultRepsMin', label: 'EXERCISE_FIELD_REPS_MIN', type: 'number', props: 'min="1"', group: 'logging' },
+        { id: 'defaultRepsMax', label: 'EXERCISE_FIELD_REPS_MAX', type: 'number', props: 'min="1"', group: 'logging' },
+        { id: 'defaultTempo.up', label: 'EXERCISE_FIELD_TEMPO_UP', type: 'number', props: 'min="0" step="0.5"', group: 'tempo' },
+        { id: 'defaultTempo.hold', label: 'EXERCISE_FIELD_TEMPO_HOLD', type: 'number', props: 'min="0" step="0.5"', group: 'tempo' },
+        { id: 'defaultTempo.down', label: 'EXERCISE_FIELD_TEMPO_DOWN', type: 'number', props: 'min="0" step="0.5"', group: 'tempo' }
+      ];
+  - file: src/ui/modals.js
+    content: |
+      import { showConfirmModal } from './modals/confirmModal.js';
+      import { openDayEditorModal } from './modals/dayEditorModal.js';
+      import { openExerciseEditorModal } from './modals/exerciseEditorModal.js';
+      import { showRecipeModal } from './modals/recipeModal.js';
+      import { openSelectionModal, openWorkoutSelectionModal, openWorkoutTemplateSelectionModal } from './modals/selectionModal.js';
+      import { openWorkoutEditorModal } from './modals/workoutEditorModal.js';
+      import { openManualWorkoutModal } from './modals/manualWorkoutModal.js';
+      import { openIngredientEditorModal } from './modals/ingredientEditorModal.js';
+      import { openMealEditorModal } from './modals/mealEditorModal.js';
+      import { openPackagePreviewModal } from './modals/packagePreviewModal.js';
+      
+      export {
+        showConfirmModal,
+        openDayEditorModal,
+        openExerciseEditorModal,
+        showRecipeModal,
+        openSelectionModal,
+        openWorkoutSelectionModal,
+        openWorkoutTemplateSelectionModal,
+        openWorkoutEditorModal,
+        openManualWorkoutModal,
+        openIngredientEditorModal,
+        openMealEditorModal,
+        openPackagePreviewModal
+      };
+  - file: src/ui/modals/exerciseEditorModal.js
+    content: |
+      import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory, getState, addExercise, updateExercise } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { EXERCISE_FIELDS } from '../../config/forms.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+      import { showNotification } from '../notifications.js';
+      
+      const EXECUTION_MODES = {
+        GUIDED_TEMPO: 'guided_tempo',
+        GUIDED_STATIC: 'guided_static',
+        LOGGING: 'logging'
+      };
+      
+      // Funzione helper per gestire la visibilità dei campi
+      function toggleFormFields(form, mode) {
+        form.querySelector('.form-group-guided_tempo').style.display = 'none';
+        form.querySelector('.form-group-guided_static').style.display = 'none';
+        form.querySelector('.form-group-logging').style.display = 'none';
+        form.querySelector('.form-group-tempo').style.display = 'none';
+      
+        if (mode === EXECUTION_MODES.GUIDED_TEMPO) {
+          form.querySelector('.form-group-guided_tempo').style.display = 'flex';
+          form.querySelector('.form-group-tempo').style.display = 'grid';
+        } else if (mode === EXECUTION_MODES.GUIDED_STATIC) {
+          form.querySelector('.form-group-guided_static').style.display = 'flex';
+        } else if (mode === EXECUTION_MODES.LOGGING) {
+          form.querySelector('.form-group-logging').style.display = 'grid';
+        }
+      }
+      
+      function renderExerciseForm(body, exercise, context) {
+        const isLibraryContext = context === 'library';
+        const isEditing = exercise !== null;
+      
+        // Normalizza i dati dell'esercizio per la prima apertura
+        let currentMode = exercise?.execution_mode || EXECUTION_MODES.GUIDED_TEMPO;
+        if (exercise?.type === 'time' && !exercise?.execution_mode) {
+          currentMode = EXECUTION_MODES.GUIDED_STATIC;
+        }
+      
+        // Costruisci il form dinamicamente
+        let formHTML = '<form id="exercise-editor-form" class="biometrics-form">';
+      
+        // Gruppi di campi
+        let commonHTML = '';
+        let guidedTempoHTML = '';
+        let guidedStaticHTML = '';
+        let loggingHTML = '';
+        let tempoHTML = '';
+      
+        EXERCISE_FIELDS.forEach(field => {
+          // Gestione campi nested (es. defaultTempo.up)
+          const fieldIdParts = field.id.split('.');
+          let currentValue = exercise;
+          if (isEditing) {
+            for (const part of fieldIdParts) {
+              currentValue = currentValue ? currentValue[part] : null;
+            }
+          } else {
+            currentValue = '';
+          }
+      
+          const label = UI_TEXT[field.label] || field.label;
+          const inputId = `ex-edit-${field.id.replace('.', '-')}`;
+          const isReadonly = (isEditing && field.id === 'id') && isLibraryContext;
+      
+          let fieldInputHTML = '';
+          if (field.type === 'select') {
+            fieldInputHTML = `<select id="${inputId}" name="${field.id}" ${field.props || ''}>
+              ${field.options.map(opt => `<option value="${opt.value}" ${currentValue === opt.value ? 'selected' : ''}>${UI_TEXT[opt.label] || opt.label}</option>`).join('')}
+            </select>`;
+          } else if (field.type === 'textarea') {
+            fieldInputHTML = `<textarea id="${inputId}" name="${field.id}" ${field.props || ''}>${currentValue || ''}</textarea>`;
+          } else {
+            fieldInputHTML = `<input type="${field.type}" id="${inputId}" name="${field.id}" value="${currentValue || ''}" ${field.props || ''} ${isReadonly ? 'readonly' : ''}>`;
+          }
+      
+          const fieldGroupHTML = `<div class="form-group" style="${field.grid ? `grid-column: ${field.grid};` : ''}">
+                                    <label for="${inputId}">${label}</label>
+                                    ${fieldInputHTML}
+                                  </div>`;
+      
+          // Smista i campi nei gruppi corretti
+          if (!isLibraryContext) {
+            // Logica per 'planner': solo campi specifici
+            if (field.id === 'execution_mode') commonHTML += fieldGroupHTML;
+            if (field.id === 'defaultSets') commonHTML += fieldGroupHTML;
+            if (field.id === 'defaultRest') commonHTML += fieldGroupHTML;
+            if (field.id === 'defaultWeight') commonHTML += fieldGroupHTML;
+            if (field.id === 'defaultReps') guidedTempoHTML += fieldGroupHTML;
+            if (field.id === 'defaultDuration') guidedStaticHTML += fieldGroupHTML;
+            if (field.id === 'defaultRepsMin') loggingHTML += fieldGroupHTML;
+            if (field.id === 'defaultRepsMax') loggingHTML += fieldGroupHTML;
+            if (field.group === 'tempo') tempoHTML += fieldGroupHTML;
+      
+          } else {
+            // Logica per 'library': tutti i campi
+            if (field.group === 'guided_tempo') guidedTempoHTML += fieldGroupHTML;
+            else if (field.group === 'guided_static') guidedStaticHTML += fieldGroupHTML;
+            else if (field.group === 'logging') loggingHTML += fieldGroupHTML;
+            else if (field.group === 'tempo') tempoHTML += fieldGroupHTML;
+            else commonHTML += fieldGroupHTML;
+          }
+        });
+      
+        // Assembla il form finale
+        formHTML += commonHTML;
+        formHTML += `<div class="form-group-guided_tempo" style="display: none;">${guidedTempoHTML}</div>`;
+        formHTML += `<div class="form-group-guided_static" style="display: none;">${guidedStaticHTML}</div>`;
+        formHTML += `<div class="form-group-logging" style="grid-column: 1 / -1; display: none; grid-template-columns: 1fr 1fr; gap: 1rem;">${loggingHTML}</div>`;
+        formHTML += `<div class="form-group-tempo" style="grid-column: 1 / -1; display: none; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 1rem;">${tempoHTML}</div>`;
+        formHTML += '</form>';
+      
+        body.innerHTML = formHTML;
+      
+        // Imposta la visibilità iniziale
+        const form = body.querySelector('#exercise-editor-form');
+        toggleFormFields(form, currentMode);
+      
+        // Aggiungi listener per il cambio di modalità
+        const modeSelect = form.querySelector('select[name="execution_mode"]');
+        if (modeSelect) {
+          modeSelect.addEventListener('change', (e) => {
+            toggleFormFields(form, e.target.value);
+          });
+        }
+      }
+      
+      function renderLogForm(body, exercise) {
+        const showWeight = exercise.defaultWeight || exercise.setsData.some(s => s.weight > 0);
+        let formHTML = `<form id="logged-exercise-form" class="structured-form">`;
+        formHTML += exercise.setsData.map((set, index) => {
+            const weightInput = showWeight ? `
+                <div class="form-group">
+                    <label for="set-weight-${index}">${UI_TEXT.LOGGED_EXERCISE_WEIGHT_LABEL}</label>
+                    <input type="number" id="set-weight-${index}" name="weight_${index}" value="${set.weight || 0}" min="0" step="0.1">
+                </div>
+            ` : '';
+            return `
+                <div class="set-editor-row">
+                    <span class="set-editor-label">${UI_TEXT.LOGGED_EXERCISE_SET_LABEL} ${index + 1}</span>
+                    <div class="form-group">
+                        <label for="set-reps-${index}">${UI_TEXT.LOGGED_EXERCISE_REPS_LABEL}</label>
+                        <input type="number" id="set-reps-${index}" name="reps_${index}" value="${set.reps || 0}" min="0">
+                    </div>
+                    ${weightInput}
+                </div>
+            `;
+        }).join('');
+        formHTML += '</form>';
+        body.innerHTML = formHTML;
+      }
+      
+      export function openExerciseEditorModal(config) {
+        const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
+        const isEditing = exercise !== null;
+        log('Modals', `Opening exercise editor modal (context: ${context}, editing: ${isEditing})`, { config });
+      
+        const modal = document.getElementById('exercise-editor-modal');
+        const body = modal.querySelector('#exercise-editor-body');
+        const saveBtn = modal.querySelector('#exercise-editor-save-btn');
+        let form;
+        let saveHandler;
+      
+        if (context === 'history') {
+            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+            saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
+            renderLogForm(body, exercise);
+            form = body.querySelector('#logged-exercise-form');
+      
+            saveHandler = (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const newSetsData = [...exercise.setsData].map((set, index) => ({
+                    ...set,
+                    reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
+                    weight: parseFloat(formData.get(`weight_${index}`)) || 0,
+                }));
+      
+                updateExerciseSetsInHistory(date, startTime, exercise.instanceId, newSetsData);
+                showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
+                modal.classList.add('modal-hidden');
+            };
+      
+        } else if (context === 'planner') {
+            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
+            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
+            renderExerciseForm(body, exercise, 'planner');
+            form = body.querySelector('#exercise-editor-form');
+      
+            saveHandler = (e) => {
+                e.preventDefault();
+                const newValues = {
+                    execution_mode: form.elements.execution_mode.value,
+                    defaultSets: parseInt(form.elements.defaultSets.value),
+                    defaultRest: parseInt(form.elements.defaultRest.value),
+                    defaultWeight: parseFloat(form.elements.defaultWeight.value),
+                    defaultReps: null,
+                    defaultDuration: null,
+                    defaultRepsMin: null,
+                    defaultRepsMax: null,
+                    defaultTempo: exercise.defaultTempo // Preserva l'oggetto tempo se esiste
+                };
+      
+                if (newValues.execution_mode === EXECUTION_MODES.GUIDED_TEMPO) {
+                    newValues.defaultReps = parseInt(form.elements.defaultReps.value);
+                    newValues.defaultTempo = {
+                        up: parseInt(form.elements['defaultTempo.up'].value),
+                        hold: parseInt(form.elements['defaultTempo.hold'].value),
+                        down: parseInt(form.elements['defaultTempo.down'].value)
+                    };
+                } else if (newValues.execution_mode === EXECUTION_MODES.GUIDED_STATIC) {
+                    newValues.defaultDuration = parseInt(form.elements.defaultDuration.value);
+                } else if (newValues.execution_mode === EXECUTION_MODES.LOGGING) {
+                    newValues.defaultRepsMin = parseInt(form.elements.defaultRepsMin.value);
+                    newValues.defaultRepsMax = parseInt(form.elements.defaultRepsMax.value);
+                }
+                
+                updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
+                modal.classList.add('modal-hidden');
+                openWorkoutEditorModal(returnIsoDate);
+            };
+      
+        } else if (context === 'library') {
+            modal.querySelector('#exercise-editor-title').textContent = isEditing ? UI_TEXT.EXERCISE_EDIT_TITLE : UI_TEXT.EXERCISE_NEW_TITLE;
+            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN_LIB;
+            renderExerciseForm(body, exercise, 'library');
+            form = body.querySelector('#exercise-editor-form');
+      
+            saveHandler = (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const newExerciseData = {};
+                let isValid = true;
+      
+                for (const field of EXERCISE_FIELDS) {
+                    let value = formData.get(field.id);
+                    if (field.type === 'number') {
+                        value = value ? parseFloat(value) : null;
+                    }
+                    if (field.props && field.props.includes('required') && !value) {
+                        isValid = false;
+                        showNotification(`Il campo '${UI_TEXT[field.label] || field.label}' è obbligatorio.`, 'error');
+                        break;
+                    }
+      
+                    // Gestione campi nested (es. defaultTempo.up)
+                    if (field.id.includes('.')) {
+                        const [parent, child] = field.id.split('.');
+                        if (!newExerciseData[parent]) newExerciseData[parent] = {};
+                        newExerciseData[parent][child] = value;
+                    } else {
+                        newExerciseData[field.id] = value;
+                    }
+                }
+      
+                if (!isValid) return;
+      
+                if (isEditing) {
+                    updateExercise(exercise.id, newExerciseData);
+                    showNotification(UI_TEXT.EXERCISE_UPDATE_SUCCESS, 'success');
+                } else {
+                    const state = getState();
+                    if (state.masterWorkoutList.some(ex => ex.id === newExerciseData.id)) {
+                        showNotification(UI_TEXT.EXERCISE_ID_CONFLICT, 'error');
+                        return;
+                    }
+                    addExercise(newExerciseData);
+                    showNotification(UI_TEXT.EXERCISE_CREATE_SUCCESS, 'success');
+                }
+      
+                modal.classList.add('modal-hidden');
+            };
+        }
+      
+        saveBtn.replaceWith(saveBtn.cloneNode(true));
+        document.getElementById('exercise-editor-save-btn').addEventListener('click', saveHandler, { once: true });
+        modal.classList.remove('modal-hidden');
+      }
+  - file: src/ui/interactions/libraryInteractions.js
+    content: |
+      import { log } from '../../utils/logger.js';
+      import { openIngredientEditorModal, openMealEditorModal, openExerciseEditorModal } from '../modals.js';
+      import { showConfirmModal } from '../modals.js';
+      import { deleteIngredient, deleteMeal, getState, setUiState, deleteWorkoutTemplate, deleteExercise } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { showNotification } from '../notifications.js';
+      
+      function handleLibraryClick(e) {
+        const state = getState();
+      
+        // Tab switching
+        const tabBtn = e.target.closest('.btn-view');
+        if (tabBtn && tabBtn.dataset.view) {
+          const newView = tabBtn.dataset.view;
+          log('Interactions-Library', 'Tab changed', { newView });
+          setUiState({
+            ...state.ui,
+            activeLibraryTab: newView,
+            libraryActiveFilter: null,
+          });
+          return;
+        }
+      
+        // Package Tag filter
+        const tagFilterBtn = e.target.closest('.tag-filter-btn');
+        if (tagFilterBtn && tagFilterBtn.dataset.tag) {
+          const tag = tagFilterBtn.dataset.tag;
+          const newFilter = tag === 'all' ? null : tag;
+          log('Interactions-Library', 'Package filter changed', { newFilter });
+          setUiState({
+            ...state.ui,
+            libraryActiveFilter: newFilter,
+          });
+          return;
+        }
+      
+        // --- Ingredient Actions ---
+        if (state.ui.activeLibraryTab === 'ingredients') {
+          const addBtn = e.target.closest('#add-ingredient-btn');
+          if (addBtn) {
+            log('Interactions-Library', 'Add new ingredient button clicked');
+            openIngredientEditorModal();
+            return;
+          }
+      
+          const item = e.target.closest('.library-item');
+          if (!item) return;
+      
+          const ingredientId = item.dataset.id;
+          const ingredient = state.masterIngredientList.find(ing => ing.id === ingredientId);
+          if (!ingredient) return;
+      
+          const editBtn = e.target.closest('.btn-edit');
+          if (editBtn) {
+            log('Interactions-Library', 'Edit ingredient button clicked', { ingredientId });
+            openIngredientEditorModal(ingredient);
+            return;
+          }
+      
+          const deleteBtn = e.target.closest('.btn-delete');
+          if (deleteBtn) {
+            log('Interactions-Library', 'Delete ingredient button clicked', { ingredientId });
+            showConfirmModal({
+              title: UI_TEXT.INGREDIENT_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.INGREDIENT_DELETE_CONFIRM_MSG} "${ingredient.nome}"?`,
+              onConfirm: () => {
+                deleteIngredient(ingredientId);
+                showNotification(UI_TEXT.INGREDIENT_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
+        }
+      
+        // --- Meal Actions ---
+        if (state.ui.activeLibraryTab === 'meals') {
+          const addMealBtn = e.target.closest('#add-meal-btn');
+          if (addMealBtn) {
+            log('Interactions-Library', 'Add new meal button clicked');
+            openMealEditorModal();
+            return;
+          }
+      
+          const mealItem = e.target.closest('.library-item');
+          if (!mealItem) return;
+      
+          const mealId = mealItem.dataset.id;
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (!meal) return;
+      
+          const editMealBtn = e.target.closest('.btn-edit');
+          if (editMealBtn) {
+            log('Interactions-Library', 'Edit meal button clicked', { mealId });
+            openMealEditorModal(meal);
+            return;
+          }
+      
+          const deleteMealBtn = e.target.closest('.btn-delete');
+          if (deleteMealBtn) {
+            log('Interactions-Library', 'Delete meal button clicked', { mealId });
+            showConfirmModal({
+              title: UI_TEXT.MEAL_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.MEAL_DELETE_CONFIRM_MSG} "${meal.nomePasto}"?`,
+              onConfirm: () => {
+                deleteMeal(mealId);
+                showNotification(UI_TEXT.MEAL_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
+        }
+      
+        // --- Exercise Actions ---
+        if (state.ui.activeLibraryTab === 'exercises') {
+          const addBtn = e.target.closest('#add-exercise-btn');
+          if (addBtn) {
+            log('Interactions-Library', 'Add new exercise button clicked');
+            openExerciseEditorModal({ context: 'library', exercise: null });
+            return;
+          }
+      
+          const item = e.target.closest('.library-item');
+          if (!item) return;
+      
+          const exerciseId = item.dataset.id;
+          const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+          if (!exercise) return;
+      
+          const editBtn = e.target.closest('.btn-edit');
+          if (editBtn) {
+            log('Interactions-Library', 'Edit exercise button clicked', { exerciseId });
+            openExerciseEditorModal({ context: 'library', exercise: exercise });
+            return;
+          }
+      
+          const deleteBtn = e.target.closest('.btn-delete');
+          if (deleteBtn) {
+            log('Interactions-Library', 'Delete exercise button clicked', { exerciseId });
+            showConfirmModal({
+              title: UI_TEXT.EXERCISE_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.EXERCISE_DELETE_CONFIRM_MSG} "${exercise.name}"?`,
+              onConfirm: () => {
+                deleteExercise(exerciseId);
+                showNotification(UI_TEXT.EXERCISE_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
+        }
+      
+        // --- Template Actions ---
+        if (state.ui.activeLibraryTab === 'templates') {
+          const templateItem = e.target.closest('.library-item');
+          if (!templateItem) return;
+      
+          const templateId = parseFloat(templateItem.dataset.id);
+          const template = state.masterWorkoutTemplateList.find(t => t.id === templateId);
+          if (!template) return;
+      
+          const deleteTemplateBtn = e.target.closest('.btn-delete-template');
+          if (deleteTemplateBtn) {
+            log('Interactions-Library', 'Delete template button clicked', { templateId });
+            showConfirmModal({
+              title: UI_TEXT.TEMPLATE_DELETE_CONFIRM_TITLE,
+              message: `${UI_TEXT.TEMPLATE_DELETE_CONFIRM_MSG} "${template.name}"?`,
+              onConfirm: () => {
+                deleteWorkoutTemplate(templateId);
+                showNotification(UI_TEXT.TEMPLATE_DELETE_SUCCESS, 'success');
+              },
+              type: 'danger'
+            });
+            return;
+          }
+        }
+      }
+      
+      function handleSearchInput(e) {
+        const searchTerm = e.target.value;
+        const currentState = getState();
+        setUiState({
+          ...currentState.ui,
+          librarySearchTerm: searchTerm
+        });
+      }
+      
+      export function initializeLibraryListeners() {
+        log('Interactions', 'Initializing library listeners');
+        const libraryPage = document.getElementById('library-page');
+        if (libraryPage) {
+          libraryPage.addEventListener('click', handleLibraryClick);
+          const searchInput = document.getElementById('library-search-input');
+          searchInput.addEventListener('input', handleSearchInput);
+        }
+      }
 commands:
-  - "echo 'Tutti gli errori di sintassi noti in uiText.js sono stati corretti.'"
+  - "echo 'Fase 2c completata. Creazione e modifica esercizi abilitata dalla libreria.'"

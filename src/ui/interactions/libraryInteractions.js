@@ -1,5 +1,5 @@
 import { log } from '../../utils/logger.js';
-import { openIngredientEditorModal, openMealEditorModal } from '../modals.js';
+import { openIngredientEditorModal, openMealEditorModal, openExerciseEditorModal } from '../modals.js';
 import { showConfirmModal } from '../modals.js';
 import { deleteIngredient, deleteMeal, getState, setUiState, deleteWorkoutTemplate, deleteExercise } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
@@ -114,12 +114,12 @@ function handleLibraryClick(e) {
 
   // --- Exercise Actions ---
   if (state.ui.activeLibraryTab === 'exercises') {
-    // const addBtn = e.target.closest('#add-exercise-btn');
-    // if (addBtn) {
-    //   log('Interactions-Library', 'Add new exercise button clicked');
-    //   // openExerciseEditorModal(); // Verrà implementato in 2c
-    //   return;
-    // }
+    const addBtn = e.target.closest('#add-exercise-btn');
+    if (addBtn) {
+      log('Interactions-Library', 'Add new exercise button clicked');
+      openExerciseEditorModal({ context: 'library', exercise: null });
+      return;
+    }
 
     const item = e.target.closest('.library-item');
     if (!item) return;
@@ -128,12 +128,12 @@ function handleLibraryClick(e) {
     const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
     if (!exercise) return;
 
-    // const editBtn = e.target.closest('.btn-edit');
-    // if (editBtn) {
-    //   log('Interactions-Library', 'Edit exercise button clicked', { exerciseId });
-    //   // openExerciseEditorModal(exercise); // Verrà implementato in 2c
-    //   return;
-    // }
+    const editBtn = e.target.closest('.btn-edit');
+    if (editBtn) {
+      log('Interactions-Library', 'Edit exercise button clicked', { exerciseId });
+      openExerciseEditorModal({ context: 'library', exercise: exercise });
+      return;
+    }
 
     const deleteBtn = e.target.closest('.btn-delete');
     if (deleteBtn) {
