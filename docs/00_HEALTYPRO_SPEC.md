@@ -112,3 +112,8 @@ Questa sezione definisce come implementeremo i concetti di MTP all'interno della
 
 * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
 * **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi da una libreria. La vista calendario mostrerà un riepilogo sia delle calorie che del numero di esercizi pianificati. Questo unificherà completamente le due anime dell'applicazione.
+
+#### Fase 5: Integrazione Macronutrienti (TODO)
+
+* **Azione (Pianificata)**: Estendere l'intera architettura per supportare il calcolo e la visualizzazione dei macronutrienti (Proteine, Carboidrati, Grassi).
+* **Dettagli**: Questo richiederà l'aggiornamento della struttura dati in `ingredienti.json`, l'espansione del `calorieCalculator.js` e l'aggiornamento di tutti i componenti UI (editor, planner, log) per visualizzare i nuovi totali.

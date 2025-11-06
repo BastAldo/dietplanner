@@ -36,3 +36,9 @@ L'interfaccia utente è stata completamente rinnovata per adottare un design sys
 * **US-35 (Importazione Intelligente):** Come utente, quando trovo un pacchetto che mi interessa, voglio poterlo aggiungere alla mia libreria con un click. L'importazione deve aggiungere solo i nuovi contenuti (pasti, ingredienti, esercizi) senza sovrascrivere o cancellare quelli che ho già creato.
 * **US-36 (Accesso ai Dettagli del Protocollo):** Come utente, per i pacchetti che lo prevedono, voglio poter leggere un documento di "protocollo" (`protocol.md`) che mi spieghi la filosofia, le regole e le strategie del piano alimentare o di allenamento.
 * **US-37 (Visualizzazione Obiettivi Macro):** Come utente, voglio poter vedere una sintesi degli obiettivi nutrizionali di un piano alimentare (es. range calorico, target proteico) direttamente nella card di anteprima nella sezione "Esplora".
+
+## 4. Funzionalità Future (TODO)
+
+* **US-38 (Configurazione Macro):** Come utente, voglio poter definire Proteine, Carboidrati e Grassi per 100g quando creo o modifico un ingrediente nella Libreria.
+* **US-39 (Calcolo Macro):** Come utente, voglio che l'applicazione calcoli automaticamente i totali dei macronutrienti (min/max) per ogni pasto che creo e per ogni giorno nel mio planner.
+* **US-40 (Visualizzazione Macro):** Come utente, voglio vedere i totali P/C/F nel mio "Today Widget", nelle card del calendario, nel "Log Dettagliato" e nel modale di riepilogo dell'editor pasti.

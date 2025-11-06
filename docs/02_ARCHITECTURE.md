@@ -31,6 +31,8 @@ Il `configService.js` orchestra questo flusso: scarica `explore.json` e `package
 ### 4.2. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
 Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti.
 
+**(TODO):** Questo modulo sarà esteso per calcolare anche i totali dei macronutrienti (Proteine, Carboidrati, Grassi) basandosi sui nuovi campi aggiunti agli ingredienti.
+
 ## 5. Gestione dei Dati
 
 ### 5.1. Strutture Dati Chiave
@@ -39,6 +41,18 @@ Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti.
     * **`manifest.json`**: Descrive un singolo pacchetto. Contiene `id`, `title`, `description`, `author`, `version`, `tags`, `image`, `protocolUrl`, `pastiUrl`, `ingredientiUrl`, `eserciziUrl`, e l'oggetto opzionale `macroTargets` per i piani dietetici.
     * **`pasti.json`**: Contiene un array di `meals`.
     * **`ingredienti.json`**: Contiene un array di `ingredienti`.
+      **(TODO):** La struttura di un ingrediente sarà estesa per includere:
+      ```json
+      {
+        "id": "ingrediente_id",
+        "nome": "Nome Ingrediente",
+        "kcal_per_100g": 100,
+        "g_per_pezzo": 50,
+        "prot_per_100g": 10,
+        "carb_per_100g": 20,
+        "fat_per_100g": 5
+      }
+      ```
     * **`esercizi.json`**: Contiene un array di `esercizi`.
 
 * **Dati Utente Locali (`localStorage`)**:

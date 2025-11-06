@@ -1,385 +1,271 @@
-commit_message: "fix(planner): Corregge TypeError (mancante +) in toISODateString"
+commit_message: "docs: Aggiorna documentazione con TODO per macronutrienti"
 rationale: |
-  Questo commit corregge un errore di battitura fatale introdotto nel file `src/ui/plannerRenderer.js` durante l'ultimo commit.
+  Come da nostra discussione, ho aggiornato i tre file principali della documentazione (`00_HEALTYPRO_SPEC.md`, `01_FUNCTIONALITY.md`, `02_ARCHITECTURE.md`) per includere l'integrazione dei macronutrienti come prossima fase di sviluppo pianificata (TODO).
 
-  L'errore era alla riga 9, nella funzione `toISODateString`.
-  Il codice errato era: `('0' (date.getMonth() + 1))`
-  Il codice corretto è: `('0' + (date.getMonth() + 1))`
-
-  Mancava un operatore `+`, che portava JavaScript a interpretare la stringa "0" come una funzione, generando l'errore `TypeError: "0" is not a function` e impedendo il rendering della pagina "Planner".
+  Questo allinea la documentazione alla visione futura che abbiamo definito:
+  1.  **`00_HEALTYPRO_SPEC.md`**: Aggiunta la "Fase 5" al piano di sviluppo per il tracciamento dei macro.
+  2.  **`01_FUNCTIONALITY.md`**: Aggiunta una nuova sezione "Funzionalità Future (TODO)" con le User Stories specifiche per la configurazione, il calcolo e la visualizzazione dei macro (US-38, US-39, US-40).
+  3.  **`02_ARCHITECTURE.md`**: Aggiornate le sezioni "Calcolo delle Calorie" e "Strutture Dati Chiave" per mostrare come `calorieCalculator.js` e `ingredienti.json` verranno estesi per supportare i macro.
 patches:
-  - file: src/ui/plannerRenderer.js
+  - file: docs/00_HEALTYPRO_SPEC.md
     content: |
-      import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID, OPTIONAL_MEAL_TYPES } from '../utils/constants.js';
-      import { UI_TEXT } from '../config/uiText.js';
-      import { renderIcon } from './icons.js';
-      import { formatIngredientsSummary } from '../utils/formatters.js';
+      # Progetto HealtyPro: Specifiche di Integrazione e Sviluppo
 
-      let plannerWeekChart = null;
+      **Obiettivo**: Questo documento definisce la visione e il piano di sviluppo per `HealtyPro`, un'applicazione nata dalla fusione concettuale di `NutriPlan` e `Mio Trainer Personale` (MTP). Funge da unica fonte di verità per la prossima fase di sviluppo.
 
-      function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
-      }
+      ## 1. Analisi dell'Applicazione di Riferimento (MTP)
 
-      function getWeekStartDate(date) {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : WEEK_STARTS_ON_MONDAY);
-        return new Date(d.setDate(diff));
-      }
+      Questa sezione analizza l'applicazione MTP basandosi esclusivamente sulla sua documentazione per estrarne i concetti di design e di flusso utente (UX) che intendiamo adottare.
 
-      function formatShortDate(date) {
-        return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' });
-      }
+      ### 1.1. Funzionalità Core (Cosa Fa)
 
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-      }
+      L'applicazione MTP è una SPA (Single Page Application) progettata per gestire il ciclo di vita di un allenamento attraverso tre viste principali:
 
-      function formatMealCalories(meal) {
-        if (!meal || typeof meal.calories_min !== 'number') return '';
-        const minCals = Number(meal.calories_min) || 0;
-        const maxCals = Number(meal.calories_max) || minCals;
-        if (minCals === 0 && maxCals === 0) return '';
-        const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-        if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-        return `${minCals} - ${maxCals} ${kcalLabel}`;
-      }
+      * **Vista Calendario**: Una dashboard principale con una griglia settimanale. Ogni cella-giorno riassume gli esercizi programmati e permette di avviare l'allenamento.
+      * **Vista Trainer Interattivo**: Un'interfaccia che guida l'utente in tempo reale attraverso l'allenamento, con timer visivi e controlli di flusso (start/pausa/termina).
+      * **Vista Debriefing**: Una schermata di riepilogo che appare alla fine dell'allenamento e mostra un report dettagliato di ciò che è stato completato, interrotto o saltato.
+      * **Sistema di Modali**: L'editing degli allenamenti avviene tramite un modale che permette di aggiungere esercizi da una libreria e di riordinare gli item della sessione con drag-and-drop.
 
-      function getActiveMealSlots(userProfile) {
-        const activeMealSlots = [...MEAL_TYPES];
-        Object.keys(OPTIONAL_MEAL_TYPES).forEach(key => {
-          if (userProfile[key]) {
-            activeMealSlots.push(OPTIONAL_MEAL_TYPES[key]);
-          }
-        });
-        return activeMealSlots;
-      }
+      ### 1.2. Flusso Utente e Architettura Concettuale (Come lo Fa)
 
-      function calculateDailyCalories(isoDate, weeklyPlan, userProfile) {
-        let min = 0, max = 0;
-        const activeMealSlots = getActiveMealSlots(userProfile);
-        
-        activeMealSlots.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal && typeof meal.calories_min === 'number') {
-            const minCals = Number(meal.calories_min) || 0;
-            const maxCals = Number(meal.calories_max) || minCals;
-            min += minCals;
-            max += maxCals;
-          }
-        });
-        if (min === 0 && max === 0) return '';
-        return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
-      }
+      Il flusso utente di MTP è **"day-centric"** (incentrato sul giorno), il che lo rende molto intuitivo:
 
-      function getRecipeButtonHTML(meal, state) {
-        const fullMeal = state.masterMealList.find(m => m.id === meal.id);
-        if (state.recipeBaseUrl && fullMeal && fullMeal.recipeId) {
-          return `<button class="btn-view-recipe" data-meal-id="${fullMeal.id}" title="${UI_TEXT.RECIPE_BUTTON_TITLE}">
-                    ${renderIcon('RECIPE', { width: 20, height: 20 })}
-                  </button>`;
-        }
-        return '';
-      }
+      1.  **Visione d'Insieme**: L'utente sceglie un giorno dal calendario.
+      2.  **Editing Centralizzato**: Modifica l'intero piano di quel giorno in un unico modale.
+      3.  **Esecuzione**: Avvia la sessione che viene eseguita passo dopo passo.
+      4.  **Revisione**: Analizza il riepilogo finale.
 
-      function getSetDetails(setData) {
-          let details = [];
-          if (setData.reps) details.push(`${setData.reps} reps`);
-          if (setData.weight) details.push(`${setData.weight} kg`);
-          if (setData.duration) details.push(`${formatDuration(setData.duration)}`);
-          return details.join(' / ');
-      }
+      L'architettura si basa su un principio chiave: il **Workout Builder Composizionale**. L'utente non sceglie piani pre-fatti, ma costruisce la propria sessione di allenamento in modo flessibile, aggiungendo esercizi da una libreria, in modo del tutto analogo alla pianificazione dei pasti. Il sistema salva una lista di esercizi per ogni giorno, che verrà poi utilizzata dalla vista Trainer per l'esecuzione.
 
-      function formatDuration(ms) {
-          if (typeof ms !== 'number' || ms < 0) return '00:00';
-          const totalSeconds = Math.floor(ms / 1000);
-          const minutes = Math.floor(totalSeconds / 60);
-          const seconds = totalSeconds % 60;
-          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
+      ### 1.3. Sistema Visivo e Schermate (La Grafica)
 
-      function renderPlannerWeekChart(state, weekStart) {
-        if (plannerWeekChart) {
-          plannerWeekChart.destroy();
-        }
+      L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **tema scuro**, minimale e funzionale.
 
-        const plannerLabels = [];
-        const plannerDataMin = [];
-        const plannerDataMax = [];
-        const activeMealSlots = getActiveMealSlots(state.userProfile);
+      * **Palette Colori**: I colori primari sono un viola (`--primary-color: #9575cd`) e un verde acqua (`--secondary-color: #4db6ac`) su uno sfondo scuro (`--bg-color: #1a1a1d`).
+      * **Componenti**: L'UI è basata su "card" con angoli arrotondati per tutti gli elementi interattivi (celle del calendario, item nei modali).
+      * **Schermate Principali (ASCII Mockup)**:
 
-        for (let i=0; i<7; i++) {
-          const date = new Date(weekStart);
-          date.setDate(date.getDate() + i);
-          plannerLabels.push(date.toLocaleDateString('it-IT', { weekday: 'short' }));
-          const isoDate = toISODateString(date);
-          let min = 0, max = 0;
-          
-          activeMealSlots.forEach(type => {
-            const meal = state.weeklyPlan[`${isoDate}-${type}`];
-            // --- BUG FIX ---
-            // Aggiunto controllo 'typeof number' per allineare la logica a calculateDailyCalories
-            // e prevenire che pasti senza calorie (undefined) vengano contati come 0.
-            if (meal && typeof meal.calories_min === 'number') {
-              const minCals = Number(meal.calories_min) || 0;
-              const maxCals = Number(meal.calories_max) || minCals;
-              min += minCals;
-              max += maxCals;
+          * **Calendario**: Una griglia responsive con navigazione settimanale.
+              ```plaintext
+              +------------------------------------------------------+
+              |  < Precedente    Settimana: 22 - 28 Luglio   Successiva >  |
+              +------------------------------------------------------+
+              | +----------+  +----------+  +----------+  +----------+ |
+              | | LUN 22   |  | MAR 23   |  | MER 24   |  | GIO 25   | |
+              | | Kcal: 2100|  | Kcal: 1850|  |          |  |          | |
+              | | Workout: 3|  | Workout: 5|  |          |  |          | |
+              | +----------+  +----------+  +----------+  +----------+ |
+              | +----------+  +----------+  +----------+               |
+              | | VEN 26   |  | SAB 27   |  | DOM 28   |               |
+              | |          |  | Kcal: 2200|  |          |               |
+              | +----------+  +----------+  +----------+               |
+              +------------------------------------------------------+
+              ```
+          * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti e gli esercizi del giorno.
+              ```plaintext
+              +------------------------------------------------------+
+              |  Editor Piano - 23 Luglio                       [X]  |
+              |------------------------------------------------------|
+              |  - Colazione:   [ Aggiungi pasto ]                   |
+              |  - Pranzo:      Pollo e Riso       (Modifica/Rimuovi) |
+              |  ...                                                 |
+              |------------------------------------------------------|
+              |  - Allenamento: Squat               (Modifica/Rimuovi) |
+              |                 Push-up             (Modifica/Rimuovi) |
+              |                 Plank               (Modifica/Rimuovi) |
+              |                 [ Aggiungi esercizio ]               |
+              +------------------------------------------------------+
+              ```
+
+      ---
+
+      ## 2. Piano di Sviluppo per HealtyPro (Cosa e Come Faremo)
+
+      Questa sezione definisce come implementeremo i concetti di MTP all'interno della base di codice di `NutriPlan`.
+
+      ### 2.1. Visione del Prodotto
+
+      `HealtyPro` sarà un'unica applicazione che unisce la pianificazione alimentare di `NutriPlan` con la filosofia di interazione di MTP. L'obiettivo è un'esperienza utente coesa, semplice e moderna.
+
+      ### 2.2. Principi Guida (La Nostra Filosofia)
+
+      1.  **La Semplicità è la Chiave**: Manterremo la base di codice di `NutriPlan` (`state.js`, `renderer.js`, ecc.) come nostra architettura. È semplice, funzionale e testata. Non importeremo alcuna logica o file `.js` da MTP.
+      2.  **Ispirazione, non Copia**: Adotteremo solo i *concetti visivi e di flusso* di MTP descritti sopra, implementandoli con il nostro codice pulito.
+      3.  **Documentazione come Guida**: Questo documento sarà il nostro riferimento. Ogni fase di sviluppo dovrà essere allineata a quanto qui descritto.
+
+      ### 2.3. Action Plan Dettagliato
+
+      #### Fase 1: Rinnovamento Visivo e Strutturale (L'Aspetto)
+
+      * **Azione**: Sostituire il contenuto di `index.html` e `style.css` di `NutriPlan`.
+      * **Dettagli**:
+          * `index.html` adotta la struttura con header fisso e container principale, mantenendo tutti gli `id` esistenti richiesti dagli script.
+          * `style.css` è stato completamente riscritto usando la palette colori e gli stili dei componenti definiti nella guida di stile.
+      * **Fix Critico - Service Worker**: Il `CACHE_NAME` in `sw.js` è stato aggiornato e un evento `activate` è stato aggiunto per garantire l'aggiornamento della cache e la pulizia delle versioni vecchie.
+
+      #### Fase 2: Refactoring del Calendario (La Vista Principale)
+
+      * **Azione**: Riscrivere la logica di rendering in `src/ui/renderer.js` e aggiornare le interazioni.
+      * **Dettagli**:
+          * La funzione `renderApp` disegna una griglia di 7 "day-cell" cliccabili che mostrano nome del giorno, data e totale calorico.
+          * È stata implementata la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
+
+      #### Fase 3: Implementazione del Modale "Editor del Giorno" (L'Interazione Core)
+
+      * **Azione**: Creare la logica per un modale di editing centralizzato con auto-aggiornamento.
+      * **Dettagli**:
+          * Il click su una "day-cell" apre il modale "Editor del Giorno".
+          * Questo modale mostra tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
+          * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
+          * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
+
+      #### Fase 4: Integrazione Funzionalità Workout (Composizionale)
+
+      * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
+      * **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi da una libreria. La vista calendario mostrerà un riepilogo sia delle calorie che del numero di esercizi pianificati. Questo unificherà completamente le due anime dell'applicazione.
+
+      #### Fase 5: Integrazione Macronutrienti (TODO)
+
+      * **Azione (Pianificata)**: Estendere l'intera architettura per supportare il calcolo e la visualizzazione dei macronutrienti (Proteine, Carboidrati, Grassi).
+      * **Dettagli**: Questo richiederà l'aggiornamento della struttura dati in `ingredienti.json`, l'espansione del `calorieCalculator.js` e l'aggiornamento di tutti i componenti UI (editor, planner, log) per visualizzare i nuovi totali.
+  - file: docs/01_FUNCTIONALITY.md
+    content: |
+      # Funzionalità: HealtyPro (ex NutriPlan)
+
+      ## 1. Visione Generale
+      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico dinamico e regole di validazione personalizzate.
+
+      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
+
+      ## 2. User Stories
+      * **US-1 (Caricamento Dati Legacy):** L'utente può caricare una configurazione da un file `pasti.json` remoto. Questo metodo è mantenuto per la condivisione di piani personali e per il ripristino da backup.
+      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
+      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
+      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel `pasti.json` (es. blocco giornaliero per un certo tag).
+      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
+      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
+      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno. Le calorie vengono calcolate dinamicamente dall'applicazione basandosi sui dati del file `ingredienti.json`.
+      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
+      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
+      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
+      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
+      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
+      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile.
+      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `pasti.json`.
+      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`).
+      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato.
+      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche.
+      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche.
+      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali.
+      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni principali tramite un menu.
+      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente.
+      * **US-32 (Galleria Ricette):** L'utente può accedere a una pagina che elenca tutti i pasti con ricette disponibili.
+      * **US-33 (Dashboard Grafici):** Come utente, voglio poter accedere a una dashboard di grafici per analizzare i miei dati.
+
+      ## 3. Ecosistema di Contenuti
+
+      * **US-34 (Scoperta Pacchetti):** Come utente, voglio accedere a una sezione "Esplora" che mi mostri una galleria di pacchetti di contenuti (piani alimentari, programmi di allenamento) curati, con titoli, descrizioni, immagini e tag per aiutarmi a scegliere.
+      * **US-35 (Importazione Intelligente):** Come utente, quando trovo un pacchetto che mi interessa, voglio poterlo aggiungere alla mia libreria con un click. L'importazione deve aggiungere solo i nuovi contenuti (pasti, ingredienti, esercizi) senza sovrascrivere o cancellare quelli che ho già creato.
+      * **US-36 (Accesso ai Dettagli del Protocollo):** Come utente, per i pacchetti che lo prevedono, voglio poter leggere un documento di "protocollo" (`protocol.md`) che mi spieghi la filosofia, le regole e le strategie del piano alimentare o di allenamento.
+      * **US-37 (Visualizzazione Obiettivi Macro):** Come utente, voglio poter vedere una sintesi degli obiettivi nutrizionali di un piano alimentare (es. range calorico, target proteico) direttamente nella card di anteprima nella sezione "Esplora".
+
+      ## 4. Funzionalità Future (TODO)
+
+      * **US-38 (Configurazione Macro):** Come utente, voglio poter definire Proteine, Carboidrati e Grassi per 100g quando creo o modifico un ingrediente nella Libreria.
+      * **US-39 (Calcolo Macro):** Come utente, voglio che l'applicazione calcoli automaticamente i totali dei macronutrienti (min/max) per ogni pasto che creo e per ogni giorno nel mio planner.
+      * **US-40 (Visualizzazione Macro):** Come utente, voglio vedere i totali P/C/F nel mio "Today Widget", nelle card del calendario, nel "Log Dettagliato" e nel modale di riepilogo dell'editor pasti.
+  - file: docs/02_ARCHITECTURE.md
+    content: |
+      # Architettura: HealtyPro (ex NutriPlan)
+
+      ## 1. Principi Guida
+      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
+      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è essenziale e intuitiva, basata su Vanilla JS.
+      * **Data-Driven & Convention over Configuration:** La logica di business è definita in file di configurazione remoti.
+      * **Maintainability (SRP):** Ogni modulo ha una singola, chiara responsabilità.
+
+      ## 2. Architettura SPA Multi-Vista
+      L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce quale vista mostrare in base allo stato.
+
+      ## 3. Architettura PWA
+      * **`manifest.json`**: Fornisce i metadati per l'installazione.
+      * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
+
+      ## 4. Logica di Business
+
+      ### 4.1. Caricamento Dati e Scoperta dei Contenuti
+
+      L'applicazione adotta un'architettura ibrida per il caricamento dei dati, separando la configurazione personale dalla scoperta di nuovi contenuti.
+
+      * **Configurazione Personale (Legacy)**: L'utente può ancora caricare una configurazione completa tramite un singolo URL a un file `pasti.json`.
+
+      * **Ecosistema di Scoperta (Architettura Principale)**: La sezione "Esplora" si basa su un'architettura disaccoppiata ospitata su un repository esterno (es. `BiohackerHub`):
+          1.  **`explore.json`**: Un file di "curation" che contiene una semplice lista di ID dei pacchetti da mettere in evidenza.
+          2.  **`package-index.json`**: Un indice generato automaticamente che mappa ogni `id` di pacchetto all'URL del suo `manifest.json`. È la fonte di verità per localizzare i contenuti.
+          3.  **`manifest.json`**: Ogni pacchetto contiene un manifest auto-descrittivo con tutti i metadati (titolo, descrizione, autore, tags, immagine, obiettivi macro) e i link relativi ai file di contenuto (`pasti.json`, `protocol.md`, etc.).
+
+      Il `configService.js` orchestra questo flusso: scarica `explore.json` e `package-index.json`, recupera i `manifest.json` necessari per visualizzare le card "in evidenza", e infine importa i contenuti di un pacchetto tramite un'operazione di "merge intelligente" che non sovrascrive i dati esistenti.
+
+      ### 4.2. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
+      Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti.
+
+      **(TODO):** Questo modulo sarà esteso per calcolare anche i totali dei macronutrienti (Proteine, Carboidrati, Grassi) basandosi sui nuovi campi aggiunti agli ingredienti.
+
+      ## 5. Gestione dei Dati
+
+      ### 5.1. Strutture Dati Chiave
+
+      * **Contenuti Remoti (BiohackerHub)**:
+          * **`manifest.json`**: Descrive un singolo pacchetto. Contiene `id`, `title`, `description`, `author`, `version`, `tags`, `image`, `protocolUrl`, `pastiUrl`, `ingredientiUrl`, `eserciziUrl`, e l'oggetto opzionale `macroTargets` per i piani dietetici.
+          * **`pasti.json`**: Contiene un array di `meals`.
+          * **`ingredienti.json`**: Contiene un array di `ingredienti`.
+            **(TODO):** La struttura di un ingrediente sarà estesa per includere:
+            ```json
+            {
+              "id": "ingrediente_id",
+              "nome": "Nome Ingrediente",
+              "kcal_per_100g": 100,
+              "g_per_pezzo": 50,
+              "prot_per_100g": 10,
+              "carb_per_100g": 20,
+              "fat_per_100g": 5
             }
-            // --- FINE BUG FIX ---
-          });
-          plannerDataMin.push(min);
-          plannerDataMax.push(max);
-        }
+            ```
+          * **`esercizi.json`**: Contiene un array di `esercizi`.
 
-        const plannerDatasets = [
-          {
-            label: UI_TEXT.CHART_KCAL_MAX_LABEL || 'Calorie Max',
-            data: plannerDataMax,
-            borderColor: 'rgba(149, 117, 205, 1)', // primary-color
-            backgroundColor: 'rgba(149, 117, 205, 0.2)',
-            fill: 'origin',
-            tension: 0.1
-          },
-          {
-            label: UI_TEXT.CHART_KCAL_MIN_LABEL || 'Calorie Min',
-            data: plannerDataMin,
-            borderColor: 'rgba(255, 255, 255, 0.5)',
-            borderDash: [5, 5],
-            fill: false,
-            tension: 0.1
-          }
-        ];
+      * **Dati Utente Locali (`localStorage`)**:
+          * **`masterMealList`, `masterIngredientList`, `masterWorkoutList`**: Le librerie personali dell'utente, arricchite (ma non sovrascritte) durante l'importazione.
+          * Altre strutture dati: `weeklyPlan`, `userProfile`, etc.
 
-        const ctx = document.getElementById('planner-week-chart-canvas').getContext('2d');
-        plannerWeekChart = new Chart(ctx, {
-          type: 'line', // Modificato da 'bar' a 'line'
-          data: { labels: plannerLabels, datasets: plannerDatasets },
-          options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: true,
-                position: 'top',
-                labels: {
-                  color: '#aaa'
-                }
-              }
-            },
-            scales: {
-              y: {
-                ticks: { color: '#aaa' },
-                grid: { color: 'rgba(255, 255, 255, 0.1)' }
-              },
-              x: {
-                ticks: { color: '#aaa' },
-                grid: { display: false }
-              }
-            }
-          }
-        });
-      }
+      ## 6. Svolta Futura: Protocolli Parametrici (In Standby)
 
-      function renderTodayWidget(state, todayISO) {
-        const widget = document.getElementById('today-widget');
-        const { userProfile, weeklyPlan, weeklyWorkouts } = state;
-        const dailyCalories = calculateDailyCalories(todayISO, weeklyPlan, userProfile);
-        
-        const activeMealSlots = getActiveMealSlots(userProfile);
-        const dayMeals = activeMealSlots.map(type => ({ type, meal: weeklyPlan[`${todayISO}-${type}`] })).filter(item => item.meal);
-        const workoutList = weeklyWorkouts[`${todayISO}-${WORKOUT_SLOT_ID}`];
+      Abbiamo definito una visione futura per rendere i pacchetti ancora più potenti: trasformarli in **protocolli parametrici**.
 
-        let mealsHtml = dayMeals.map(item => `
-          <div class="today-meal-item">
-            <span><strong>${item.type}:</strong> ${item.meal.nomePasto}</span>
-            <span>${formatMealCalories(item.meal)}</span>
-          </div>
-        `).join('');
+      L'idea è di permettere a un pacchetto di contenere **formule e regole** che l'applicazione client può usare per calcolare le quantità ottimali in base ai dati biometrici dell'utente (peso, BMR, etc.).
 
-        let workoutHtml = '';
-        if (workoutList && workoutList.length > 0) {
-          workoutHtml = `<button class="btn btn-primary btn-start-workout-day" data-date="${todayISO}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-        } else {
-          workoutHtml = `<p class="placeholder-text">Nessun allenamento pianificato per oggi.</p>`;
-        }
+      Un `manifest.json` potrebbe contenere una sezione `protocolEngine` come questa:
 
-        widget.innerHTML = `
-          <div class="today-widget-header">
-            <h3>Oggi, ${formatFullDate(todayISO)}</h3>
-            <span>${dailyCalories}</span>
-          </div>
-          <div class="today-widget-body">
-            ${mealsHtml.length > 0 ? mealsHtml : '<p class="placeholder-text">Nessun pasto pianificato per oggi.</p>'}
-            ${workoutHtml}
-          </div>
-        `;
-      }
-
-      function renderCalendarView(state, weekStart) {
-        const calendarGrid = document.getElementById('calendar-grid');
-        const todayISO = toISODateString(new Date());
-        const { userProfile, weeklyPlan, weeklyWorkouts } = state;
-        
-        calendarGrid.innerHTML = '';
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const dayName = DAYS[i];
-          const isoDate = toISODateString(dayDate);
-          const dailyCalories = calculateDailyCalories(isoDate, weeklyPlan, userProfile);
-          const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
-
-          let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
-          let workoutButtonHTML = '';
-
-          if (workoutList && workoutList.length > 0) {
-              const exerciseCount = workoutList.length;
-              const plural = exerciseCount > 1 ? UI_TEXT.PLANNER_EXERCISES_MULTI_LABEL : UI_TEXT.PLANNER_EXERCISES_SINGLE_LABEL;
-              summaryHTML += `<div class="daily-summary-item">${renderIcon('DUMBBELL', {width: 16, height: 16})} ${exerciseCount} ${plural}</div>`;
-              workoutButtonHTML = `<button class="btn btn-primary btn-start-workout-day" data-date="${isoDate}">${UI_TEXT.START_WORKOUT_BTN}</button>`;
-          }
-
-          const dayCell = document.createElement('div');
-          dayCell.className = 'day-cell';
-          if (isoDate === todayISO) {
-            dayCell.classList.add('is-today');
-          }
-          dayCell.dataset.date = isoDate;
-          dayCell.innerHTML = `
-            <div class="day-cell__header"><span>${dayName}</span><span>${dayDate.getDate()}</span></div>
-            <div class="day-cell__body">${summaryHTML}${workoutButtonHTML}</div>`;
-          calendarGrid.appendChild(dayCell);
+      ```json
+      "protocolEngine": {
+        "constants": {
+          "PROTEIN_PER_KG": 1.9,
+          "ACTIVITY_MULTIPLIER": 1.25,
+          "CALORIE_DEFICIT": 400
+        },
+        "formulas": {
+          "daily_protein_target": "${user.weight_kg} * ${constants.PROTEIN_PER_KG}"
+        },
+        "normalizationRules": {
+          "petto_pollo": { "type": "step", "value": 50 }
         }
       }
+      ```
 
-      function renderLogView(state, weekStart) {
-        const logView = document.getElementById('log-view');
-        const todayISO = toISODateString(new Date());
-        const { userProfile, weeklyPlan, workoutHistory, masterMealList, recipeBaseUrl } = state;
-        
-        let logViewHTML = '';
-        let hasContent = false;
+      > **NOTA IMPORTANTE:** Lo sviluppo di questa funzionalità è **attualmente in standby**. Sebbene l'architettura sia stata delineata, la sua implementazione richiede un'ulteriore fase di progettazione approfondita. La priorità attuale è consolidare e standardizzare l'ecosistema di contenuti statici.
 
-        for (let i = 0; i < 7; i++) {
-          const dayDate = new Date(weekStart);
-          dayDate.setDate(dayDate.getDate() + i);
-          const isoDate = toISODateString(dayDate);
-          
-          const activeMealSlots = getActiveMealSlots(userProfile);
-          const dayMeals = activeMealSlots.map(type => ({ type, meal: weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
-          const completedWorkouts = workoutHistory[isoDate] || [];
-
-          if (dayMeals.length > 0 || completedWorkouts.length > 0) {
-            hasContent = true;
-            let dayLogHTML = `<div class="log-day ${isoDate === todayISO ? 'is-today' : ''}">`;
-            dayLogHTML += `
-              <div class="log-day-header">
-                <h3>${formatFullDate(isoDate)}</h3>
-                <span class="log-day__total-calories">${calculateDailyCalories(isoDate, weeklyPlan, userProfile)}</span>
-              </div>
-              <div class="log-day-body">
-            `;
-
-            if (dayMeals.length > 0) {
-              dayLogHTML += dayMeals.map(item => `
-                <div class="log-item">
-                  <div class="log-item__name">
-                    <div>
-                      <strong>${item.type}:</strong>
-                      <span>${item.meal.nomePasto}</span>
-                      <div class="log-item-details">${formatIngredientsSummary(item.meal)}</div>
-                    </div>
-                    ${getRecipeButtonHTML(item.meal, state)}
-                  </div>
-                  <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
-                </div>`).join('');
-            }
-
-            if (completedWorkouts.length > 0) {
-                completedWorkouts.forEach(workout => {
-                    if (workout.type === 'structured') {
-                        dayLogHTML += `<div class="log-workout-summary">
-                            <div class="log-workout-header">
-                                <h4>${UI_TEXT.LOG_VIEW_WORKOUT_TITLE}</h4>
-                                <div class="log-workout-header-actions">
-                                    <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                                </div>
-                            </div>
-                            <div class="log-workout-stats">
-                                <span>Durata: ${formatDuration(workout.totalTime)}</span>
-                                ${workout.totalCaloriesBurned > 0 ? `<span>/</span><span>Kcal: ${workout.totalCaloriesBurned}</span>` : ''}
-                                ${workout.totalTonnage > 0 ? `<span>/</span><span>Volume: ${workout.totalTonnage} kg</span>` : ''}
-                                ${workout.rpe ? `<span>/</span><span>RPE: ${workout.rpe}</span>` : ''}
-                            </div>
-                            ${workout.exercises.map(ex => `
-                            <div class="log-workout-exercise">
-                                <div class="log-item">
-                                  <strong>${ex.name}</strong>
-                                  <div class="log-workout-header-actions">
-                                    <button class="btn-edit-logged-exercise" data-date="${workout.date}" data-starttime="${workout.startTime}" data-instanceid="${ex.instanceId}" title="Modifica Esercizio">${renderIcon('EDIT')}</button>
-                                  </div>
-                                </div>
-                                <div class="log-sets-details">
-                                ${ex.setsData.map((setData, i) => `
-                                    <div class="log-set-item">
-                                    <span>Serie ${i + 1}</span>
-                                    <span>${getSetDetails(setData)}</span>
-                                    </div>
-                                `).join('')}
-                                </div>
-                            </div>
-                            `).join('')}
-                        </div>`;
-                    } else if (workout.type === 'manual') {
-                        let detailsHTML = '';
-                        if (workout.distance) detailsHTML += `<div><strong>Distanza:</strong> ${workout.distance} km</div>`;
-                        if (workout.fc_avg) detailsHTML += `<div><strong>FC Media:</strong> ${workout.fc_avg} bpm</div>`;
-                        if (workout.fc_max) detailsHTML += `<div><strong>FC Max:</strong> ${workout.fc_max} bpm</div>`;
-                        if (workout.notes) detailsHTML += `<div class="log-item-details">${workout.notes.replace(/\n/g, '<br>')}</div>`;
-
-                        dayLogHTML += `<div class="log-workout-summary">
-                            <div class="log-workout-header">
-                                <h4>${UI_TEXT.LOG_VIEW_MANUAL_ACTIVITY_TITLE}</h4>
-                                <div class="log-workout-header-actions">
-                                  <button class="btn-delete-workout" data-date="${workout.date}" data-starttime="${workout.startTime}" title="Elimina Allenamento">${renderIcon('TRASH')}</button>
-                                </div>
-                            </div>
-                            <div class="log-item">
-                                <strong>${workout.name}</strong>
-                                <span>${workout.duration || ''}</span>
-                            </div>
-                            ${detailsHTML ? `<div class="log-manual-details">${detailsHTML}</div>` : ''}
-                        </div>`;
-                    }
-                });
-            }
-
-            dayLogHTML += `</div></div>`;
-            logViewHTML += dayLogHTML;
-          }
-        }
-
-        if (!hasContent) {
-          logView.innerHTML = `<p class="placeholder-text">${UI_TEXT.LOG_VIEW_EMPTY}</p>`;
-        } else {
-          logView.innerHTML = logViewHTML;
-        }
-      }
-
-      export function renderPlannerPage(state) {
-        const weekStart = getWeekStartDate(state.focusedDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        document.getElementById('week-title').textContent = `${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)}`;
-
-        const todayISO = toISODateString(new Date());
-        renderTodayWidget(state, todayISO);
-        renderPlannerWeekChart(state, weekStart);
-        renderCalendarView(state, weekStart);
-        renderLogView(state, weekStart);
-      }
+      ## 7. Dipendenze di Terze Parti
+      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette.
+      * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
+      * **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
 commands:
-  - "echo 'Bugfix: Corretto il TypeError in plannerRenderer.js.'"
+  - "echo 'Documentazione aggiornata con la pianificazione per i macronutrienti.'"
