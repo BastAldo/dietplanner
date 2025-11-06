@@ -232,6 +232,8 @@ const UI_TEXT_CONFIG = [
   { id: 'TEMPLATE_DELETE_CONFIRM_MSG', text: 'Sei sicuro di voler eliminare la scheda' },
   { id: 'SAVE_TEMPLATE_BTN', text: 'Salva come Scheda' },
   { id: 'SAVE_TEMPLATE_PROMPT', text: 'Inserisci un nome per la scheda:' },
+  { id: 'WORKOUT_EDITOR_SAVE_CHANGES_BTN', text: 'Salva Modifiche' },
+  { id: 'WORKOUT_EDITOR_UPDATE_SUCCESS', text: 'Modifiche salvate con successo!' },
   { id: 'CLEAR_WORKOUT_BTN', text: 'Pulisci Allenamento' },
   { id: 'CLEAR_WORKOUT_CONFIRM_TITLE', text: 'Pulisci Allenamento' },
   { id: 'CLEAR_WORKOUT_CONFIRM_MSG', text: 'Sei sicuro di voler rimuovere tutti gli esercizi da questo giorno?' },

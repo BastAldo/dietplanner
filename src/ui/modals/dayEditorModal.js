@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan, getMealsForType } from '../../core/state.js';
+import { getState, updateWeeklyPlan, getMealsForType, addWorkoutTemplateToDay } from '../../core/state.js';
 import { MEAL_TYPES, WORKOUT_SLOT_ID, OPTIONAL_MEAL_TYPES } from '../../utils/constants.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { renderIcon } from '../icons.js';
@@ -118,15 +118,20 @@ export function openDayEditorModal(isoDate) {
     }
     else if (btnAddExercise) {
       dayEditorModal.classList.add('modal-hidden');
-      openWorkoutEditorModal(isoDate);
+      openWorkoutEditorModal({ type: 'day', isoDate: isoDate });
     }
     else if (btnAddFromTemplate) {
       dayEditorModal.classList.add('modal-hidden');
-      openWorkoutTemplateSelectionModal(workoutSlotId, isoDate);
+      openWorkoutTemplateSelectionModal((template) => {
+        if (template) {
+          addWorkoutTemplateToDay(workoutSlotId, template.id);
+        }
+        openDayEditorModal(isoDate);
+      });
     }
     else if (btnManageWorkout) {
       dayEditorModal.classList.add('modal-hidden');
-      openWorkoutEditorModal(isoDate);
+      openWorkoutEditorModal({ type: 'day', isoDate: isoDate });
     }
     else if (btnLogActivity) {
       dayEditorModal.classList.add('modal-hidden');

@@ -1,5 +1,5 @@
 import { log } from '../../utils/logger.js';
-import { openIngredientEditorModal, openMealEditorModal, openExerciseEditorModal } from '../modals.js';
+import { openIngredientEditorModal, openMealEditorModal, openExerciseEditorModal, openWorkoutEditorModal } from '../modals.js';
 import { showConfirmModal } from '../modals.js';
 import { deleteIngredient, deleteMeal, getState, setUiState, deleteWorkoutTemplate, deleteExercise } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
@@ -159,6 +159,13 @@ function handleLibraryClick(e) {
     const templateId = parseFloat(templateItem.dataset.id);
     const template = state.masterWorkoutTemplateList.find(t => t.id === templateId);
     if (!template) return;
+
+    const editTemplateBtn = e.target.closest('.btn-edit-template');
+    if (editTemplateBtn) {
+      log('Interactions-Library', 'Edit template button clicked', { templateId });
+      openWorkoutEditorModal({ type: 'template', templateId: template.id });
+      return;
+    }
 
     const deleteTemplateBtn = e.target.closest('.btn-delete-template');
     if (deleteTemplateBtn) {

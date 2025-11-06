@@ -2,6 +2,7 @@ import { calculateBMR } from '../core/calculations.js';
 import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
+import { renderCharts } from './charts.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
 import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
@@ -382,6 +383,7 @@ export function renderLibraryPage(state) {
                   <span class="library-item-info__details">${exerciseCount} ${plural}</span>
                 </div>
                 <div class="library-item-actions">
+                  <button class="btn-edit-template" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
                   <button class="btn-delete-template" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
                 </div>
               </div>`;

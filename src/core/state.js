@@ -89,6 +89,10 @@ export function getExerciseFromHistory(date, startTime, instanceId) {
   return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
 }
 
+export function getTemplateById(templateId) {
+  return state.masterWorkoutTemplateList.find(t => t.id === templateId);
+}
+
 export function toggleDebugMode() {
   state.debugMode = !state.debugMode;
   console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
@@ -319,6 +323,16 @@ export function addWorkoutTemplate(templateName, exercises) {
   notify();
 }
 
+export function updateWorkoutTemplate(templateId, newExercises) {
+  log('State', 'Updating workout template', { templateId });
+  const index = state.masterWorkoutTemplateList.findIndex(t => t.id === templateId);
+  if (index > -1) {
+    state.masterWorkoutTemplateList[index].exercises = JSON.parse(JSON.stringify(newExercises)); // Deep copy
+    saveStateToLocalStorage();
+    notify();
+  }
+}
+
 export function deleteWorkoutTemplate(templateId) {
   log('State', 'Deleting workout template', { templateId });
   state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id !== templateId);
@@ -408,6 +422,13 @@ export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
     }
     saveStateToLocalStorage();
     notify();
+}
+
+export function setWeeklyWorkout(slotId, newExercises) {
+  log('State', 'Setting new weekly workout for slot', { slotId });
+  state.weeklyWorkouts[slotId] = JSON.parse(JSON.stringify(newExercises)); // Deep copy
+  saveStateToLocalStorage();
+  notify();
 }
 
 export function clearWeeklyWorkout(slotId) {
@@ -591,7 +612,7 @@ export function copyPreviousWeek() {
       const destSlotId = `${destISO}-${mealType}`;
       const mealObject = state.weeklyPlan[sourceSlotId];
       if (mealObject) {
-        state.weeklyPlan[destSlotId] = { ...mealObject };
+        state.weeklyPlan[destSlotId] = { ...meal };
       } else {
         delete state.weeklyPlan[destSlotId];
       }
