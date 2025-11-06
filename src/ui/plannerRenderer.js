@@ -25,14 +25,40 @@ function formatFullDate(isoDate) {
   return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-function formatMealCalories(meal) {
-  if (!meal || typeof meal.calories_min !== 'number') return '';
-  const minCals = Number(meal.calories_min) || 0;
-  const maxCals = Number(meal.calories_max) || minCals;
-  if (minCals === 0 && maxCals === 0) return '';
-  const kcalLabel = UI_TEXT.KCAL_LABEL || 'Kcal';
-  if (minCals === maxCals) return `${minCals} ${kcalLabel}`;
-  return `${minCals} - ${maxCals} ${kcalLabel}`;
+function formatMacroRange(min, max, label) {
+  if (min === undefined || min === null) min = 0;
+  if (max === undefined || max === null) max = min;
+  
+  // Arrotonda ai decimali solo se necessario
+  min = Math.round(min * 10) / 10;
+  max = Math.round(max * 10) / 10;
+
+  if (min === 0 && max === 0) return '';
+  const value = (min === max) ? `${min}g` : `${min}-${max}g`;
+  let className = '';
+  if (label === 'P') className = 'macro-prot';
+  if (label === 'C') className = 'macro-carb';
+  if (label === 'F') className = 'macro-fat';
+  return `<span class="${className}">${label}: ${value}</span>`;
+}
+
+function formatMealStats(meal) {
+  if (!meal) return '';
+  let calString = '';
+  if (typeof meal.calories_min === 'number') {
+    const minCals = Number(meal.calories_min) || 0;
+    const maxCals = Number(meal.calories_max) || minCals;
+    if (minCals > 0 || maxCals > 0) {
+       calString = minCals === maxCals ? `${minCals} Kcal` : `${minCals} - ${maxCals} Kcal`;
+    }
+  }
+  const macroString = [
+    formatMacroRange(meal.prot_min, meal.prot_max, 'P'),
+    formatMacroRange(meal.carb_min, meal.carb_max, 'C'),
+    formatMacroRange(meal.fat_min, meal.fat_max, 'F')
+  ].filter(Boolean).join(' | ');
+
+  return [calString, macroString].filter(Boolean).join(' | ');
 }
 
 function getActiveMealSlots(userProfile) {
@@ -45,21 +71,42 @@ function getActiveMealSlots(userProfile) {
   return activeMealSlots;
 }
 
-function calculateDailyCalories(isoDate, weeklyPlan, userProfile) {
-  let min = 0, max = 0;
+function calculateDailyMacros(isoDate, weeklyPlan, userProfile) {
+  let minC = 0, maxC = 0, minP = 0, maxP = 0, minF = 0, maxF = 0, minK = 0, maxK = 0;
   const activeMealSlots = getActiveMealSlots(userProfile);
   
   activeMealSlots.forEach(type => {
     const meal = weeklyPlan[`${isoDate}-${type}`];
     if (meal && typeof meal.calories_min === 'number') {
-      const minCals = Number(meal.calories_min) || 0;
-      const maxCals = Number(meal.calories_max) || minCals;
-      min += minCals;
-      max += maxCals;
+      minK += (Number(meal.calories_min) || 0);
+      maxK += (Number(meal.calories_max) || minK);
+      minP += (Number(meal.prot_min) || 0);
+      maxP += (Number(meal.prot_max) || minP);
+      minC += (Number(meal.carb_min) || 0);
+      maxC += (Number(meal.carb_max) || minC);
+      minF += (Number(meal.fat_min) || 0);
+      maxF += (Number(meal.fat_max) || minF);
     }
   });
-  if (min === 0 && max === 0) return '';
-  return min === max ? `${UI_TEXT.KCAL_LABEL}: ${min}` : `${UI_TEXT.KCAL_LABEL}: ${min} - ${max}`;
+
+  // Correzione: se maxK è 0 ma minK è > 0 (vecchi dati), maxK = minK
+  if (maxK === 0 && minK > 0) maxK = minK;
+  if (maxP === 0 && minP > 0) maxP = minP;
+  if (maxC === 0 && minC > 0) maxC = minC;
+  if (maxF === 0 && minF > 0) maxF = minF;
+
+  let calString = '';
+  if (minK > 0 || maxK > 0) {
+    calString = minK === maxK ? `${UI_TEXT.KCAL_LABEL}: ${minK}` : `${UI_TEXT.KCAL_LABEL}: ${minK} - ${maxK}`;
+  }
+
+  let macroString = [
+    formatMacroRange(minP, maxP, 'P'),
+    formatMacroRange(minC, maxC, 'C'),
+    formatMacroRange(minF, maxF, 'F')
+  ].filter(Boolean).join(' | ');
+
+  return { calString, macroString };
 }
 
 function getRecipeButtonHTML(meal, state) {
@@ -108,7 +155,7 @@ function renderPlannerWeekChart(state, weekStart) {
     activeMealSlots.forEach(type => {
       const meal = state.weeklyPlan[`${isoDate}-${type}`];
       // --- BUG FIX ---
-      // Aggiunto controllo 'typeof number' per allineare la logica a calculateDailyCalories
+      // Aggiunto controllo 'typeof number' per allineare la logica a calculateDailyMacros
       // e prevenire che pasti senza calorie (undefined) vengano contati come 0.
       if (meal && typeof meal.calories_min === 'number') {
         const minCals = Number(meal.calories_min) || 0;
@@ -174,7 +221,7 @@ function renderPlannerWeekChart(state, weekStart) {
 function renderTodayWidget(state, todayISO) {
   const widget = document.getElementById('today-widget');
   const { userProfile, weeklyPlan, weeklyWorkouts } = state;
-  const dailyCalories = calculateDailyCalories(todayISO, weeklyPlan, userProfile);
+  const dailyMacros = calculateDailyMacros(todayISO, weeklyPlan, userProfile);
   
   const activeMealSlots = getActiveMealSlots(userProfile);
   const dayMeals = activeMealSlots.map(type => ({ type, meal: weeklyPlan[`${todayISO}-${type}`] })).filter(item => item.meal);
@@ -183,7 +230,7 @@ function renderTodayWidget(state, todayISO) {
   let mealsHtml = dayMeals.map(item => `
     <div class="today-meal-item">
       <span><strong>${item.type}:</strong> ${item.meal.nomePasto}</span>
-      <span>${formatMealCalories(item.meal)}</span>
+      <span class="today-meal-stats">${formatMealStats(item.meal)}</span>
     </div>
   `).join('');
 
@@ -197,7 +244,10 @@ function renderTodayWidget(state, todayISO) {
   widget.innerHTML = `
     <div class="today-widget-header">
       <h3>Oggi, ${formatFullDate(todayISO)}</h3>
-      <span>${dailyCalories}</span>
+      <div class="today-widget-totals">
+        <span>${dailyMacros.calString}</span>
+        <span class="daily-macros">${dailyMacros.macroString}</span>
+      </div>
     </div>
     <div class="today-widget-body">
       ${mealsHtml.length > 0 ? mealsHtml : '<p class="placeholder-text">Nessun pasto pianificato per oggi.</p>'}
@@ -217,10 +267,10 @@ function renderCalendarView(state, weekStart) {
     dayDate.setDate(dayDate.getDate() + i);
     const dayName = DAYS[i];
     const isoDate = toISODateString(dayDate);
-    const dailyCalories = calculateDailyCalories(isoDate, weeklyPlan, userProfile);
+    const dailyMacros = calculateDailyMacros(isoDate, weeklyPlan, userProfile);
     const workoutList = weeklyWorkouts[`${isoDate}-${WORKOUT_SLOT_ID}`];
 
-    let summaryHTML = `<div class="daily-calories">${dailyCalories}</div>`;
+    let summaryHTML = `<div class="daily-calories">${dailyMacros.calString}</div><div class="daily-macros">${dailyMacros.macroString}</div>`;
     let workoutButtonHTML = '';
 
     if (workoutList && workoutList.length > 0) {
@@ -259,6 +309,7 @@ function renderLogView(state, weekStart) {
     const activeMealSlots = getActiveMealSlots(userProfile);
     const dayMeals = activeMealSlots.map(type => ({ type, meal: weeklyPlan[`${isoDate}-${type}`] })).filter(item => item.meal);
     const completedWorkouts = workoutHistory[isoDate] || [];
+    const dailyMacros = calculateDailyMacros(isoDate, weeklyPlan, userProfile);
 
     if (dayMeals.length > 0 || completedWorkouts.length > 0) {
       hasContent = true;
@@ -266,7 +317,7 @@ function renderLogView(state, weekStart) {
       dayLogHTML += `
         <div class="log-day-header">
           <h3>${formatFullDate(isoDate)}</h3>
-          <span class="log-day__total-calories">${calculateDailyCalories(isoDate, weeklyPlan, userProfile)}</span>
+          <span class="log-day__total-calories">${dailyMacros.calString} | ${dailyMacros.macroString}</span>
         </div>
         <div class="log-day-body">
       `;
@@ -282,7 +333,7 @@ function renderLogView(state, weekStart) {
               </div>
               ${getRecipeButtonHTML(item.meal, state)}
             </div>
-            <span class="log-item__calories">${formatMealCalories(item.meal)}</span>
+            <span class="log-item__calories">${formatMealStats(item.meal)}</span>
           </div>`).join('');
       }
 

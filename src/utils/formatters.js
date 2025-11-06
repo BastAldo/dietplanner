@@ -10,6 +10,30 @@ function formatMealCalories(meal) {
   return `${minCals} - ${maxCals} ${kcalLabel}`;
 }
 
+function formatMacroRange(min, max, label) {
+  if (min === undefined || min === null) min = 0;
+  if (max === undefined || max === null) max = min;
+  
+  // Arrotonda ai decimali solo se necessario
+  min = Math.round(min * 10) / 10;
+  max = Math.round(max * 10) / 10;
+
+  if (min === 0 && max === 0) return '';
+  const value = (min === max) ? `${min}g` : `${min}-${max}g`;
+  let className = '';
+  if (label === 'P') className = 'macro-prot';
+  if (label === 'C') className = 'macro-carb';
+  if (label === 'F') className = 'macro-fat';
+  return `<span class="${className}">${label}: ${value}</span>`;
+}
+
+function formatMacros(meal) {
+  const p = formatMacroRange(meal.prot_min, meal.prot_max, 'P');
+  const c = formatMacroRange(meal.carb_min, meal.carb_max, 'C');
+  const f = formatMacroRange(meal.fat_min, meal.fat_max, 'F');
+  return [p, c, f].filter(Boolean).join(' | ');
+}
+
 export function formatDate(date) {
     const d = new Date(date);
     let month = '' + (d.getMonth() + 1);
@@ -54,9 +78,18 @@ export function formatDateWithYear(date) {
 export function formatIngredients(meal) {
   const summary = formatIngredientsSummary(meal);
   const calories = formatMealCalories(meal);
-  if (!summary && !calories) return '';
-  const details = `<div class="meal-item-details">${summary || ''} | ${calories || ''}</div>`;
-  return details.replace(" |  | ", " | ");
+  const macros = formatMacros(meal);
+
+  let html = '';
+  if (summary) {
+    html += `<div class="meal-item-details">${summary}</div>`;
+  }
+  
+  const stats = [calories, macros].filter(Boolean).join(' | ');
+  if (stats) {
+     html += `<div class="meal-item-stats">${stats}</div>`;
+  }
+  return html;
 }
 
 export function formatIngredientsSummary(meal) {
