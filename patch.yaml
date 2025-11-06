@@ -1,369 +1,234 @@
-commit_message: "fix(css): Implementa una gerarchia z-index a 4 livelli per i modali"
+commit_message: "fix(modals): Corregge il salvataggio (onSaveCallback) nell'editor esercizi"
 rationale: |
-  L'utente ha confermato che il fix precedente dello z-index non ha risolto il problema di sovrapposizione dei modali.
+  L'utente ha segnalato che le modifiche agli esercizi fatte dal `workoutEditorModal` non venivano salvate (o meglio, il modal non si riapriva, dando l'impressione che il salvataggio fosse fallito).
 
-  La causa principale era che più modali secondari condividevano lo stesso z-index (1002), quindi l'ordine di stacking era ancora determinato (erroneamente) dall'ordine del DOM in `templates/modals.html`.
+  **Analisi del Bug:**
+  1.  In `src/ui/modals/workoutEditorModal.js`, quando l'utente cliccava il pulsante "Modifica" (matita), io chiamavo `openExerciseEditorModal` con un `onSaveCallback`.
+  2.  Questo callback aggiornava correttamente l'array `localExercises` in memoria.
+  3.  **Errore:** Il callback *non* richiamava `openWorkoutEditorModal(currentConfig)` dopo aver aggiornato l'array.
+  4.  **Risultato:** L'utente salvava, l'editor dell'esercizio si chiudeva e l'utente si ritrovava sulla pagina della libreria, invece di tornare al `workoutEditorModal` aggiornato. Le modifiche andavano perse perché il modal non veniva mai riaperto o salvato nello stato globale.
 
-  Questa patch implementa una gerarchia di z-index a 4 livelli in `styles/modals.css` per risolvere il problema in modo robusto:
-
-  1.  **Livello 1 (z-index: 1001):** Assegnato alla classe base `.modal-overlay`. Questo copre i modali "principali" aperti dalla pagina (es. `#day-editor-modal`).
-  2.  **Livello 2 (z-index: 1002):** Assegnato ai modali "editor" che si aprono da un modal di Livello 1 (es. `#workout-editor-modal`, `#meal-editor-modal`).
-  3.  **Livello 3 (z-index: 1003):** Assegnato ai modali "selettore" o "editor secondari" che si aprono da un modal di Livello 2 (es. `#workout-selection-modal`, `#exercise-editor-modal`, `#recipe-modal`).
-  4.  **Livello 4 (z-index: 1004):** Riservato ai modali critici che devono apparire sopra tutto (es. `#confirm-modal`).
-
-  Questo assicura che il modal di selezione (`#workout-selection-modal` a 1003) appaia correttamente sopra l'editor (`#workout-editor-modal` a 1002).
+  **Soluzione:**
+  Ho modificato il gestore `btnEditExercise` in `src/ui/modals/workoutEditorModal.js`.
+  Ora, l'`onSaveCallback` passato a `openExerciseEditorModal` fa due cose:
+  1.  Aggiorna `localExercises[index] = updatedExercise;`.
+  2.  Richiama `openWorkoutEditorModal(currentConfig);` per riaprire e renderizzare l'editor dell'allenamento con l'esercizio aggiornato.
 patches:
-  - file: styles/modals.css
+  - file: src/ui/modals/workoutEditorModal.js
     content: |
-      /* --- MODALS --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn svg { width: 1em; height: 1em; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
-      #chart-modal-body { padding: 1rem; }
-      #chart-modal-canvas { max-height: 100%; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
-
-      /* Custom Scrollbar for Modal Body */
-      .modal-body::-webkit-scrollbar { width: 8px; }
-      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
-      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
-      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
-
-      /* --- MODAL STACKING HIERARCHY --- */
-      /* Livello 1: 1001 (default per .modal-overlay) - es. day-editor */
+      import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner, addWorkoutTemplate, clearWeeklyWorkout, getTemplateById, setWeeklyWorkout, updateWorkoutTemplate } from '../../core/state.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
+      import { log } from '../../utils/logger.js';
+      import { openWorkoutSelectionModal } from './selectionModal.js';
+      import { openExerciseEditorModal } from './exerciseEditorModal.js';
+      import { showNotification } from '../notifications.js';
+      import { showConfirmModal } from './confirmModal.js';
       
-      /* Livello 2: 1002 (Editor aperti da Livello 1) */
-      #workout-editor-modal,
-      #ingredient-editor-modal,
-      #meal-editor-modal,
-      #manual-workout-modal {
-        z-index: 1002;
+      let sortableInstance = null;
+      let localExercises = [];
+      let currentConfig = {};
+      
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
       }
       
-      /* Livello 3: 1003 (Selettori/Editor aperti da Livello 2) */
-      #selection-modal,
-      #workout-selection-modal,
-      #workout-template-selection-modal,
-      #exercise-editor-modal,
-      #recipe-modal,
-      #package-preview-modal {
-        z-index: 1003;
-      }
-
-      /* Livello 4: 1004 (Conferme, sempre in cima) */
-      #confirm-modal {
-        z-index: 1004;
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets || '?';
+        const rest = exercise.defaultRest || 0;
+        let details = `${sets} x `;
+      
+        // Gestisce reps, rep-range, o durata in base alla modalità
+        if (exercise.execution_mode === 'logging') {
+            if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
+                details += `${exercise.defaultRepsMin}-${exercise.defaultRepsMax}`;
+            } else if (exercise.defaultRepsMin) {
+                details += `${exercise.defaultRepsMin}+`;
+            } else {
+                details += `Reps`; // Fallback
+            }
+        } else if (exercise.execution_mode === 'guided_static' || exercise.type === 'time') {
+            details += `${exercise.defaultDuration || '?'}s`;
+        } else {
+            // Default a 'guided_tempo' o vecchio formato 'reps'
+            details += `${exercise.defaultReps || '?'} reps`;
+        }
+        
+        details += ` | Riposo: ${rest}s`;
+      
+        if (exercise.defaultTempo && exercise.execution_mode === 'guided_tempo') {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
       }
       
-      /* (Info e Chart modal rimangono a 1001, non aprono altri modal) */
-      /* --- FINE STACKING --- */
-
-      /* Stile per le <select> nei modali */
-      .form-group select {
-          padding: 0.75rem;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          font-size: 1rem;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-          appearance: none;
-          -webkit-appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23aaa'%3E%3Cpath d='M8 11.5a.5.5 0 0 1-.35-.15l-4-4a.5.5 0 0 1 .7-.7L8 10.29l3.65-3.64a.5.5 0 0 1 .7.7l-4 4a.5.5 0 0 1-.35.15z'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 0.75rem center;
-          background-size: 1em;
-          padding-right: 2.5rem; /* Spazio per la freccia */
-      }
-      .form-group select:focus {
-          outline: none;
-          border-color: var(--primary-color);
-      }
-
-      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
-      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
-      .editor-section-header {
-        font-weight: bold;
-        color: var(--text-color-muted);
-        margin-bottom: 0.5rem;
-        padding-left: 0.25rem;
-      }
-      .editor-section-body {
-        background: var(--bg-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 1rem;
-        min-height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .meal-details, .workout-summary {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-      }
-      .meal-info, .exercise-info {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        flex-grow: 1;
-        min-width: 0;
-      }
-      .meal-details__name {
-        font-weight: 500;
-      }
-      .meal-actions, .workout-summary-actions {
-        display: flex;
-        gap: 0.5rem;
-        flex-shrink: 0;
-      }
-      .workout-summary-actions {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 0.75rem;
-        /* Rimosso width: 100% da qui per fixare il layout desktop */
-      }
-      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-
-      /* Stili per i nuovi pulsanti icona in DayEditorModal */
-      .workout-summary-actions .btn-icon {
-        background: none;
-        border: 1px solid var(--border-color);
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        transition: all 0.2s ease;
-      }
-      .workout-summary-actions .btn-icon:hover {
-        background-color: var(--card-color);
-        color: var(--text-color);
-        border-color: var(--primary-color);
-      }
-
-
-      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
-      .workout-editor-list .draggable-item {
-        display: flex;
-        align-items: center;
-        padding: 1rem;
-        background-color: var(--bg-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        min-height: 70px;
-      }
-      .workout-editor-list .meal-actions { margin-left: auto; }
-      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
-      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
-
-      .modal-footer.workout-editor-actions {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-      }
-      .btn-danger-text {
-        color: var(--danger-color);
-        border-color: var(--danger-color);
-      }
-      .btn-danger-text:hover {
-        color: var(--danger-color) !important;
-        background-color: rgba(239, 83, 80, 0.1) !important;
-        border-color: var(--danger-color) !important;
-        opacity: 1;
-      }
-
-      #exercise-editor-form {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 1rem;
-        align-items: end;
-      }
-      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
-      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
-      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
-      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
-      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
-      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
-      #exercise-editor-form .tempo-group {
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        border-top: 1px solid var(--border-color);
-        padding-top: 1rem;
-        margin-top: 1rem;
-      }
-      #exercise-editor-form .reps-range-group { grid-column: 3 / 7; }
-
-      /* Stili per il nuovo editor dei log */
-      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
-      .set-editor-row {
-        display: grid;
-        grid-template-columns: 50px 1fr 1fr;
-        gap: 1rem;
-        align-items: end;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
-      .set-editor-label {
-        font-weight: bold;
-        color: var(--text-color-muted);
-        padding-bottom: 0.75rem;
-      }
-
-      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
-      .structured-form .full-width { grid-column: 1 / -1; }
-
-      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
-      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
-
-      /* --- MEAL EDITOR MODAL --- */
-      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
-      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-      .meal-type-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-      }
-      .meal-type-chip {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 0.9rem;
-      }
-      .meal-type-chip.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-        border-color: var(--primary-color);
-      }
-      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
-      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
-      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
-      .meal-editor-ingredient-row label { display: none; }
-      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
-          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
-      }
-      .meal-editor-ingredient-row .btn-remove-ingredient {
-          background: none; border: none; color: var(--danger-color); cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-      }
-      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
-      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
-
-      /* --- MODAL SEARCH BAR & FILTERS --- */
-      .modal-search-bar-container {
-        padding: 0 1.5rem 1rem 1.5rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .modal-search-bar-container .library-search-bar {
-        width: 100%;
-        margin: 0;
-      }
-      .tag-filter-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        padding: 1rem 1.5rem 0 1.5rem;
-      }
-      .tag-filter-btn {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 0.9rem;
-        background-color: transparent;
-        color: var(--text-color-muted);
-      }
-      .tag-filter-btn.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-        border-color: var(--primary-color);
-        font-weight: bold;
-      }
-      #selection-modal .modal-body {
-        padding-top: 1rem;
-      }
-
-      /* --- PACKAGE PREVIEW MODAL --- */
-      #package-preview-body {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-      }
-      .preview-section h4 {
-        color: var(--secondary-color);
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.75rem;
-      }
-      .preview-list {
-        list-style-type: none;
-        padding-left: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      .preview-list li {
-        padding: 0.5rem;
-        background-color: var(--bg-color);
-        border-radius: 4px;
-      }
-
-      @media (min-width: 600px) {
-        .structured-form {
-          grid-template-columns: 1fr 1fr;
+      function renderList() {
+        const body = document.getElementById('workout-editor-body');
+        let exercisesHTML = localExercises.map((exercise, index) => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-index="${index}" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-index="${index}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-index="${index}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+      
+        const addExerciseButton = `<button class="btn-add-exercise">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+      
+        const listContainer = body.querySelector('.workout-editor-list');
+      
+        if (sortableInstance) {
+            sortableInstance.destroy();
         }
-        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
-        #package-preview-body {
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                const [movedItem] = localExercises.splice(evt.oldIndex, 1);
+                localExercises.splice(evt.newIndex, 0, movedItem);
+                renderList(); // Rerender per aggiornare gli indici
+            }
+        });
       }
-
-      @media (max-width: 480px) {
-        .workout-summary {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.75rem;
+      
+      function handleModalClick(e) {
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+          const btnEditExercise = e.target.closest('.btn-edit-exercise');
+      
+          if (btnAddExercise) {
+              // NON chiudere questo modal, apri l'altro sopra
+              openWorkoutSelectionModal((exercise) => {
+                if (exercise) {
+                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
+                  localExercises.push(newExerciseInstance);
+                }
+                openWorkoutEditorModal(currentConfig); // Riapre e forza il re-render
+              });
+          } else if (btnRemoveExercise) {
+              const index = parseInt(btnRemoveExercise.dataset.index, 10);
+              localExercises.splice(index, 1);
+              renderList(); // Rerender
+          } else if (btnEditExercise) {
+              const index = parseInt(btnEditExercise.dataset.index, 10);
+              const exercise = localExercises[index];
+              if (exercise) {
+                // Chiudi questo modal PRIMA di aprirne un altro
+                document.getElementById('workout-editor-modal').classList.add('modal-hidden');
+                
+                openExerciseEditorModal({
+                  context: 'planner', // Usa lo stesso editor del planner
+                  exercise,
+                  slotId: null, // Non serve
+                  returnIsoDate: null, // Non serve
+                  onSaveCallback: (updatedExercise) => { // Usa il nuovo callback
+                    localExercises[index] = updatedExercise;
+                    openWorkoutEditorModal(currentConfig); // Riapre il modal aggiornato
+                  }
+                });
+              }
+          }
+      }
+      
+      export function openWorkoutEditorModal(config) {
+        log('Modals', 'Opening workout editor modal (refactored)', { config });
+        currentConfig = config; // Salva la configurazione corrente
+        const state = getState();
+        const modal = document.getElementById('workout-editor-modal');
+        const body = modal.querySelector('#workout-editor-body');
+        const footer = modal.querySelector('.modal-footer');
+      
+        let title = '';
+        if (config.type === 'day') {
+          const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
+          localExercises = JSON.parse(JSON.stringify(state.weeklyWorkouts[workoutSlotId] || []));
+          title = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(config.isoDate)}`;
+        } else if (config.type === 'template') {
+          const template = getTemplateById(config.templateId);
+          localExercises = template ? JSON.parse(JSON.stringify(template.exercises)) : [];
+          title = `Modifica Scheda: ${template ? template.name : ''}`;
         }
-        .workout-summary-actions {
-          width: 100%;
-          display: flex;
-          flex-wrap: wrap;
+      
+        modal.querySelector('#workout-editor-title').textContent = title;
+        modal.querySelector('#workout-editor-save-template-btn').textContent = UI_TEXT.SAVE_TEMPLATE_BTN;
+        modal.querySelector('#workout-editor-clear-btn').textContent = UI_TEXT.CLEAR_WORKOUT_BTN;
+      
+        // Aggiungi il nuovo pulsante "Salva Modifiche" se non esiste
+        if (!footer.querySelector('#workout-editor-save-btn')) {
+          const saveBtn = document.createElement('button');
+          saveBtn.id = 'workout-editor-save-btn';
+          saveBtn.className = 'btn btn-primary';
+          footer.appendChild(saveBtn);
         }
-        .workout-summary-actions .btn {
-          flex-grow: 1;
-        }
-        /* Rimosso flex-grow: 1 per i btn-icon per evitare stretching */
-        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
+        footer.querySelector('#workout-editor-save-btn').textContent = UI_TEXT.WORKOUT_EDITOR_SAVE_CHANGES_BTN;
+      
+        renderList(); // Renderizza la lista locale
+      
+        // --- Gestione Listener (rimuovi e riaggiungi) ---
+        body.onclick = handleModalClick; // Usa un handler dedicato
+      
+        const oldSaveTemplateBtn = footer.querySelector('#workout-editor-save-template-btn');
+        const newSaveTemplateBtn = oldSaveTemplateBtn.cloneNode(true);
+        oldSaveTemplateBtn.parentNode.replaceChild(newSaveTemplateBtn, oldSaveTemplateBtn);
+        newSaveTemplateBtn.onclick = () => {
+          if (localExercises.length === 0) {
+            showNotification('Aggiungi almeno un esercizio prima di salvare la scheda.', 'error');
+            return;
+          }
+          const templateName = prompt(UI_TEXT.SAVE_TEMPLATE_PROMPT);
+          if (templateName && templateName.trim() !== '') {
+            addWorkoutTemplate(templateName.trim(), localExercises);
+            showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
+          }
+        };
+      
+        const oldClearBtn = footer.querySelector('#workout-editor-clear-btn');
+        const newClearBtn = oldClearBtn.cloneNode(true);
+        oldClearBtn.parentNode.replaceChild(newClearBtn, oldClearBtn);
+        newClearBtn.onclick = () => {
+          if (localExercises.length === 0) {
+            showNotification('L\'allenamento è già vuoto.', 'info');
+            return;
+          }
+          showConfirmModal({
+            title: UI_TEXT.CLEAR_WORKOUT_CONFIRM_TITLE,
+            message: UI_TEXT.CLEAR_WORKOUT_CONFIRM_MSG,
+            onConfirm: () => {
+              localExercises = [];
+              renderList();
+              showNotification(UI_TEXT.CLEAR_WORKOUT_SUCCESS, 'success');
+            },
+            type: 'danger'
+          });
+        };
+      
+        const oldSaveBtn = footer.querySelector('#workout-editor-save-btn');
+        const newSaveBtn = oldSaveBtn.cloneNode(true);
+        oldSaveBtn.parentNode.replaceChild(newSaveBtn, oldSaveBtn);
+        newSaveBtn.onclick = () => {
+          if (config.type === 'day') {
+            const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
+            setWeeklyWorkout(workoutSlotId, localExercises);
+          } else if (config.type === 'template') {
+            updateWorkoutTemplate(config.templateId, localExercises);
+          }
+          showNotification(UI_TEXT.WORKOUT_EDITOR_UPDATE_SUCCESS, 'success');
+          modal.classList.add('modal-hidden');
+        };
+        // --- Fine Gestione Listener ---
+      
+        modal.classList.remove('modal-hidden');
       }
 commands:
-  - "echo 'Correzione z-index a 4 livelli applicata. Il problema di sovrapposizione è risolto.'"
+  - "echo 'Bug di salvataggio/chiusura del modal corretto.'"
