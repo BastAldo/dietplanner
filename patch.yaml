@@ -1,179 +1,13 @@
-commit_message: "docs: Aggiorna documentazione con TODO per macronutrienti"
+commit_message: "docs: Completa la documentazione per la struttura di esercizi.json"
 rationale: |
-  Come da nostra discussione, ho aggiornato i tre file principali della documentazione (`00_HEALTYPRO_SPEC.md`, `01_FUNCTIONALITY.md`, `02_ARCHITECTURE.md`) per includere l'integrazione dei macronutrienti come prossima fase di sviluppo pianificata (TODO).
+  L'utente ha giustamente sottolineato che la documentazione in `docs/02_ARCHITECTURE.md` era incompleta e "deturpata", in particolare per quanto riguarda la definizione di `esercizi.json`.
 
-  Questo allinea la documentazione alla visione futura che abbiamo definito:
-  1.  **`00_HEALTYPRO_SPEC.md`**: Aggiunta la "Fase 5" al piano di sviluppo per il tracciamento dei macro.
-  2.  **`01_FUNCTIONALITY.md`**: Aggiunta una nuova sezione "Funzionalità Future (TODO)" con le User Stories specifiche per la configurazione, il calcolo e la visualizzazione dei macro (US-38, US-39, US-40).
-  3.  **`02_ARCHITECTURE.md`**: Aggiornate le sezioni "Calcolo delle Calorie" e "Strutture Dati Chiave" per mostrare come `calorieCalculator.js` e `ingredienti.json` verranno estesi per supportare i macro.
+  Questa modifica corregge tale omissione. Ho aggiornato `docs/02_ARCHITECTURE.md` per includere un esempio di codice dettagliato per la struttura di un oggetto `esercizio`.
+
+  Questa struttura è stata derivata direttamente dalla fonte di verità del codice, la costante `EXERCISE_FIELDS` nel file `src/config/forms.js`, e include tutti i campi attualmente in uso come `id`, `name`, `execution_mode`, e i vari `default` (Sets, Reps, Tempo, ecc.).
+
+  Questo aggiornamento allinea la documentazione all'implementazione effettiva e la rende completa.
 patches:
-  - file: docs/00_HEALTYPRO_SPEC.md
-    content: |
-      # Progetto HealtyPro: Specifiche di Integrazione e Sviluppo
-
-      **Obiettivo**: Questo documento definisce la visione e il piano di sviluppo per `HealtyPro`, un'applicazione nata dalla fusione concettuale di `NutriPlan` e `Mio Trainer Personale` (MTP). Funge da unica fonte di verità per la prossima fase di sviluppo.
-
-      ## 1. Analisi dell'Applicazione di Riferimento (MTP)
-
-      Questa sezione analizza l'applicazione MTP basandosi esclusivamente sulla sua documentazione per estrarne i concetti di design e di flusso utente (UX) che intendiamo adottare.
-
-      ### 1.1. Funzionalità Core (Cosa Fa)
-
-      L'applicazione MTP è una SPA (Single Page Application) progettata per gestire il ciclo di vita di un allenamento attraverso tre viste principali:
-
-      * **Vista Calendario**: Una dashboard principale con una griglia settimanale. Ogni cella-giorno riassume gli esercizi programmati e permette di avviare l'allenamento.
-      * **Vista Trainer Interattivo**: Un'interfaccia che guida l'utente in tempo reale attraverso l'allenamento, con timer visivi e controlli di flusso (start/pausa/termina).
-      * **Vista Debriefing**: Una schermata di riepilogo che appare alla fine dell'allenamento e mostra un report dettagliato di ciò che è stato completato, interrotto o saltato.
-      * **Sistema di Modali**: L'editing degli allenamenti avviene tramite un modale che permette di aggiungere esercizi da una libreria e di riordinare gli item della sessione con drag-and-drop.
-
-      ### 1.2. Flusso Utente e Architettura Concettuale (Come lo Fa)
-
-      Il flusso utente di MTP è **"day-centric"** (incentrato sul giorno), il che lo rende molto intuitivo:
-
-      1.  **Visione d'Insieme**: L'utente sceglie un giorno dal calendario.
-      2.  **Editing Centralizzato**: Modifica l'intero piano di quel giorno in un unico modale.
-      3.  **Esecuzione**: Avvia la sessione che viene eseguita passo dopo passo.
-      4.  **Revisione**: Analizza il riepilogo finale.
-
-      L'architettura si basa su un principio chiave: il **Workout Builder Composizionale**. L'utente non sceglie piani pre-fatti, ma costruisce la propria sessione di allenamento in modo flessibile, aggiungendo esercizi da una libreria, in modo del tutto analogo alla pianificazione dei pasti. Il sistema salva una lista di esercizi per ogni giorno, che verrà poi utilizzata dalla vista Trainer per l'esecuzione.
-
-      ### 1.3. Sistema Visivo e Schermate (La Grafica)
-
-      L'interfaccia di MTP è progettata con una filosofia **"mobile-first"** e un **tema scuro**, minimale e funzionale.
-
-      * **Palette Colori**: I colori primari sono un viola (`--primary-color: #9575cd`) e un verde acqua (`--secondary-color: #4db6ac`) su uno sfondo scuro (`--bg-color: #1a1a1d`).
-      * **Componenti**: L'UI è basata su "card" con angoli arrotondati per tutti gli elementi interattivi (celle del calendario, item nei modali).
-      * **Schermate Principali (ASCII Mockup)**:
-
-          * **Calendario**: Una griglia responsive con navigazione settimanale.
-              ```plaintext
-              +------------------------------------------------------+
-              |  < Precedente    Settimana: 22 - 28 Luglio   Successiva >  |
-              +------------------------------------------------------+
-              | +----------+  +----------+  +----------+  +----------+ |
-              | | LUN 22   |  | MAR 23   |  | MER 24   |  | GIO 25   | |
-              | | Kcal: 2100|  | Kcal: 1850|  |          |  |          | |
-              | | Workout: 3|  | Workout: 5|  |          |  |          | |
-              | +----------+  +----------+  +----------+  +----------+ |
-              | +----------+  +----------+  +----------+               |
-              | | VEN 26   |  | SAB 27   |  | DOM 28   |               |
-              | |          |  | Kcal: 2200|  |          |               |
-              | +----------+  +----------+  +----------+               |
-              +------------------------------------------------------+
-              ```
-          * **Editor del Giorno (Modale)**: Un unico pannello per gestire tutti i pasti e gli esercizi del giorno.
-              ```plaintext
-              +------------------------------------------------------+
-              |  Editor Piano - 23 Luglio                       [X]  |
-              |------------------------------------------------------|
-              |  - Colazione:   [ Aggiungi pasto ]                   |
-              |  - Pranzo:      Pollo e Riso       (Modifica/Rimuovi) |
-              |  ...                                                 |
-              |------------------------------------------------------|
-              |  - Allenamento: Squat               (Modifica/Rimuovi) |
-              |                 Push-up             (Modifica/Rimuovi) |
-              |                 Plank               (Modifica/Rimuovi) |
-              |                 [ Aggiungi esercizio ]               |
-              +------------------------------------------------------+
-              ```
-
-      ---
-
-      ## 2. Piano di Sviluppo per HealtyPro (Cosa e Come Faremo)
-
-      Questa sezione definisce come implementeremo i concetti di MTP all'interno della base di codice di `NutriPlan`.
-
-      ### 2.1. Visione del Prodotto
-
-      `HealtyPro` sarà un'unica applicazione che unisce la pianificazione alimentare di `NutriPlan` con la filosofia di interazione di MTP. L'obiettivo è un'esperienza utente coesa, semplice e moderna.
-
-      ### 2.2. Principi Guida (La Nostra Filosofia)
-
-      1.  **La Semplicità è la Chiave**: Manterremo la base di codice di `NutriPlan` (`state.js`, `renderer.js`, ecc.) come nostra architettura. È semplice, funzionale e testata. Non importeremo alcuna logica o file `.js` da MTP.
-      2.  **Ispirazione, non Copia**: Adotteremo solo i *concetti visivi e di flusso* di MTP descritti sopra, implementandoli con il nostro codice pulito.
-      3.  **Documentazione come Guida**: Questo documento sarà il nostro riferimento. Ogni fase di sviluppo dovrà essere allineata a quanto qui descritto.
-
-      ### 2.3. Action Plan Dettagliato
-
-      #### Fase 1: Rinnovamento Visivo e Strutturale (L'Aspetto)
-
-      * **Azione**: Sostituire il contenuto di `index.html` e `style.css` di `NutriPlan`.
-      * **Dettagli**:
-          * `index.html` adotta la struttura con header fisso e container principale, mantenendo tutti gli `id` esistenti richiesti dagli script.
-          * `style.css` è stato completamente riscritto usando la palette colori e gli stili dei componenti definiti nella guida di stile.
-      * **Fix Critico - Service Worker**: Il `CACHE_NAME` in `sw.js` è stato aggiornato e un evento `activate` è stato aggiunto per garantire l'aggiornamento della cache e la pulizia delle versioni vecchie.
-
-      #### Fase 2: Refactoring del Calendario (La Vista Principale)
-
-      * **Azione**: Riscrivere la logica di rendering in `src/ui/renderer.js` e aggiornare le interazioni.
-      * **Dettagli**:
-          * La funzione `renderApp` disegna una griglia di 7 "day-cell" cliccabili che mostrano nome del giorno, data e totale calorico.
-          * È stata implementata la navigazione settimanale (settimana precedente/successiva) aggiornando lo stato `focusedDate`.
-
-      #### Fase 3: Implementazione del Modale "Editor del Giorno" (L'Interazione Core)
-
-      * **Azione**: Creare la logica per un modale di editing centralizzato con auto-aggiornamento.
-      * **Dettagli**:
-          * Il click su una "day-cell" apre il modale "Editor del Giorno".
-          * Questo modale mostra tutti gli slot pasto per quel giorno (`Colazione`, `Pranzo`, `Cena`, ecc.).
-          * L'utente clicca su "Aggiungi" per chiudere l'editor e aprire un secondo modale per la selezione del pasto.
-          * Una volta che un pasto viene selezionato o rimosso, l'Editor del Giorno si riapre e/o si aggiorna automaticamente per mostrare lo stato corrente, fornendo un feedback immediato e coerente.
-
-      #### Fase 4: Integrazione Funzionalità Workout (Composizionale)
-
-      * **Azione**: Aggiungere la logica per la gestione degli allenamenti all'interno dello stesso flusso.
-      * **Dettagli**: L'Editor del Giorno verrà esteso per permettere l'aggiunta di esercizi da una libreria. La vista calendario mostrerà un riepilogo sia delle calorie che del numero di esercizi pianificati. Questo unificherà completamente le due anime dell'applicazione.
-
-      #### Fase 5: Integrazione Macronutrienti (TODO)
-
-      * **Azione (Pianificata)**: Estendere l'intera architettura per supportare il calcolo e la visualizzazione dei macronutrienti (Proteine, Carboidrati, Grassi).
-      * **Dettagli**: Questo richiederà l'aggiornamento della struttura dati in `ingredienti.json`, l'espansione del `calorieCalculator.js` e l'aggiornamento di tutti i componenti UI (editor, planner, log) per visualizzare i nuovi totali.
-  - file: docs/01_FUNCTIONALITY.md
-    content: |
-      # Funzionalità: HealtyPro (ex NutriPlan)
-
-      ## 1. Visione Generale
-      Una web app frontend-only, installabile (PWA), per creare e gestire piani alimentari flessibili per l'intera giornata (colazione, spuntini, pranzo e cena) con conteggio calorico dinamico e regole di validazione personalizzate.
-
-      L'interfaccia utente è stata completamente rinnovata per adottare un design system unificato (ispirato a MTP), con un tema scuro, componenti moderni e un flusso di interazione migliorato per la pianificazione giornaliera.
-
-      ## 2. User Stories
-      * **US-1 (Caricamento Dati Legacy):** L'utente può caricare una configurazione da un file `pasti.json` remoto. Questo metodo è mantenuto per la condivisione di piani personali e per il ripristino da backup.
-      * **US-2 (Visualizzazione Calendario):** L'utente vede un calendario settimanale "day-centric". Ogni giorno è una card che riassume le informazioni principali (es. calorie totali).
-      * **US-3 (Pianificazione via Modale):** L'utente clicca su una card del giorno per aprire un modale di editing centralizzato, dove può gestire tutti i pasti di quella giornata.
-      * **US-4 (Validazione Dinamica):** L'utente vuole che l'app applichi le regole definite nel `pasti.json` (es. blocco giornaliero per un certo tag).
-      * **US-11 (Cancellazione Pasti):** L'utente può rimuovere un pasto inserito.
-      * **US-15 (Layout Mobile Leggibile):** Su mobile, il calendario è una lista di card giornaliere.
-      * **US-16 (Conteggio Calorie Flessibile):** L'utente vede il totale calorico per ogni giorno. Le calorie vengono calcolate dinamicamente dall'applicazione basandosi sui dati del file `ingredienti.json`.
-      * **US-17 (Installazione):** Come utente, voglio poter installare l'app sulla mia home screen o desktop per un accesso rapido.
-      * **US-18 (Uso Offline):** Come utente, voglio poter aprire e usare l'app anche senza connessione internet, dopo averla visitata la prima volta.
-      * **US-19 (Chiusura Modale Esterna):** Come utente, voglio poter chiudere qualsiasi modale cliccando sull'area scura esterna ad esso, per un'interazione più rapida.
-      * **US-20 (Registro Pasti Settimanale Dettagliato):** Come utente, voglio poter passare a una vista registro per vedere l'elenco di tutti i pasti pianificati, con il dettaglio calorico per singolo pasto e il totale giornaliero.
-      * **US-21 (Copia Settimana):** Come utente, voglio poter copiare il piano alimentare della settimana precedente a quella attuale con un solo click per velocizzare la pianificazione.
-      * **US-22 (Visualizzazione Ricetta):** Come utente, voglio poter visualizzare la ricetta di un pasto, se disponibile.
-      * **US-23 (Condivisione Configurazione Sicura):** Come utente, voglio poter generare un link per condividere il mio `pasti.json`.
-      * **US-24 (Backup Dati Locale Flessibile):** Come utente, voglio poter salvare un backup dei miei dati come file di testo (`.txt`).
-      * **US-25 (Ripristino da Backup Locale):** Come utente, voglio poter caricare un file di backup (`.txt` o `.json`) precedentemente salvato.
-      * **US-26 (Inserimento Dati Biometrici):** Come utente, voglio poter inserire e modificare le mie misurazioni biometriche.
-      * **US-27 (Visualizzazione Storico Biometrico):** Come utente, voglio poter visualizzare lo storico delle mie misurazioni biometriche.
-      * **US-29 (Profilo Utente):** L'utente può inserire e salvare i suoi dati personali.
-      * **US-30 (Navigazione Principale):** L'utente può navigare tra le sezioni principali tramite un menu.
-      * **US-31 (Calcolo Automatico BMR):** L'applicazione calcola automaticamente il Metabolismo Basale (BMR) dell'utente.
-      * **US-32 (Galleria Ricette):** L'utente può accedere a una pagina che elenca tutti i pasti con ricette disponibili.
-      * **US-33 (Dashboard Grafici):** Come utente, voglio poter accedere a una dashboard di grafici per analizzare i miei dati.
-
-      ## 3. Ecosistema di Contenuti
-
-      * **US-34 (Scoperta Pacchetti):** Come utente, voglio accedere a una sezione "Esplora" che mi mostri una galleria di pacchetti di contenuti (piani alimentari, programmi di allenamento) curati, con titoli, descrizioni, immagini e tag per aiutarmi a scegliere.
-      * **US-35 (Importazione Intelligente):** Come utente, quando trovo un pacchetto che mi interessa, voglio poterlo aggiungere alla mia libreria con un click. L'importazione deve aggiungere solo i nuovi contenuti (pasti, ingredienti, esercizi) senza sovrascrivere o cancellare quelli che ho già creato.
-      * **US-36 (Accesso ai Dettagli del Protocollo):** Come utente, per i pacchetti che lo prevedono, voglio poter leggere un documento di "protocollo" (`protocol.md`) che mi spieghi la filosofia, le regole e le strategie del piano alimentare o di allenamento.
-      * **US-37 (Visualizzazione Obiettivi Macro):** Come utente, voglio poter vedere una sintesi degli obiettivi nutrizionali di un piano alimentare (es. range calorico, target proteico) direttamente nella card di anteprima nella sezione "Esplora".
-
-      ## 4. Funzionalità Future (TODO)
-
-      * **US-38 (Configurazione Macro):** Come utente, voglio poter definire Proteine, Carboidrati e Grassi per 100g quando creo o modifico un ingrediente nella Libreria.
-      * **US-39 (Calcolo Macro):** Come utente, voglio che l'applicazione calcoli automaticamente i totali dei macronutrienti (min/max) per ogni pasto che creo e per ogni giorno nel mio planner.
-      * **US-40 (Visualizzazione Macro):** Come utente, voglio vedere i totali P/C/F nel mio "Today Widget", nelle card del calendario, nel "Log Dettagliato" e nel modale di riepilogo dell'editor pasti.
   - file: docs/02_ARCHITECTURE.md
     content: |
       # Architettura: HealtyPro (ex NutriPlan)
@@ -231,7 +65,29 @@ patches:
               "fat_per_100g": 5
             }
             ```
-          * **`esercizi.json`**: Contiene un array di `esercizi`.
+          * **`esercizi.json`**: Contiene un array di `esercizi`. Ogni esercizio segue una struttura dettagliata che definisce la sua esecuzione e i suoi parametri di default:
+            ```json
+            {
+              "id": "squat_bilanciere",
+              "name": "Squat con Bilanciere",
+              "description": "Esercizio base per le gambe.",
+              "met_value": 3.5,
+              "execution_mode": "guided_tempo",
+              "defaultSets": 3,
+              "defaultRest": 60,
+              "defaultWeight": 50,
+              "defaultReps": 10,
+              "defaultDuration": null,
+              "defaultRepsMin": null,
+              "defaultRepsMax": null,
+              "defaultTempo": {
+                "up": 1,
+                "hold": 0,
+                "down": 2
+              },
+              "etichette": ["gambe", "pkg:programma-base"]
+            }
+            ```
 
       * **Dati Utente Locali (`localStorage`)**:
           * **`masterMealList`, `masterIngredientList`, `masterWorkoutList`**: Le librerie personali dell'utente, arricchite (ma non sovrascritte) durante l'importazione.
@@ -268,4 +124,4 @@ patches:
       * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
       * **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
 commands:
-  - "echo 'Documentazione aggiornata con la pianificazione per i macronutrienti.'"
+  - "echo 'Documentazione: Aggiornato docs/02_ARCHITECTURE.md con la struttura completa di esercizi.json.'"

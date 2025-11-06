@@ -53,7 +53,29 @@ Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti.
         "fat_per_100g": 5
       }
       ```
-    * **`esercizi.json`**: Contiene un array di `esercizi`.
+    * **`esercizi.json`**: Contiene un array di `esercizi`. Ogni esercizio segue una struttura dettagliata che definisce la sua esecuzione e i suoi parametri di default:
+      ```json
+      {
+        "id": "squat_bilanciere",
+        "name": "Squat con Bilanciere",
+        "description": "Esercizio base per le gambe.",
+        "met_value": 3.5,
+        "execution_mode": "guided_tempo",
+        "defaultSets": 3,
+        "defaultRest": 60,
+        "defaultWeight": 50,
+        "defaultReps": 10,
+        "defaultDuration": null,
+        "defaultRepsMin": null,
+        "defaultRepsMax": null,
+        "defaultTempo": {
+          "up": 1,
+          "hold": 0,
+          "down": 2
+        },
+        "etichette": ["gambe", "pkg:programma-base"]
+      }
+      ```
 
 * **Dati Utente Locali (`localStorage`)**:
     * **`masterMealList`, `masterIngredientList`, `masterWorkoutList`**: Le librerie personali dell'utente, arricchite (ma non sovrascritte) durante l'importazione.
