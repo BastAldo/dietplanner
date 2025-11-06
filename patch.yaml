@@ -1,148 +1,650 @@
-commit_message: "fix(css): Risolve il layout shift globale forzando la scrollbar"
+commit_message: "feat(state): Aggiunge persistenza e CRUD per Esercizi (Fase 2a)"
 rationale: |
-  Come da nuova analisi, il "layout shift" (salto laterale) è causato dalla comparsa e scomparsa della barra di scorrimento verticale del browser quando si naviga tra tab con altezze di contenuto diverse (es. da un tab con una lista lunga a uno vuoto).
+  Implemento la prima parte della Fase 2 ("Implementazione Tab Esercizi"), concentrandomi esclusivamente sul livello dati (backend).
 
-  Questa patch applica la soluzione standard per questo problema:
-  1.  **File Modificato:** `styles/base.css`
-  2.  **Soluzione:** Aggiungo `overflow-y: scroll;` al selettore `html`. Questo forza il browser a riservare *sempre* lo spazio per la barra di scorrimento, anche se la pagina non è abbastanza alta da richiederla.
-  3.  **Risultato:** Lo spazio per la scrollbar è permanente, quindi la larghezza visibile della pagina non cambia più, eliminando il "salto" laterale sia sull'header fisso che sul contenuto della pagina.
+  1.  **`src/utils/constants.js`**: Aggiungo la nuova chiave `LOCAL_STORAGE_KEY_EXERCISES` per la persistenza nel localStorage.
+  2.  **`src/core/state.js`**:
+      * Importo la nuova chiave.
+      * Aggiorno `saveStateToLocalStorage`, `loadStateFromLocalStorage`, e `setAppState` per includere `masterWorkoutList` (usando la nuova chiave) e renderla persistente.
+      * Modifico `setPlannerConfig` per *unire* gli esercizi (`config.esercizi`) importati da un pacchetto, invece di sovrascrivere la lista esistente. Questo la allinea al comportamento di ingredienti e pasti.
+      * Aggiungo le nuove funzioni CRUD: `addExercise`, `updateExercise`, `deleteExercise`, che operano su `state.masterWorkoutList` e salvano nello stato.
 patches:
-  - file: styles/base.css
+  - file: src/utils/constants.js
     content: |
-      /* --- GLOBAL STYLES & MOBILE FIRST --- */
-      :root {
-          --bg-color: #1a1a1d;
-          --card-color: #2c2c34;
-          --primary-color: #9575cd;
-          --secondary-color: #4db6ac;
-          --text-color: #f4f4f9;
-          --text-color-muted: #aaa;
-          --border-color: #40404a;
-          --danger-color: #ef5350;
-          --success-color: #66bb6a;
-          --warning-color: #fdd835;
-          --info-color: var(--primary-color);
-          --header-height: 60px;
+      export const DEFAULT_CONFIG_URL = '';
+      export const LOCAL_STORAGE_KEY_PLAN = 'dynamicProtocolPlan';
+      export const LOCAL_STORAGE_KEY_URL = 'dynamicConfigUrl';
+      export const LOCAL_STORAGE_KEY_BIOMETRICS = 'healtyproBiometricData';
+      export const LOCAL_STORAGE_KEY_PROFILE = 'healtyproUserProfile';
+      export const LOCAL_STORAGE_KEY_GOALS = 'healtyproUserGoals';
+      export const LOCAL_STORAGE_KEY_WORKOUTS = 'healtyproWorkouts';
+      export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
+      export const LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES = 'healtyproWorkoutTemplates';
+      export const LOCAL_STORAGE_KEY_INGREDIENTS = 'healtyproUserIngredients';
+      export const LOCAL_STORAGE_KEY_MEALS = 'healtyproUserMeals';
+      export const LOCAL_STORAGE_KEY_EXERCISES = 'healtyproUserExercises';
+      export const WEEK_STARTS_ON_MONDAY = 1;
+      export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+      export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
+      export const OPTIONAL_MEAL_TYPES = {
+        enablePreWorkout: 'Pre-Workout',
+        enablePostWorkout: 'Post-Workout',
+        enablePreNanna: 'Pre-Nanna'
+      };
+      export const ALL_MEAL_TYPES = [...MEAL_TYPES, ...Object.values(OPTIONAL_MEAL_TYPES)];
+      export const WORKOUT_SLOT_ID = 'Allenamento';
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS, LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, LOCAL_STORAGE_KEY_EXERCISES } from '../utils/constants.js';
+      import { processMealsWithCalories } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+      
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterIngredientList: [],
+        masterWorkoutList: [],
+        masterWorkoutTemplateList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        debugMode: false,
+        ui: {
+          currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
+          activeLibraryTab: 'ingredients',
+          librarySearchTerm: '',
+          libraryActiveFilter: null,
+          lastWorkoutSummary: null,
+          charts: {
+            currentRangeFilter: 30,
+            dateOffset: 0,
+            selectedBiometric: 'weight',
+            plannerChartType: 'bar'
+          },
+          explore: {
+            packages: [],
+            searchTerm: '',
+            activeTags: [],
+            sortOrder: 'default'
+          }
+        }
+      };
+      
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+      
+      export const getState = () => ({ ...state });
+      export const setState = (newState) => {
+        state = { ...state, ...newState };
+        notify();
       }
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      html { font-size: 16px; overflow-y: scroll; }
-      body {
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-          padding-top: var(--header-height);
+      export const setUiState = (uiChanges) => {
+        state.ui = { ...state.ui, ...uiChanges };
+        notify();
       }
-      .hidden { display: none !important; }
-
-      /* --- TOAST NOTIFICATIONS --- */
-      .toast-container {
-        position: fixed; top: 80px; right: 1rem; z-index: 2000;
-        display: flex; flex-direction: column; gap: 0.5rem;
+      
+      export function getPackageTags() {
+        const mealTags = state.masterMealList.flatMap(meal => meal.etichette || []);
+        const ingredientTags = state.masterIngredientList.flatMap(ing => ing.etichette || []);
+        const allTags = [...mealTags, ...ingredientTags];
+        const pkgTags = allTags.filter(tag => tag && tag.startsWith('pkg:'));
+        return [...new Set(pkgTags)];
       }
-      .toast {
-        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
-        border-radius: 8px; border-left: 5px solid var(--info-color);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
-        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
+      
+      export function getMealsForType(mealType) {
+        return state.masterMealList.filter(meal => {
+          if (meal.tipoPasto === 'Tutti') return true;
+          if (Array.isArray(meal.tipoPasto)) {
+            return meal.tipoPasto.includes(mealType);
+          }
+          return meal.tipoPasto === mealType;
+        });
       }
-      .toast.show { opacity: 1; transform: translateX(0); }
-      .toast.is-success { border-left-color: var(--success-color); }
-      .toast.is-error { border-left-color: var(--danger-color); }
-      .toast.is-info { border-left-color: var(--secondary-color); }
-
-      /* --- GLOBAL ALERT BANNER --- */
-      .global-alert {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 1rem; background-color: var(--card-color);
-        border-left: 5px solid var(--warning-color); border-radius: 8px;
-        margin-bottom: 1.5rem; color: var(--text-color);
+      
+      export function getExerciseForPlanner(slotId, instanceId) {
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
       }
-      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; padding: 0; }
-      .alert-close-btn svg { display: block; }
-      .alert-close-btn:hover { color: var(--text-color); }
-
-      /* --- PERSISTENT HEADER --- */
-      .app-header {
-          position: fixed; top: 0; left: 0; width: 100%; height: var(--header-height);
-          background-color: rgba(44, 44, 52, 0.85);
-          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
+      
+      export function getExerciseFromHistory(date, startTime, instanceId) {
+        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+        if (!workout) return null;
+        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
       }
-      .header-content {
-        width: 100%; max-width: 1200px; display: flex;
-        justify-content: space-between; align-items: center;
+      
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
       }
-      .app-title { display: flex; align-items: center; gap: 0.75rem; }
-      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
-      .main-nav { display: none; }
-      .btn-nav {
-        background: transparent; border: none; color: var(--text-color-muted);
-        padding: 0.5rem; border-radius: 8px; cursor: pointer; font-weight: bold;
-        transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
+      
+      export function setPlannerConfig(config, sourceId) {
+        log('State', 'Merging new planner config', { sourceId });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        const exercises = config.esercizi || [];
+        
+        const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
+      
+        ingredients.forEach(ing => {
+          if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              ing.etichette = [...(ing.etichette || []), packageTag];
+            }
+            state.masterIngredientList.push(ing);
+          }
+        });
+      
+        meals.forEach(meal => {
+          if (!state.masterMealList.some(existing => existing.id === meal.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              meal.etichette = [...(meal.etichette || []), packageTag];
+            }
+            state.masterMealList.push(meal);
+          }
+        });
+      
+        exercises.forEach(ex => {
+          if (!state.masterWorkoutList.some(existing => existing.id === ex.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              ex.etichette = [...(ex.etichette || []), packageTag];
+            }
+            state.masterWorkoutList.push(ex);
+          }
+        });
+      
+        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+        saveStateToLocalStorage();
+        notify();
       }
-      .btn-nav svg { fill: currentColor; }
-      .btn-nav span { display: none; } /* Hide text on mobile by default */
-      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
-      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
-      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
-      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
-      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
-      #info-icon { padding: 0.5rem; }
-      .hamburger-btn { display: flex; background: none; border: none; color: var(--text-color); z-index: 1002; }
-
-      /* --- MAIN LAYOUT & CONTAINERS --- */
-      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-      .page-view { width: 100%; }
-      .app-footer {
-          padding: 1.5rem 1rem; margin-top: 1.5rem;
-          display: flex; justify-content: center;
-          gap: 0.75rem;
+      
+      export function setContentHubUrl(url) {
+        log('State', 'Setting new Content Hub URL', { url });
+        state.contentHubUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
       }
-
-      /* --- GENERAL COMPONENTS --- */
-      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
-      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
-      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
-      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
-      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
-      .btn:hover { opacity: 0.85; }
-      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
-
-      /* Responsive Nav */
-      @media (min-width: 768px) {
-          .main-nav { display: flex; gap: 0.5rem; }
-          .hamburger-btn { display: none; }
-          .btn-nav { padding: 0.5rem 1rem; }
-          .btn-nav span { display: inline; }
+      
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, JSON.stringify(state.masterWorkoutTemplateList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+        localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_MEALS, JSON.stringify(state.masterMealList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_EXERCISES, JSON.stringify(state.masterWorkoutList));
       }
-
-      /* Stili per il menu mobile */
-      .main-nav.is-mobile {
-          display: flex;
-          flex-direction: column;
-          position: fixed;
-          top: 60px;
-          left: 0;
-          width: 100%;
-          height: calc(100vh - 60px);
-          background-color: var(--bg-color);
-          padding: 1rem;
-          gap: 1rem;
-          transform: translateX(-100%);
-          transition: transform 0.3s ease-in-out;
+      
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const templates = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES);
+        let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+        const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
+        const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
+        const exercises = localStorage.getItem(LOCAL_STORAGE_KEY_EXERCISES);
+      
+        if (url) {
+            // Migration for existing users with the old, incorrect URL without the repo name
+            if (url === 'https://itbiohackerhub-max.github.io/') {
+                log('State', 'Migrating incorrect legacy hub URL.');
+                url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+                localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
+            }
+            state.contentHubUrl = url;
+        }
+      
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (templates) { try { state.masterWorkoutTemplateList = JSON.parse(templates); } catch (e) { console.error("Error parsing masterWorkoutTemplateList", e); state.masterWorkoutTemplateList = []; } }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+        if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
+        if (meals) { try { state.masterMealList = JSON.parse(meals); } catch (e) { console.error("Error parsing masterMealList", e); state.masterMealList = []; } }
+        if (exercises) { try { state.masterWorkoutList = JSON.parse(exercises); } catch (e) { console.error("Error parsing masterWorkoutList", e); state.masterWorkoutList = []; } }
       }
-      .main-nav.is-mobile.is-open {
-          transform: translateX(0);
+      
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.masterWorkoutTemplateList = backupData.masterWorkoutTemplateList || [];
+        state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        state.masterIngredientList = backupData.masterIngredientList || [];
+        state.masterMealList = backupData.masterMealList || [];
+        state.masterWorkoutList = backupData.masterWorkoutList || [];
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
+        notify();
       }
-      .main-nav.is-mobile .btn-nav {
-          justify-content: center;
-          padding: 1rem;
-          font-size: 1.2rem;
+      
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
       }
-      .main-nav.is-mobile .btn-nav span {
-          display: inline;
+      
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addMultipleBiometricEntries(newEntries) {
+        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
+        state.biometricData = [...state.biometricData, ...newEntries];
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addIngredient(ingredientData) {
+        log('State', 'Adding new ingredient', { ingredientData });
+        state.masterIngredientList.push(ingredientData);
+        state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateIngredient(ingredientId, updatedData) {
+        log('State', 'Updating ingredient', { ingredientId, updatedData });
+        const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
+        if (index > -1) {
+          state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
+          state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function deleteIngredient(ingredientId) {
+        log('State', 'Deleting ingredient', { ingredientId });
+        state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addMeal(mealData) {
+        log('State', 'Adding new meal', { mealData });
+        state.masterMealList.push(mealData);
+        state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+        state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateMeal(mealId, updatedData) {
+        log('State', 'Updating meal', { mealId, updatedData });
+        const index = state.masterMealList.findIndex(m => m.id === mealId);
+        if (index > -1) {
+          state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
+          state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+          state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function deleteMeal(mealId) {
+        log('State', 'Deleting meal', { mealId });
+        state.masterMealList = state.masterMealList.filter(m => m.id !== mealId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addWorkoutTemplate(templateName, exercises) {
+        log('State', 'Adding new workout template', { templateName });
+        const newTemplate = {
+          id: Date.now() + Math.random(),
+          name: templateName,
+          exercises: JSON.parse(JSON.stringify(exercises)) // Deep copy
+        };
+        state.masterWorkoutTemplateList.push(newTemplate);
+        state.masterWorkoutTemplateList.sort((a, b) => a.name.localeCompare(b.name));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function deleteWorkoutTemplate(templateId) {
+        log('State', 'Deleting workout template', { templateId });
+        state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id !== templateId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addExercise(exerciseData) {
+        log('State', 'Adding new exercise', { exerciseData });
+        state.masterWorkoutList.push(exerciseData);
+        state.masterWorkoutList.sort((a, b) => a.name.localeCompare(b.name));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateExercise(exerciseId, updatedData) {
+        log('State', 'Updating exercise', { exerciseId, updatedData });
+        const index = state.masterWorkoutList.findIndex(ex => ex.id === exerciseId);
+        if (index > -1) {
+          state.masterWorkoutList[index] = { ...state.masterWorkoutList[index], ...updatedData };
+          state.masterWorkoutList.sort((a, b) => a.name.localeCompare(b.name));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function deleteExercise(exerciseId) {
+        log('State', 'Deleting exercise', { exerciseId });
+        state.masterWorkoutList = state.masterWorkoutList.filter(ex => ex.id !== exerciseId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addWorkoutTemplateToDay(slotId, templateId) {
+        log('State', 'Adding workout template to day', { slotId, templateId });
+        const template = state.masterWorkoutTemplateList.find(t => t.id === templateId);
+        if (!template) return;
+      
+        // Deep copy exercises from template to ensure unique instanceIds
+        const exercisesToAdd = JSON.parse(JSON.stringify(template.exercises));
+        
+        // Ensure new instanceIds for all exercises being added
+        exercisesToAdd.forEach(ex => {
+          ex.instanceId = Date.now() + Math.random();
+        });
+      
+        if (!state.weeklyWorkouts[slotId]) {
+            state.weeklyWorkouts[slotId] = [];
+        }
+        
+        state.weeklyWorkouts[slotId] = [...state.weeklyWorkouts[slotId], ...exercisesToAdd];
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+      
+          if (exerciseId) {
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) {
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function clearWeeklyWorkout(slotId) {
+        log('State', 'Clearing weekly workout', { slotId });
+        if (state.weeklyWorkouts[slotId]) {
+          delete state.weeklyWorkouts[slotId];
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+      
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+      
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+      
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+      
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+      
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+      
+            if (state.workoutHistory[isoDate]) {
+                delete state.workoutHistory[isoDate];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+      
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
+        if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals', 'explore'].includes(view)) {
+          state.ui.currentView = view;
+          notify();
+        }
+      }
+      
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.ui.lastWorkoutSummary = summary;
+        notify();
+      }
+      
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+      
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+      
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+      
+      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
+        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
+        if (!state.workoutHistory[date]) return;
+      
+        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+        if (workoutIndex === -1) return;
+      
+        const workout = state.workoutHistory[date][workoutIndex];
+        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
+        if (exerciseIndex === -1) return;
+      
+        workout.exercises[exerciseIndex].setsData = newSetsData;
+        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
+        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+      
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+      
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+      
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...mealObject };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+      
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
       }
 commands:
-  - "echo 'Fix CSS per layout shift applicato. La scrollbar è ora sempre visibile.'"
+  - "echo 'Fase 2a completata. Lo stato ora gestisce la persistenza e il CRUD per gli esercizi.'"

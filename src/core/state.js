@@ -1,4 +1,4 @@
-import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS, LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES } from '../utils/constants.js';
+import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS, LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, LOCAL_STORAGE_KEY_EXERCISES } from '../utils/constants.js';
 import { processMealsWithCalories } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
 import { log } from '../utils/logger.js';
@@ -99,7 +99,7 @@ export function setPlannerConfig(config, sourceId) {
   state.rules = config.rules || [];
   const ingredients = config.ingredienti || [];
   const meals = config.meals || [];
-  state.masterWorkoutList = config.esercizi || [];
+  const exercises = config.esercizi || [];
   
   const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
 
@@ -118,6 +118,15 @@ export function setPlannerConfig(config, sourceId) {
         meal.etichette = [...(meal.etichette || []), packageTag];
       }
       state.masterMealList.push(meal);
+    }
+  });
+
+  exercises.forEach(ex => {
+    if (!state.masterWorkoutList.some(existing => existing.id === ex.id)) {
+      if (packageTag) { // Add tag if new and from a package
+        ex.etichette = [...(ex.etichette || []), packageTag];
+      }
+      state.masterWorkoutList.push(ex);
     }
   });
 
@@ -144,6 +153,7 @@ export function saveStateToLocalStorage() {
   localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
   localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
   localStorage.setItem(LOCAL_STORAGE_KEY_MEALS, JSON.stringify(state.masterMealList));
+  localStorage.setItem(LOCAL_STORAGE_KEY_EXERCISES, JSON.stringify(state.masterWorkoutList));
 }
 
 export function loadStateFromLocalStorage() {
@@ -158,6 +168,7 @@ export function loadStateFromLocalStorage() {
   const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
   const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
   const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
+  const exercises = localStorage.getItem(LOCAL_STORAGE_KEY_EXERCISES);
 
   if (url) {
       // Migration for existing users with the old, incorrect URL without the repo name
@@ -178,6 +189,7 @@ export function loadStateFromLocalStorage() {
   if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
   if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
   if (meals) { try { state.masterMealList = JSON.parse(meals); } catch (e) { console.error("Error parsing masterMealList", e); state.masterMealList = []; } }
+  if (exercises) { try { state.masterWorkoutList = JSON.parse(exercises); } catch (e) { console.error("Error parsing masterWorkoutList", e); state.masterWorkoutList = []; } }
 }
 
 export function setAppState(backupData) {
@@ -192,6 +204,7 @@ export function setAppState(backupData) {
   state.userGoals = backupData.userGoals || {};
   state.masterIngredientList = backupData.masterIngredientList || [];
   state.masterMealList = backupData.masterMealList || [];
+  state.masterWorkoutList = backupData.masterWorkoutList || [];
   saveStateToLocalStorage();
   localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
   notify();
@@ -309,6 +322,32 @@ export function addWorkoutTemplate(templateName, exercises) {
 export function deleteWorkoutTemplate(templateId) {
   log('State', 'Deleting workout template', { templateId });
   state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id !== templateId);
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function addExercise(exerciseData) {
+  log('State', 'Adding new exercise', { exerciseData });
+  state.masterWorkoutList.push(exerciseData);
+  state.masterWorkoutList.sort((a, b) => a.name.localeCompare(b.name));
+  saveStateToLocalStorage();
+  notify();
+}
+
+export function updateExercise(exerciseId, updatedData) {
+  log('State', 'Updating exercise', { exerciseId, updatedData });
+  const index = state.masterWorkoutList.findIndex(ex => ex.id === exerciseId);
+  if (index > -1) {
+    state.masterWorkoutList[index] = { ...state.masterWorkoutList[index], ...updatedData };
+    state.masterWorkoutList.sort((a, b) => a.name.localeCompare(b.name));
+    saveStateToLocalStorage();
+    notify();
+  }
+}
+
+export function deleteExercise(exerciseId) {
+  log('State', 'Deleting exercise', { exerciseId });
+  state.masterWorkoutList = state.masterWorkoutList.filter(ex => ex.id !== exerciseId);
   saveStateToLocalStorage();
   notify();
 }

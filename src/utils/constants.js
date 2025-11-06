@@ -9,6 +9,7 @@ export const LOCAL_STORAGE_KEY_WORKOUT_HISTORY = 'healtyproWorkoutHistory';
 export const LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES = 'healtyproWorkoutTemplates';
 export const LOCAL_STORAGE_KEY_INGREDIENTS = 'healtyproUserIngredients';
 export const LOCAL_STORAGE_KEY_MEALS = 'healtyproUserMeals';
+export const LOCAL_STORAGE_KEY_EXERCISES = 'healtyproUserExercises';
 export const WEEK_STARTS_ON_MONDAY = 1;
 export const DAYS = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
 export const MEAL_TYPES = [ 'Colazione', 'Spuntino Mattutino', 'Pranzo', 'Spuntino Pomeridiano', 'Cena' ];
