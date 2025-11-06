@@ -2,7 +2,6 @@ import { calculateBMR } from '../core/calculations.js';
 import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
-import { renderCharts } from './charts.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
 import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
@@ -232,6 +231,28 @@ function renderPackageFilters(state) {
   tagsContainer.innerHTML = tagsHtml;
 }
 
+function formatExerciseDetails(exercise) {
+  const sets = exercise.defaultSets || '?';
+  const rest = exercise.defaultRest || 0;
+  let details = `${sets} set | Riposo: ${rest}s`;
+
+  const mode = exercise.execution_mode || 'guided_tempo';
+
+  if (mode === 'logging') {
+      if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
+          details += ` | ${exercise.defaultRepsMin}-${exercise.defaultRepsMax} reps`;
+      } else if (exercise.defaultRepsMin) {
+          details += ` | ${exercise.defaultRepsMin}+ reps`;
+      }
+  } else if (mode === 'guided_static') {
+      details += ` | ${exercise.defaultDuration || '?'}s`;
+  } else {
+      details += ` | ${exercise.defaultReps || '?'} reps`;
+  }
+
+  return details;
+}
+
 export function renderLibraryPage(state) {
   const { activeLibraryTab = 'ingredients', librarySearchTerm = '', libraryActiveFilter } = state.ui;
   const searchInput = document.getElementById('library-search-input');
@@ -240,6 +261,7 @@ export function renderLibraryPage(state) {
   const tabs = {
     'ingredients': 'ingredienti (per nome o etichetta)',
     'meals': 'pasti (per nome o etichetta)',
+    'exercises': 'esercizi (per nome o etichetta)',
     'templates': 'schede (per nome)'
   };
   searchInput.placeholder = `Cerca in ${tabs[activeLibraryTab] || 'ingredienti'}...`;
@@ -249,13 +271,14 @@ export function renderLibraryPage(state) {
   
   document.getElementById('library-tab-ingredients').textContent = 'Ingredienti';
   document.getElementById('library-tab-meals').textContent = 'Pasti';
+  document.getElementById('library-tab-exercises').textContent = 'Esercizi';
   document.getElementById('library-tab-templates').textContent = UI_TEXT.NAV_TEMPLATES;
 
   const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
 
-  // Render Package Filters (solo per pasti e ingredienti)
+  // Render Package Filters (solo per pasti, ingredienti, esercizi)
   const tagsContainer = document.getElementById('library-tag-filters');
-  if (activeLibraryTab === 'meals' || activeLibraryTab === 'ingredients') {
+  if (activeLibraryTab === 'meals' || activeLibraryTab === 'ingredients' || activeLibraryTab === 'exercises') {
     renderPackageFilters(state);
     tagsContainer.classList.remove('hidden');
   } else {
@@ -309,6 +332,41 @@ export function renderLibraryPage(state) {
     }).join('');
   } else {
     mealList.innerHTML = `<p class="placeholder-text">Nessun pasto trovato. Creane uno nuovo o caricalo da una configurazione remota.</p>`;
+  }
+
+  // Render Exercises
+  const exerciseList = document.getElementById('exercise-list');
+  const filteredExercises = state.masterWorkoutList.filter(ex => {
+      // Filtro Pacchetto
+      if (libraryActiveFilter && (!ex.etichette || !ex.etichette.includes(libraryActiveFilter))) {
+        return false;
+      }
+      
+      // Filtro Ricerca
+      if (lowerCaseSearchTerm !== '') {
+        const nameMatch = ex.name.toLowerCase().includes(lowerCaseSearchTerm);
+        const tagMatch = ex.etichette && ex.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearchTerm));
+        if (!nameMatch && !tagMatch) return false;
+      }
+      
+      return true;
+  });
+
+  if (filteredExercises.length > 0) {
+    exerciseList.innerHTML = filteredExercises.map(ex => {
+      return `<div class="library-item" data-id="${ex.id}">
+                <div class="library-item-info">
+                  <span class="library-item-info__name">${ex.name}</span>
+                  <span class="library-item-info__details">${formatExerciseDetails(ex)}</span>
+                </div>
+                <div class="library-item-actions">
+                  <button class="btn-edit" title="Modifica">${renderIcon('EDIT', { width: 18, height: 18 })}</button>
+                  <button class="btn-delete" title="Elimina">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
+                </div>
+              </div>`;
+    }).join('');
+  } else {
+    exerciseList.innerHTML = `<p class="placeholder-text">Nessun esercizio trovato. Creane uno nuovo o carica un pacchetto dalla sezione Esplora.</p>`;
   }
 
   // Render Templates

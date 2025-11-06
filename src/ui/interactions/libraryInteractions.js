@@ -1,7 +1,7 @@
 import { log } from '../../utils/logger.js';
 import { openIngredientEditorModal, openMealEditorModal } from '../modals.js';
 import { showConfirmModal } from '../modals.js';
-import { deleteIngredient, deleteMeal, getState, setUiState, deleteWorkoutTemplate } from '../../core/state.js';
+import { deleteIngredient, deleteMeal, getState, setUiState, deleteWorkoutTemplate, deleteExercise } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { showNotification } from '../notifications.js';
 
@@ -105,6 +105,45 @@ function handleLibraryClick(e) {
         onConfirm: () => {
           deleteMeal(mealId);
           showNotification(UI_TEXT.MEAL_DELETE_SUCCESS, 'success');
+        },
+        type: 'danger'
+      });
+      return;
+    }
+  }
+
+  // --- Exercise Actions ---
+  if (state.ui.activeLibraryTab === 'exercises') {
+    // const addBtn = e.target.closest('#add-exercise-btn');
+    // if (addBtn) {
+    //   log('Interactions-Library', 'Add new exercise button clicked');
+    //   // openExerciseEditorModal(); // Verrà implementato in 2c
+    //   return;
+    // }
+
+    const item = e.target.closest('.library-item');
+    if (!item) return;
+
+    const exerciseId = item.dataset.id;
+    const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+    if (!exercise) return;
+
+    // const editBtn = e.target.closest('.btn-edit');
+    // if (editBtn) {
+    //   log('Interactions-Library', 'Edit exercise button clicked', { exerciseId });
+    //   // openExerciseEditorModal(exercise); // Verrà implementato in 2c
+    //   return;
+    // }
+
+    const deleteBtn = e.target.closest('.btn-delete');
+    if (deleteBtn) {
+      log('Interactions-Library', 'Delete exercise button clicked', { exerciseId });
+      showConfirmModal({
+        title: UI_TEXT.EXERCISE_DELETE_CONFIRM_TITLE,
+        message: `${UI_TEXT.EXERCISE_DELETE_CONFIRM_MSG} "${exercise.name}"?`,
+        onConfirm: () => {
+          deleteExercise(exerciseId);
+          showNotification(UI_TEXT.EXERCISE_DELETE_SUCCESS, 'success');
         },
         type: 'danger'
       });

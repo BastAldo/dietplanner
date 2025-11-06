@@ -5,6 +5,7 @@
         <div class="view-switcher">
             <button id="library-tab-ingredients" class="btn-view active" data-view="ingredients">Ingredienti</button>
             <button id="library-tab-meals" class="btn-view" data-view="meals">Pasti</button>
+            <button id="library-tab-exercises" class="btn-view" data-view="exercises">Esercizi</button>
             <button id="library-tab-templates" class="btn-view" data-view="templates">Schede</button>
         </div>
         <input type="search" id="library-search-input" class="library-search-bar" placeholder="Cerca in ingredienti...">
@@ -25,6 +26,14 @@
         <button id="add-meal-btn" class="btn btn-primary">Nuovo</button>
       </div>
       <div id="meal-list"></div>
+    </div>
+
+    <div id="library-content-exercises" class="library-content hidden">
+      <div class="library-header">
+        <h4>Esercizi</h4>
+        <button id="add-exercise-btn" class="btn btn-primary">Nuovo</button>
+      </div>
+      <div id="exercise-list"></div>
     </div>
 
     <div id="library-content-templates" class="library-content hidden">
