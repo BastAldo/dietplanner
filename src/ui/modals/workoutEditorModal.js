@@ -132,6 +132,16 @@ export function openWorkoutEditorModal(config) {
   const body = modal.querySelector('#workout-editor-body');
   const footer = modal.querySelector('.modal-footer');
   
+  // --- FIX START ---
+  // Aggiungi il pulsante "Salva Modifiche" se non esiste, PRIMA di provare a selezionarlo.
+  if (!footer.querySelector('#workout-editor-save-btn')) {
+    const newSaveBtn = document.createElement('button');
+    newSaveBtn.id = 'workout-editor-save-btn';
+    newSaveBtn.className = 'btn btn-primary';
+    footer.appendChild(newSaveBtn);
+  }
+  // --- FIX END ---
+  
   const saveBtn = footer.querySelector('#workout-editor-save-btn');
   const saveTemplateBtn = footer.querySelector('#workout-editor-save-template-btn');
 
@@ -156,14 +166,6 @@ export function openWorkoutEditorModal(config) {
   modal.querySelector('#workout-editor-title').textContent = title;
   modal.querySelector('#workout-editor-save-template-btn').textContent = UI_TEXT.SAVE_TEMPLATE_BTN;
   modal.querySelector('#workout-editor-clear-btn').textContent = UI_TEXT.CLEAR_WORKOUT_BTN;
-
-  // Aggiungi il nuovo pulsante "Salva Modifiche" se non esiste
-  if (!footer.querySelector('#workout-editor-save-btn')) {
-    const newSaveBtn = document.createElement('button');
-    newSaveBtn.id = 'workout-editor-save-btn';
-    newSaveBtn.className = 'btn btn-primary';
-    footer.appendChild(newSaveBtn);
-  }
   footer.querySelector('#workout-editor-save-btn').textContent = UI_TEXT.WORKOUT_EDITOR_SAVE_CHANGES_BTN;
 
   renderList(); // Renderizza la lista locale
