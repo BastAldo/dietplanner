@@ -6,7 +6,7 @@ import { formatIngredientsSummary } from '../utils/formatters.js';
 let plannerWeekChart = null;
 
 function toISODateString(date) {
-  return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+  return date.getFullYear() + '-' + ('0' (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 }
 
 function getWeekStartDate(date) {
@@ -107,34 +107,54 @@ function renderPlannerWeekChart(state, weekStart) {
     
     activeMealSlots.forEach(type => {
       const meal = state.weeklyPlan[`${isoDate}-${type}`];
-      if (meal) {
-        min += meal.calories_min || 0;
-        max += meal.calories_max || meal.calories_min || 0;
+      // --- BUG FIX ---
+      // Aggiunto controllo 'typeof number' per allineare la logica a calculateDailyCalories
+      // e prevenire che pasti senza calorie (undefined) vengano contati come 0.
+      if (meal && typeof meal.calories_min === 'number') {
+        const minCals = Number(meal.calories_min) || 0;
+        const maxCals = Number(meal.calories_max) || minCals;
+        min += minCals;
+        max += maxCals;
       }
+      // --- FINE BUG FIX ---
     });
     plannerDataMin.push(min);
     plannerDataMax.push(max);
   }
 
-  const plannerDatasets = [{
-    label: 'Calorie Pianificate (min-max)',
-    data: plannerDataMin.map((min, i) => [min, plannerDataMax[i]]),
-    backgroundColor: 'rgba(77, 182, 172, 0.5)', // secondary-color
-    borderColor: 'rgba(77, 182, 172, 1)',
-    borderWidth: 1,
-    borderSkipped: false,
-  }];
+  const plannerDatasets = [
+    {
+      label: UI_TEXT.CHART_KCAL_MAX_LABEL || 'Calorie Max',
+      data: plannerDataMax,
+      borderColor: 'rgba(149, 117, 205, 1)', // primary-color
+      backgroundColor: 'rgba(149, 117, 205, 0.2)',
+      fill: 'origin',
+      tension: 0.1
+    },
+    {
+      label: UI_TEXT.CHART_KCAL_MIN_LABEL || 'Calorie Min',
+      data: plannerDataMin,
+      borderColor: 'rgba(255, 255, 255, 0.5)',
+      borderDash: [5, 5],
+      fill: false,
+      tension: 0.1
+    }
+  ];
 
   const ctx = document.getElementById('planner-week-chart-canvas').getContext('2d');
   plannerWeekChart = new Chart(ctx, {
-    type: 'bar',
+    type: 'line', // Modificato da 'bar' a 'line'
     data: { labels: plannerLabels, datasets: plannerDatasets },
     options: { 
       responsive: true, 
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          display: false
+          display: true,
+          position: 'top',
+          labels: {
+            color: '#aaa'
+          }
         }
       },
       scales: {
