@@ -179,7 +179,7 @@ const UI_TEXT_CONFIG = [
   { id: 'DISCARD_WORKOUT_BTN', text: 'Scarta Allenamento' },
   { id: 'DISCARD_WORKOUT_CONFIRM_TITLE', text: 'Scartare Allenamento?' },
   { id: 'DISCARD_WORKOUT_CONFIRM_MSG', text: 'L\'allenamento non verrà salvato nello storico. Questa azione è irreversibile.' },
-  { id:Gent: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
+  { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
   { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' },
   { id: 'INGREDIENT_NEW_TITLE', text: 'Nuovo Ingrediente' },
   { id: 'INGREDIENT_EDIT_TITLE', text: 'Modifica Ingrediente' },

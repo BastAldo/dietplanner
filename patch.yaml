@@ -1,10 +1,10 @@
-commit_message: "fix(config): Corregge un errore di sintassi in uiText.js"
+commit_message: "fix(config): Corregge errori di sintassi multipli in uiText.js"
 rationale: |
-  Hai assolutamente ragione, mi scuso per l'errore.
+  Questa patch corregge due errori di sintassi (typo) nel file `src/config/uiText.js` che sono stati introdotti durante le modifiche precedenti:
+  1.  **Riga 138:** Corretto `id:D:` in `{ id: 'PLANNER_SUMMARY_AVG_KCAL', ... }`.
+  2.  **Riga 182:** Corretto `id:Gent:` in `{ id: 'CHARTS_GOAL_ESTIMATE_LABEL', ... }`.
 
-  Ho introdotto un errore di battitura (`id:D:`) nel file `src/config/uiText.js` alla riga 138 durante la patch precedente. Questo ha causato il SyntaxError che hai riscontrato.
-
-  Questo YAML corregge quell'unica riga, ripristinando `{ id: 'PLANNER_SUMMARY_AVG_KCAL', ... }` e risolvendo l'errore.
+  Ho verificato il resto del file per assicurarmi che non ci siano altri errori di sintassi evidenti.
 patches:
   - file: src/config/uiText.js
     content: |
@@ -189,7 +189,7 @@ patches:
         { id: 'DISCARD_WORKOUT_BTN', text: 'Scarta Allenamento' },
         { id: 'DISCARD_WORKOUT_CONFIRM_TITLE', text: 'Scartare Allenamento?' },
         { id: 'DISCARD_WORKOUT_CONFIRM_MSG', text: 'L\'allenamento non verrà salvato nello storico. Questa azione è irreversibile.' },
-        { id:Gent: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
+        { id: 'CHARTS_GOAL_ESTIMATE_LABEL', text: 'Settimane stimate all\'obiettivo' },
         { id: 'CHARTS_GOAL_ESTIMATE_NOT_SET', text: 'Imposta un obiettivo di peso' },
         { id: 'INGREDIENT_NEW_TITLE', text: 'Nuovo Ingrediente' },
         { id: 'INGREDIENT_EDIT_TITLE', text: 'Modifica Ingrediente' },
@@ -240,4 +240,4 @@ patches:
         return acc;
       }, {});
 commands:
-  - "echo 'Correzione del typo in uiText.js applicata.'"
+  - "echo 'Tutti gli errori di sintassi noti in uiText.js sono stati corretti.'"
