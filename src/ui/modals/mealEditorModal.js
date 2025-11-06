@@ -4,7 +4,7 @@ import { showNotification } from '../notifications.js';
 import { log } from '../../utils/logger.js';
 import { ALL_MEAL_TYPES } from '../../utils/constants.js';
 import { renderIcon } from '../icons.js';
-import { processMealsWithCalories } from '../../core/calorieCalculator.js';
+import { processMealsWithMacros } from '../../core/calorieCalculator.js';
 
 let tempIngredients = [];
 let isEditingMode = false;
@@ -37,6 +37,16 @@ function renderIngredientRows() {
   updateTotals();
 }
 
+function formatMacroRange(min, max, label) {
+  if (min === 0 && max === 0) return '';
+  const value = (min === max) ? `${min}g` : `${min}-${max}g`;
+  let className = '';
+  if (label === 'P') className = 'macro-p';
+  if (label === 'C') className = 'macro-c';
+  if (label === 'F') className = 'macro-f';
+  return `<span class="${className}">${label}: ${value}</span>`;
+}
+
 function updateTotals() {
   const totalsEl = document.getElementById('meal-editor-totals');
   const mealForCalc = {
@@ -44,17 +54,26 @@ function updateTotals() {
     ingredienti: tempIngredients,
   };
 
-  const [processedMeal] = processMealsWithCalories([mealForCalc], getState().masterIngredientList);
+  const [processedMeal] = processMealsWithMacros([mealForCalc], getState().masterIngredientList);
 
+  let totalsHTML = '';
   if (processedMeal.calories_min > 0) {
     if (processedMeal.calories_min === processedMeal.calories_max) {
-      totalsEl.textContent = `Totale: ${processedMeal.calories_min} Kcal`;
+      totalsHTML += `Totale: ${processedMeal.calories_min} Kcal`;
     } else {
-      totalsEl.textContent = `Totale: ${processedMeal.calories_min} - ${processedMeal.calories_max} Kcal`;
+      totalsHTML += `Totale: ${processedMeal.calories_min} - ${processedMeal.calories_max} Kcal`;
     }
-  } else {
-    totalsEl.textContent = '';
   }
+
+  const protHTML = formatMacroRange(processedMeal.prot_min, processedMeal.prot_max, 'P');
+  const carbHTML = formatMacroRange(processedMeal.carb_min, processedMeal.carb_max, 'C');
+  const fatHTML = formatMacroRange(processedMeal.fat_min, processedMeal.fat_max, 'F');
+
+  if (protHTML || carbHTML || fatHTML) {
+    totalsHTML += ` | ${protHTML} ${carbHTML} ${fatHTML}`;
+  }
+
+  totalsEl.innerHTML = totalsHTML;
 }
 
 function handleModalBodyClick(e) {

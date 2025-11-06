@@ -1,5 +1,5 @@
 import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS, LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, LOCAL_STORAGE_KEY_EXERCISES } from '../utils/constants.js';
-import { processMealsWithCalories } from './calorieCalculator.js';
+import { processMealsWithMacros } from './calorieCalculator.js';
 import { resetWorkoutState } from './trainer.js';
 import { log } from '../utils/logger.js';
 
@@ -44,7 +44,7 @@ let state = {
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+const toISODateString = (date) => date.getFullYear() + '-' + ('0' (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
 const getWeekStartDate = (date) => {
   const d = new Date(date);
@@ -129,7 +129,7 @@ export function setPlannerConfig(config, sourceId) {
     }
   });
 
-  state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+  state.masterMealList = processMealsWithMacros(state.masterMealList, state.masterIngredientList);
   saveStateToLocalStorage();
   notify();
 }
@@ -280,7 +280,7 @@ export function deleteIngredient(ingredientId) {
 export function addMeal(mealData) {
   log('State', 'Adding new meal', { mealData });
   state.masterMealList.push(mealData);
-  state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+  state.masterMealList = processMealsWithMacros(state.masterMealList, state.masterIngredientList);
   state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
   saveStateToLocalStorage();
   notify();
@@ -291,7 +291,7 @@ export function updateMeal(mealId, updatedData) {
   const index = state.masterMealList.findIndex(m => m.id === mealId);
   if (index > -1) {
     state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
-    state.masterMealList = processMealsWithCalories(state.masterMealList, state.masterIngredientList);
+    state.masterMealList = processMealsWithMacros(state.masterMealList, state.masterIngredientList);
     state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
     saveStateToLocalStorage();
     notify();
@@ -330,7 +330,7 @@ export function updateWorkoutTemplate(templateId, newExercises) {
 
 export function deleteWorkoutTemplate(templateId) {
   log('State', 'Deleting workout template', { templateId });
-  state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id !== templateId);
+  state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id === templateId);
   saveStateToLocalStorage();
   notify();
 }

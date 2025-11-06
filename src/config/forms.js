@@ -33,7 +33,10 @@ export const INGREDIENT_FIELDS = [
   { id: 'id', label: 'ID Univoco', type: 'text', props: 'required' },
   { id: 'nome', label: 'Nome', type: 'text', props: 'required' },
   { id: 'kcal_per_100g', label: 'Kcal / 100g', type: 'number', props: 'required min="0"' },
-  { id: 'g_per_pezzo', label: 'Grammi per pezzo (opzionale)', type: 'number', props: 'min="0"' }
+  { id: 'g_per_pezzo', label: 'Grammi per pezzo (opzionale)', type: 'number', props: 'min="0"' },
+  { id: 'prot_per_100g', label: 'Proteine / 100g', type: 'number', props: 'min="0"' },
+  { id: 'carb_per_100g', label: 'Carboidrati / 100g', type: 'number', props: 'min="0"' },
+  { id: 'fat_per_100g', label: 'Grassi / 100g', type: 'number', props: 'min="0"' }
 ];
 
 export const EXERCISE_FIELDS = [

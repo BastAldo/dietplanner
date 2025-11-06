@@ -255,6 +255,11 @@
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+.checkbox-group { /* Alias per .meal-type-group */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .meal-type-chip {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border-color);
@@ -282,6 +287,10 @@
 }
 .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
 .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
+.meal-editor-totals .macro-p { color: var(--danger-color); }
+.meal-editor-totals .macro-c { color: var(--success-color); }
+.meal-editor-totals .macro-f { color: var(--warning-color); }
+.meal-editor-totals span { margin-left: 0.75rem; }
 
 /* --- MODAL SEARCH BAR & FILTERS --- */
 .modal-search-bar-container {

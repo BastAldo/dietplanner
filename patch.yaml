@@ -1,127 +1,1392 @@
-commit_message: "docs: Completa la documentazione per la struttura di esercizi.json"
+commit_message: "feat(core): Implementa il calcolo dei macronutrienti (Parte 1)"
 rationale: |
-  L'utente ha giustamente sottolineato che la documentazione in `docs/02_ARCHITECTURE.md` era incompleta e "deturpata", in particolare per quanto riguarda la definizione di `esercizi.json`.
+  Questo è il primo di due commit per implementare la funzionalità di tracciamento dei macronutrienti, come definito nelle specifiche (US-38, US-39).
 
-  Questa modifica corregge tale omissione. Ho aggiornato `docs/02_ARCHITECTURE.md` per includere un esempio di codice dettagliato per la struttura di un oggetto `esercizio`.
+  Questa patch si concentra sull'aggiornamento del modello dati, del motore di calcolo e dell'interfaccia di input:
 
-  Questa struttura è stata derivata direttamente dalla fonte di verità del codice, la costante `EXERCISE_FIELDS` nel file `src/config/forms.js`, e include tutti i campi attualmente in uso come `id`, `name`, `execution_mode`, e i vari `default` (Sets, Reps, Tempo, ecc.).
+  1.  `src/config/forms.js`: L'array `INGREDIENT_FIELDS` è stato esteso per includere `prot_per_100g`, `carb_per_100g`, e `fat_per_100g`. Questo è conforme alla struttura dati definita in `docs/02_ARCHITECTURE.md` e abilita la US-38. L'editor degli ingredienti (`ingredientEditorModal.js`) si aggiorna dinamicamente da questa configurazione.
 
-  Questo aggiornamento allinea la documentazione all'implementazione effettiva e la rende completa.
+  2.  `src/core/calorieCalculator.js`: Il modulo è stato refattorizzato per gestire i macronutrienti.
+      * `calculateIngredientCaloriesRange` è stato rinominato in `calculateIngredientMacrosRange` e ora restituisce un oggetto completo (`min`, `max`, `prot`, `carb`, `fat`).
+      * `processMealsWithCalories` è stato rinominato in `processMealsWithMacros`. Questa funzione ora aggrega tutti i macronutrienti (min/max) e li aggiunge all'oggetto pasto.
+
+  3.  `src/core/state.js`: Aggiornato per importare e utilizzare la nuova funzione `processMealsWithMacros` in `setPlannerConfig`, `addMeal` e `updateMeal`. Questo assicura che qualsiasi pasto caricato o modificato nello stato dell'applicazione ora contenga i dati macro completi.
+
+  4.  `src/ui/modals/mealEditorModal.js`: Il modal di modifica dei pasti è stato aggiornato per utilizzare il nuovo `processMealsWithMacros` nella sua funzione `updateTotals`. Ora visualizza i totali P/C/F in tempo reale durante la creazione o la modifica di un pasto.
+
+  5.  `styles/modals.css`: Aggiunti stili per i nuovi totali macro (`.macro-p`, `.macro-c`, `.macro-f`) nel modal di modifica pasti, utilizzando la palette colori definita in `docs/03_STYLE_GUIDE.md` per un feedback visivo immediato.
 patches:
-  - file: docs/02_ARCHITECTURE.md
+  - file: src/config/forms.js
     content: |
-      # Architettura: HealtyPro (ex NutriPlan)
-
-      ## 1. Principi Guida
-      * **PWA-First:** L'applicazione è progettata per essere installabile e funzionare offline.
-      * **Minimalism & Simplicity (KISS):** L'interfaccia utente è essenziale e intuitiva, basata su Vanilla JS.
-      * **Data-Driven & Convention over Configuration:** La logica di business è definita in file di configurazione remoti.
-      * **Maintainability (SRP):** Ogni modulo ha una singola, chiara responsabilità.
-
-      ## 2. Architettura SPA Multi-Vista
-      L'applicazione è una **Single Page Application (SPA)**. Un singolo `index.html` contiene i contenitori per ogni vista, e la logica in `renderer.js` gestisce quale vista mostrare in base allo stato.
-
-      ## 3. Architettura PWA
-      * **`manifest.json`**: Fornisce i metadati per l'installazione.
-      * **`sw.js` (Service Worker)**: Mette in cache l' "app shell" per il funzionamento offline.
-
-      ## 4. Logica di Business
-
-      ### 4.1. Caricamento Dati e Scoperta dei Contenuti
-
-      L'applicazione adotta un'architettura ibrida per il caricamento dei dati, separando la configurazione personale dalla scoperta di nuovi contenuti.
-
-      * **Configurazione Personale (Legacy)**: L'utente può ancora caricare una configurazione completa tramite un singolo URL a un file `pasti.json`.
-
-      * **Ecosistema di Scoperta (Architettura Principale)**: La sezione "Esplora" si basa su un'architettura disaccoppiata ospitata su un repository esterno (es. `BiohackerHub`):
-          1.  **`explore.json`**: Un file di "curation" che contiene una semplice lista di ID dei pacchetti da mettere in evidenza.
-          2.  **`package-index.json`**: Un indice generato automaticamente che mappa ogni `id` di pacchetto all'URL del suo `manifest.json`. È la fonte di verità per localizzare i contenuti.
-          3.  **`manifest.json`**: Ogni pacchetto contiene un manifest auto-descrittivo con tutti i metadati (titolo, descrizione, autore, tags, immagine, obiettivi macro) e i link relativi ai file di contenuto (`pasti.json`, `protocol.md`, etc.).
-
-      Il `configService.js` orchestra questo flusso: scarica `explore.json` e `package-index.json`, recupera i `manifest.json` necessari per visualizzare le card "in evidenza", e infine importa i contenuti di un pacchetto tramite un'operazione di "merge intelligente" che non sovrascrive i dati esistenti.
-
-      ### 4.2. Calcolo delle Calorie (`src/core/calorieCalculator.js`)
-      Questo modulo ha la sola responsabilità di calcolare le calorie dei pasti.
-
-      **(TODO):** Questo modulo sarà esteso per calcolare anche i totali dei macronutrienti (Proteine, Carboidrati, Grassi) basandosi sui nuovi campi aggiunti agli ingredienti.
-
-      ## 5. Gestione dei Dati
-
-      ### 5.1. Strutture Dati Chiave
-
-      * **Contenuti Remoti (BiohackerHub)**:
-          * **`manifest.json`**: Descrive un singolo pacchetto. Contiene `id`, `title`, `description`, `author`, `version`, `tags`, `image`, `protocolUrl`, `pastiUrl`, `ingredientiUrl`, `eserciziUrl`, e l'oggetto opzionale `macroTargets` per i piani dietetici.
-          * **`pasti.json`**: Contiene un array di `meals`.
-          * **`ingredienti.json`**: Contiene un array di `ingredienti`.
-            **(TODO):** La struttura di un ingrediente sarà estesa per includere:
-            ```json
-            {
-              "id": "ingrediente_id",
-              "nome": "Nome Ingrediente",
-              "kcal_per_100g": 100,
-              "g_per_pezzo": 50,
-              "prot_per_100g": 10,
-              "carb_per_100g": 20,
-              "fat_per_100g": 5
-            }
-            ```
-          * **`esercizi.json`**: Contiene un array di `esercizi`. Ogni esercizio segue una struttura dettagliata che definisce la sua esecuzione e i suoi parametri di default:
-            ```json
-            {
-              "id": "squat_bilanciere",
-              "name": "Squat con Bilanciere",
-              "description": "Esercizio base per le gambe.",
-              "met_value": 3.5,
-              "execution_mode": "guided_tempo",
-              "defaultSets": 3,
-              "defaultRest": 60,
-              "defaultWeight": 50,
-              "defaultReps": 10,
-              "defaultDuration": null,
-              "defaultRepsMin": null,
-              "defaultRepsMax": null,
-              "defaultTempo": {
-                "up": 1,
-                "hold": 0,
-                "down": 2
-              },
-              "etichette": ["gambe", "pkg:programma-base"]
-            }
-            ```
-
-      * **Dati Utente Locali (`localStorage`)**:
-          * **`masterMealList`, `masterIngredientList`, `masterWorkoutList`**: Le librerie personali dell'utente, arricchite (ma non sovrascritte) durante l'importazione.
-          * Altre strutture dati: `weeklyPlan`, `userProfile`, etc.
-
-      ## 6. Svolta Futura: Protocolli Parametrici (In Standby)
-
-      Abbiamo definito una visione futura per rendere i pacchetti ancora più potenti: trasformarli in **protocolli parametrici**.
-
-      L'idea è di permettere a un pacchetto di contenere **formule e regole** che l'applicazione client può usare per calcolare le quantità ottimali in base ai dati biometrici dell'utente (peso, BMR, etc.).
-
-      Un `manifest.json` potrebbe contenere una sezione `protocolEngine` come questa:
-
-      ```json
-      "protocolEngine": {
-        "constants": {
-          "PROTEIN_PER_KG": 1.9,
-          "ACTIVITY_MULTIPLIER": 1.25,
-          "CALORIE_DEFICIT": 400
+      export const PROFILE_FIELDS = [
+        { id: 'firstName', label: 'Nome', type: 'text' },
+        { id: 'lastName', label: 'Cognome', type: 'text' },
+        { id: 'nickname', label: 'Nickname', type: 'text' },
+        { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
+        { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
+        { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] },
+        {
+          id: 'plannerPrefs',
+          label: 'Preferenze Planner',
+          type: 'checkbox-group',
+          options: [
+            { id: 'enablePreWorkout', label: 'Attiva slot Pre-Workout' },
+            { id: 'enablePostWorkout', label: 'Attiva slot Post-Workout' },
+            { id: 'enablePreNanna', label: 'Attiva slot Pre-Nanna' },
+          ]
+        }
+      ];
+      
+      export const BIOMETRIC_FIELDS = [
+        { id: 'date', label: 'Data', type: 'date', props: 'required' },
+        { id: 'weight', label: 'Peso (kg)', type: 'number', props: 'step="0.1" required' },
+        { id: 'muscleMass', label: 'Massa M. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatMass', label: 'Massa G. (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'water', label: 'Acqua (kg)', type: 'number', props: 'step="0.1"' },
+        { id: 'fatPercentage', label: 'Grasso (%)', type: 'number', props: 'step="0.1"' },
+        { id: 'bmi', label: 'BMI', type: 'number', props: 'step="0.1"' },
+        { id: 'basalMetabolism', label: 'M. Basale (kcal)', type: 'number', props: 'step="1" readonly' },
+        { id: 'notes', label: 'Note', type: 'textarea' }
+      ];
+      
+      export const INGREDIENT_FIELDS = [
+        { id: 'id', label: 'ID Univoco', type: 'text', props: 'required' },
+        { id: 'nome', label: 'Nome', type: 'text', props: 'required' },
+        { id: 'kcal_per_100g', label: 'Kcal / 100g', type: 'number', props: 'required min="0"' },
+        { id: 'g_per_pezzo', label: 'Grammi per pezzo (opzionale)', type: 'number', props: 'min="0"' },
+        { id: 'prot_per_100g', label: 'Proteine / 100g', type: 'number', props: 'min="0"' },
+        { id: 'carb_per_100g', label: 'Carboidrati / 100g', type: 'number', props: 'min="0"' },
+        { id: 'fat_per_100g', label: 'Grassi / 100g', type: 'number', props: 'min="0"' }
+      ];
+      
+      export const EXERCISE_FIELDS = [
+        { id: 'id', label: 'EXERCISE_FIELD_ID', type: 'text', props: 'required', grid: '1 / -1' },
+        { id: 'name', label: 'EXERCISE_FIELD_NAME', type: 'text', props: 'required', grid: '1 / -1' },
+        { id: 'description', label: 'EXERCISE_FIELD_DESC', type: 'textarea', grid: '1 / -1' },
+        { id: 'met_value', label: 'EXERCISE_FIELD_MET', type: 'number', props: 'min="0" step="0.1"', grid: '1 / -1' },
+        {
+          id: 'execution_mode',
+          label: 'EXERCISE_FIELD_MODE',
+          type: 'select',
+          grid: '1 / -1',
+          options: [
+            { value: 'guided_tempo', label: 'EXERCISE_FIELD_MODE_GUIDED_TEMPO' },
+            { value: 'guided_static', label: 'EXERCISE_FIELD_MODE_GUIDED_STATIC' },
+            { value: 'logging', label: 'EXERCISE_FIELD_MODE_LOGGING' }
+          ]
         },
-        "formulas": {
-          "daily_protein_target": "${user.weight_kg} * ${constants.PROTEIN_PER_KG}"
-        },
-        "normalizationRules": {
-          "petto_pollo": { "type": "step", "value": 50 }
+        { id: 'defaultSets', label: 'EXERCISE_FIELD_SETS', type: 'number', props: 'min="1"', group: 'common-group' },
+        { id: 'defaultRest', label: 'EXERCISE_FIELD_REST', type: 'number', props: 'min="0"', group: 'common-group' },
+        { id: 'defaultWeight', label: 'EXERCISE_FIELD_WEIGHT', type: 'number', props: 'min="0" step="0.5"', group: 'common-group' },
+        { id: 'defaultReps', label: 'EXERCISE_FIELD_REPS', type: 'number', props: 'min="1"', group: 'guided_tempo' },
+        { id: 'defaultDuration', label: 'EXERCISE_FIELD_DURATION', type: 'number', props: 'min="1"', group: 'guided_static' },
+        { id: 'defaultRepsMin', label: 'EXERCISE_FIELD_REPS_MIN', type: 'number', props: 'min="1"', group: 'logging' },
+        { id: 'defaultRepsMax', label: 'EXERCISE_FIELD_REPS_MAX', type: 'number', props: 'min="1"', group: 'logging' },
+        { id: 'defaultTempo.up', label: 'EXERCISE_FIELD_TEMPO_UP', type: 'number', props: 'min="0" step="0.5"', group: 'tempo' },
+        { id: 'defaultTempo.hold', label: 'EXERCISE_FIELD_TEMPO_HOLD', type: 'number', props: 'min="0" step="0.5"', group: 'tempo' },
+        { id: 'defaultTempo.down', label: 'EXERCISE_FIELD_TEMPO_DOWN', type: 'number', props: 'min="0" step="0.5"', group: 'tempo' }
+      ];
+  - file: src/core/calorieCalculator.js
+    content: |
+      function getIngredientById(id, ingredients) {
+        return ingredients.find(ing => ing.id === id);
+      }
+      
+      function calculateIngredientMacrosRange(ingredientItem, ingredientData) {
+        if (!ingredientData) return { min: 0, max: 0, prot: 0, carb: 0, fat: 0 };
+      
+        const kcalPerGram = (ingredientData.kcal_per_100g || 0) / 100;
+        const protPerGram = (ingredientData.prot_per_100g || 0) / 100;
+        const carbPerGram = (ingredientData.carb_per_100g || 0) / 100;
+        const fatPerGram = (ingredientData.fat_per_100g || 0) / 100;
+      
+        let minGrams = 0, maxGrams = 0;
+      
+        if (ingredientItem.quantita_g) {
+          minGrams = maxGrams = ingredientItem.quantita_g;
+        } else if (ingredientItem.quantita_g_min && ingredientItem.quantita_g_max) {
+          minGrams = ingredientItem.quantita_g_min;
+          maxGrams = ingredientItem.quantita_g_max;
+        } else if (ingredientItem.quantita_g_min) {
+          minGrams = maxGrams = ingredientItem.quantita_g_min;
+        } else if (ingredientItem.quantita_pezzi && typeof ingredientData.g_per_pezzo === 'number') {
+          minGrams = maxGrams = ingredientItem.quantita_pezzi * ingredientData.g_per_pezzo;
+        } else {
+          // Se non possiamo determinare i grammi, restituiamo 0 per tutto
+          return { min: 0, max: 0, prot: 0, carb: 0, fat: 0 };
+        }
+        
+        // Se maxGrams non è stato impostato (es. solo quantita_g_min), uguaglialo a minGrams
+        if (maxGrams === 0) maxGrams = minGrams;
+      
+        return {
+          min: kcalPerGram * minGrams,
+          max: kcalPerGram * maxGrams,
+          prot_min: protPerGram * minGrams,
+          prot_max: protPerGram * maxGrams,
+          carb_min: carbPerGram * minGrams,
+          carb_max: carbPerGram * maxGrams,
+          fat_min: fatPerGram * minGrams,
+          fat_max: fatPerGram * maxGrams
+        };
+      }
+      
+      
+      export function processMealsWithMacros(meals, ingredients) {
+        if (!meals || !ingredients) return [];
+      
+        return meals.map(meal => {
+          let totalMinCalories = 0;
+          let totalMaxCalories = 0;
+          let totalMinProt = 0;
+          let totalMaxProt = 0;
+          let totalMinCarb = 0;
+          let totalMaxCarb = 0;
+          let totalMinFat = 0;
+          let totalMaxFat = 0;
+      
+          if (meal.ingredienti && Array.isArray(meal.ingredienti)) {
+            meal.ingredienti.forEach(item => {
+              const ingredientData = getIngredientById(item.id, ingredients);
+              if (ingredientData) {
+                const macros = calculateIngredientMacrosRange(item, ingredientData);
+                totalMinCalories += macros.min;
+                totalMaxCalories += macros.max;
+                totalMinProt += macros.prot_min;
+                totalMaxProt += macros.prot_max;
+                totalMinCarb += macros.carb_min;
+                totalMaxCarb += macros.carb_max;
+                totalMinFat += macros.fat_min;
+                totalMaxFat += macros.fat_max;
+              }
+            });
+          }
+      
+          return {
+            ...meal,
+            calories_min: Math.round(totalMinCalories),
+            calories_max: Math.round(totalMaxCalories),
+            prot_min: Math.round(totalMinProt),
+            prot_max: Math.round(totalMaxProt),
+            carb_min: Math.round(totalMinCarb),
+            carb_max: Math.round(totalMaxCarb),
+            fat_min: Math.round(totalMinFat),
+            fat_max: Math.round(totalMaxFat)
+          };
+        });
+      }
+  - file: src/core/state.js
+    content: |
+      import { LOCAL_STORAGE_KEY_PLAN, LOCAL_STORAGE_KEY_URL, MEAL_TYPES, LOCAL_STORAGE_KEY_BIOMETRICS, LOCAL_STORAGE_KEY_PROFILE, LOCAL_STORAGE_KEY_WORKOUTS, WORKOUT_SLOT_ID, LOCAL_STORAGE_KEY_WORKOUT_HISTORY, LOCAL_STORAGE_KEY_GOALS, LOCAL_STORAGE_KEY_INGREDIENTS, LOCAL_STORAGE_KEY_MEALS, LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, LOCAL_STORAGE_KEY_EXERCISES } from '../utils/constants.js';
+      import { processMealsWithMacros } from './calorieCalculator.js';
+      import { resetWorkoutState } from './trainer.js';
+      import { log } from '../utils/logger.js';
+      
+      let state = {
+        rules: [],
+        masterMealList: [],
+        masterIngredientList: [],
+        masterWorkoutList: [],
+        masterWorkoutTemplateList: [],
+        weeklyPlan: {},
+        weeklyWorkouts: {},
+        workoutHistory: {},
+        biometricData: [],
+        userProfile: {},
+        userGoals: {},
+        contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
+        recipeBaseUrl: '',
+        focusedDate: new Date(),
+        debugMode: false,
+        ui: {
+          currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
+          activeLibraryTab: 'ingredients',
+          library: {
+            searchTerm: '',
+            packageFilter: null,
+            mealTypeFilter: 'all',
+            execModeFilter: 'all'
+          },
+          lastWorkoutSummary: null,
+          charts: {
+            currentRangeFilter: 30,
+            dateOffset: 0,
+            selectedBiometric: 'weight'
+          },
+          explore: {
+            packages: [],
+            searchTerm: '',
+            activeTags: [],
+            sortOrder: 'default'
+          }
+        }
+      };
+      
+      const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
+      const toISODateString = (date) => date.getFullYear() + '-' + ('0' (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+      
+      const getWeekStartDate = (date) => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      };
+      
+      export const getState = () => ({ ...state });
+      export const setState = (newState) => {
+        state = { ...state, ...newState };
+        notify();
+      }
+      export const setUiState = (uiChanges) => {
+        state.ui = { ...state.ui, ...uiChanges };
+        notify();
+      }
+      
+      export function getMealsForType(mealType) {
+        return state.masterMealList.filter(meal => {
+          if (meal.tipoPasto === 'Tutti') return true;
+          if (Array.isArray(meal.tipoPasto)) {
+            return meal.tipoPasto.includes(mealType);
+          }
+          return meal.tipoPasto === mealType;
+        });
+      }
+      
+      export function getExerciseForPlanner(slotId, instanceId) {
+        const workoutList = state.weeklyWorkouts[slotId] || [];
+        return workoutList.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+      
+      export function getExerciseFromHistory(date, startTime, instanceId) {
+        const workout = state.workoutHistory[date]?.find(w => w.startTime === startTime);
+        if (!workout) return null;
+        return workout.exercises.find(ex => ex.instanceId === parseFloat(instanceId));
+      }
+      
+      export function getTemplateById(templateId) {
+        return state.masterWorkoutTemplateList.find(t => t.id === templateId);
+      }
+      
+      export function toggleDebugMode() {
+        state.debugMode = !state.debugMode;
+        console.log(`%cDebug mode is now ${state.debugMode ? 'ON' : 'OFF'}`, 'color: white; background-color: #ef5350; padding: 4px; border-radius: 4px;');
+      }
+      
+      export function setPlannerConfig(config, sourceId) {
+        log('State', 'Merging new planner config', { sourceId });
+        state.rules = config.rules || [];
+        const ingredients = config.ingredienti || [];
+        const meals = config.meals || [];
+        const exercises = config.esercizi || [];
+        
+        const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
+      
+        ingredients.forEach(ing => {
+          if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              ing.etichette = [...(ing.etichette || []), packageTag];
+            }
+            state.masterIngredientList.push(ing);
+          }
+        });
+      
+        meals.forEach(meal => {
+          if (!state.masterMealList.some(existing => existing.id === meal.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              meal.etichette = [...(meal.etichette || []), packageTag];
+            }
+            state.masterMealList.push(meal);
+          }
+        });
+      
+        exercises.forEach(ex => {
+          if (!state.masterWorkoutList.some(existing => existing.id === ex.id)) {
+            if (packageTag) { // Add tag if new and from a package
+              ex.etichette = [...(ex.etichette || []), packageTag];
+            }
+            state.masterWorkoutList.push(ex);
+          }
+        });
+      
+        state.masterMealList = processMealsWithMacros(state.masterMealList, state.masterIngredientList);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function setContentHubUrl(url) {
+        log('State', 'Setting new Content Hub URL', { url });
+        state.contentHubUrl = url;
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, url);
+        notify();
+      }
+      
+      export function saveStateToLocalStorage() {
+        log('State', 'Saving all application state to localStorage');
+        localStorage.setItem(LOCAL_STORAGE_KEY_PLAN, JSON.stringify(state.weeklyPlan));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUTS, JSON.stringify(state.weeklyWorkouts));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY, JSON.stringify(state.workoutHistory));
+        localStorage.setItem(LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES, JSON.stringify(state.masterWorkoutTemplateList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_BIOMETRICS, JSON.stringify(state.biometricData));
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROFILE, JSON.stringify(state.userProfile));
+        localStorage.setItem(LOCAL_STORAGE_KEY_GOALS, JSON.stringify(state.userGoals));
+        localStorage.setItem(LOCAL_STORAGE_KEY_INGREDIENTS, JSON.stringify(state.masterIngredientList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_MEALS, JSON.stringify(state.masterMealList));
+        localStorage.setItem(LOCAL_STORAGE_KEY_EXERCISES, JSON.stringify(state.masterWorkoutList));
+      }
+      
+      export function loadStateFromLocalStorage() {
+        log('State', 'Loading all application state from localStorage');
+        const plan = localStorage.getItem(LOCAL_STORAGE_KEY_PLAN);
+        const workouts = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUTS);
+        const history = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_HISTORY);
+        const templates = localStorage.getItem(LOCAL_STORAGE_KEY_WORKOUT_TEMPLATES);
+        let url = localStorage.getItem(LOCAL_STORAGE_KEY_URL);
+        const biometrics = localStorage.getItem(LOCAL_STORAGE_KEY_BIOMETRICS);
+        const profile = localStorage.getItem(LOCAL_STORAGE_KEY_PROFILE);
+        const goals = localStorage.getItem(LOCAL_STORAGE_KEY_GOALS);
+        const ingredients = localStorage.getItem(LOCAL_STORAGE_KEY_INGREDIENTS);
+        const meals = localStorage.getItem(LOCAL_STORAGE_KEY_MEALS);
+        const exercises = localStorage.getItem(LOCAL_STORAGE_KEY_EXERCISES);
+      
+        if (url) {
+            // Migration for existing users with the old, incorrect URL without the repo name
+            if (url === 'https://itbiohackerhub-max.github.io/') {
+                log('State', 'Migrating incorrect legacy hub URL.');
+                url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+                localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
+            }
+            state.contentHubUrl = url;
+        }
+      
+        if (plan) { try { state.weeklyPlan = JSON.parse(plan); } catch (e) { console.error("Error parsing weeklyPlan", e); state.weeklyPlan = {}; } }
+        if (workouts) { try { state.weeklyWorkouts = JSON.parse(workouts); } catch (e) { console.error("Error parsing weeklyWorkouts", e); state.weeklyWorkouts = {}; } }
+        if (history) { try { state.workoutHistory = JSON.parse(history); } catch (e) { console.error("Error parsing workoutHistory", e); state.workoutHistory = {}; } }
+        if (templates) { try { state.masterWorkoutTemplateList = JSON.parse(templates); } catch (e) { console.error("Error parsing masterWorkoutTemplateList", e); state.masterWorkoutTemplateList = []; } }
+        if (biometrics) { try { state.biometricData = JSON.parse(biometrics); } catch (e) { console.error("Error parsing biometricData", e); state.biometricData = []; } }
+        if (profile) { try { state.userProfile = JSON.parse(profile); } catch (e) { console.error("Error parsing userProfile", e); state.userProfile = {}; } }
+        if (goals) { try { state.userGoals = JSON.parse(goals); } catch (e) { console.error("Error parsing userGoals", e); state.userGoals = {}; } }
+        if (ingredients) { try { state.masterIngredientList = JSON.parse(ingredients); } catch (e) { console.error("Error parsing masterIngredientList", e); state.masterIngredientList = []; } }
+        if (meals) { try { state.masterMealList = JSON.parse(meals); } catch (e) { console.error("Error parsing masterMealList", e); state.masterMealList = []; } }
+        if (exercises) { try { state.masterWorkoutList = JSON.parse(exercises); } catch (e) { console.error("Error parsing masterWorkoutList", e); state.masterWorkoutList = []; } }
+      }
+      
+      export function setAppState(backupData) {
+        log('State', 'Restoring application state from backup');
+        state.weeklyPlan = backupData.weeklyPlan || {};
+        state.weeklyWorkouts = backupData.weeklyWorkouts || {};
+        state.workoutHistory = backupData.workoutHistory || {};
+        state.masterWorkoutTemplateList = backupData.masterWorkoutTemplateList || [];
+        state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+        state.biometricData = backupData.biometricData || [];
+        state.userProfile = backupData.userProfile || {};
+        state.userGoals = backupData.userGoals || {};
+        state.masterIngredientList = backupData.masterIngredientList || [];
+        state.masterMealList = backupData.masterMealList || [];
+        state.masterWorkoutList = backupData.masterWorkoutList || [];
+        saveStateToLocalStorage();
+        localStorage.setItem(LOCAL_STORAGE_KEY_URL, state.contentHubUrl);
+        notify();
+      }
+      
+      export function saveUserProfile(profile) {
+        log('State', 'Saving user profile', { profile });
+        state.userProfile = profile;
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function saveUserGoals(goals) {
+          log('State', 'Saving user goals', { goals });
+          state.userGoals = goals;
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function addOrUpdateBiometricEntry(entry) {
+        log('State', 'Adding or updating biometric entry', { entry });
+        const index = state.biometricData.findIndex(e => e.date === entry.date);
+        if (index > -1) {
+          state.biometricData[index] = entry;
+        } else {
+          state.biometricData.push(entry);
+        }
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addMultipleBiometricEntries(newEntries) {
+        log('State', 'Adding multiple biometric entries', { count: newEntries.length });
+        state.biometricData = [...state.biometricData, ...newEntries];
+        state.biometricData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function deleteBiometricEntry(date) {
+        log('State', 'Deleting biometric entry', { date });
+        state.biometricData = state.biometricData.filter(e => e.date !== date);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addIngredient(ingredientData) {
+        log('State', 'Adding new ingredient', { ingredientData });
+        state.masterIngredientList.push(ingredientData);
+        state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateIngredient(ingredientId, updatedData) {
+        log('State', 'Updating ingredient', { ingredientId, updatedData });
+        const index = state.masterIngredientList.findIndex(ing => ing.id === ingredientId);
+        if (index > -1) {
+          state.masterIngredientList[index] = { ...state.masterIngredientList[index], ...updatedData };
+          state.masterIngredientList.sort((a, b) => a.nome.localeCompare(b.nome));
+          saveStateToLocalStorage();
+          notify();
         }
       }
-      ```
-
-      > **NOTA IMPORTANTE:** Lo sviluppo di questa funzionalità è **attualmente in standby**. Sebbene l'architettura sia stata delineata, la sua implementazione richiede un'ulteriore fase di progettazione approfondita. La priorità attuale è consolidare e standardizzare l'ecosistema di contenuti statici.
-
-      ## 7. Dipendenze di Terze Parti
-      * **Marked.js & DOMPurify**: Caricate via CDN per il rendering sicuro delle ricette.
-      * **Chart.js**: Caricata via CDN per la visualizzazione dei grafici.
-      * **SortableJS**: Caricata via CDN per la gestione del drag-and-drop.
+      
+      export function deleteIngredient(ingredientId) {
+        log('State', 'Deleting ingredient', { ingredientId });
+        state.masterIngredientList = state.masterIngredientList.filter(ing => ing.id !== ingredientId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addMeal(mealData) {
+        log('State', 'Adding new meal', { mealData });
+        state.masterMealList.push(mealData);
+        state.masterMealList = processMealsWithMacros(state.masterMealList, state.masterIngredientList);
+        state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateMeal(mealId, updatedData) {
+        log('State', 'Updating meal', { mealId, updatedData });
+        const index = state.masterMealList.findIndex(m => m.id === mealId);
+        if (index > -1) {
+          state.masterMealList[index] = { ...state.masterMealList[index], ...updatedData };
+          state.masterMealList = processMealsWithMacros(state.masterMealList, state.masterIngredientList);
+          state.masterMealList.sort((a,b) => a.nomePasto.localeCompare(b.nomePasto));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function deleteMeal(mealId) {
+        log('State', 'Deleting meal', { mealId });
+        state.masterMealList = state.masterMealList.filter(m => m.id !== mealId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addWorkoutTemplate(templateName, exercises) {
+        log('State', 'Adding new workout template', { templateName });
+        const newTemplate = {
+          id: Date.now() + Math.random(),
+          name: templateName,
+          exercises: JSON.parse(JSON.stringify(exercises)) // Deep copy
+        };
+        state.masterWorkoutTemplateList.push(newTemplate);
+        state.masterWorkoutTemplateList.sort((a, b) => a.name.localeCompare(b.name));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateWorkoutTemplate(templateId, newExercises) {
+        log('State', 'Updating workout template', { templateId });
+        const index = state.masterWorkoutTemplateList.findIndex(t => t.id === templateId);
+        if (index > -1) {
+          state.masterWorkoutTemplateList[index].exercises = JSON.parse(JSON.stringify(newExercises)); // Deep copy
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function deleteWorkoutTemplate(templateId) {
+        log('State', 'Deleting workout template', { templateId });
+        state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id === templateId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addExercise(exerciseData) {
+        log('State', 'Adding new exercise', { exerciseData });
+        state.masterWorkoutList.push(exerciseData);
+        state.masterWorkoutList.sort((a, b) => a.name.localeCompare(b.name));
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateExercise(exerciseId, updatedData) {
+        log('State', 'Updating exercise', { exerciseId, updatedData });
+        const index = state.masterWorkoutList.findIndex(ex => ex.id === exerciseId);
+        if (index > -1) {
+          state.masterWorkoutList[index] = { ...state.masterWorkoutList[index], ...updatedData };
+          state.masterWorkoutList.sort((a, b) => a.name.localeCompare(b.name));
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function deleteExercise(exerciseId) {
+        log('State', 'Deleting exercise', { exerciseId });
+        state.masterWorkoutList = state.masterWorkoutList.filter(ex => ex.id !== exerciseId);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function addWorkoutTemplateToDay(slotId, templateId) {
+        log('State', 'Adding workout template to day', { slotId, templateId });
+        const template = state.masterWorkoutTemplateList.find(t => t.id === templateId);
+        if (!template) return;
+      
+        // Deep copy exercises from template to ensure unique instanceIds
+        const exercisesToAdd = JSON.parse(JSON.stringify(template.exercises));
+        
+        // Ensure new instanceIds for all exercises being added
+        exercisesToAdd.forEach(ex => {
+          ex.instanceId = Date.now() + Math.random();
+        });
+      
+        if (!state.weeklyWorkouts[slotId]) {
+            state.weeklyWorkouts[slotId] = [];
+        }
+        
+        state.weeklyWorkouts[slotId] = [...state.weeklyWorkouts[slotId], ...exercisesToAdd];
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateWeeklyPlan(slotId, mealId) {
+        log('State', 'Updating weekly plan', { slotId, mealId });
+        if (mealId) {
+          const meal = state.masterMealList.find(m => m.id === mealId);
+          if (meal) {
+            state.weeklyPlan[slotId] = { ...meal };
+          }
+        } else {
+          delete state.weeklyPlan[slotId];
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function updateWeeklyWorkout(slotId, exerciseId, instanceId = null) {
+        log('State', 'Updating weekly workout', { slotId, exerciseId, instanceId });
+          if (!state.weeklyWorkouts[slotId]) {
+              state.weeklyWorkouts[slotId] = [];
+          }
+      
+          if (exerciseId) {
+              const exercise = state.masterWorkoutList.find(ex => ex.id === exerciseId);
+              if (exercise) {
+                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
+                  state.weeklyWorkouts[slotId].push(newExerciseInstance);
+              }
+          } else if (instanceId) {
+              state.weeklyWorkouts[slotId] = state.weeklyWorkouts[slotId].filter(ex => ex.instanceId !== instanceId);
+              if (state.weeklyWorkouts[slotId].length === 0) {
+                  delete state.weeklyWorkouts[slotId];
+              }
+          }
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function setWeeklyWorkout(slotId, newExercises) {
+        log('State', 'Setting new weekly workout for slot', { slotId });
+        state.weeklyWorkouts[slotId] = JSON.parse(JSON.stringify(newExercises)); // Deep copy
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function clearWeeklyWorkout(slotId) {
+        log('State', 'Clearing weekly workout', { slotId });
+        if (state.weeklyWorkouts[slotId]) {
+          delete state.weeklyWorkouts[slotId];
+          saveStateToLocalStorage();
+          notify();
+        }
+      }
+      
+      export function updateExerciseInstanceInWorkout(slotId, instanceId, newValues) {
+        log('State', 'Updating exercise instance in planner', { slotId, instanceId, newValues });
+          if (!state.weeklyWorkouts[slotId]) return;
+      
+          const workoutList = state.weeklyWorkouts[slotId];
+          const exerciseIndex = workoutList.findIndex(ex => ex.instanceId === instanceId);
+      
+          if (exerciseIndex > -1) {
+              const updatedExercise = { ...workoutList[exerciseIndex], ...newValues };
+              if (newValues.defaultTempo) {
+                  updatedExercise.defaultTempo = { ...workoutList[exerciseIndex].defaultTempo, ...newValues.defaultTempo };
+              }
+              workoutList[exerciseIndex] = updatedExercise;
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+      
+      export function reorderWorkoutExercises(slotId, oldIndex, newIndex) {
+        log('State', 'Reordering workout exercises', { slotId, oldIndex, newIndex });
+          if (!state.weeklyWorkouts[slotId] || oldIndex === newIndex) return;
+          const workoutList = state.weeklyWorkouts[slotId];
+          const [movedItem] = workoutList.splice(oldIndex, 1);
+          workoutList.splice(newIndex, 0, movedItem);
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function resetCurrentWeek() {
+        log('State', 'Resetting current week');
+        const weekStart = getWeekStartDate(state.focusedDate);
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(weekStart);
+            date.setDate(date.getDate() + i);
+            const isoDate = toISODateString(date);
+      
+            MEAL_TYPES.forEach(mealType => {
+                const slotId = `${isoDate}-${mealType}`;
+                if (state.weeklyPlan[slotId]) {
+                    delete state.weeklyPlan[slotId];
+                }
+            });
+      
+            const workoutSlotId = `${isoDate}-${WORKOUT_SLOT_ID}`;
+            if (state.weeklyWorkouts[workoutSlotId]) {
+                delete state.weeklyWorkouts[workoutSlotId];
+            }
+      
+            if (state.workoutHistory[isoDate]) {
+                delete state.workoutHistory[isoDate];
+            }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function navigateWeek(direction) {
+        log('State', 'Navigating week', { direction });
+        const newDate = new Date(state.focusedDate);
+        newDate.setDate(newDate.getDate() + (direction * 7));
+        state.focusedDate = newDate;
+        notify();
+      }
+      
+      export function setView(view) {
+        log('State', 'Setting new view', { newView: view, oldView: state.ui.currentView });
+        if (['planner', 'log', 'library', 'progress', 'profile', 'charts', 'recipes', 'trainer', 'debriefing', 'goals', 'explore'].includes(view)) {
+          state.ui.currentView = view;
+          notify();
+        }
+      }
+      
+      export function setLastWorkoutSummary(summary) {
+        log('State', 'Setting last workout summary');
+        state.ui.lastWorkoutSummary = summary;
+        notify();
+      }
+      
+      export function addWorkoutToHistory(summary) {
+        log('State', 'Adding structured workout to history', { date: summary.date });
+        if (summary && summary.date) {
+            if (!state.workoutHistory[summary.date]) {
+                state.workoutHistory[summary.date] = [];
+            }
+            state.workoutHistory[summary.date].push({ ...summary, type: 'structured' });
+            saveStateToLocalStorage();
+            notify();
+        }
+      }
+      
+      export function addManualWorkoutToHistory(date, activityData) {
+          log('State', 'Adding manual workout to history', { date, activityData });
+          if (!state.workoutHistory[date]) {
+              state.workoutHistory[date] = [];
+          }
+          const manualWorkout = {
+              type: 'manual',
+              date: date,
+              startTime: Date.now(),
+              ...activityData
+          };
+          state.workoutHistory[date].push(manualWorkout);
+          saveStateToLocalStorage();
+          notify();
+      }
+      
+      export function deleteWorkoutFromHistory(date, startTime) {
+          log('State', 'Deleting workout from history', { date, startTime });
+          if (state.workoutHistory[date]) {
+              state.workoutHistory[date] = state.workoutHistory[date].filter(workout => workout.startTime !== startTime);
+              if (state.workoutHistory[date].length === 0) {
+                  delete state.workoutHistory[date];
+              }
+              saveStateToLocalStorage();
+              notify();
+          }
+      }
+      
+      export function updateWorkoutInHistory(date, startTime, updates) {
+          log('State', 'Updating workout in history', { date, startTime, updates });
+          if (state.workoutHistory[date]) {
+              const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+              if (workoutIndex > -1) {
+                  state.workoutHistory[date][workoutIndex] = {
+                      ...state.workoutHistory[date][workoutIndex],
+                      ...updates
+                  };
+                  saveStateToLocalStorage();
+                  notify();
+              }
+          }
+      }
+      
+      export function updateExerciseSetsInHistory(date, startTime, exerciseInstanceId, newSetsData) {
+        log('State', 'Updating exercise sets in history', { date, startTime, exerciseInstanceId });
+        if (!state.workoutHistory[date]) return;
+      
+        const workoutIndex = state.workoutHistory[date].findIndex(w => w.startTime === startTime);
+        if (workoutIndex === -1) return;
+      
+        const workout = state.workoutHistory[date][workoutIndex];
+        const exerciseIndex = workout.exercises.findIndex(ex => ex.instanceId === exerciseInstanceId);
+        if (exerciseIndex === -1) return;
+      
+        workout.exercises[exerciseIndex].setsData = newSetsData;
+        const exerciseTonnage = newSetsData.reduce((acc, set) => acc + ((set.reps || 0) * (set.weight || 0)), 0);
+        workout.exercises[exerciseIndex].tonnage = exerciseTonnage;
+        workout.totalTonnage = workout.exercises.reduce((acc, ex) => acc + (ex.tonnage || 0), 0);
+        saveStateToLocalStorage();
+        notify();
+      }
+      
+      export function copyPreviousWeek() {
+        log('State', 'Copying previous week');
+        const currentWeekStart = getWeekStartDate(state.focusedDate);
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+      
+        for (let i = 0; i < 7; i++) {
+          const sourceDate = new Date(prevWeekStart);
+          sourceDate.setDate(sourceDate.getDate() + i);
+          const sourceISO = toISODateString(sourceDate);
+      
+          const destDate = new Date(currentWeekStart);
+          destDate.setDate(destDate.getDate() + i);
+          const destISO = toISODateString(destDate);
+      
+          MEAL_TYPES.forEach(mealType => {
+            const sourceSlotId = `${sourceISO}-${mealType}`;
+            const destSlotId = `${destISO}-${mealType}`;
+            const mealObject = state.weeklyPlan[sourceSlotId];
+            if (mealObject) {
+              state.weeklyPlan[destSlotId] = { ...meal };
+            } else {
+              delete state.weeklyPlan[destSlotId];
+            }
+          });
+      
+          const sourceWorkoutSlot = `${sourceISO}-${WORKOUT_SLOT_ID}`;
+          const destWorkoutSlot = `${destISO}-${WORKOUT_SLOT_ID}`;
+          const workoutList = state.weeklyWorkouts[sourceWorkoutSlot];
+          if (workoutList && Array.isArray(workoutList)) {
+              state.weeklyWorkouts[destWorkoutSlot] = JSON.parse(JSON.stringify(workoutList));
+          } else {
+              delete state.weeklyWorkouts[destWorkoutSlot];
+          }
+        }
+        saveStateToLocalStorage();
+        notify();
+      }
+  - file: src/ui/modals/mealEditorModal.js
+    content: |
+      import { getState, addMeal, updateMeal } from '../../core/state.js';
+      import { UI_TEXT } from '../../config/uiText.js';
+      import { showNotification } from '../notifications.js';
+      import { log } from '../../utils/logger.js';
+      import { ALL_MEAL_TYPES } from '../../utils/constants.js';
+      import { renderIcon } from '../icons.js';
+      import { processMealsWithMacros } from '../../core/calorieCalculator.js';
+      
+      let tempIngredients = [];
+      let isEditingMode = false;
+      
+      function renderIngredientRows() {
+        const listContainer = document.getElementById('meal-editor-ingredients-list');
+        const { masterIngredientList } = getState();
+        const optionsHtml = masterIngredientList.map(ing => `<option value="${ing.id}">${ing.nome}</option>`).join('');
+      
+        if (tempIngredients.length === 0) {
+          listContainer.innerHTML = `<p class="placeholder-text">Aggiungi il primo ingrediente al tuo pasto.</p>`;
+        } else {
+          listContainer.innerHTML = tempIngredients.map((item, index) => `
+            <div class="meal-editor-ingredient-row" data-index="${index}">
+              <select name="ingredient_${index}" required>${optionsHtml}</select>
+              <input type="number" name="quantita_g_${index}" placeholder="Grammi" min="0" value="${item.quantita_g || ''}" class="quantita_g">
+              <input type="number" name="quantita_pezzi_${index}" placeholder="Pezzi" min="0" value="${item.quantita_pezzi || ''}" class="quantita_pezzi">
+              <button type="button" class="btn-remove-ingredient">${renderIcon('TRASH', { width: 18, height: 18 })}</button>
+            </div>
+          `).join('');
+      
+          // Set selected options
+          tempIngredients.forEach((item, index) => {
+            const select = listContainer.querySelector(`select[name="ingredient_${index}"]`);
+            if (select) {
+              select.value = item.id;
+            }
+          });
+        }
+        updateTotals();
+      }
+      
+      function formatMacroRange(min, max, label) {
+        if (min === 0 && max === 0) return '';
+        const value = (min === max) ? `${min}g` : `${min}-${max}g`;
+        let className = '';
+        if (label === 'P') className = 'macro-p';
+        if (label === 'C') className = 'macro-c';
+        if (label === 'F') className = 'macro-f';
+        return `<span class="${className}">${label}: ${value}</span>`;
+      }
+      
+      function updateTotals() {
+        const totalsEl = document.getElementById('meal-editor-totals');
+        const mealForCalc = {
+          id: 'temp',
+          ingredienti: tempIngredients,
+        };
+      
+        const [processedMeal] = processMealsWithMacros([mealForCalc], getState().masterIngredientList);
+      
+        let totalsHTML = '';
+        if (processedMeal.calories_min > 0) {
+          if (processedMeal.calories_min === processedMeal.calories_max) {
+            totalsHTML += `Totale: ${processedMeal.calories_min} Kcal`;
+          } else {
+            totalsHTML += `Totale: ${processedMeal.calories_min} - ${processedMeal.calories_max} Kcal`;
+          }
+        }
+      
+        const protHTML = formatMacroRange(processedMeal.prot_min, processedMeal.prot_max, 'P');
+        const carbHTML = formatMacroRange(processedMeal.carb_min, processedMeal.carb_max, 'C');
+        const fatHTML = formatMacroRange(processedMeal.fat_min, processedMeal.fat_max, 'F');
+      
+        if (protHTML || carbHTML || fatHTML) {
+          totalsHTML += ` | ${protHTML} ${carbHTML} ${fatHTML}`;
+        }
+      
+        totalsEl.innerHTML = totalsHTML;
+      }
+      
+      function handleModalBodyClick(e) {
+        // Add new ingredient
+        if (e.target.closest('#meal-add-ingredient-btn')) {
+          tempIngredients.push({ id: getState().masterIngredientList[0]?.id || '', quantita_g: null, quantita_pezzi: null });
+          renderIngredientRows();
+          return;
+        }
+      
+        // Remove an ingredient
+        const removeBtn = e.target.closest('.btn-remove-ingredient');
+        if (removeBtn) {
+          const row = e.target.closest('.meal-editor-ingredient-row');
+          if (row) {
+            tempIngredients.splice(parseInt(row.dataset.index, 10), 1);
+            renderIngredientRows();
+          }
+          return;
+        }
+      
+        // Toggle meal type chip
+        const chip = e.target.closest('.meal-type-chip');
+        if (chip) {
+          chip.classList.toggle('active');
+          return;
+        }
+      }
+      
+      function handleIngredientInputChange(e) {
+        const target = e.target;
+        const row = target.closest('.meal-editor-ingredient-row');
+        if (!row) return;
+        const index = parseInt(row.dataset.index, 10);
+      
+        if (target.matches('select')) {
+          tempIngredients[index].id = target.value;
+        } else if (target.matches('input[name^="quantita_g"]')) {
+          tempIngredients[index].quantita_g = parseFloat(target.value) || null;
+        } else if (target.matches('input[name^="quantita_pezzi"]')) {
+          tempIngredients[index].quantita_pezzi = parseFloat(target.value) || null;
+        }
+        updateTotals();
+      }
+      
+      function handleFormSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const mealData = {
+          id: form.elements['id'].value,
+          nomePasto: form.elements['nomePasto'].value,
+          tipoPasto: [],
+          ingredienti: tempIngredients.filter(ing => ing.id), // Filter out empty ones
+        };
+      
+        document.querySelectorAll('#meal-edit-tipoPasto-container .meal-type-chip.active').forEach(chip => {
+          mealData.tipoPasto.push(chip.dataset.value);
+        });
+      
+        if (!mealData.id || !mealData.nomePasto) {
+          showNotification('ID e Nome Pasto sono obbligatori.', 'error');
+          return;
+        }
+      
+        if (isEditingMode) {
+          updateMeal(form.elements['id'].value, mealData);
+          showNotification(UI_TEXT.MEAL_UPDATE_SUCCESS, 'success');
+        } else {
+          if (getState().masterMealList.some(m => m.id === mealData.id)) {
+            showNotification(UI_TEXT.MEAL_ID_CONFLICT, 'error');
+            return;
+          }
+          addMeal(mealData);
+          showNotification(UI_TEXT.MEAL_CREATE_SUCCESS, 'success');
+        }
+      
+        document.getElementById('meal-editor-modal').classList.add('modal-hidden');
+      }
+      
+      
+      export function openMealEditorModal(meal = null) {
+        isEditingMode = meal !== null;
+        log('Modals', isEditingMode ? 'Opening meal editor (edit)' : 'Opening meal editor (new)', { meal });
+      
+        tempIngredients = isEditingMode ? JSON.parse(JSON.stringify(meal.ingredienti || [])) : [];
+      
+        const modal = document.getElementById('meal-editor-modal');
+        const form = modal.querySelector('#meal-editor-form');
+        const title = modal.querySelector('#meal-editor-title');
+        const saveBtn = modal.querySelector('#meal-editor-save-btn');
+        const modalBody = modal.querySelector('.modal-body');
+      
+        title.textContent = isEditingMode ? UI_TEXT.MEAL_EDIT_TITLE : UI_TEXT.MEAL_NEW_TITLE;
+        saveBtn.textContent = UI_TEXT.MEAL_SAVE_BTN;
+      
+        // Populate main form fields
+        form.elements.id.value = meal?.id || '';
+        form.elements.nomePasto.value = meal?.nomePasto || '';
+        form.elements.id.readOnly = isEditingMode;
+      
+        // Populate meal type chips
+        const tipoPastoContainer = document.getElementById('meal-edit-tipoPasto-container');
+        tipoPastoContainer.innerHTML = ALL_MEAL_TYPES.map(type => `
+          <div class="meal-type-chip ${meal?.tipoPasto?.includes(type) ? 'active' : ''}" data-value="${type}">
+            ${type}
+          </div>
+        `).join('');
+      
+        renderIngredientRows();
+      
+        // --- Event Listener Management ---
+        // Remove old listeners to prevent duplication
+        modalBody.removeEventListener('click', handleModalBodyClick);
+        modalBody.removeEventListener('input', handleIngredientInputChange);
+        form.removeEventListener('submit', handleFormSubmit);
+      
+        // Add fresh listeners
+        modalBody.addEventListener('click', handleModalBodyClick);
+        modalBody.addEventListener('input', handleIngredientInputChange);
+        form.addEventListener('submit', handleFormSubmit);
+      
+        modal.classList.remove('modal-hidden');
+      }
+  - file: styles/modals.css
+    content: |
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
+      
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
+      
+      /* Stili per Input in Confirm Modal */
+      .modal-body .form-group {
+        width: 100%;
+        margin-top: 1rem;
+      }
+      .modal-body .form-group label {
+        display: none; /* Il messaggio del modale funge da etichetta */
+      }
+      .modal-body .form-group input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 1rem;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+      }
+      .modal-body .form-group input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+      }
+      
+      /* --- MODAL STACKING HIERARCHY --- */
+      /* Livello 1: 1001 (default per .modal-overlay) - es. day-editor */
+      
+      /* Livello 2: 1002 (Editor aperti da Livello 1) */
+      #workout-editor-modal,
+      #ingredient-editor-modal,
+      #meal-editor-modal,
+      #manual-workout-modal {
+        z-index: 1002;
+      }
+      
+      /* Livello 3: 1003 (Selettori/Editor aperti da Livello 2) */
+      #selection-modal,
+      #workout-selection-modal,
+      #workout-template-selection-modal,
+      #exercise-editor-modal,
+      #recipe-modal,
+      #package-preview-modal {
+        z-index: 1003;
+      }
+      
+      /* Livello 4: 1004 (Conferme, sempre in cima) */
+      #confirm-modal {
+        z-index: 1004;
+      }
+      
+      /* (Info e Chart modal rimangono a 1001, non aprono altri modal) */
+      /* --- FINE STACKING --- */
+      
+      /* Stile per le <select> nei modali */
+      .form-group select {
+          padding: 0.75rem;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          font-size: 1rem;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          appearance: none;
+          -webkit-appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23aaa'%3E%3Cpath d='M8 11.5a.5.5 0 0 1-.35-.15l-4-4a.5.5 0 0 1 .7-.7L8 10.29l3.65-3.64a.5.5 0 0 1 .7.7l-4 4a.5.5 0 0 1-.35.15z'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 0.75rem center;
+          background-size: 1em;
+          padding-right: 2.5rem; /* Spazio per la freccia */
+      }
+      .form-group select:focus {
+          outline: none;
+          border-color: var(--primary-color);
+      }
+      
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
+      }
+      .editor-section-body {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .meal-details, .workout-summary {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .meal-info, .exercise-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .meal-details__name {
+        font-weight: 500;
+      }
+      .meal-actions, .workout-summary-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .workout-summary-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        /* Rimosso width: 100% da qui per fixare il layout desktop */
+      }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+      
+      /* Stili per i nuovi pulsanti icona in DayEditorModal */
+      .workout-summary-actions .btn-icon {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-color-muted);
+        cursor: pointer;
+        padding: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        transition: all 0.2s ease;
+      }
+      .workout-summary-actions .btn-icon:hover {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        border-color: var(--primary-color);
+      }
+      
+      
+      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+      .workout-editor-list .draggable-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        min-height: 70px;
+      }
+      .workout-editor-list .meal-actions { margin-left: auto; }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+      
+      .modal-footer.workout-editor-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .btn-danger-text {
+        color: var(--danger-color);
+        border-color: var(--danger-color);
+      }
+      .btn-danger-text:hover {
+        color: var(--danger-color) !important;
+        background-color: rgba(239, 83, 80, 0.1) !important;
+        border-color: var(--danger-color) !important;
+        opacity: 1;
+      }
+      
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
+      }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
+      }
+      #exercise-editor-form .reps-range-group { grid-column: 3 / 7; }
+      
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
+      }
+      
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+      
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+      
+      /* --- MEAL EDITOR MODAL --- */
+      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
+      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      .meal-type-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .checkbox-group { /* Alias per .meal-type-group */
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .meal-type-chip {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+      }
+      .meal-type-chip.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+      }
+      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
+      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
+      .meal-editor-ingredient-row label { display: none; }
+      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
+          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
+      }
+      .meal-editor-ingredient-row .btn-remove-ingredient {
+          background: none; border: none; color: var(--danger-color); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+      }
+      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
+      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
+      .meal-editor-totals .macro-p { color: var(--danger-color); }
+      .meal-editor-totals .macro-c { color: var(--success-color); }
+      .meal-editor-totals .macro-f { color: var(--warning-color); }
+      .meal-editor-totals span { margin-left: 0.75rem; }
+      
+      /* --- MODAL SEARCH BAR & FILTERS --- */
+      .modal-search-bar-container {
+        padding: 0 1.5rem 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .modal-search-bar-container .library-search-bar {
+        width: 100%;
+        margin: 0;
+      }
+      .tag-filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem 0 1.5rem;
+      }
+      .tag-filter-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+        background-color: transparent;
+        color: var(--text-color-muted);
+      }
+      .tag-filter-btn.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+        font-weight: bold;
+      }
+      #selection-modal .modal-body {
+        padding-top: 1rem;
+      }
+      
+      /* --- PACKAGE PREVIEW MODAL --- */
+      #package-preview-body {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+      .preview-section h4 {
+        color: var(--secondary-color);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .preview-list {
+        list-style-type: none;
+        padding-left: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .preview-list li {
+        padding: 0.5rem;
+        background-color: var(--bg-color);
+        border-radius: 4px;
+      }
+      
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
+        }
+        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
+        #package-preview-body {
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+        /* Rimosso flex-grow: 1 per i btn-icon per evitare stretching */
+        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
+      }
 commands:
-  - "echo 'Documentazione: Aggiornato docs/02_ARCHITECTURE.md con la struttura completa di esercizi.json.'"
+  - "echo 'Parte 1: Modello dati e motore di calcolo per i macronutrienti implementati.'"
