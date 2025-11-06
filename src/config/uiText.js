@@ -139,7 +139,7 @@ const UI_TEXT_CONFIG = [
   { id: 'PLANNER_SUMMARY_WORKOUTS', text: 'Allenamenti' },
   { id: 'PLANNER_SUMMARY_CALORIES_BURNED', text: 'Kcal Bruciate' },
   { id: 'PLANNER_SUMMARY_WEIGHT_PROGRESS', text: 'Kg mancanti' },
-  { id:ANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
+  { id: 'MANUAL_WORKOUT_MODAL_TITLE', text: 'Registra Attività Manuale' },
   { id: 'MANUAL_WORKOUT_NAME_LABEL', text: 'Nome Attività' },
   { id: 'MANUAL_WORKOUT_DURATION_LABEL', text: 'Durata' },
   { id: 'MANUAL_WORKOUT_DISTANCE_LABEL', text: 'Distanza (km)' },
