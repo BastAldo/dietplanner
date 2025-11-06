@@ -1,53 +1,13 @@
-commit_message: "fix(planner): Corregge bug calcolo grafico e ne migliora la UI"
+commit_message: "fix(planner): Corregge TypeError (mancante +) in toISODateString"
 rationale: |
-  Questo commit implementa due richieste dell'utente relative al grafico settimanale sulla pagina "Planner":
+  Questo commit corregge un errore di battitura fatale introdotto nel file `src/ui/plannerRenderer.js` durante l'ultimo commit.
 
-  1.  **Correzione Bug Dati Mancanti:**
-      * È stato identificato un bug in `src/ui/plannerRenderer.js` (`renderPlannerWeekChart`) dove i totali delle calorie del grafico non corrispondevano a quelli delle card (es. Lunedì mostrava Kcal sulla card ma 0 sul grafico).
-      * La funzione `calculateDailyCalories` (usata dalle card) controllava correttamente `if (meal && typeof meal.calories_min === 'number')`, mentre `renderPlannerWeekChart` (usata dal grafico) no.
-      * Questo portava `renderPlannerWeekChart` a calcolare 0 per i giorni che avevano pasti senza calorie (es. `calories_min: undefined`).
-      * Il fix aggiunge il controllo `if (meal && typeof meal.calories_min === 'number')` anche a `renderPlannerWeekChart`, allineando la logica di calcolo e risolvendo il bug.
+  L'errore era alla riga 9, nella funzione `toISODateString`.
+  Il codice errato era: `('0' (date.getMonth() + 1))`
+  Il codice corretto è: `('0' + (date.getMonth() + 1))`
 
-  2.  **Miglioramento UI/UX (Richiesta Utente):**
-      * **Tipo di Grafico:** In `src/ui/plannerRenderer.js`, il tipo di grafico è stato cambiato da `type: 'bar'` a `type: 'line'` per una migliore leggibilità del range. I dataset sono stati aggiornati per mostrare una linea "Max" (piena, con riempimento) e una "Min" (tratteggiata).
-      * **Posizione:** In `templates/planner.html`, il widget del grafico (`#planner-week-chart-widget`) è stato spostato dalla cima della pagina a sotto il contenitore principale (`section.view-container`), dando priorità al calendario e al log.
+  Mancava un operatore `+`, che portava JavaScript a interpretare la stringa "0" come una funzione, generando l'errore `TypeError: "0" is not a function` e impedendo il rendering della pagina "Planner".
 patches:
-  - file: templates/planner.html
-    content: |
-      <div id="global-alert" class="global-alert hidden">
-          <p id="global-alert-message"></p>
-          <button id="global-alert-close" class="alert-close-btn"></button>
-      </div>
-
-      <div id="planner-page" class="page-view">
-          <section id="today-widget" class="today-widget"></section>
-          
-          <section class="view-container">
-              <header class="calendar-header">
-                  <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>
-                  <h2 id="week-title"></h2>
-                  <button id="next-week-btn" class="btn btn-secondary">&gt;</button>
-              </header>
-               <div class="planner-controls-wrapper">
-                  <div class="planner-actions">
-                    <button id="copy-week-btn" class="btn btn-secondary"></button>
-                    <button id="reset-btn" class="btn btn-secondary"></button>
-                  </div>
-              </div>
-              <div id="calendar-grid" class="calendar-grid"></div>
-              <h3 id="log-view-title" class="section-title">Registro Dettagliato</h3>
-              <div id="log-view" class="log-view"></div>
-          </section>
-
-          <section id="planner-week-chart-widget" class="chart-card">
-              <div class="chart-header">
-                  <h4 id="planner-week-chart-title"></h4>
-              </div>
-              <div class="chart-canvas-container" style="height: 250px;">
-                <canvas id="planner-week-chart-canvas"></canvas>
-              </div>
-          </section>
-      </div>
   - file: src/ui/plannerRenderer.js
     content: |
       import { MEAL_TYPES, WEEK_STARTS_ON_MONDAY, DAYS, WORKOUT_SLOT_ID, OPTIONAL_MEAL_TYPES } from '../utils/constants.js';
@@ -58,7 +18,7 @@ patches:
       let plannerWeekChart = null;
 
       function toISODateString(date) {
-        return date.getFullYear() + '-' + ('0' (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+        return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
       }
 
       function getWeekStartDate(date) {
@@ -422,4 +382,4 @@ patches:
         renderLogView(state, weekStart);
       }
 commands:
-  - "echo 'Bugfix: Corretto il calcolo del grafico settimanale e migliorata la UI (line chart, posizione).'"
+  - "echo 'Bugfix: Corretto il TypeError in plannerRenderer.js.'"

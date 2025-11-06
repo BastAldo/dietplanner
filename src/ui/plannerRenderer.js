@@ -6,7 +6,7 @@ import { formatIngredientsSummary } from '../utils/formatters.js';
 let plannerWeekChart = null;
 
 function toISODateString(date) {
-  return date.getFullYear() + '-' + ('0' (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+  return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 }
 
 function getWeekStartDate(date) {
