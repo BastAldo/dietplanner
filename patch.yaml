@@ -1,268 +1,56 @@
-commit_message: "fix(css): Corregge il layout delle icone nel modal editor giorno"
+commit_message: "fix(css): Corregge il layout shift nel tab \"Schede\" della Libreria"
 rationale: |
-  Questo commit corregge un bug di layout nel modale "Editor del Giorno", come segnalato.
+  Come richiesto, implemento solo la Fase 1 del piano per correggere il bug del "layout shift".
 
-  1.  **Problema Desktop (Spaginazione):** I pulsanti-icona (`.btn-icon`) nella sezione allenamento (`.workout-summary-actions`) venivano spinti all'estrema destra e causavano un "a capo" prematuro, anche con spazio disponibile.
-      * **Causa:** Una regola CSS in `styles/modals.css` applicava `width: 100%` alla classe `.workout-summary-actions` di base (desktop).
-      * **Soluzione:** È stato rimosso `width: 100%` dalla regola base `.workout-summary-actions`. Questa proprietà ora è relegata correttamente solo alla media query per schermi piccoli.
-
-  2.  **Problema Mobile (Icone Stretciate):** Su schermi piccoli, i pulsanti-icona si "stiravano" per occupare l'intera larghezza.
-      * **Causa:** La regola CSS `@media (max-width: 480px)` applicava `flex-grow: 1` ai `.btn-icon`.
-      * **Soluzione:** È stato rimosso `flex-grow: 1` da `.workout-summary-actions .btn-icon` all'interno della media query. `flex-grow: 1` è stato mantenuto solo per i `.btn` (pulsanti con testo) in quella vista, come previsto.
-
-  Queste modifiche ripristinano il corretto allineamento `flex` su tutti i dispositivi.
+  1.  **File Modificato:** `styles/library.css`
+  2.  **Problema:** Quando si passa a un tab (es. "Schede") che non mostra i filtri per pacchetto, il container dei filtri (`#library-tag-filters`) riceve la classe `.hidden`. La regola CSS `.tag-filter-container.hidden { display: none; }` rimuove l'elemento dal flusso del layout, causando un "salto" verticale del contenuto sottostante.
+  3.  **Soluzione:** Ho modificato la regola `.tag-filter-container.hidden`. Invece di `display: none;`, ora usa `visibility: hidden;` per nascondere l'elemento mantenendolo nel flusso. Ho inoltre aggiunto `height: 0;`, `padding: 0;`, `margin-bottom: 0;` e `opacity: 0;` per collassare lo spazio occupato dall'elemento nascosto, eliminando così il "buco" vuoto e risolvendo il "layout shift".
 patches:
-  - file: styles/modals.css
+  - file: styles/library.css
     content: |
-      /* --- MODALS --- */
-      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
-      .modal-hidden { display: none !important; }
-      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
-      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
-      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
-      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
-      .modal-header h3 { color: var(--primary-color); }
-      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
-      .modal-close-btn svg { width: 1em; height: 1em; }
-      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
-      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
-      #chart-modal-body { padding: 1rem; }
-      #chart-modal-canvas { max-height: 100%; }
-      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
-      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
-      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
-      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
-      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
-
-      /* Custom Scrollbar for Modal Body */
-      .modal-body::-webkit-scrollbar { width: 8px; }
-      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
-      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
-      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
-
-      /* Stile per le <select> nei modali */
-      .form-group select {
-          padding: 0.75rem;
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          font-size: 1rem;
-          background-color: var(--bg-color);
-          color: var(--text-color);
-          appearance: none;
-          -webkit-appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23aaa'%3E%3Cpath d='M8 11.5a.5.5 0 0 1-.35-.15l-4-4a.5.5 0 0 1 .7-.7L8 10.29l3.65-3.64a.5.5 0 0 1 .7.7l-4 4a.5.5 0 0 1-.35.15z'/%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 0.75rem center;
-          background-size: 1em;
-          padding-right: 2.5rem; /* Spazio per la freccia */
+      /* --- LIBRARY PAGE --- */
+      #library-page > h3 {
+          color: var(--primary-color);
+          margin-bottom: 1.5rem;
       }
-      .form-group select:focus {
-          outline: none;
-          border-color: var(--primary-color);
-      }
-
-      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
-      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
-      .editor-section-header {
-        font-weight: bold;
-        color: var(--text-color-muted);
-        margin-bottom: 0.5rem;
-        padding-left: 0.25rem;
-      }
-      .editor-section-body {
-        background: var(--bg-color);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 1rem;
-        min-height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .meal-details, .workout-summary {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-      }
-      .meal-info, .exercise-info {
+      
+      .library-controls {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
-        flex-grow: 1;
-        min-width: 0;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
       }
-      .meal-details__name {
-        font-weight: 500;
-      }
-      .meal-actions, .workout-summary-actions {
-        display: flex;
-        gap: 0.5rem;
-        flex-shrink: 0;
-      }
-      .workout-summary-actions {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 0.75rem;
-        /* Rimosso width: 100% da qui per fixare il layout desktop */
-      }
-      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
-      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
-      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
-
-      /* Stili per i nuovi pulsanti icona in DayEditorModal */
-      .workout-summary-actions .btn-icon {
-        background: none;
-        border: 1px solid var(--border-color);
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        transition: all 0.2s ease;
-      }
-      .workout-summary-actions .btn-icon:hover {
-        background-color: var(--card-color);
-        color: var(--text-color);
-        border-color: var(--primary-color);
-      }
-
-
-      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
-      .workout-editor-list .draggable-item {
-        display: flex;
-        align-items: center;
-        padding: 1rem;
-        background-color: var(--bg-color);
+      
+      .library-search-bar {
+        width: 100%;
+        padding: 0.75rem;
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        min-height: 70px;
+        font-size: 1rem;
+        background-color: var(--card-color);
+        color: var(--text-color);
       }
-      .workout-editor-list .meal-actions { margin-left: auto; }
-      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
-      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
-
-      .modal-footer.workout-editor-actions {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-      }
-      .btn-danger-text {
-        color: var(--danger-color);
-        border-color: var(--danger-color);
-      }
-      .btn-danger-text:hover {
-        color: var(--danger-color) !important;
-        background-color: rgba(239, 83, 80, 0.1) !important;
-        border-color: var(--danger-color) !important;
-        opacity: 1;
-      }
-
-      #exercise-editor-form {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 1rem;
-        align-items: end;
-      }
-      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
-      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
-      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
-      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
-      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
-      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
-      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
-      #exercise-editor-form .tempo-group {
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        border-top: 1px solid var(--border-color);
-        padding-top: 1rem;
-        margin-top: 1rem;
-      }
-      #exercise-editor-form .reps-range-group { grid-column: 3 / 7; }
-
-      /* Stili per il nuovo editor dei log */
-      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
-      .set-editor-row {
-        display: grid;
-        grid-template-columns: 50px 1fr 1fr;
-        gap: 1rem;
-        align-items: end;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
-      .set-editor-label {
-        font-weight: bold;
-        color: var(--text-color-muted);
-        padding-bottom: 0.75rem;
-      }
-
-      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
-      .structured-form .full-width { grid-column: 1 / -1; }
-
-      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
-      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
-
-      /* --- MEAL EDITOR MODAL --- */
-      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
-      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-      .meal-type-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-      }
-      .meal-type-chip {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 0.9rem;
-      }
-      .meal-type-chip.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
+      
+      .library-search-bar:focus {
+        outline: none;
         border-color: var(--primary-color);
       }
-      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
-      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
-      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
-      .meal-editor-ingredient-row label { display: none; }
-      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
-          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
-          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
-      }
-      .meal-editor-ingredient-row .btn-remove-ingredient {
-          background: none; border: none; color: var(--danger-color); cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-      }
-      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
-      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
-
-      /* --- MODAL SEARCH BAR & FILTERS --- */
-      .modal-search-bar-container {
-        padding: 0 1.5rem 1rem 1.5rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-      .modal-search-bar-container .library-search-bar {
-        width: 100%;
-        margin: 0;
-      }
+      
       .tag-filter-container {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
-        padding: 1rem 1.5rem 0 1.5rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s ease;
       }
+      .tag-filter-container.hidden {
+        visibility: hidden;
+        height: 0;
+        padding: 0;
+        margin-bottom: 0;
+        opacity: 0;
+      }
+      
       .tag-filter-btn {
         padding: 0.5rem 1rem;
         border: 1px solid var(--border-color);
@@ -273,67 +61,111 @@ patches:
         background-color: transparent;
         color: var(--text-color-muted);
       }
+      
       .tag-filter-btn.active {
         background-color: var(--primary-color);
         color: var(--bg-color);
         border-color: var(--primary-color);
         font-weight: bold;
       }
-      #selection-modal .modal-body {
-        padding-top: 1rem;
+      
+      /* Stili per le Tab Orizzontali */
+      .view-switcher {
+        display: flex;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden; /* Per arrotondare gli angoli del container */
       }
-
-      /* --- PACKAGE PREVIEW MODAL --- */
-      #package-preview-body {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
+      .view-switcher .btn-view {
+        flex-grow: 1;
+        border: none;
+        border-radius: 0;
+        padding: 0.75rem 1rem;
+        background-color: transparent;
+        color: var(--text-color-muted);
+        font-weight: bold;
+        transition: all 0.2s;
       }
-      .preview-section h4 {
-        color: var(--secondary-color);
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.75rem;
+      .view-switcher .btn-view:not(:last-child) {
+        border-right: 1px solid var(--border-color);
       }
-      .preview-list {
-        list-style-type: none;
-        padding-left: 0;
+      .view-switcher .btn-view.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+      }
+      .view-switcher .btn-view:hover:not(.active) {
+        background-color: var(--card-color);
+        color: var(--text-color);
+      }
+      
+      
+      .library-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      
+      .library-section {
+        margin-bottom: 2rem;
+      }
+      
+      .library-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 1rem;
+          padding: 1rem;
+          background-color: var(--card-color);
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          margin-bottom: 0.75rem;
+      }
+      
+      .library-item-info {
         display: flex;
         flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      
+      .library-item-info__name {
+        font-weight: 500;
+        word-break: break-word;
+      }
+      .library-item-info__details {
+        font-size: 0.85rem;
+        color: var(--text-color-muted);
+        word-break: break-word;
+      }
+      
+      .library-item-actions {
+        display: flex;
         gap: 0.5rem;
+        flex-shrink: 0;
       }
-      .preview-list li {
+      
+      .library-item-actions button {
+        background: none;
+        border: none;
+        color: var(--text-color-muted);
+        cursor: pointer;
         padding: 0.5rem;
-        background-color: var(--bg-color);
-        border-radius: 4px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-
-      @media (min-width: 600px) {
-        .structured-form {
-          grid-template-columns: 1fr 1fr;
-        }
-        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
-        #package-preview-body {
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        }
+      .library-item-actions button:hover {
+        background-color: rgba(255, 255, 255, 0.1);
       }
-
-      @media (max-width: 480px) {
-        .workout-summary {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 0.75rem;
-        }
-        .workout-summary-actions {
-          width: 100%;
-          display: flex;
-          flex-wrap: wrap;
-        }
-        .workout-summary-actions .btn {
-          flex-grow: 1;
-        }
-        /* Rimosso flex-grow: 1 per i btn-icon per evitare stretching */
-        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
+      .library-item-actions .btn-edit:hover {
+        color: var(--primary-color);
+      }
+      .library-item-actions .btn-delete:hover,
+      .library-item-actions .btn-delete-template:hover {
+        color: var(--danger-color);
       }
 commands:
-  - "echo 'Fix CSS per layout icone modal giorno applicato.'"
+  - "echo 'Fase 1 completata: Corretto il bug del layout shift nella Libreria.'"
