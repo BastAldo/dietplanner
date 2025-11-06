@@ -18,7 +18,7 @@ export function openIngredientEditorModal(ingredient = null) {
 
   form.innerHTML = INGREDIENT_FIELDS.map(field => `
     <div class="form-group">
-      <label for="ing-edit-${field.id}">${field.label}</label>
+      <label for="ing-edit-${field.id}">${UI_TEXT[field.label] || field.label}</label>
       <input
         type="${field.type}"
         id="ing-edit-${field.id}"
@@ -43,7 +43,7 @@ export function openIngredientEditorModal(ingredient = null) {
       }
       if (field.props && field.props.includes('required') && !value) {
         isValid = false;
-        showNotification(`Il campo '${field.label}' è obbligatorio.`, 'error');
+        showNotification(`Il campo '${UI_TEXT[field.label] || field.label}' è obbligatorio.`, 'error');
         break;
       }
       ingredientData[field.id] = value;

@@ -96,15 +96,16 @@ export function renderProfilePage(state) {
 
   PROFILE_FIELDS.forEach(field => {
     let fieldHTML = '<div class="form-group">';
+    const labelText = UI_TEXT[field.label] || field.label;
     switch (field.type) {
       case 'radio':
-        fieldHTML += `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>`;
+        fieldHTML += `<fieldset><legend>${labelText}</legend>${field.options.map(opt => `<label><input type="radio" name="${field.id}" value="${opt.value}" ${state.userProfile[field.id] === opt.value ? 'checked' : ''}> ${UI_TEXT[opt.label] || opt.label}</label>`).join('')}</fieldset>`;
         break;
       case 'checkbox-group':
-        fieldHTML += `<fieldset><legend>${field.label}</legend>${field.options.map(opt => `<label><input type="checkbox" name="${opt.id}" id="prof-${opt.id}" ${state.userProfile[opt.id] ? 'checked' : ''}> ${opt.label}</label>`).join('')}</fieldset>`;
+        fieldHTML += `<fieldset><legend>${labelText}</legend>${field.options.map(opt => `<label><input type="checkbox" name="${opt.id}" id="prof-${opt.id}" ${state.userProfile[opt.id] ? 'checked' : ''}> ${UI_TEXT[opt.label] || opt.label}</label>`).join('')}</fieldset>`;
         break;
       default:
-        fieldHTML += `<label for="prof-${field.id}">${field.label}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`;
+        fieldHTML += `<label for="prof-${field.id}">${labelText}</label><input type="${field.type}" id="prof-${field.id}" name="${field.id}" value="${state.userProfile[field.id] || ''}" ${field.props || ''}>`;
     }
     fieldHTML += '</div>';
     formHTML += fieldHTML;

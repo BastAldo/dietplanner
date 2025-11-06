@@ -1,18 +1,18 @@
 export const PROFILE_FIELDS = [
-  { id: 'firstName', label: 'Nome', type: 'text' },
-  { id: 'lastName', label: 'Cognome', type: 'text' },
-  { id: 'nickname', label: 'Nickname', type: 'text' },
-  { id: 'dateOfBirth', label: 'Data di Nascita', type: 'date' },
-  { id: 'height', label: 'Altezza (cm)', type: 'number', props: 'min="1"' },
-  { id: 'gender', label: 'Sesso Biologico', type: 'radio', options: [{value: 'male', label: 'Uomo'}, {value: 'female', label: 'Donna'}] },
+  { id: 'firstName', label: 'PROFILE_FIELD_FIRSTNAME', type: 'text' },
+  { id: 'lastName', label: 'PROFILE_FIELD_LASTNAME', type: 'text' },
+  { id: 'nickname', label: 'PROFILE_FIELD_NICKNAME', type: 'text' },
+  { id: 'dateOfBirth', label: 'PROFILE_FIELD_DOB', type: 'date' },
+  { id: 'height', label: 'PROFILE_FIELD_HEIGHT', type: 'number', props: 'min="1"' },
+  { id: 'gender', label: 'PROFILE_FIELD_GENDER', type: 'radio', options: [{value: 'male', label: 'PROFILE_FIELD_GENDER_MALE'}, {value: 'female', label: 'PROFILE_FIELD_GENDER_FEMALE'}] },
   {
     id: 'plannerPrefs',
-    label: 'Preferenze Planner',
+    label: 'PROFILE_FIELD_PREFS',
     type: 'checkbox-group',
     options: [
-      { id: 'enablePreWorkout', label: 'Attiva slot Pre-Workout' },
-      { id: 'enablePostWorkout', label: 'Attiva slot Post-Workout' },
-      { id: 'enablePreNanna', label: 'Attiva slot Pre-Nanna' },
+      { id: 'enablePreWorkout', label: 'PROFILE_FIELD_PREFS_PRE_WORKOUT' },
+      { id: 'enablePostWorkout', label: 'PROFILE_FIELD_PREFS_POST_WORKOUT' },
+      { id: 'enablePreNanna', label: 'PROFILE_FIELD_PREFS_PRE_NANNA' },
     ]
   }
 ];
@@ -30,13 +30,13 @@ export const BIOMETRIC_FIELDS = [
 ];
 
 export const INGREDIENT_FIELDS = [
-  { id: 'id', label: 'ID Univoco', type: 'text', props: 'required' },
-  { id: 'nome', label: 'Nome', type: 'text', props: 'required' },
-  { id: 'kcal_per_100g', label: 'Kcal / 100g', type: 'number', props: 'required min="0"' },
-  { id: 'g_per_pezzo', label: 'Grammi per pezzo (opzionale)', type: 'number', props: 'min="0"' },
-  { id: 'prot_per_100g', label: 'Proteine / 100g', type: 'number', props: 'min="0"' },
-  { id: 'carb_per_100g', label: 'Carboidrati / 100g', type: 'number', props: 'min="0"' },
-  { id: 'fat_per_100g', label: 'Grassi / 100g', type: 'number', props: 'min="0"' }
+  { id: 'id', label: 'INGREDIENT_FIELD_ID', type: 'text', props: 'required' },
+  { id: 'nome', label: 'INGREDIENT_FIELD_NAME', type: 'text', props: 'required' },
+  { id: 'kcal_per_100g', label: 'INGREDIENT_FIELD_KCAL', type: 'number', props: 'required min="0"' },
+  { id: 'g_per_pezzo', label: 'INGREDIENT_FIELD_G_PER_PIECE', type: 'number', props: 'min="0"' },
+  { id: 'prot_per_100g', label: 'INGREDIENT_FIELD_PROT', type: 'number', props: 'min="0"' },
+  { id: 'carb_per_100g', label: 'INGREDIENT_FIELD_CARB', type: 'number', props: 'min="0"' },
+  { id: 'fat_per_100g', label: 'INGREDIENT_FIELD_FAT', type: 'number', props: 'min="0"' }
 ];
 
 export const EXERCISE_FIELDS = [

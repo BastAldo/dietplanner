@@ -40,14 +40,14 @@
 .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
 
 /* Stili per Input in Confirm Modal */
-.modal-body .form-group {
+#confirm-modal .modal-body .form-group {
   width: 100%;
   margin-top: 1rem;
 }
-.modal-body .form-group label {
+#confirm-modal .modal-body .form-group label {
   display: none; /* Il messaggio del modale funge da etichetta */
 }
-.modal-body .form-group input {
+#confirm-modal .modal-body .form-group input {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid var(--border-color);
@@ -56,7 +56,7 @@
   background-color: var(--bg-color);
   color: var(--text-color);
 }
-.modal-body .form-group input:focus {
+#confirm-modal .modal-body .form-group input:focus {
   outline: none;
   border-color: var(--primary-color);
 }

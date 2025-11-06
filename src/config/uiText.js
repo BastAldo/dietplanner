@@ -248,7 +248,30 @@ const UI_TEXT_CONFIG = [
   { id: 'EXPLORE_SORT_NAME_ASC', text: 'Nome (A-Z)' },
   { id: 'EXPLORE_SORT_NAME_DESC', text: 'Nome (Z-A)' },
   { id: 'EXPLORE_SORT_AUTHOR', text: 'Autore' },
-  { id: 'EXPLORE_FILTER_ALL', text: 'Tutti' }
+  { id: 'EXPLORE_FILTER_ALL', text: 'Tutti' },
+
+  // Nuove chiavi per Profile
+  { id: 'PROFILE_FIELD_FIRSTNAME', text: 'Nome' },
+  { id: 'PROFILE_FIELD_LASTNAME', text: 'Cognome' },
+  { id: 'PROFILE_FIELD_NICKNAME', text: 'Nickname' },
+  { id: 'PROFILE_FIELD_DOB', text: 'Data di Nascita' },
+  { id: 'PROFILE_FIELD_HEIGHT', text: 'Altezza (cm)' },
+  { id: 'PROFILE_FIELD_GENDER', text: 'Sesso Biologico' },
+  { id: 'PROFILE_FIELD_GENDER_MALE', text: 'Uomo' },
+  { id: 'PROFILE_FIELD_GENDER_FEMALE', text: 'Donna' },
+  { id: 'PROFILE_FIELD_PREFS', text: 'Preferenze Planner' },
+  { id: 'PROFILE_FIELD_PREFS_PRE_WORKOUT', text: 'Attiva slot Pre-Workout' },
+  { id: 'PROFILE_FIELD_PREFS_POST_WORKOUT', text: 'Attiva slot Post-Workout' },
+  { id: 'PROFILE_FIELD_PREFS_PRE_NANNA', text: 'Attiva slot Pre-Nanna' },
+
+  // Nuove chiavi per Ingredient
+  { id: 'INGREDIENT_FIELD_ID', text: 'ID Univoco' },
+  { id: 'INGREDIENT_FIELD_NAME', text: 'Nome' },
+  { id: 'INGREDIENT_FIELD_KCAL', text: 'Kcal / 100g' },
+  { id: 'INGREDIENT_FIELD_G_PER_PIECE', text: 'Grammi per pezzo (opzionale)' },
+  { id: 'INGREDIENT_FIELD_PROT', text: 'Proteine / 100g' },
+  { id: 'INGREDIENT_FIELD_CARB', text: 'Carboidrati / 100g' },
+  { id: 'INGREDIENT_FIELD_FAT', text: 'Grassi / 100g' }
 ];
 
 export const UI_TEXT = UI_TEXT_CONFIG.reduce((acc, { id, text }) => {
