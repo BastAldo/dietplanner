@@ -53,11 +53,9 @@ export function populateInitialText() {
   document.getElementById('profile-title').textContent = UI_TEXT.PROFILE_FORM_TITLE;
   document.getElementById('data-management-title').textContent = "Gestione Dati";
   document.getElementById('charts-title').textContent = UI_TEXT.CHARTS_TITLE;
-  document.getElementById('planner-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
+  document.getElementById('planner-week-chart-title').textContent = UI_TEXT.PLANNER_CHART_TITLE;
   document.getElementById('biometrics-chart-title').textContent = UI_TEXT.BIOMETRICS_CHART_TITLE;
   document.getElementById('recipes-title').textContent = UI_TEXT.RECIPES_TITLE;
-  document.querySelector('#charts-page .btn-chart-type[data-type=\"bar\"]').textContent = UI_TEXT.CHART_BAR_VIEW_BTN;
-  document.querySelector('#charts-page .btn-chart-type[data-type=\"line\"]').textContent = UI_TEXT.CHART_LINE_VIEW_BTN;
   document.getElementById('debriefing-title').textContent = UI_TEXT.DEBRIEFING_TITLE;
   document.getElementById('back-to-planner-btn').textContent = UI_TEXT.DEBRIEFING_BACK_BTN;
   document.getElementById('log-view-title').textContent = "Registro Dettagliato";

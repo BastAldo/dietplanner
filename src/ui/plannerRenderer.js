@@ -3,6 +3,8 @@ import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
 
+let plannerWeekChart = null;
+
 function toISODateString(date) {
   return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 }
@@ -86,90 +88,67 @@ function formatDuration(ms) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function renderPlannerSummaryWidget(state, weekStart) {
-  const widgetContainer = document.getElementById('planner-summary-widget');
-  const { userGoals, biometricData, workoutHistory, userProfile, weeklyPlan } = state;
-  let totalCaloriesConsumed = 0;
-  let dayCount = 0;
-  let completedWorkouts = 0;
-  let totalCaloriesBurned = 0;
-
-  for (let i = 0; i < 7; i++) {
-      const dayDate = new Date(weekStart);
-      dayDate.setDate(dayDate.getDate() + i);
-      const isoDate = toISODateString(dayDate);
-
-      let dailyMin = 0;
-      let hasMeals = false;
-      const activeMealSlots = getActiveMealSlots(userProfile);
-      
-      activeMealSlots.forEach(type => {
-          const meal = weeklyPlan[`${isoDate}-${type}`];
-          if (meal) {
-              dailyMin += Number(meal.calories_min) || 0;
-              hasMeals = true;
-          }
-      });
-
-      if (hasMeals) {
-          totalCaloriesConsumed += dailyMin;
-          dayCount++;
-      }
-
-      if (workoutHistory[isoDate]) {
-          completedWorkouts += workoutHistory[isoDate].length;
-          workoutHistory[isoDate].forEach(workout => {
-              totalCaloriesBurned += workout.totalCaloriesBurned || 0;
-          });
-      }
+function renderPlannerWeekChart(state, weekStart) {
+  if (plannerWeekChart) {
+    plannerWeekChart.destroy();
   }
 
-  const avgCalories = dayCount > 0 ? Math.round(totalCaloriesConsumed / dayCount) : 0;
-  const calGoal = userGoals.avg_calories || 0;
-  const workoutGoal = userGoals.num_workouts || 0;
-  const weightGoal = userGoals.target_weight || 0;
-  const latestWeight = biometricData.length > 0 ? biometricData[0].weight : 0;
-  const kgToGoal = (latestWeight && weightGoal) ? (latestWeight - weightGoal).toFixed(1) : 0;
+  const plannerLabels = [];
+  const plannerDataMin = [];
+  const plannerDataMax = [];
+  const activeMealSlots = getActiveMealSlots(state.userProfile);
 
-  let weightProgressHTML = '';
-  if (latestWeight > 0 && weightGoal > 0) {
-      weightProgressHTML = `
-      <div class="planner-summary-stat">
-          <div class="stat-icon">${renderIcon('GOAL', {width: 20, height: 20})}</div>
-          <div>
-              <span class="stat-value">${kgToGoal} kg</span>
-              <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WEIGHT_PROGRESS}</span>
-          </div>
-      </div>`;
+  for (let i=0; i<7; i++) {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + i);
+    plannerLabels.push(date.toLocaleDateString('it-IT', { weekday: 'short' }));
+    const isoDate = toISODateString(date);
+    let min = 0, max = 0;
+    
+    activeMealSlots.forEach(type => {
+      const meal = state.weeklyPlan[`${isoDate}-${type}`];
+      if (meal) {
+        min += meal.calories_min || 0;
+        max += meal.calories_max || meal.calories_min || 0;
+      }
+    });
+    plannerDataMin.push(min);
+    plannerDataMax.push(max);
   }
 
-  widgetContainer.innerHTML = `
-      <h3 class="planner-summary-title">${UI_TEXT.PLANNER_SUMMARY_TITLE}</h3>
-      <div class="planner-summary-stats">
-          <div class="planner-summary-stat">
-              <div class="stat-icon">${renderIcon('PLANNER', {width: 20, height: 20})}</div>
-              <div>
-                  <span class="stat-value">${avgCalories} ${calGoal > 0 ? `/ ${calGoal}`: ''}</span>
-                  <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_AVG_KCAL}</span>
-              </div>
-          </div>
-          <div class="planner-summary-stat">
-              <div class="stat-icon">${renderIcon('DUMBBELL', {width: 20, height: 20})}</div>
-              <div>
-                  <span class="stat-value">${completedWorkouts} ${workoutGoal > 0 ? `/ ${workoutGoal}`: ''}</span>
-                  <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_WORKOUTS}</span>
-              </div>
-          </div>
-          <div class="planner-summary-stat">
-              <div class="stat-icon">${renderIcon('BAR_CHART', {width: 20, height: 20})}</div>
-              <div>
-                  <span class="stat-value">${Math.round(totalCaloriesBurned)}</span>
-                  <span class="stat-label">${UI_TEXT.PLANNER_SUMMARY_CALORIES_BURNED}</span>
-              </div>
-          </div>
-          ${weightProgressHTML}
-      </div>
-  `;
+  const plannerDatasets = [{
+    label: 'Calorie Pianificate (min-max)',
+    data: plannerDataMin.map((min, i) => [min, plannerDataMax[i]]),
+    backgroundColor: 'rgba(77, 182, 172, 0.5)', // secondary-color
+    borderColor: 'rgba(77, 182, 172, 1)',
+    borderWidth: 1,
+    borderSkipped: false,
+  }];
+
+  const ctx = document.getElementById('planner-week-chart-canvas').getContext('2d');
+  plannerWeekChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: plannerLabels, datasets: plannerDatasets },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          ticks: { color: '#aaa' },
+          grid: { color: 'rgba(255, 255, 255, 0.1)' }
+        },
+        x: {
+          ticks: { color: '#aaa' },
+          grid: { display: false }
+        }
+      }
+    }
+  });
 }
 
 function renderTodayWidget(state, todayISO) {
@@ -366,7 +345,7 @@ export function renderPlannerPage(state) {
 
   const todayISO = toISODateString(new Date());
   renderTodayWidget(state, todayISO);
-  renderPlannerSummaryWidget(state, weekStart);
+  renderPlannerWeekChart(state, weekStart);
   renderCalendarView(state, weekStart);
   renderLogView(state, weekStart);
 }

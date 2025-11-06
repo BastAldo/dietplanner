@@ -47,46 +47,6 @@
   color: var(--text-color-muted);
 }
 
-.planner-summary-widget {
-    background: var(--card-color);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-.planner-summary-title {
-    color: var(--secondary-color);
-    text-align: center;
-    margin-bottom: 1.5rem;
-    font-size: 1.25rem;
-}
-.planner-summary-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1.5rem;
-    align-items: center;
-    justify-content: center;
-}
-.planner-summary-stat {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    justify-content: center;
-}
-.planner-summary-stat .stat-icon {
-    color: var(--secondary-color);
-}
-.planner-summary-stat .stat-value {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--primary-color);
-}
-.planner-summary-stat .stat-label {
-    font-size: 0.8rem;
-    color: var(--text-color-muted);
-    text-transform: uppercase;
-}
-
 .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .calendar-header h2 { font-size: 1.25rem; text-align: center; color: var(--text-color); }
 .planner-controls-wrapper {
@@ -190,6 +150,37 @@
   font-style: italic;
   color: var(--text-color-muted);
   width: 100%;
+}
+
+/* --- Stili importati da charts.css per il widget grafico --- */
+.chart-card {
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 1.5rem; /* Aggiunto margine per separarlo */
+}
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-shrink: 0;
+    gap: 1rem;
+}
+.chart-header h4 {
+    color: var(--primary-color);
+    margin: 0;
+    text-align: left;
+    flex-grow: 1;
+}
+.chart-canvas-container {
+    position: relative;
+    height: 250px; /* Altezza di default per il widget */
+    width: 100%;
+    flex-grow: 1;
 }
 
 

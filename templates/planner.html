@@ -5,7 +5,16 @@
 
 <div id="planner-page" class="page-view">
     <section id="today-widget" class="today-widget"></section>
-    <section id="planner-summary-widget" class="planner-summary-widget"></section>
+    
+    <section id="planner-week-chart-widget" class="chart-card">
+        <div class="chart-header">
+            <h4 id="planner-week-chart-title"></h4>
+        </div>
+        <div class="chart-canvas-container" style="height: 250px;">
+          <canvas id="planner-week-chart-canvas"></canvas>
+        </div>
+    </section>
+
     <section class="view-container">
         <header class="calendar-header">
             <button id="prev-week-btn" class="btn btn-secondary">&lt;</button>

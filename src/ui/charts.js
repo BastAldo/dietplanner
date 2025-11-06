@@ -5,7 +5,6 @@ import { MEAL_TYPES } from '../utils/constants.js';
 
 let biometricChart = null;
 let trendChart = null;
-let plannerChart = null;
 let correlationChart = null;
 
 const CHART_COLORS = [
@@ -140,7 +139,7 @@ function renderSummaryStats(fullData, goalWeight) {
 
 export function renderCharts() {
     const appData = getState();
-    const { currentRangeFilter, dateOffset, selectedBiometric, plannerChartType } = appData.ui.charts;
+    const { currentRangeFilter, dateOffset, selectedBiometric } = appData.ui.charts;
     const { filteredData, fullData } = getBiometricsData(appData, currentRangeFilter, dateOffset);
     
     updateChartNavigation(appData, currentRangeFilter, dateOffset, filteredData);
@@ -206,55 +205,6 @@ export function renderCharts() {
       options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'day' } } } }
     });
     
-    // Render Planner Chart
-    if (plannerChart) plannerChart.destroy();
-    const weekStart = new Date(appData.focusedDate);
-    const day = weekStart.getDay();
-    const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
-    weekStart.setDate(diff);
-
-    const plannerLabels = [];
-    const plannerDataMin = [];
-    const plannerDataMax = [];
-    for (let i=0; i<7; i++) {
-      const date = new Date(weekStart);
-      date.setDate(date.getDate() + i);
-      plannerLabels.push(date.toLocaleDateString('it-IT', { weekday: 'short' }));
-      const isoDate = date.toISOString().split('T')[0];
-      let min = 0, max = 0;
-      MEAL_TYPES.forEach(type => {
-        const meal = appData.weeklyPlan[`${isoDate}-${type}`];
-        if (meal) {
-          min += meal.calories_min || 0;
-          max += meal.calories_max || meal.calories_min || 0;
-        }
-      });
-      plannerDataMin.push(min);
-      plannerDataMax.push(max);
-    }
-
-    let plannerDatasets;
-    if (plannerChartType === 'line') {
-      plannerDatasets = [
-        { label: 'Calorie Min', data: plannerDataMin, borderColor: 'rgba(75, 192, 192, 1)', fill: false },
-        { label: 'Calorie Max', data: plannerDataMax, borderColor: 'rgba(255, 159, 64, 1)', fill: false }
-      ];
-    } else {
-      plannerDatasets = [{
-        label: 'Calorie Pianificate (min-max)',
-        data: plannerDataMin.map((min, i) => [min, plannerDataMax[i]]),
-        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1,
-        borderSkipped: false,
-      }];
-    }
-    plannerChart = setupChart('planner-chart-canvas', {
-      type: plannerChartType,
-      data: { labels: plannerLabels, datasets: plannerDatasets },
-      options: { responsive: true, maintainAspectRatio: false }
-    });
-
     // Render Correlation Chart
     if (correlationChart) correlationChart.destroy();
     const correlationDataPoints = [];

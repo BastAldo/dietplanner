@@ -43,18 +43,6 @@ function handleBiometricChange(newKey) {
     setUiState(newUiState);
 }
 
-function handlePlannerChartTypeChange(newType) {
-    const currentState = getState();
-    const newUiState = {
-        ...currentState.ui,
-        charts: {
-            ...currentState.ui.charts,
-            plannerChartType: newType
-        }
-    };
-    setUiState(newUiState);
-}
-
 export function initializeChartsListeners() {
     const chartsPage = document.getElementById('charts-page');
     if (!chartsPage) return;
@@ -72,8 +60,6 @@ export function initializeChartsListeners() {
             handleDateNavigation(1);
         } else if (target.matches('.btn-chart-type') && target.dataset.key) {
             handleBiometricChange(target.dataset.key);
-        } else if (target.matches('.btn-chart-type') && target.dataset.type) {
-            handlePlannerChartTypeChange(target.dataset.type);
         }
     });
 }

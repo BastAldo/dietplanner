@@ -32,8 +32,7 @@ let state = {
     charts: {
       currentRangeFilter: 30,
       dateOffset: 0,
-      selectedBiometric: 'weight',
-      plannerChartType: 'bar'
+      selectedBiometric: 'weight'
     },
     explore: {
       packages: [],
