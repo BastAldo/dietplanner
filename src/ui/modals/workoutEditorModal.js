@@ -95,8 +95,9 @@ function handleModalClick(e) {
           if (exercise) {
             const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
             localExercises.push(newExerciseInstance);
+            renderList(); // <-- FIX: Aggiorna la lista localmente
           }
-          openWorkoutEditorModal(currentConfig); // Riapre e forza il re-render
+          // NON richiamare openWorkoutEditorModal(currentConfig)
         });
     } else if (btnRemoveExercise) {
         const index = parseInt(btnRemoveExercise.dataset.index, 10);
@@ -132,6 +133,17 @@ export function openWorkoutEditorModal(config) {
   const footer = modal.querySelector('.modal-footer');
 
   let title = '';
+  // FIX: Non reinizializzare localExercises se è già popolato E 
+  // stiamo aprendo la *stessa* configurazione.
+  // Questo è un controllo fragile, un modo migliore è resettare
+  // localExercises solo quando config cambia *veramente*.
+  // Per ora, l'unica chiamata che *non* deve re-inizializzare
+  // è quella da openWorkoutSelectionModal. Ma quella chiamata
+  // è stata rimossa.
+  // La logica originale di re-inizializzazione è CORRETTA
+  // perché ogni volta che si apre il modal si deve partire
+  // dallo stato globale (o template).
+  
   if (config.type === 'day') {
     const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
     localExercises = JSON.parse(JSON.stringify(state.weeklyWorkouts[workoutSlotId] || []));

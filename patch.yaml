@@ -1,174 +1,249 @@
-commit_message: "fix(modals): Forza l'aggiornamento di selectionModal.js alla versione con callback"
+commit_message: "fix(modals): Risolve il bug di aggiunta esercizio nel workoutEditorModal"
 rationale: |
-  Come emerso dai log forniti dall'utente (`[Modals] Opening workout selection modal {slotId: ƒ}`), il file `src/ui/modals/selectionModal.js` è rimasto a una versione precedente e non ha recepito il refactoring della "Fase 3a".
+  L'utente ha segnalato che l'aggiunta di un esercizio nel `workoutEditorModal` non funzionava.
 
-  Questo causava il bug:
-  1.  Il `workoutEditorModal` passava un callback a `openWorkoutSelectionModal`.
-  2.  Il vecchio `openWorkoutSelectionModal` interpretava il callback come uno `slotId`.
-  3.  Al click, il vecchio `list.onclick` chiamava `updateWeeklyWorkout` con un `slotId` che in realtà era una funzione, causando il fallimento dell'operazione e la mancata aggiunta dell'esercizio all'array `localExercises`.
+  **Analisi del Bug:**
+  1.  Il `workoutEditorModal` apriva correttamente il `workoutSelectionModal` con un callback.
+  2.  Il callback aggiungeva l'esercizio al `localExercises` array (corretto).
+  3.  Il callback richiamava `openWorkoutEditorModal(currentConfig)` (errato).
+  4.  Questa chiamata faceva sì che `openWorkoutEditorModal` re-inizializzasse `localExercises` dall'inizio, cancellando l'esercizio appena aggiunto prima che potesse essere renderizzato.
 
-  Questa patch ri-applica l'intera modifica a `src/ui/modals/selectionModal.js`, correggendo la firma di `openWorkoutSelectionModal` e `openWorkoutTemplateSelectionModal` per usare `onSelectCallback`. Questo allinea il file al resto del codice e corregge il bug.
+  **Soluzione:**
+  Ho modificato il `handleModalClick` in `src/ui/modals/workoutEditorModal.js`:
+  1.  Il gestore `btnAddExercise` ora non richiama più `openWorkoutEditorModal`.
+  2.  Il callback passato a `openWorkoutSelectionModal` ora fa solo due cose:
+      a. Aggiunge l'esercizio a `localExercises`.
+      b. Chiama `renderList()` per aggiornare l'HTML del modal (che è rimasto aperto).
+
+  Questo corregge il bug e l'esercizio ora viene aggiunto correttamente alla lista.
 patches:
-  - file: src/ui/modals/selectionModal.js
+  - file: src/ui/modals/workoutEditorModal.js
     content: |
-      import { getState, updateWeeklyPlan, updateWeeklyWorkout, getPackageTags, addWorkoutTemplateToDay } from '../../core/state.js';
+      import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner, addWorkoutTemplate, clearWeeklyWorkout, getTemplateById, setWeeklyWorkout, updateWorkoutTemplate } from '../../core/state.js';
+      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
       import { UI_TEXT } from '../../config/uiText.js';
+      import { renderIcon } from '../icons.js';
       import { log } from '../../utils/logger.js';
-      import { formatIngredients } from '../../utils/formatters.js';
-      import { openDayEditorModal } from './dayEditorModal.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
+      import { openWorkoutSelectionModal } from './selectionModal.js';
+      import { openExerciseEditorModal } from './exerciseEditorModal.js';
+      import { showNotification } from '../notifications.js';
+      import { showConfirmModal } from './confirmModal.js';
       
-      export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
-        log('Modals', 'Opening meal selection modal', { slotId });
-        const mealType = slotId.substring(11);
-        const selectionModal = document.getElementById('selection-modal');
-        selectionModal.querySelector('#selection-modal-title').textContent = `${UI_TEXT.SELECT_MEAL_TITLE} ${mealType}`;
-        
-        const list = selectionModal.querySelector('#selection-modal-list');
-        const searchInput = selectionModal.querySelector('#selection-modal-search');
-        const tagsContainer = selectionModal.querySelector('#selection-modal-tag-filters');
-        
-        let activeTagFilter = null;
-        let searchTerm = '';
+      let sortableInstance = null;
+      let localExercises = [];
+      let currentConfig = {};
       
-        function renderPackageTags() {
-            const pkgTags = getPackageTags();
-            if (pkgTags.length === 0) {
-              tagsContainer.innerHTML = '';
-              return;
+      function formatFullDate(isoDate) {
+        const date = new Date(isoDate);
+        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+      
+      function formatExerciseDetails(exercise) {
+        const sets = exercise.defaultSets || '?';
+        const rest = exercise.defaultRest || 0;
+        let details = `${sets} x `;
+      
+        // Gestisce reps, rep-range, o durata in base alla modalità
+        if (exercise.execution_mode === 'logging') {
+            if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
+                details += `${exercise.defaultRepsMin}-${exercise.defaultRepsMax}`;
+            } else if (exercise.defaultRepsMin) {
+                details += `${exercise.defaultRepsMin}+`;
+            } else {
+                details += `Reps`; // Fallback
             }
-            tagsContainer.innerHTML = `
-              <button class="tag-filter-btn active" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>
-              ${pkgTags.map(tag => {
-                const tagName = tag.replace('pkg:', '');
-                return `<button class="tag-filter-btn" data-tag="${tag}">${tagName}</button>`;
-              }).join('')}
-            `;
+        } else if (exercise.execution_mode === 'guided_static' || exercise.type === 'time') {
+            details += `${exercise.defaultDuration || '?'}s`;
+        } else {
+            // Default a 'guided_tempo' o vecchio formato 'reps'
+            details += `${exercise.defaultReps || '?'} reps`;
         }
+        
+        details += ` | Riposo: ${rest}s`;
       
-        function renderList() {
-            const lowerCaseSearch = searchTerm.toLowerCase().trim();
-            
-            const filteredMeals = relevantMeals.filter(meal => {
-                // Filtro Pacchetto
-                if (activeTagFilter && (!meal.etichette || !meal.etichette.includes(activeTagFilter))) {
-                    return false;
+        if (exercise.defaultTempo && exercise.execution_mode === 'guided_tempo') {
+            const { up, hold, down } = exercise.defaultTempo;
+            details += ` | Tempo: ${up}-${hold}-${down}`;
+        }
+        return details;
+      }
+      
+      function renderList() {
+        const body = document.getElementById('workout-editor-body');
+        let exercisesHTML = localExercises.map((exercise, index) => {
+            const exerciseDetails = formatExerciseDetails(exercise);
+            return `<div class="meal-details draggable-item" data-index="${index}" data-instance-id="${exercise.instanceId}">
+                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
+                        <div class="exercise-info">
+                            <span class="meal-details__name">${exercise.name}</span>
+                            <span class="exercise-details-summary">${exerciseDetails}</span>
+                        </div>
+                        <div class="meal-actions">
+                            <button class="btn-edit-exercise" title="Modifica" data-index="${index}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
+                            <button class="btn-remove-exercise" title="Rimuovi" data-index="${index}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
+                        </div>
+                    </div>`;
+        }).join('');
+      
+        const addExerciseButton = `<button class="btn-add-exercise">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
+        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
+      
+        const listContainer = body.querySelector('.workout-editor-list');
+      
+        if (sortableInstance) {
+            sortableInstance.destroy();
+        }
+        sortableInstance = new Sortable(listContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                const [movedItem] = localExercises.splice(evt.oldIndex, 1);
+                localExercises.splice(evt.newIndex, 0, movedItem);
+                renderList(); // Rerender per aggiornare gli indici
+            }
+        });
+      }
+      
+      function handleModalClick(e) {
+          const btnAddExercise = e.target.closest('.btn-add-exercise');
+          const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
+          const btnEditExercise = e.target.closest('.btn-edit-exercise');
+      
+          if (btnAddExercise) {
+              // NON chiudere questo modal, apri l'altro sopra
+              openWorkoutSelectionModal((exercise) => {
+                if (exercise) {
+                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
+                  localExercises.push(newExerciseInstance);
+                  renderList(); // <-- FIX: Aggiorna la lista localmente
                 }
+                // NON richiamare openWorkoutEditorModal(currentConfig)
+              });
+          } else if (btnRemoveExercise) {
+              const index = parseInt(btnRemoveExercise.dataset.index, 10);
+              localExercises.splice(index, 1);
+              renderList(); // Rerender
+          } else if (btnEditExercise) {
+              const index = parseInt(btnEditExercise.dataset.index, 10);
+              const exercise = localExercises[index];
+              if (exercise) {
+                // Chiudi questo modal PRIMA di aprirne un altro
+                document.getElementById('workout-editor-modal').classList.add('modal-hidden');
                 
-                // Filtro Ricerca
-                if (lowerCaseSearch !== '') {
-                  const nameMatch = meal.nomePasto.toLowerCase().includes(lowerCaseSearch);
-                  const tagMatch = meal.etichette && meal.etichette.some(tag => tag.toLowerCase().includes(lowerCaseSearch));
-                  if (!nameMatch && !tagMatch) return false;
-                }
+                openExerciseEditorModal({
+                  context: 'planner', // Usa lo stesso editor del planner
+                  exercise,
+                  slotId: null, // Non serve
+                  returnIsoDate: null, // Non serve
+                  onSaveCallback: (updatedExercise) => { // Usa il nuovo callback
+                    localExercises[index] = updatedExercise;
+                    openWorkoutEditorModal(currentConfig); // Riapre il modal aggiornato
+                  }
+                });
+              }
+          }
+      }
       
-                return true;
-            });
-            
-            const noMealsText = searchTerm ? `Nessun pasto trovato per "${searchTerm}".` : UI_TEXT.NO_MEALS_AVAILABLE;
-            list.innerHTML = filteredMeals.length > 0 
-                ? filteredMeals.map(meal => `<div class="selection-item" data-meal-id="${meal.id}"><h4>${meal.nomePasto}</h4>${formatIngredients(meal)}</div>`).join('') 
-                : `<p class="placeholder-text">${noMealsText}</p>`;
+      export function openWorkoutEditorModal(config) {
+        log('Modals', 'Opening workout editor modal (refactored)', { config });
+        currentConfig = config; // Salva la configurazione corrente
+        const state = getState();
+        const modal = document.getElementById('workout-editor-modal');
+        const body = modal.querySelector('#workout-editor-body');
+        const footer = modal.querySelector('.modal-footer');
+      
+        let title = '';
+        // FIX: Non reinizializzare localExercises se è già popolato E 
+        // stiamo aprendo la *stessa* configurazione.
+        // Questo è un controllo fragile, un modo migliore è resettare
+        // localExercises solo quando config cambia *veramente*.
+        // Per ora, l'unica chiamata che *non* deve re-inizializzare
+        // è quella da openWorkoutSelectionModal. Ma quella chiamata
+        // è stata rimossa.
+        // La logica originale di re-inizializzazione è CORRETTA
+        // perché ogni volta che si apre il modal si deve partire
+        // dallo stato globale (o template).
+        
+        if (config.type === 'day') {
+          const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
+          localExercises = JSON.parse(JSON.stringify(state.weeklyWorkouts[workoutSlotId] || []));
+          title = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(config.isoDate)}`;
+        } else if (config.type === 'template') {
+          const template = getTemplateById(config.templateId);
+          localExercises = template ? JSON.parse(JSON.stringify(template.exercises)) : [];
+          title = `Modifica Scheda: ${template ? template.name : ''}`;
         }
       
-        searchInput.value = '';
-        searchInput.oninput = (e) => {
-            searchTerm = e.target.value;
-            renderList();
-        };
+        modal.querySelector('#workout-editor-title').textContent = title;
+        modal.querySelector('#workout-editor-save-template-btn').textContent = UI_TEXT.SAVE_TEMPLATE_BTN;
+        modal.querySelector('#workout-editor-clear-btn').textContent = UI_TEXT.CLEAR_WORKOUT_BTN;
       
-        tagsContainer.onclick = (e) => {
-          const target = e.target.closest('.tag-filter-btn');
-          if (!target) return;
-          
-          tagsContainer.querySelectorAll('.tag-filter-btn').forEach(btn => btn.classList.remove('active'));
-          target.classList.add('active');
-          
-          const tag = target.dataset.tag;
-          activeTagFilter = tag === 'all' ? null : tag;
-          renderList();
-        };
-        
-        renderPackageTags();
-        renderList();
-        
-        const closeAndReturn = () => {
-          selectionModal.classList.add('modal-hidden');
-          if (returnIsoDate) openDayEditorModal(returnIsoDate);
-        };
+        // Aggiungi il nuovo pulsante "Salva Modifiche" se non esiste
+        if (!footer.querySelector('#workout-editor-save-btn')) {
+          const saveBtn = document.createElement('button');
+          saveBtn.id = 'workout-editor-save-btn';
+          saveBtn.className = 'btn btn-primary';
+          footer.appendChild(saveBtn);
+        }
+        footer.querySelector('#workout-editor-save-btn').textContent = UI_TEXT.WORKOUT_EDITOR_SAVE_CHANGES_BTN;
       
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if(item) { 
-            updateWeeklyPlan(slotId, item.dataset.mealId); 
-            closeAndReturn(); 
+        renderList(); // Renderizza la lista locale
+      
+        // --- Gestione Listener (rimuovi e riaggiungi) ---
+        body.onclick = handleModalClick; // Usa un handler dedicato
+      
+        const oldSaveTemplateBtn = footer.querySelector('#workout-editor-save-template-btn');
+        const newSaveTemplateBtn = oldSaveTemplateBtn.cloneNode(true);
+        oldSaveTemplateBtn.parentNode.replaceChild(newSaveTemplateBtn, oldSaveTemplateBtn);
+        newSaveTemplateBtn.onclick = () => {
+          if (localExercises.length === 0) {
+            showNotification('Aggiungi almeno un esercizio prima di salvare la scheda.', 'error');
+            return;
           }
-        };
-        selectionModal.classList.remove('modal-hidden');
-      }
-      
-      export function openWorkoutSelectionModal(onSelectCallback) {
-        log('Modals', 'Opening workout selection modal (callback mode)');
-        const state = getState();
-        const workoutSelectionModal = document.getElementById('workout-selection-modal');
-        workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
-        const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
-        const relevantWorkouts = state.masterWorkoutList;
-        list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-      
-        const closeAndSelect = (exercise) => {
-          workoutSelectionModal.classList.add('modal-hidden');
-          if (onSelectCallback) {
-            onSelectCallback(exercise);
+          const templateName = prompt(UI_TEXT.SAVE_TEMPLATE_PROMPT);
+          if (templateName && templateName.trim() !== '') {
+            addWorkoutTemplate(templateName.trim(), localExercises);
+            showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
           }
         };
       
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            const exercise = state.masterWorkoutList.find(ex => ex.id === item.dataset.exerciseId);
-            if (exercise) {
-              closeAndSelect(exercise);
-            }
+        const oldClearBtn = footer.querySelector('#workout-editor-clear-btn');
+        const newClearBtn = oldClearBtn.cloneNode(true);
+        oldClearBtn.parentNode.replaceChild(newClearBtn, oldClearBtn);
+        newClearBtn.onclick = () => {
+          if (localExercises.length === 0) {
+            showNotification('L\'allenamento è già vuoto.', 'info');
+            return;
           }
-        };
-        workoutSelectionModal.classList.remove('modal-hidden');
-      }
-      
-      export function openWorkoutTemplateSelectionModal(onSelectCallback) {
-        log('Modals', 'Opening workout template selection modal (callback mode)');
-        const state = getState();
-        const templateSelectionModal = document.getElementById('workout-template-selection-modal');
-        templateSelectionModal.querySelector('#workout-template-selection-modal-title').textContent = UI_TEXT.SELECT_TEMPLATE_TITLE;
-        const list = templateSelectionModal.querySelector('#workout-template-selection-modal-list');
-        const relevantTemplates = state.masterWorkoutTemplateList;
-        
-        list.innerHTML = relevantTemplates.length > 0 
-            ? relevantTemplates.map(template => 
-                `<div class="selection-item" data-template-id="${template.id}">
-                    <h4>${template.name}</h4>
-                    <p>${template.exercises.length} ${template.exercises.length === 1 ? 'esercizio' : 'esercizi'}</p>
-                </div>`
-              ).join('') 
-            : `<p class="placeholder-text">${UI_TEXT.NO_TEMPLATES_AVAILABLE}</p>`;
-        
-        const closeAndSelect = (template) => {
-          templateSelectionModal.classList.add('modal-hidden');
-          if (onSelectCallback) {
-            onSelectCallback(template);
-          }
+          showConfirmModal({
+            title: UI_TEXT.CLEAR_WORKOUT_CONFIRM_TITLE,
+            message: UI_TEXT.CLEAR_WORKOUT_CONFIRM_MSG,
+            onConfirm: () => {
+              localExercises = [];
+              renderList();
+              showNotification(UI_TEXT.CLEAR_WORKOUT_SUCCESS, 'success');
+            },
+            type: 'danger'
+          });
         };
       
-        list.onclick = e => {
-          const item = e.target.closest('.selection-item');
-          if (item) {
-            const template = state.masterWorkoutTemplateList.find(t => t.id === parseFloat(item.dataset.templateId));
-            if (template) {
-              closeAndSelect(template);
-            }
+        const oldSaveBtn = footer.querySelector('#workout-editor-save-btn');
+        const newSaveBtn = oldSaveBtn.cloneNode(true);
+        oldSaveBtn.parentNode.replaceChild(newSaveBtn, oldSaveBtn);
+        newSaveBtn.onclick = () => {
+          if (config.type === 'day') {
+            const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
+            setWeeklyWorkout(workoutSlotId, localExercises);
+          } else if (config.type === 'template') {
+            updateWorkoutTemplate(config.templateId, localExercises);
           }
+          showNotification(UI_TEXT.WORKOUT_EDITOR_UPDATE_SUCCESS, 'success');
+          modal.classList.add('modal-hidden');
         };
-        templateSelectionModal.classList.remove('modal-hidden');
+        // --- Fine Gestione Listener ---
+      
+        modal.classList.remove('modal-hidden');
       }
 commands:
-  - "echo 'Bugfix: selectionModal.js è stato forzato alla versione corretta con i callback.'"
+  - "echo 'Bugfix: Corretta la logica di callback in workoutEditorModal. Gli esercizi ora dovrebbero aggiungersi correttamente.'"
