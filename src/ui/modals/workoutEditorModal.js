@@ -181,11 +181,27 @@ export function openWorkoutEditorModal(config) {
       showNotification('Aggiungi almeno un esercizio prima di salvare la scheda.', 'error');
       return;
     }
-    const templateName = prompt(UI_TEXT.SAVE_TEMPLATE_PROMPT);
-    if (templateName && templateName.trim() !== '') {
-      addWorkoutTemplate(templateName.trim(), localExercises);
-      showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
-    }
+    
+    showConfirmModal({
+      title: UI_TEXT.SAVE_TEMPLATE_BTN,
+      message: UI_TEXT.SAVE_TEMPLATE_PROMPT,
+      input: { placeholder: 'Nome della scheda...', required: true },
+      buttons: [
+        {
+          text: 'Salva',
+          className: 'btn btn-primary',
+          callback: (templateName) => {
+            // templateName è già validato (required: true) dal confirmModal
+            addWorkoutTemplate(templateName.trim(), localExercises);
+            showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
+          }
+        },
+        {
+          text: UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
+          className: 'btn btn-secondary'
+        }
+      ]
+    });
   };
 
   const oldClearBtn = footer.querySelector('#workout-editor-clear-btn');

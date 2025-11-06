@@ -1,10 +1,12 @@
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
+import { showNotification } from '../notifications.js';
 
 export function showConfirmModal(options) {
   const {
     title,
     message,
+    input, // Nuovo: { placeholder, value, required }
     buttons = [], // Default to an empty array
     // The following are fallbacks for the old API signature
     onConfirm,
@@ -14,10 +16,22 @@ export function showConfirmModal(options) {
     cancelText = UI_TEXT.CONFIRM_MODAL_CANCEL_BTN,
   } = options;
 
-  log('Modals', 'Showing confirm modal', { title });
+  log('Modals', 'Showing confirm modal', { title, hasInput: !!input });
   const confirmModal = document.getElementById('confirm-modal');
   confirmModal.querySelector('#confirm-modal-title').textContent = title;
-  confirmModal.querySelector('#confirm-modal-message').textContent = message;
+  
+  const modalBody = confirmModal.querySelector('.modal-body');
+  modalBody.innerHTML = `<p id="confirm-modal-message">${message}</p>`; // Pulisci e imposta messaggio
+
+  // Aggiungi input se richiesto
+  if (input) {
+    modalBody.innerHTML += `
+      <div class="form-group">
+        <input type="text" id="confirm-modal-input" placeholder="${input.placeholder || ''}" value="${input.value || ''}">
+      </div>
+    `;
+  }
+  
   const footer = confirmModal.querySelector('.modal-footer');
   footer.innerHTML = ''; // Clear previous buttons
 
@@ -39,6 +53,11 @@ export function showConfirmModal(options) {
 
   const cleanup = () => {
     confirmModal.classList.add('modal-hidden');
+    // Rimuovi l'input per sicurezza
+    const inputEl = modalBody.querySelector('#confirm-modal-input');
+    if (inputEl) {
+      inputEl.parentElement.remove();
+    }
   };
 
   buttonConfigs.forEach(btnConfig => {
@@ -46,11 +65,23 @@ export function showConfirmModal(options) {
     button.textContent = btnConfig.text;
     button.className = btnConfig.className || 'btn btn-secondary';
     button.addEventListener('click', () => {
+      let inputValue = null;
+      if (input) {
+        const inputEl = document.getElementById('confirm-modal-input');
+        inputValue = inputEl.value;
+
+        if (input.required && (!inputValue || inputValue.trim() === '')) {
+          showNotification('Questo campo è obbligatorio.', 'error');
+          inputEl.focus();
+          return; // Non chiudere il modale, non eseguire il callback
+        }
+      }
+      
       if (btnConfig.callback) {
-        btnConfig.callback();
+        btnConfig.callback(inputValue); // Passa il valore dell'input al callback
       }
       cleanup();
-    }, { once: true });
+    }, { once: false }); // Rimosso 'once: true' per permettere la validazione
     footer.appendChild(button);
   });
 
@@ -65,4 +96,7 @@ export function showConfirmModal(options) {
   }
 
   confirmModal.classList.remove('modal-hidden');
+  if (input) {
+    document.getElementById('confirm-modal-input').focus();
+  }
 }
