@@ -64,14 +64,6 @@ export const setUiState = (uiChanges) => {
   notify();
 }
 
-export function getPackageTags() {
-  const mealTags = state.masterMealList.flatMap(meal => meal.etichette || []);
-  const ingredientTags = state.masterIngredientList.flatMap(ing => ing.etichette || []);
-  const allTags = [...mealTags, ...ingredientTags];
-  const pkgTags = allTags.filter(tag => tag && tag.startsWith('pkg:'));
-  return [...new Set(pkgTags)];
-}
-
 export function getMealsForType(mealType) {
   return state.masterMealList.filter(meal => {
     if (meal.tipoPasto === 'Tutti') return true;

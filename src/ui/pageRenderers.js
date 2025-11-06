@@ -6,7 +6,7 @@ import { renderCharts } from './charts.js';
 import { formatIngredientsSummary } from '../utils/formatters.js';
 import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
-import { getState, setUiState, getPackageTags } from '../core/state.js';
+import { getState, setUiState } from '../core/state.js';
 import { openPackagePreviewModal } from './modals.js';
 import { ALL_MEAL_TYPES } from '../utils/constants.js';
 
@@ -214,11 +214,21 @@ export function renderRecipesPage(state) {
   }).join('');
 }
 
-function renderPackageFilters(state) {
+function renderPackageFilters(state, activeLibraryTab) {
   const { packageFilter } = state.ui.library;
-  const pkgTags = getPackageTags();
   const tagsContainer = document.getElementById('library-tag-filters');
   
+  let sourceList = [];
+  if (activeLibraryTab === 'ingredients') {
+    sourceList = state.masterIngredientList;
+  } else if (activeLibraryTab === 'meals') {
+    sourceList = state.masterMealList;
+  } else if (activeLibraryTab === 'exercises') {
+    sourceList = state.masterWorkoutList;
+  }
+
+  const pkgTags = [...new Set(sourceList.flatMap(item => item.etichette || []).filter(tag => tag && tag.startsWith('pkg:')))];
+
   if (pkgTags.length === 0) {
     tagsContainer.innerHTML = '';
     return;
@@ -283,7 +293,7 @@ export function renderLibraryPage(state) {
   // Render Package Filters (solo per pasti, ingredienti, esercizi)
   const tagsContainer = document.getElementById('library-tag-filters');
   if (activeLibraryTab === 'meals' || activeLibraryTab === 'ingredients' || activeLibraryTab === 'exercises') {
-    renderPackageFilters(state);
+    renderPackageFilters(state, activeLibraryTab);
     tagsContainer.classList.remove('hidden');
   } else {
     tagsContainer.classList.add('hidden');
