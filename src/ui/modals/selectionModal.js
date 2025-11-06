@@ -94,32 +94,36 @@ export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
   selectionModal.classList.remove('modal-hidden');
 }
 
-export function openWorkoutSelectionModal(slotId, returnIsoDate) {
-  log('Modals', 'Opening workout selection modal', { slotId });
+export function openWorkoutSelectionModal(onSelectCallback) {
+  log('Modals', 'Opening workout selection modal (callback mode)');
   const state = getState();
   const workoutSelectionModal = document.getElementById('workout-selection-modal');
   workoutSelectionModal.querySelector('#workout-selection-modal-title').textContent = UI_TEXT.SELECT_EXERCISE_TITLE;
   const list = workoutSelectionModal.querySelector('#workout-selection-modal-list');
   const relevantWorkouts = state.masterWorkoutList;
   list.innerHTML = relevantWorkouts.length > 0 ? relevantWorkouts.map(ex => `<div class="selection-item" data-exercise-id="${ex.id}"><h4>${ex.name}</h4><p>${ex.description}</p></div>`).join('') : `<p>${UI_TEXT.NO_WORKOUTS_AVAILABLE}</p>`;
-  
-  const closeAndReturn = () => {
+
+  const closeAndSelect = (exercise) => {
     workoutSelectionModal.classList.add('modal-hidden');
-    if (returnIsoDate) openWorkoutEditorModal(returnIsoDate);
+    if (onSelectCallback) {
+      onSelectCallback(exercise);
+    }
   };
 
   list.onclick = e => {
     const item = e.target.closest('.selection-item');
     if (item) {
-      updateWeeklyWorkout(slotId, item.dataset.exerciseId);
-      closeAndReturn();
+      const exercise = state.masterWorkoutList.find(ex => ex.id === item.dataset.exerciseId);
+      if (exercise) {
+        closeAndSelect(exercise);
+      }
     }
   };
   workoutSelectionModal.classList.remove('modal-hidden');
 }
 
-export function openWorkoutTemplateSelectionModal(slotId, returnIsoDate) {
-  log('Modals', 'Opening workout template selection modal', { slotId });
+export function openWorkoutTemplateSelectionModal(onSelectCallback) {
+  log('Modals', 'Opening workout template selection modal (callback mode)');
   const state = getState();
   const templateSelectionModal = document.getElementById('workout-template-selection-modal');
   templateSelectionModal.querySelector('#workout-template-selection-modal-title').textContent = UI_TEXT.SELECT_TEMPLATE_TITLE;
@@ -135,16 +139,20 @@ export function openWorkoutTemplateSelectionModal(slotId, returnIsoDate) {
         ).join('') 
       : `<p class="placeholder-text">${UI_TEXT.NO_TEMPLATES_AVAILABLE}</p>`;
   
-  const closeAndReturn = () => {
+  const closeAndSelect = (template) => {
     templateSelectionModal.classList.add('modal-hidden');
-    if (returnIsoDate) openDayEditorModal(returnIsoDate);
+    if (onSelectCallback) {
+      onSelectCallback(template);
+    }
   };
 
   list.onclick = e => {
     const item = e.target.closest('.selection-item');
     if (item) {
-      addWorkoutTemplateToDay(slotId, parseFloat(item.dataset.templateId));
-      closeAndReturn();
+      const template = state.masterWorkoutTemplateList.find(t => t.id === parseFloat(item.dataset.templateId));
+      if (template) {
+        closeAndSelect(template);
+      }
     }
   };
   templateSelectionModal.classList.remove('modal-hidden');
