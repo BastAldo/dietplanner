@@ -1,5 +1,5 @@
 import { calculateBMR } from '../core/calculations.js';
-import { BIOMETRIC_FIELDS, PROFILE_FIELDS } from '../config/forms.js';
+import { BIOMETRIC_FIELDS, PROFILE_FIELDS, EXERCISE_FIELDS } from '../config/forms.js';
 import { UI_TEXT } from '../config/uiText.js';
 import { renderIcon } from './icons.js';
 import { renderCharts } from './charts.js';
@@ -8,6 +8,7 @@ import { fetchAndMergePackage } from '../api/configService.js';
 import { log } from '../utils/logger.js';
 import { getState, setUiState, getPackageTags } from '../core/state.js';
 import { openPackagePreviewModal } from './modals.js';
+import { ALL_MEAL_TYPES } from '../utils/constants.js';
 
 async function fetchJson(url) {
   const response = await fetch(url);
@@ -214,7 +215,7 @@ export function renderRecipesPage(state) {
 }
 
 function renderPackageFilters(state) {
-  const { libraryActiveFilter } = state.ui;
+  const { packageFilter } = state.ui.library;
   const pkgTags = getPackageTags();
   const tagsContainer = document.getElementById('library-tag-filters');
   
@@ -223,10 +224,10 @@ function renderPackageFilters(state) {
     return;
   }
 
-  let tagsHtml = `<button class="tag-filter-btn ${!libraryActiveFilter ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>`;
+  let tagsHtml = `<button class="tag-filter-btn ${!packageFilter ? 'active' : ''}" data-tag="all">${UI_TEXT.EXPLORE_FILTER_ALL}</button>`;
   tagsHtml += pkgTags.map(tag => {
     const tagName = tag.replace('pkg:', '');
-    return `<button class="tag-filter-btn ${libraryActiveFilter === tag ? 'active' : ''}" data-tag="${tag}">${tagName}</button>`;
+    return `<button class="tag-filter-btn ${packageFilter === tag ? 'active' : ''}" data-tag="${tag}">${tagName}</button>`;
   }).join('');
   
   tagsContainer.innerHTML = tagsHtml;
@@ -255,9 +256,11 @@ function formatExerciseDetails(exercise) {
 }
 
 export function renderLibraryPage(state) {
-  const { activeLibraryTab = 'ingredients', librarySearchTerm = '', libraryActiveFilter } = state.ui;
+  const { activeLibraryTab = 'ingredients', library: libState } = state.ui;
+  const { searchTerm = '', packageFilter, mealTypeFilter, execModeFilter } = libState;
+  
   const searchInput = document.getElementById('library-search-input');
-  searchInput.value = librarySearchTerm;
+  searchInput.value = searchTerm;
   
   const tabs = {
     'ingredients': 'ingredienti (per nome o etichetta)',
@@ -275,7 +278,7 @@ export function renderLibraryPage(state) {
   document.getElementById('library-tab-exercises').textContent = 'Esercizi';
   document.getElementById('library-tab-templates').textContent = UI_TEXT.NAV_TEMPLATES;
 
-  const lowerCaseSearchTerm = librarySearchTerm.toLowerCase();
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
 
   // Render Package Filters (solo per pasti, ingredienti, esercizi)
   const tagsContainer = document.getElementById('library-tag-filters');
@@ -286,11 +289,43 @@ export function renderLibraryPage(state) {
     tagsContainer.classList.add('hidden');
   }
 
+  // Render Specific Filters (Meals, Exercises)
+  const specificFiltersContainer = document.getElementById('library-specific-filters');
+  let specificFiltersHtml = '';
+
+  if (activeLibraryTab === 'meals') {
+    specificFiltersHtml = `
+      <div class="form-group">
+        <label for="library-meal-type-filter">Tipo Pasto</label>
+        <select id="library-meal-type-filter" name="mealTypeFilter">
+          <option value="all">Tutti i tipi</option>
+          ${ALL_MEAL_TYPES.map(type => `<option value="${type}" ${mealTypeFilter === type ? 'selected' : ''}>${type}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  } else if (activeLibraryTab === 'exercises') {
+    specificFiltersHtml = `
+      <div class="form-group">
+        <label for="library-exec-mode-filter">Modalità Esecuzione</label>
+        <select id="library-exec-mode-filter" name="execModeFilter">
+          <option value="all">Tutte le modalità</option>
+          <option value="guided_tempo" ${execModeFilter === 'guided_tempo' ? 'selected' : ''}>${UI_TEXT.EXERCISE_FIELD_MODE_GUIDED_TEMPO}</option>
+          <option value="guided_static" ${execModeFilter === 'guided_static' ? 'selected' : ''}>${UI_TEXT.EXERCISE_FIELD_MODE_GUIDED_STATIC}</option>
+          <option value="logging" ${execModeFilter === 'logging' ? 'selected' : ''}>${UI_TEXT.EXERCISE_FIELD_MODE_LOGGING}</option>
+        </select>
+      </div>
+    `;
+  }
+
+  specificFiltersContainer.innerHTML = specificFiltersHtml;
+  specificFiltersContainer.classList.toggle('hidden', specificFiltersHtml === '');
+
+
   // Render Ingredients
   const ingredientList = document.getElementById('ingredient-list');
   const filteredIngredients = state.masterIngredientList.filter(ing => {
       // Filtro Pacchetto
-      if (libraryActiveFilter && (!ing.etichette || !ing.etichette.includes(libraryActiveFilter))) {
+      if (packageFilter && (!ing.etichette || !ing.etichette.includes(packageFilter))) {
         return false;
       }
       // Filtro Ricerca
@@ -312,8 +347,19 @@ export function renderLibraryPage(state) {
   const mealList = document.getElementById('meal-list');
   const filteredMeals = state.masterMealList.filter(meal => {
       // Filtro Pacchetto
-      if (libraryActiveFilter && (!meal.etichette || !meal.etichette.includes(libraryActiveFilter))) {
+      if (packageFilter && (!meal.etichette || !meal.etichette.includes(packageFilter))) {
         return false;
+      }
+      
+      // Filtro Tipo Pasto
+      if (mealTypeFilter !== 'all') {
+        if (meal.tipoPasto === 'Tutti') {
+          // 'Tutti' non matcha un filtro specifico
+        } else if (Array.isArray(meal.tipoPasto)) {
+          if (!meal.tipoPasto.includes(mealTypeFilter)) return false;
+        } else {
+          if (meal.tipoPasto !== mealTypeFilter) return false;
+        }
       }
       
       // Filtro Ricerca
@@ -339,8 +385,14 @@ export function renderLibraryPage(state) {
   const exerciseList = document.getElementById('exercise-list');
   const filteredExercises = state.masterWorkoutList.filter(ex => {
       // Filtro Pacchetto
-      if (libraryActiveFilter && (!ex.etichette || !ex.etichette.includes(libraryActiveFilter))) {
+      if (packageFilter && (!ex.etichette || !ex.etichette.includes(packageFilter))) {
         return false;
+      }
+      
+      // Filtro Modalità Esecuzione
+      if (execModeFilter !== 'all') {
+        const mode = ex.execution_mode || 'guided_tempo'; // Default
+        if (mode !== execModeFilter) return false;
       }
       
       // Filtro Ricerca

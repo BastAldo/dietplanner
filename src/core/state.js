@@ -22,8 +22,12 @@ let state = {
   ui: {
     currentView: 'planner', // 'planner', 'log', 'library', 'progress', 'charts', 'recipes', 'profile', 'trainer', 'debriefing', 'goals', 'explore'
     activeLibraryTab: 'ingredients',
-    librarySearchTerm: '',
-    libraryActiveFilter: null,
+    library: {
+      searchTerm: '',
+      packageFilter: null,
+      mealTypeFilter: 'all',
+      execModeFilter: 'all'
+    },
     lastWorkoutSummary: null,
     charts: {
       currentRangeFilter: 30,

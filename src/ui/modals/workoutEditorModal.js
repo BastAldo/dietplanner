@@ -131,27 +131,26 @@ export function openWorkoutEditorModal(config) {
   const modal = document.getElementById('workout-editor-modal');
   const body = modal.querySelector('#workout-editor-body');
   const footer = modal.querySelector('.modal-footer');
+  
+  const saveBtn = footer.querySelector('#workout-editor-save-btn');
+  const saveTemplateBtn = footer.querySelector('#workout-editor-save-template-btn');
 
   let title = '';
-  // FIX: Non reinizializzare localExercises se è già popolato E 
-  // stiamo aprendo la *stessa* configurazione.
-  // Questo è un controllo fragile, un modo migliore è resettare
-  // localExercises solo quando config cambia *veramente*.
-  // Per ora, l'unica chiamata che *non* deve re-inizializzare
-  // è quella da openWorkoutSelectionModal. Ma quella chiamata
-  // è stata rimossa.
-  // La logica originale di re-inizializzazione è CORRETTA
-  // perché ogni volta che si apre il modal si deve partire
-  // dallo stato globale (o template).
   
   if (config.type === 'day') {
     const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
     localExercises = JSON.parse(JSON.stringify(state.weeklyWorkouts[workoutSlotId] || []));
     title = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(config.isoDate)}`;
+    saveBtn.style.display = 'block';
+    saveTemplateBtn.style.display = 'block';
   } else if (config.type === 'template') {
-    const template = getTemplateById(config.templateId);
+    const isCreating = !config.templateId;
+    const template = isCreating ? null : getTemplateById(config.templateId);
     localExercises = template ? JSON.parse(JSON.stringify(template.exercises)) : [];
-    title = `Modifica Scheda: ${template ? template.name : ''}`;
+    title = isCreating ? 'Crea Nuova Scheda' : `Modifica Scheda: ${template ? template.name : ''}`;
+    
+    saveBtn.style.display = isCreating ? 'none' : 'block';
+    saveTemplateBtn.style.display = 'block';
   }
 
   modal.querySelector('#workout-editor-title').textContent = title;
@@ -160,10 +159,10 @@ export function openWorkoutEditorModal(config) {
 
   // Aggiungi il nuovo pulsante "Salva Modifiche" se non esiste
   if (!footer.querySelector('#workout-editor-save-btn')) {
-    const saveBtn = document.createElement('button');
-    saveBtn.id = 'workout-editor-save-btn';
-    saveBtn.className = 'btn btn-primary';
-    footer.appendChild(saveBtn);
+    const newSaveBtn = document.createElement('button');
+    newSaveBtn.id = 'workout-editor-save-btn';
+    newSaveBtn.className = 'btn btn-primary';
+    footer.appendChild(newSaveBtn);
   }
   footer.querySelector('#workout-editor-save-btn').textContent = UI_TEXT.WORKOUT_EDITOR_SAVE_CHANGES_BTN;
 
@@ -214,7 +213,7 @@ export function openWorkoutEditorModal(config) {
     if (config.type === 'day') {
       const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
       setWeeklyWorkout(workoutSlotId, localExercises);
-    } else if (config.type === 'template') {
+    } else if (config.type === 'template' && config.templateId) {
       updateWorkoutTemplate(config.templateId, localExercises);
     }
     showNotification(UI_TEXT.WORKOUT_EDITOR_UPDATE_SUCCESS, 'success');

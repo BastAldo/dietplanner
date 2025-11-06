@@ -16,7 +16,12 @@ function handleLibraryClick(e) {
     setUiState({
       ...state.ui,
       activeLibraryTab: newView,
-      libraryActiveFilter: null,
+      library: { // Reset all filters on tab change
+        ...state.ui.library,
+        packageFilter: null,
+        mealTypeFilter: 'all',
+        execModeFilter: 'all'
+      },
     });
     return;
   }
@@ -29,7 +34,10 @@ function handleLibraryClick(e) {
     log('Interactions-Library', 'Package filter changed', { newFilter });
     setUiState({
       ...state.ui,
-      libraryActiveFilter: newFilter,
+      library: {
+        ...state.ui.library,
+        packageFilter: newFilter
+      },
     });
     return;
   }
@@ -153,6 +161,13 @@ function handleLibraryClick(e) {
 
   // --- Template Actions ---
   if (state.ui.activeLibraryTab === 'templates') {
+    const addTemplateBtn = e.target.closest('#add-template-btn');
+    if (addTemplateBtn) {
+      log('Interactions-Library', 'Add new template button clicked');
+      openWorkoutEditorModal({ type: 'template', templateId: null });
+      return;
+    }
+
     const templateItem = e.target.closest('.library-item');
     if (!templateItem) return;
 
@@ -189,7 +204,32 @@ function handleSearchInput(e) {
   const currentState = getState();
   setUiState({
     ...currentState.ui,
-    librarySearchTerm: searchTerm
+    library: {
+      ...currentState.ui.library,
+      searchTerm: searchTerm
+    }
+  });
+}
+
+function handleMealTypeFilterChange(e) {
+  const currentState = getState();
+  setUiState({
+    ...currentState.ui,
+    library: {
+      ...currentState.ui.library,
+      mealTypeFilter: e.target.value
+    }
+  });
+}
+
+function handleExecModeFilterChange(e) {
+  const currentState = getState();
+  setUiState({
+    ...currentState.ui,
+    library: {
+      ...currentState.ui.library,
+      execModeFilter: e.target.value
+    }
   });
 }
 
@@ -198,7 +238,20 @@ export function initializeLibraryListeners() {
   const libraryPage = document.getElementById('library-page');
   if (libraryPage) {
     libraryPage.addEventListener('click', handleLibraryClick);
+
     const searchInput = document.getElementById('library-search-input');
     searchInput.addEventListener('input', handleSearchInput);
+
+    const specificFilters = document.getElementById('library-specific-filters');
+    if (specificFilters) {
+      specificFilters.addEventListener('change', (e) => {
+        if (e.target.id === 'library-meal-type-filter') {
+          handleMealTypeFilterChange(e);
+        }
+        if (e.target.id === 'library-exec-mode-filter') {
+          handleExecModeFilterChange(e);
+        }
+      });
+    }
   }
 }
