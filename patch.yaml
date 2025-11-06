@@ -1,171 +1,148 @@
-commit_message: "fix(css): Corregge il layout shift nel tab \"Schede\" della Libreria"
+commit_message: "fix(css): Risolve il layout shift globale forzando la scrollbar"
 rationale: |
-  Come richiesto, implemento solo la Fase 1 del piano per correggere il bug del "layout shift".
+  Come da nuova analisi, il "layout shift" (salto laterale) è causato dalla comparsa e scomparsa della barra di scorrimento verticale del browser quando si naviga tra tab con altezze di contenuto diverse (es. da un tab con una lista lunga a uno vuoto).
 
-  1.  **File Modificato:** `styles/library.css`
-  2.  **Problema:** Quando si passa a un tab (es. "Schede") che non mostra i filtri per pacchetto, il container dei filtri (`#library-tag-filters`) riceve la classe `.hidden`. La regola CSS `.tag-filter-container.hidden { display: none; }` rimuove l'elemento dal flusso del layout, causando un "salto" verticale del contenuto sottostante.
-  3.  **Soluzione:** Ho modificato la regola `.tag-filter-container.hidden`. Invece di `display: none;`, ora usa `visibility: hidden;` per nascondere l'elemento mantenendolo nel flusso. Ho inoltre aggiunto `height: 0;`, `padding: 0;`, `margin-bottom: 0;` e `opacity: 0;` per collassare lo spazio occupato dall'elemento nascosto, eliminando così il "buco" vuoto e risolvendo il "layout shift".
+  Questa patch applica la soluzione standard per questo problema:
+  1.  **File Modificato:** `styles/base.css`
+  2.  **Soluzione:** Aggiungo `overflow-y: scroll;` al selettore `html`. Questo forza il browser a riservare *sempre* lo spazio per la barra di scorrimento, anche se la pagina non è abbastanza alta da richiederla.
+  3.  **Risultato:** Lo spazio per la scrollbar è permanente, quindi la larghezza visibile della pagina non cambia più, eliminando il "salto" laterale sia sull'header fisso che sul contenuto della pagina.
 patches:
-  - file: styles/library.css
+  - file: styles/base.css
     content: |
-      /* --- LIBRARY PAGE --- */
-      #library-page > h3 {
-          color: var(--primary-color);
-          margin-bottom: 1.5rem;
+      /* --- GLOBAL STYLES & MOBILE FIRST --- */
+      :root {
+          --bg-color: #1a1a1d;
+          --card-color: #2c2c34;
+          --primary-color: #9575cd;
+          --secondary-color: #4db6ac;
+          --text-color: #f4f4f9;
+          --text-color-muted: #aaa;
+          --border-color: #40404a;
+          --danger-color: #ef5350;
+          --success-color: #66bb6a;
+          --warning-color: #fdd835;
+          --info-color: var(--primary-color);
+          --header-height: 60px;
       }
-      
-      .library-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html { font-size: 16px; overflow-y: scroll; }
+      body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          padding-top: var(--header-height);
       }
-      
-      .library-search-bar {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 1rem;
-        background-color: var(--card-color);
-        color: var(--text-color);
+      .hidden { display: none !important; }
+
+      /* --- TOAST NOTIFICATIONS --- */
+      .toast-container {
+        position: fixed; top: 80px; right: 1rem; z-index: 2000;
+        display: flex; flex-direction: column; gap: 0.5rem;
       }
-      
-      .library-search-bar:focus {
-        outline: none;
-        border-color: var(--primary-color);
+      .toast {
+        background-color: var(--card-color); color: var(--text-color); padding: 1rem;
+        border-radius: 8px; border-left: 5px solid var(--info-color);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0;
+        transform: translateX(100%); transition: all 0.4s ease; cursor: pointer;
       }
-      
-      .tag-filter-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem;
-        transition: all 0.2s ease;
+      .toast.show { opacity: 1; transform: translateX(0); }
+      .toast.is-success { border-left-color: var(--success-color); }
+      .toast.is-error { border-left-color: var(--danger-color); }
+      .toast.is-info { border-left-color: var(--secondary-color); }
+
+      /* --- GLOBAL ALERT BANNER --- */
+      .global-alert {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 1rem; background-color: var(--card-color);
+        border-left: 5px solid var(--warning-color); border-radius: 8px;
+        margin-bottom: 1.5rem; color: var(--text-color);
       }
-      .tag-filter-container.hidden {
-        visibility: hidden;
-        height: 0;
-        padding: 0;
-        margin-bottom: 0;
-        opacity: 0;
+      .alert-close-btn { background: none; border: none; color: var(--text-color-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; padding: 0; }
+      .alert-close-btn svg { display: block; }
+      .alert-close-btn:hover { color: var(--text-color); }
+
+      /* --- PERSISTENT HEADER --- */
+      .app-header {
+          position: fixed; top: 0; left: 0; width: 100%; height: var(--header-height);
+          background-color: rgba(44, 44, 52, 0.85);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+          border-bottom: 1px solid var(--border-color); padding: 0 1rem;
       }
-      
-      .tag-filter-btn {
-        padding: 0.5rem 1rem;
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-size: 0.9rem;
-        background-color: transparent;
-        color: var(--text-color-muted);
+      .header-content {
+        width: 100%; max-width: 1200px; display: flex;
+        justify-content: space-between; align-items: center;
       }
-      
-      .tag-filter-btn.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-        border-color: var(--primary-color);
-        font-weight: bold;
+      .app-title { display: flex; align-items: center; gap: 0.75rem; }
+      .app-title h1 { font-size: 1.4rem; color: var(--text-color); }
+      .main-nav { display: none; }
+      .btn-nav {
+        background: transparent; border: none; color: var(--text-color-muted);
+        padding: 0.5rem; border-radius: 8px; cursor: pointer; font-weight: bold;
+        transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;
       }
-      
-      /* Stili per le Tab Orizzontali */
-      .view-switcher {
-        display: flex;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        overflow: hidden; /* Per arrotondare gli angoli del container */
+      .btn-nav svg { fill: currentColor; }
+      .btn-nav span { display: none; } /* Hide text on mobile by default */
+      .btn-nav:hover { background-color: var(--card-color); color: var(--text-color); }
+      .btn-nav.active { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-view { background: transparent; border: none; padding: 0.5rem; color: var(--text-color-muted); cursor: pointer; display: flex; align-items: center; }
+      .btn-view.active { background: var(--primary-color); color: var(--bg-color); }
+      .btn-view:not(:last-child) { border-right: 1px solid var(--border-color); }
+      #info-icon { padding: 0.5rem; }
+      .hamburger-btn { display: flex; background: none; border: none; color: var(--text-color); z-index: 1002; }
+
+      /* --- MAIN LAYOUT & CONTAINERS --- */
+      #app-container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+      .page-view { width: 100%; }
+      .app-footer {
+          padding: 1.5rem 1rem; margin-top: 1.5rem;
+          display: flex; justify-content: center;
+          gap: 0.75rem;
       }
-      .view-switcher .btn-view {
-        flex-grow: 1;
-        border: none;
-        border-radius: 0;
-        padding: 0.75rem 1rem;
-        background-color: transparent;
-        color: var(--text-color-muted);
-        font-weight: bold;
-        transition: all 0.2s;
+
+      /* --- GENERAL COMPONENTS --- */
+      .placeholder-text { color: var(--text-color-muted); text-align: center; padding: 2rem; }
+      .btn { padding: 0.75rem 1.5rem; border-radius: 8px; border: 1px solid transparent; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; text-transform: uppercase; }
+      .btn-primary { background-color: var(--primary-color); color: var(--bg-color); }
+      .btn-secondary { color: var(--text-color-muted); border-color: var(--border-color); background-color: transparent; }
+      .btn-danger { background-color: var(--danger-color); color: var(--text-color); }
+      .btn:hover { opacity: 0.85; }
+      .btn-secondary:hover { background-color: var(--card-color); color: var(--text-color); border-color: var(--text-color-muted); opacity: 1; }
+
+      /* Responsive Nav */
+      @media (min-width: 768px) {
+          .main-nav { display: flex; gap: 0.5rem; }
+          .hamburger-btn { display: none; }
+          .btn-nav { padding: 0.5rem 1rem; }
+          .btn-nav span { display: inline; }
       }
-      .view-switcher .btn-view:not(:last-child) {
-        border-right: 1px solid var(--border-color);
-      }
-      .view-switcher .btn-view.active {
-        background-color: var(--primary-color);
-        color: var(--bg-color);
-      }
-      .view-switcher .btn-view:hover:not(.active) {
-        background-color: var(--card-color);
-        color: var(--text-color);
-      }
-      
-      
-      .library-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-      }
-      
-      .library-section {
-        margin-bottom: 2rem;
-      }
-      
-      .library-item {
+
+      /* Stili per il menu mobile */
+      .main-nav.is-mobile {
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 1rem;
+          flex-direction: column;
+          position: fixed;
+          top: 60px;
+          left: 0;
+          width: 100%;
+          height: calc(100vh - 60px);
+          background-color: var(--bg-color);
           padding: 1rem;
-          background-color: var(--card-color);
-          border: 1px solid var(--border-color);
-          border-radius: 8px;
-          margin-bottom: 0.75rem;
+          gap: 1rem;
+          transform: translateX(-100%);
+          transition: transform 0.3s ease-in-out;
       }
-      
-      .library-item-info {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        flex-grow: 1;
-        min-width: 0;
+      .main-nav.is-mobile.is-open {
+          transform: translateX(0);
       }
-      
-      .library-item-info__name {
-        font-weight: 500;
-        word-break: break-word;
+      .main-nav.is-mobile .btn-nav {
+          justify-content: center;
+          padding: 1rem;
+          font-size: 1.2rem;
       }
-      .library-item-info__details {
-        font-size: 0.85rem;
-        color: var(--text-color-muted);
-        word-break: break-word;
-      }
-      
-      .library-item-actions {
-        display: flex;
-        gap: 0.5rem;
-        flex-shrink: 0;
-      }
-      
-      .library-item-actions button {
-        background: none;
-        border: none;
-        color: var(--text-color-muted);
-        cursor: pointer;
-        padding: 0.5rem;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .library-item-actions button:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-      }
-      .library-item-actions .btn-edit:hover {
-        color: var(--primary-color);
-      }
-      .library-item-actions .btn-delete:hover,
-      .library-item-actions .btn-delete-template:hover {
-        color: var(--danger-color);
+      .main-nav.is-mobile .btn-nav span {
+          display: inline;
       }
 commands:
-  - "echo 'Fase 1 completata: Corretto il bug del layout shift nella Libreria.'"
+  - "echo 'Fix CSS per layout shift applicato. La scrollbar è ora sempre visibile.'"
