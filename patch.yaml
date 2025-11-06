@@ -1,520 +1,359 @@
-commit_message: "fix(modals): Corregge il flusso di aggiunta/modifica nel workoutEditorModal"
+commit_message: "fix(css): Corregge lo z-index dei modali per la sovrapposizione"
 rationale: |
-  Questa patch corregge due bug critici introdotti durante il refactoring per l'editing delle schede (Fase 3):
+  L'utente ha segnalato un bug critico per cui il modal di selezione degli esercizi (`#workout-selection-modal`) appariva *sotto* il modal dell'editor dell'allenamento (`#workout-editor-modal`), rendendolo inutilizzabile.
 
-  1.  **Bug (Aggiunta Esercizio):** L'utente segnalava che cliccando "Aggiungi Esercizio" nel `workoutEditorModal`, il modal si chiudeva e non accadeva nulla.
-      * **Causa:** Il `workoutEditorModal` veniva nascosto (`modal-hidden`) *prima* che il `selectionModal` venisse aperto.
-      * **Fix:** Ho rimosso la riga `document.getElementById('workout-editor-modal').classList.add('modal-hidden');` dal gestore del pulsante `btnAddExercise` in `workoutEditorModal.js`. Ora il modal di selezione si apre correttamente *sopra* l'editor.
+  Questo era causato dal fatto che entrambi i modal condividevano lo stesso `z-index` (1001) e l'editor dell'allenamento è definito dopo il selettore nel file `templates/modals.html`.
 
-  2.  **Bug (Modifica Esercizio):** Il pulsante "Modifica" (matita) in `workoutEditorModal` non funzionava perché `exerciseEditorModal` non era stato aggiornato per gestire il nuovo flusso basato su callback.
-      * **Fix (`exerciseEditorModal.js`):** La funzione `openExerciseEditorModal` ora accetta un `onSaveCallback` nei suoi `config`. Il `saveHandler` per il `context: 'planner'` è stato aggiornato: se `onSaveCallback` è presente, lo esegue (passandogli l'esercizio aggiornato) e chiude il modal. Altrimenti, esegue la vecchia logica (chiamando `updateExerciseInstanceInWorkout`).
-      * **Fix (`workoutEditorModal.js`):** Il gestore del pulsante `btnEditExercise` è stato aggiornato. Ora chiude il `workoutEditorModal` e apre `exerciseEditorModal` passando il nuovo `onSaveCallback`, che aggiorna correttamente l'array `localExercises` e riapre il `workoutEditorModal`. Ho anche rimosso il codice "wrapper" (es. `openWorkoutExerciseEditor`, `plannerSaveHandler`) che non era più necessario.
+  Questa patch corregge il problema in `styles/modals.css` stabilendo una gerarchia di `z-index`:
+  1.  `.modal-overlay` (i modali "base" come day-editor): mantiene `z-index: 1001`.
+  2.  Ho creato una nuova sezione `MODAL STACKING FIX` per i "sotto-modali".
+  3.  Ai modali secondari (editor e selettori che si aprono da un altro modal) è stato assegnato `z-index: 1002`.
+  4.  Al modal di conferma (`#confirm-modal`), che deve apparire sopra *tutto*, è stato assegnato `z-index: 1003`.
+
+  Questo assicura che i modali si sovrappongano sempre nell'ordine corretto.
 patches:
-  - file: src/ui/modals/exerciseEditorModal.js
+  - file: styles/modals.css
     content: |
-      import { updateExerciseInstanceInWorkout, updateExerciseSetsInHistory, getState, addExercise, updateExercise } from '../../core/state.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { EXERCISE_FIELDS } from '../../config/forms.js';
-      import { log } from '../../utils/logger.js';
-      import { openWorkoutEditorModal } from './workoutEditorModal.js';
-      import { showNotification } from '../notifications.js';
-      
-      const EXECUTION_MODES = {
-        GUIDED_TEMPO: 'guided_tempo',
-        GUIDED_STATIC: 'guided_static',
-        LOGGING: 'logging'
-      };
-      
-      // Funzione helper per gestire la visibilità dei campi
-      function toggleFormFields(form, mode) {
-        form.querySelector('.form-group-guided_tempo').style.display = 'none';
-        form.querySelector('.form-group-guided_static').style.display = 'none';
-        form.querySelector('.form-group-logging').style.display = 'none';
-        form.querySelector('.form-group-tempo').style.display = 'none';
-      
-        if (mode === EXECUTION_MODES.GUIDED_TEMPO) {
-          form.querySelector('.form-group-guided_tempo').style.display = 'flex';
-          form.querySelector('.form-group-tempo').style.display = 'grid';
-        } else if (mode === EXECUTION_MODES.GUIDED_STATIC) {
-          form.querySelector('.form-group-guided_static').style.display = 'flex';
-        } else if (mode === EXECUTION_MODES.LOGGING) {
-          form.querySelector('.form-group-logging').style.display = 'grid';
-        }
-      }
-      
-      function renderExerciseForm(body, exercise, context) {
-        const isLibraryContext = context === 'library';
-        const isEditing = exercise !== null;
-      
-        // Normalizza i dati dell'esercizio per la prima apertura
-        let currentMode = exercise?.execution_mode || EXECUTION_MODES.GUIDED_TEMPO;
-        if (exercise?.type === 'time' && !exercise?.execution_mode) {
-          currentMode = EXECUTION_MODES.GUIDED_STATIC;
-        }
-      
-        // Costruisci il form dinamicamente
-        let formHTML = '<form id="exercise-editor-form" class="biometrics-form">';
-      
-        // Gruppi di campi
-        let commonHTML = '';
-        let guidedTempoHTML = '';
-        let guidedStaticHTML = '';
-        let loggingHTML = '';
-        let tempoHTML = '';
-      
-        EXERCISE_FIELDS.forEach(field => {
-          // Gestione campi nested (es. defaultTempo.up)
-          const fieldIdParts = field.id.split('.');
-          let currentValue = exercise;
-          if (isEditing) {
-            for (const part of fieldIdParts) {
-              currentValue = currentValue ? currentValue[part] : null;
-            }
-          } else {
-            currentValue = '';
-          }
-      
-          const label = UI_TEXT[field.label] || field.label;
-          const inputId = `ex-edit-${field.id.replace('.', '-')}`;
-          const isReadonly = (isEditing && field.id === 'id') && isLibraryContext;
-      
-          let fieldInputHTML = '';
-          if (field.type === 'select') {
-            fieldInputHTML = `<select id="${inputId}" name="${field.id}" ${field.props || ''}>
-              ${field.options.map(opt => `<option value="${opt.value}" ${currentValue === opt.value ? 'selected' : ''}>${UI_TEXT[opt.label] || opt.label}</option>`).join('')}
-            </select>`;
-          } else if (field.type === 'textarea') {
-            fieldInputHTML = `<textarea id="${inputId}" name="${field.id}" ${field.props || ''}>${currentValue || ''}</textarea>`;
-          } else {
-            fieldInputHTML = `<input type="${field.type}" id="${inputId}" name="${field.id}" value="${currentValue || ''}" ${field.props || ''} ${isReadonly ? 'readonly' : ''}>`;
-          }
-      
-          const fieldGroupHTML = `<div class="form-group" style="${field.grid ? `grid-column: ${field.grid};` : ''}">
-                                    <label for="${inputId}">${label}</label>
-                                    ${fieldInputHTML}
-                                  </div>`;
-      
-          // Smista i campi nei gruppi corretti
-          if (!isLibraryContext) {
-            // Logica per 'planner': solo campi specifici
-            if (field.id === 'execution_mode') commonHTML += fieldGroupHTML;
-            if (field.id === 'defaultSets') commonHTML += fieldGroupHTML;
-            if (field.id === 'defaultRest') commonHTML += fieldGroupHTML;
-            if (field.id === 'defaultWeight') commonHTML += fieldGroupHTML;
-            if (field.id === 'defaultReps') guidedTempoHTML += fieldGroupHTML;
-            if (field.id === 'defaultDuration') guidedStaticHTML += fieldGroupHTML;
-            if (field.id === 'defaultRepsMin') loggingHTML += fieldGroupHTML;
-            if (field.id === 'defaultRepsMax') loggingHTML += fieldGroupHTML;
-            if (field.group === 'tempo') tempoHTML += fieldGroupHTML;
-      
-          } else {
-            // Logica per 'library': tutti i campi
-            if (field.group === 'guided_tempo') guidedTempoHTML += fieldGroupHTML;
-            else if (field.group === 'guided_static') guidedStaticHTML += fieldGroupHTML;
-            else if (field.group === 'logging') loggingHTML += fieldGroupHTML;
-            else if (field.group === 'tempo') tempoHTML += fieldGroupHTML;
-            else commonHTML += fieldGroupHTML;
-          }
-        });
-      
-        // Assembla il form finale
-        formHTML += commonHTML;
-        formHTML += `<div class="form-group-guided_tempo" style="display: none;">${guidedTempoHTML}</div>`;
-        formHTML += `<div class="form-group-guided_static" style="display: none;">${guidedStaticHTML}</div>`;
-        formHTML += `<div class="form-group-logging" style="grid-column: 1 / -1; display: none; grid-template-columns: 1fr 1fr; gap: 1rem;">${loggingHTML}</div>`;
-        formHTML += `<div class="form-group-tempo" style="grid-column: 1 / -1; display: none; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 1rem;">${tempoHTML}</div>`;
-        formHTML += '</form>';
-      
-        body.innerHTML = formHTML;
-      
-        // Imposta la visibilità iniziale
-        const form = body.querySelector('#exercise-editor-form');
-        toggleFormFields(form, currentMode);
-      
-        // Aggiungi listener per il cambio di modalità
-        const modeSelect = form.querySelector('select[name="execution_mode"]');
-        if (modeSelect) {
-          modeSelect.addEventListener('change', (e) => {
-            toggleFormFields(form, e.target.value);
-          });
-        }
-      }
-      
-      function renderLogForm(body, exercise) {
-        const showWeight = exercise.defaultWeight || exercise.setsData.some(s => s.weight > 0);
-        let formHTML = `<form id="logged-exercise-form" class="structured-form">`;
-        formHTML += exercise.setsData.map((set, index) => {
-            const weightInput = showWeight ? `
-                <div class="form-group">
-                    <label for="set-weight-${index}">${UI_TEXT.LOGGED_EXERCISE_WEIGHT_LABEL}</label>
-                    <input type="number" id="set-weight-${index}" name="weight_${index}" value="${set.weight || 0}" min="0" step="0.1">
-                </div>
-            ` : '';
-            return `
-                <div class="set-editor-row">
-                    <span class="set-editor-label">${UI_TEXT.LOGGED_EXERCISE_SET_LABEL} ${index + 1}</span>
-                    <div class="form-group">
-                        <label for="set-reps-${index}">${UI_TEXT.LOGGED_EXERCISE_REPS_LABEL}</label>
-                        <input type="number" id="set-reps-${index}" name="reps_${index}" value="${set.reps || 0}" min="0">
-                    </div>
-                    ${weightInput}
-                </div>
-            `;
-        }).join('');
-        formHTML += '</form>';
-        body.innerHTML = formHTML;
-      }
-      
-      export function openExerciseEditorModal(config) {
-        const { context, exercise, date, startTime, slotId, returnIsoDate, onSaveCallback } = config;
-        const isEditing = exercise !== null;
-        log('Modals', `Opening exercise editor modal (context: ${context}, editing: ${isEditing})`, { config });
-      
-        const modal = document.getElementById('exercise-editor-modal');
-        const body = modal.querySelector('#exercise-editor-body');
-        const saveBtn = modal.querySelector('#exercise-editor-save-btn');
-        let form;
-        let saveHandler;
-      
-        if (context === 'history') {
-            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.LOGGED_EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-            saveBtn.textContent = UI_TEXT.LOGGED_EXERCISE_SAVE_BTN;
-            renderLogForm(body, exercise);
-            form = body.querySelector('#logged-exercise-form');
-      
-            saveHandler = (e) => {
-                e.preventDefault();
-                const formData = new FormData(form);
-                const newSetsData = [...exercise.setsData].map((set, index) => ({
-                    ...set,
-                    reps: parseInt(formData.get(`reps_${index}`), 10) || 0,
-                    weight: parseFloat(formData.get(`weight_${index}`)) || 0,
-                }));
-      
-                updateExerciseSetsInHistory(date, startTime, exercise.instanceId, newSetsData);
-                showNotification(UI_TEXT.WORKOUT_LOG_SAVE_SUCCESS, 'success');
-                modal.classList.add('modal-hidden');
-            };
-      
-        } else if (context === 'planner') {
-            modal.querySelector('#exercise-editor-title').textContent = `${UI_TEXT.EXERCISE_EDITOR_TITLE}: ${exercise.name}`;
-            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN;
-            renderExerciseForm(body, exercise, 'planner');
-            form = body.querySelector('#exercise-editor-form');
-      
-            saveHandler = (e) => {
-                e.preventDefault();
-                const newValues = {
-                    execution_mode: form.elements.execution_mode.value,
-                    defaultSets: parseInt(form.elements.defaultSets.value),
-                    defaultRest: parseInt(form.elements.defaultRest.value),
-                    defaultWeight: parseFloat(form.elements.defaultWeight.value),
-                    defaultReps: null,
-                    defaultDuration: null,
-                    defaultRepsMin: null,
-                    defaultRepsMax: null,
-                    defaultTempo: exercise.defaultTempo // Preserva l'oggetto tempo se esiste
-                };
-      
-                if (newValues.execution_mode === EXECUTION_MODES.GUIDED_TEMPO) {
-                    newValues.defaultReps = parseInt(form.elements.defaultReps.value);
-                    newValues.defaultTempo = {
-                        up: parseInt(form.elements['defaultTempo.up'].value),
-                        hold: parseInt(form.elements['defaultTempo.hold'].value),
-                        down: parseInt(form.elements['defaultTempo.down'].value)
-                    };
-                } else if (newValues.execution_mode === EXECUTION_MODES.GUIDED_STATIC) {
-                    newValues.defaultDuration = parseInt(form.elements.defaultDuration.value);
-                } else if (newValues.execution_mode === EXECUTION_MODES.LOGGING) {
-                    newValues.defaultRepsMin = parseInt(form.elements.defaultRepsMin.value);
-                    newValues.defaultRepsMax = parseInt(form.elements.defaultRepsMax.value);
-                }
-                
-                const updatedExercise = { ...exercise, ...newValues };
+      /* --- MODALS --- */
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center; z-index: 1001; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+      .modal-hidden { display: none !important; }
+      .modal-overlay:not(.modal-hidden) { display: flex; opacity: 1; pointer-events: all; }
+      .modal-content { background-color: var(--card-color); border-radius: 8px; border: 1px solid var(--border-color); width: 90%; max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; position: relative; }
+      .modal-content-large { max-width: 95vw; width: 95vw; height: 90vh; max-height: 90vh; }
+      .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+      .modal-header h3 { color: var(--primary-color); }
+      .modal-close-btn { position: absolute; top: 0.5rem; right: 0.5rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-color-muted); padding: 0; line-height: 1; width: 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background-color 0.2s, color 0.2s; z-index: 10; }
+      .modal-close-btn svg { width: 1em; height: 1em; }
+      .modal-close-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: var(--text-color); }
+      .modal-body { overflow-y: auto; flex-grow: 1; padding: 1.5rem; display: flex; flex-direction: column; }
+      #chart-modal-body { padding: 1rem; }
+      #chart-modal-canvas { max-height: 100%; }
+      .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; }
+      .selection-list { display: flex; flex-direction: column; gap: 0.5rem; }
+      .selection-item { padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+      .selection-item:hover { background-color: var(--bg-color); border-color: var(--primary-color); }
+      .meal-item-details { font-size: 0.85rem; color: var(--text-color-muted); margin-top: 0.25rem; }
 
-                if (onSaveCallback) {
-                  // Nuovo flusso per workoutEditorModal
-                  onSaveCallback(updatedExercise);
-                  modal.classList.add('modal-hidden');
-                } else {
-                  // Flusso vecchio per dayEditorModal
-                  updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
-                  modal.classList.add('modal-hidden');
-                  openWorkoutEditorModal({ type: 'day', isoDate: returnIsoDate });
-                }
-            };
-      
-        } else if (context === 'library') {
-            modal.querySelector('#exercise-editor-title').textContent = isEditing ? UI_TEXT.EXERCISE_EDIT_TITLE : UI_TEXT.EXERCISE_NEW_TITLE;
-            saveBtn.textContent = UI_TEXT.EXERCISE_SAVE_BTN_LIB;
-            renderExerciseForm(body, exercise, 'library');
-            form = body.querySelector('#exercise-editor-form');
-      
-            saveHandler = (e) => {
-                e.preventDefault();
-                const formData = new FormData(form);
-                const newExerciseData = {};
-                let isValid = true;
-      
-                for (const field of EXERCISE_FIELDS) {
-                    let value = formData.get(field.id);
-                    if (field.type === 'number') {
-                        value = value ? parseFloat(value) : null;
-                    }
-                    if (field.props && field.props.includes('required') && !value) {
-                        isValid = false;
-                        showNotification(`Il campo '${UI_TEXT[field.label] || field.label}' è obbligatorio.`, 'error');
-                        break;
-                    }
-      
-                    // Gestione campi nested (es. defaultTempo.up)
-                    if (field.id.includes('.')) {
-                        const [parent, child] = field.id.split('.');
-                        if (!newExerciseData[parent]) newExerciseData[parent] = {};
-                        newExerciseData[parent][child] = value;
-                    } else {
-                        newExerciseData[field.id] = value;
-                    }
-                }
-      
-                if (!isValid) return;
-      
-                if (isEditing) {
-                    updateExercise(exercise.id, newExerciseData);
-                    showNotification(UI_TEXT.EXERCISE_UPDATE_SUCCESS, 'success');
-                } else {
-                    const state = getState();
-                    if (state.masterWorkoutList.some(ex => ex.id === newExerciseData.id)) {
-                        showNotification(UI_TEXT.EXERCISE_ID_CONFLICT, 'error');
-                        return;
-                    }
-                    addExercise(newExerciseData);
-                    showNotification(UI_TEXT.EXERCISE_CREATE_SUCCESS, 'success');
-                }
-      
-                modal.classList.add('modal-hidden');
-            };
-        }
-      
-        saveBtn.replaceWith(saveBtn.cloneNode(true));
-        document.getElementById('exercise-editor-save-btn').addEventListener('click', saveHandler, { once: true });
-        modal.classList.remove('modal-hidden');
+      /* Custom Scrollbar for Modal Body */
+      .modal-body::-webkit-scrollbar { width: 8px; }
+      .modal-body::-webkit-scrollbar-track { background: var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 10px; border: 2px solid var(--bg-color); }
+      .modal-body::-webkit-scrollbar-thumb:hover { background-color: var(--text-color-muted); }
+
+      /* --- MODAL STACKING FIX --- */
+      /* Modali secondari (che si aprono sopra un altro modal) */
+      #selection-modal,
+      #workout-selection-modal,
+      #workout-template-selection-modal,
+      #exercise-editor-modal,
+      #manual-workout-modal,
+      #ingredient-editor-modal,
+      #meal-editor-modal,
+      #package-preview-modal,
+      #recipe-modal,
+      #workout-editor-modal { /* Anche l'editor si apre sopra il day-editor */
+        z-index: 1002;
       }
-  - file: src/ui/modals/workoutEditorModal.js
-    content: |
-      import { getState, updateWeeklyWorkout, reorderWorkoutExercises, getExerciseForPlanner, addWorkoutTemplate, clearWeeklyWorkout, getTemplateById, setWeeklyWorkout, updateWorkoutTemplate } from '../../core/state.js';
-      import { WORKOUT_SLOT_ID } from '../../utils/constants.js';
-      import { UI_TEXT } from '../../config/uiText.js';
-      import { renderIcon } from '../icons.js';
-      import { log } from '../../utils/logger.js';
-      import { openWorkoutSelectionModal } from './selectionModal.js';
-      import { openExerciseEditorModal } from './exerciseEditorModal.js';
-      import { showNotification } from '../notifications.js';
-      import { showConfirmModal } from './confirmModal.js';
-      
-      let sortableInstance = null;
-      let localExercises = [];
-      let currentConfig = {};
-      
-      function formatFullDate(isoDate) {
-        const date = new Date(isoDate);
-        return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      /* Il modal di conferma deve essere sopra TUTTO */
+      #confirm-modal {
+        z-index: 1003;
       }
-      
-      function formatExerciseDetails(exercise) {
-        const sets = exercise.defaultSets || '?';
-        const rest = exercise.defaultRest || 0;
-        let details = `${sets} x `;
-      
-        // Gestisce reps, rep-range, o durata in base alla modalità
-        if (exercise.execution_mode === 'logging') {
-            if (exercise.defaultRepsMin && exercise.defaultRepsMax) {
-                details += `${exercise.defaultRepsMin}-${exercise.defaultRepsMax}`;
-            } else if (exercise.defaultRepsMin) {
-                details += `${exercise.defaultRepsMin}+`;
-            } else {
-                details += `Reps`; // Fallback
-            }
-        } else if (exercise.execution_mode === 'guided_static' || exercise.type === 'time') {
-            details += `${exercise.defaultDuration || '?'}s`;
-        } else {
-            // Default a 'guided_tempo' o vecchio formato 'reps'
-            details += `${exercise.defaultReps || '?'} reps`;
-        }
-        
-        details += ` | Riposo: ${rest}s`;
-      
-        if (exercise.defaultTempo && exercise.execution_mode === 'guided_tempo') {
-            const { up, hold, down } = exercise.defaultTempo;
-            details += ` | Tempo: ${up}-${hold}-${down}`;
-        }
-        return details;
+
+      /* Stile per le <select> nei modali */
+      .form-group select {
+          padding: 0.75rem;
+          border: 1px solid var(--border-color);
+          border-radius: 8px;
+          font-size: 1rem;
+          background-color: var(--bg-color);
+          color: var(--text-color);
+          appearance: none;
+          -webkit-appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23aaa'%3E%3Cpath d='M8 11.5a.5.5 0 0 1-.35-.15l-4-4a.5.5 0 0 1 .7-.7L8 10.29l3.65-3.64a.5.5 0 0 1 .7.7l-4 4a.5.5 0 0 1-.35.15z'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 0.75rem center;
+          background-size: 1em;
+          padding-right: 2.5rem; /* Spazio per la freccia */
       }
-      
-      function renderList() {
-        const body = document.getElementById('workout-editor-body');
-        let exercisesHTML = localExercises.map((exercise, index) => {
-            const exerciseDetails = formatExerciseDetails(exercise);
-            return `<div class="meal-details draggable-item" data-index="${index}" data-instance-id="${exercise.instanceId}">
-                        <div class="drag-handle">${renderIcon('DRAG_HANDLE', { width: 18, height: 18 })}</div>
-                        <div class="exercise-info">
-                            <span class="meal-details__name">${exercise.name}</span>
-                            <span class="exercise-details-summary">${exerciseDetails}</span>
-                        </div>
-                        <div class="meal-actions">
-                            <button class="btn-edit-exercise" title="Modifica" data-index="${index}">${renderIcon('EDIT', { width: 16, height: 16 })}</button>
-                            <button class="btn-remove-exercise" title="Rimuovi" data-index="${index}">${renderIcon('TRASH', { width: 16, height: 16 })}</button>
-                        </div>
-                    </div>`;
-        }).join('');
-      
-        const addExerciseButton = `<button class="btn-add-exercise">${UI_TEXT.ADD_EXERCISE_BTN}</button>`;
-        body.innerHTML = `<div class="day-editor-list workout-editor-list">${exercisesHTML}</div>${addExerciseButton}`;
-      
-        const listContainer = body.querySelector('.workout-editor-list');
-      
-        if (sortableInstance) {
-            sortableInstance.destroy();
-        }
-        sortableInstance = new Sortable(listContainer, {
-            animation: 150,
-            handle: '.drag-handle',
-            ghostClass: 'sortable-ghost',
-            onEnd: function(evt) {
-                const [movedItem] = localExercises.splice(evt.oldIndex, 1);
-                localExercises.splice(evt.newIndex, 0, movedItem);
-                renderList(); // Rerender per aggiornare gli indici
-            }
-        });
+      .form-group select:focus {
+          outline: none;
+          border-color: var(--primary-color);
       }
-      
-      function handleModalClick(e) {
-          const btnAddExercise = e.target.closest('.btn-add-exercise');
-          const btnRemoveExercise = e.target.closest('.btn-remove-exercise');
-          const btnEditExercise = e.target.closest('.btn-edit-exercise');
-      
-          if (btnAddExercise) {
-              // NON chiudere questo modal, apri l'altro sopra
-              openWorkoutSelectionModal((exercise) => {
-                if (exercise) {
-                  const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
-                  localExercises.push(newExerciseInstance);
-                }
-                openWorkoutEditorModal(currentConfig); // Riapre e forza il re-render
-              });
-          } else if (btnRemoveExercise) {
-              const index = parseInt(btnRemoveExercise.dataset.index, 10);
-              localExercises.splice(index, 1);
-              renderList(); // Rerender
-          } else if (btnEditExercise) {
-              const index = parseInt(btnEditExercise.dataset.index, 10);
-              const exercise = localExercises[index];
-              if (exercise) {
-                // Chiudi questo modal PRIMA di aprirne un altro
-                document.getElementById('workout-editor-modal').classList.add('modal-hidden');
-                
-                openExerciseEditorModal({
-                  context: 'planner', // Usa lo stesso editor del planner
-                  exercise,
-                  slotId: null, // Non serve
-                  returnIsoDate: null, // Non serve
-                  onSaveCallback: (updatedExercise) => { // Usa il nuovo callback
-                    localExercises[index] = updatedExercise;
-                    openWorkoutEditorModal(currentConfig); // Riapre il modal aggiornato
-                  }
-                });
-              }
-          }
+
+      /* --- UNIFIED EDITOR SECTION COMPONENT --- */
+      .day-editor-list { display: flex; flex-direction: column; gap: 1rem; }
+      .editor-section-header {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        margin-bottom: 0.5rem;
+        padding-left: 0.25rem;
       }
-      
-      export function openWorkoutEditorModal(config) {
-        log('Modals', 'Opening workout editor modal (refactored)', { config });
-        currentConfig = config; // Salva la configurazione corrente
-        const state = getState();
-        const modal = document.getElementById('workout-editor-modal');
-        const body = modal.querySelector('#workout-editor-body');
-        const footer = modal.querySelector('.modal-footer');
-      
-        let title = '';
-        if (config.type === 'day') {
-          const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
-          localExercises = JSON.parse(JSON.stringify(state.weeklyWorkouts[workoutSlotId] || []));
-          title = `${UI_TEXT.WORKOUT_EDITOR_TITLE} - ${formatFullDate(config.isoDate)}`;
-        } else if (config.type === 'template') {
-          const template = getTemplateById(config.templateId);
-          localExercises = template ? JSON.parse(JSON.stringify(template.exercises)) : [];
-          title = `Modifica Scheda: ${template ? template.name : ''}`;
+      .editor-section-body {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .meal-details, .workout-summary {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+      }
+      .meal-info, .exercise-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex-grow: 1;
+        min-width: 0;
+      }
+      .meal-details__name {
+        font-weight: 500;
+      }
+      .meal-actions, .workout-summary-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+      .workout-summary-actions {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        /* Rimosso width: 100% da qui per fixare il layout desktop */
+      }
+      .meal-actions button { background: none; border: none; color: var(--text-color-muted); cursor: pointer; padding: 0.4rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+      .meal-actions button:hover { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+      .btn-add-meal, .btn-add-exercise { background: transparent; border: 1px dashed var(--border-color); color: var(--text-color-muted); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; width: 100%; transition: all 0.2s; }
+      .btn-add-meal:hover, .btn-add-exercise:hover { background: var(--bg-color); border-color: var(--secondary-color); color: var(--secondary-color); }
+
+      /* Stili per i nuovi pulsanti icona in DayEditorModal */
+      .workout-summary-actions .btn-icon {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-color-muted);
+        cursor: pointer;
+        padding: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        transition: all 0.2s ease;
+      }
+      .workout-summary-actions .btn-icon:hover {
+        background-color: var(--card-color);
+        color: var(--text-color);
+        border-color: var(--primary-color);
+      }
+
+
+      /* --- WORKOUT EDITOR STYLES (ISOLATED & CORRECTED) --- */
+      .workout-editor-list .draggable-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        background-color: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        min-height: 70px;
+      }
+      .workout-editor-list .meal-actions { margin-left: auto; }
+      .meal-actions .btn-remove-exercise { color: var(--danger-color); }
+      .exercise-details-summary { font-size: 0.85rem; color: var(--text-color-muted); }
+
+      .modal-footer.workout-editor-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .btn-danger-text {
+        color: var(--danger-color);
+        border-color: var(--danger-color);
+      }
+      .btn-danger-text:hover {
+        color: var(--danger-color) !important;
+        background-color: rgba(239, 83, 80, 0.1) !important;
+        border-color: var(--danger-color) !important;
+        opacity: 1;
+      }
+
+      #exercise-editor-form {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        align-items: end;
+      }
+      #exercise-editor-form .form-group { display: flex; flex-direction: column; }
+      #exercise-editor-form label { margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-color-muted); }
+      #exercise-editor-form input { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; background-color: var(--bg-color); color: var(--text-color); }
+      #exercise-editor-form .sets-group { grid-column: 1 / 3; }
+      #exercise-editor-form .reps-group, #exercise-editor-form .duration-group { grid-column: 3 / 5; }
+      #exercise-editor-form .rest-group { grid-column: 5 / 7; }
+      #exercise-editor-form .weight-group { grid-column: 1 / 4; }
+      #exercise-editor-form .tempo-group {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        border-top: 1px solid var(--border-color);
+        padding-top: 1rem;
+        margin-top: 1rem;
+      }
+      #exercise-editor-form .reps-range-group { grid-column: 3 / 7; }
+
+      /* Stili per il nuovo editor dei log */
+      #logged-exercise-form { display: flex; flex-direction: column; gap: 1rem; }
+      .set-editor-row {
+        display: grid;
+        grid-template-columns: 50px 1fr 1fr;
+        gap: 1rem;
+        align-items: end;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      #logged-exercise-form .set-editor-row:last-child { border-bottom: none; }
+      .set-editor-label {
+        font-weight: bold;
+        color: var(--text-color-muted);
+        padding-bottom: 0.75rem;
+      }
+
+      .structured-form { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+      .structured-form .full-width { grid-column: 1 / -1; }
+
+      .drag-handle { cursor: grab; color: var(--text-color-muted); padding: 0.5rem; }
+      .sortable-ghost { opacity: 0.4; background: var(--primary-color); }
+
+      /* --- MEAL EDITOR MODAL --- */
+      #meal-editor-form { display: flex; flex-direction: column; gap: 1.5rem; }
+      .meal-editor-form-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+      .meal-type-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .meal-type-chip {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+      }
+      .meal-type-chip.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+      }
+      .meal-editor-ingredients-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; }
+      .meal-editor-ingredients-header h4 { color: var(--secondary-color); }
+      .meal-editor-ingredient-row { display: grid; grid-template-columns: 1fr 80px 80px 40px; gap: 0.75rem; align-items: center; }
+      .meal-editor-ingredient-row label { display: none; }
+      .meal-editor-ingredient-row select, .meal-editor-ingredient-row input {
+          width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px;
+          font-size: 1rem; background-color: var(--bg-color); color: var(--text-color);
+      }
+      .meal-editor-ingredient-row .btn-remove-ingredient {
+          background: none; border: none; color: var(--danger-color); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+      }
+      .meal-editor-footer { border-top: 1px solid var(--border-color); margin-top: 1.5rem; padding-top: 1rem; text-align: right; }
+      .meal-editor-totals { font-weight: bold; font-size: 1.1rem; }
+
+      /* --- MODAL SEARCH BAR & FILTERS --- */
+      .modal-search-bar-container {
+        padding: 0 1.5rem 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .modal-search-bar-container .library-search-bar {
+        width: 100%;
+        margin: 0;
+      }
+      .tag-filter-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem 0 1.5rem;
+      }
+      .tag-filter-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+        background-color: transparent;
+        color: var(--text-color-muted);
+      }
+      .tag-filter-btn.active {
+        background-color: var(--primary-color);
+        color: var(--bg-color);
+        border-color: var(--primary-color);
+        font-weight: bold;
+      }
+      #selection-modal .modal-body {
+        padding-top: 1rem;
+      }
+
+      /* --- PACKAGE PREVIEW MODAL --- */
+      #package-preview-body {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+      .preview-section h4 {
+        color: var(--secondary-color);
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .preview-list {
+        list-style-type: none;
+        padding-left: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .preview-list li {
+        padding: 0.5rem;
+        background-color: var(--bg-color);
+        border-radius: 4px;
+      }
+
+      @media (min-width: 600px) {
+        .structured-form {
+          grid-template-columns: 1fr 1fr;
         }
-      
-        modal.querySelector('#workout-editor-title').textContent = title;
-        modal.querySelector('#workout-editor-save-template-btn').textContent = UI_TEXT.SAVE_TEMPLATE_BTN;
-        modal.querySelector('#workout-editor-clear-btn').textContent = UI_TEXT.CLEAR_WORKOUT_BTN;
-      
-        // Aggiungi il nuovo pulsante "Salva Modifiche" se non esiste
-        if (!footer.querySelector('#workout-editor-save-btn')) {
-          const saveBtn = document.createElement('button');
-          saveBtn.id = 'workout-editor-save-btn';
-          saveBtn.className = 'btn btn-primary';
-          footer.appendChild(saveBtn);
+        .meal-editor-form-grid { grid-template-columns: 1fr 1fr; }
+        #package-preview-body {
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         }
-        footer.querySelector('#workout-editor-save-btn').textContent = UI_TEXT.WORKOUT_EDITOR_SAVE_CHANGES_BTN;
-      
-        renderList(); // Renderizza la lista locale
-      
-        // --- Gestione Listener (rimuovi e riaggiungi) ---
-        body.onclick = handleModalClick; // Usa un handler dedicato
-      
-        const oldSaveTemplateBtn = footer.querySelector('#workout-editor-save-template-btn');
-        const newSaveTemplateBtn = oldSaveTemplateBtn.cloneNode(true);
-        oldSaveTemplateBtn.parentNode.replaceChild(newSaveTemplateBtn, oldSaveTemplateBtn);
-        newSaveTemplateBtn.onclick = () => {
-          if (localExercises.length === 0) {
-            showNotification('Aggiungi almeno un esercizio prima di salvare la scheda.', 'error');
-            return;
-          }
-          const templateName = prompt(UI_TEXT.SAVE_TEMPLATE_PROMPT);
-          if (templateName && templateName.trim() !== '') {
-            addWorkoutTemplate(templateName.trim(), localExercises);
-            showNotification(UI_TEXT.TEMPLATE_SAVE_SUCCESS, 'success');
-          }
-        };
-      
-        const oldClearBtn = footer.querySelector('#workout-editor-clear-btn');
-        const newClearBtn = oldClearBtn.cloneNode(true);
-        oldClearBtn.parentNode.replaceChild(newClearBtn, oldClearBtn);
-        newClearBtn.onclick = () => {
-          if (localExercises.length === 0) {
-            showNotification('L\'allenamento è già vuoto.', 'info');
-            return;
-          }
-          showConfirmModal({
-            title: UI_TEXT.CLEAR_WORKOUT_CONFIRM_TITLE,
-            message: UI_TEXT.CLEAR_WORKOUT_CONFIRM_MSG,
-            onConfirm: () => {
-              localExercises = [];
-              renderList();
-              showNotification(UI_TEXT.CLEAR_WORKOUT_SUCCESS, 'success');
-            },
-            type: 'danger'
-          });
-        };
-      
-        const oldSaveBtn = footer.querySelector('#workout-editor-save-btn');
-        const newSaveBtn = oldSaveBtn.cloneNode(true);
-        oldSaveBtn.parentNode.replaceChild(newSaveBtn, oldSaveBtn);
-        newSaveBtn.onclick = () => {
-          if (config.type === 'day') {
-            const workoutSlotId = `${config.isoDate}-${WORKOUT_SLOT_ID}`;
-            setWeeklyWorkout(workoutSlotId, localExercises);
-          } else if (config.type === 'template') {
-            updateWorkoutTemplate(config.templateId, localExercises);
-          }
-          showNotification(UI_TEXT.WORKOUT_EDITOR_UPDATE_SUCCESS, 'success');
-          modal.classList.add('modal-hidden');
-        };
-        // --- Fine Gestione Listener ---
-      
-        modal.classList.remove('modal-hidden');
+      }
+
+      @media (max-width: 480px) {
+        .workout-summary {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .workout-summary-actions {
+          width: 100%;
+          display: flex;
+          flex-wrap: wrap;
+        }
+        .workout-summary-actions .btn {
+          flex-grow: 1;
+        }
+        /* Rimosso flex-grow: 1 per i btn-icon per evitare stretching */
+        .meal-editor-ingredient-row { grid-template-columns: 1fr 70px 70px 40px; }
       }
 commands:
-  - "echo 'Fase 3b/c completata e bug corretti. Il workout editor ora gestisce l''aggiunta e la modifica per giorni e schede.'"
+  - "echo 'Correzione dello z-index dei modali applicata.'"
