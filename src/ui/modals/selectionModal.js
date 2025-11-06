@@ -1,4 +1,4 @@
-import { getState, updateWeeklyPlan, updateWeeklyWorkout, getPackageTags, addWorkoutTemplateToDay } from '../../core/state.js';
+import { getState, updateWeeklyPlan, updateWeeklyWorkout, addWorkoutTemplateToDay } from '../../core/state.js';
 import { UI_TEXT } from '../../config/uiText.js';
 import { log } from '../../utils/logger.js';
 import { formatIngredients } from '../../utils/formatters.js';
@@ -19,7 +19,7 @@ export function openSelectionModal(slotId, returnIsoDate, relevantMeals) {
   let searchTerm = '';
 
   function renderPackageTags() {
-      const pkgTags = getPackageTags();
+      const pkgTags = [...new Set(relevantMeals.flatMap(meal => meal.etichette || []).filter(tag => tag && tag.startsWith('pkg:')))];
       if (pkgTags.length === 0) {
         tagsContainer.innerHTML = '';
         return;
