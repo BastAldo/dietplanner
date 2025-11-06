@@ -44,7 +44,7 @@ let state = {
 };
 
 const notify = () => document.dispatchEvent(new CustomEvent('stateChange'));
-const toISODateString = (date) => date.getFullYear() + '-' + ('0' (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+const toISODateString = (date) => date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
 
 const getWeekStartDate = (date) => {
   const d = new Date(date);
@@ -103,28 +103,43 @@ export function setPlannerConfig(config, sourceId) {
   const packageTag = sourceId ? `pkg:${sourceId}` : null; // Create tag
 
   ingredients.forEach(ing => {
-    if (!state.masterIngredientList.some(existing => existing.id === ing.id)) {
-      if (packageTag) { // Add tag if new and from a package
-        ing.etichette = [...(ing.etichette || []), packageTag];
-      }
+    if (packageTag) { // Add tag to the incoming item
+      ing.etichette = [...(ing.etichette || []), packageTag];
+    }
+    const index = state.masterIngredientList.findIndex(existing => existing.id === ing.id);
+    if (index > -1) {
+      // Update existing ingredient
+      state.masterIngredientList[index] = ing;
+    } else {
+      // Add new ingredient
       state.masterIngredientList.push(ing);
     }
   });
 
   meals.forEach(meal => {
-    if (!state.masterMealList.some(existing => existing.id === meal.id)) {
-      if (packageTag) { // Add tag if new and from a package
-        meal.etichette = [...(meal.etichette || []), packageTag];
-      }
+    if (packageTag) { // Add tag to the incoming item
+      meal.etichette = [...(meal.etichette || []), packageTag];
+    }
+    const index = state.masterMealList.findIndex(existing => existing.id === meal.id);
+    if (index > -1) {
+      // Update existing meal
+      state.masterMealList[index] = meal;
+    } else {
+      // Add new meal
       state.masterMealList.push(meal);
     }
   });
 
   exercises.forEach(ex => {
-    if (!state.masterWorkoutList.some(existing => existing.id === ex.id)) {
-      if (packageTag) { // Add tag if new and from a package
-        ex.etichette = [...(ex.etichette || []), packageTag];
-      }
+    if (packageTag) { // Add tag to the incoming item
+      ex.etichette = [...(ex.etichette || []), packageTag];
+    }
+    const index = state.masterWorkoutList.findIndex(existing => existing.id === ex.id);
+    if (index > -1) {
+      // Update existing exercise
+      state.masterWorkoutList[index] = ex;
+    } else {
+      // Add new exercise
       state.masterWorkoutList.push(ex);
     }
   });
@@ -330,7 +345,7 @@ export function updateWorkoutTemplate(templateId, newExercises) {
 
 export function deleteWorkoutTemplate(templateId) {
   log('State', 'Deleting workout template', { templateId });
-  state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id === templateId);
+  state.masterWorkoutTemplateList = state.masterWorkoutTemplateList.filter(t => t.id !== templateId);
   saveStateToLocalStorage();
   notify();
 }
