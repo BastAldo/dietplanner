@@ -90,13 +90,13 @@ function handleModalClick(e) {
     const btnEditExercise = e.target.closest('.btn-edit-exercise');
 
     if (btnAddExercise) {
-        document.getElementById('workout-editor-modal').classList.add('modal-hidden');
+        // NON chiudere questo modal, apri l'altro sopra
         openWorkoutSelectionModal((exercise) => {
           if (exercise) {
             const newExerciseInstance = { ...exercise, instanceId: Date.now() + Math.random() };
             localExercises.push(newExerciseInstance);
           }
-          openWorkoutEditorModal(currentConfig); // Riapre il modal aggiornato
+          openWorkoutEditorModal(currentConfig); // Riapre e forza il re-render
         });
     } else if (btnRemoveExercise) {
         const index = parseInt(btnRemoveExercise.dataset.index, 10);
@@ -106,85 +106,21 @@ function handleModalClick(e) {
         const index = parseInt(btnEditExercise.dataset.index, 10);
         const exercise = localExercises[index];
         if (exercise) {
+          // Chiudi questo modal PRIMA di aprirne un altro
+          document.getElementById('workout-editor-modal').classList.add('modal-hidden');
+          
           openExerciseEditorModal({
             context: 'planner', // Usa lo stesso editor del planner
             exercise,
-            slotId: null, // Non serve lo slotId, gestiamo localmente
-            returnIsoDate: null, // Gestito dal callback
-            // Callback custom per aggiornare localExercises
-            onSave: (updatedExercise) => {
+            slotId: null, // Non serve
+            returnIsoDate: null, // Non serve
+            onSaveCallback: (updatedExercise) => { // Usa il nuovo callback
               localExercises[index] = updatedExercise;
-              renderList();
               openWorkoutEditorModal(currentConfig); // Riapre il modal aggiornato
             }
           });
         }
     }
-}
-
-// Handler per il salvataggio del planner, per mantenere la compatibilità
-function plannerSaveHandler(e) {
-  e.preventDefault();
-  const form = e.target.closest('.modal-content').querySelector('#exercise-editor-form');
-  const { exercise, slotId, returnIsoDate, onSave } = e.target.onSaveConfig;
-
-  const newValues = {
-      execution_mode: form.elements.execution_mode.value,
-      defaultSets: parseInt(form.elements.defaultSets.value),
-      defaultRest: parseInt(form.elements.defaultRest.value),
-      defaultWeight: parseFloat(form.elements.defaultWeight.value),
-      defaultReps: null,
-      defaultDuration: null,
-      defaultRepsMin: null,
-      defaultRepsMax: null,
-      defaultTempo: exercise.defaultTempo
-  };
-
-  if (newValues.execution_mode === 'guided_tempo') {
-      newValues.defaultReps = parseInt(form.elements.defaultReps.value);
-      newValues.defaultTempo = {
-          up: parseInt(form.elements['defaultTempo.up'].value),
-          hold: parseInt(form.elements['defaultTempo.hold'].value),
-          down: parseInt(form.elements['defaultTempo.down'].value)
-      };
-  } else if (newValues.execution_mode === 'guided_static') {
-      newValues.defaultDuration = parseInt(form.elements.defaultDuration.value);
-  } else if (newValues.execution_mode === 'logging') {
-      newValues.defaultRepsMin = parseInt(form.elements.defaultRepsMin.value);
-      newValues.defaultRepsMax = parseInt(form.elements.defaultRepsMax.value);
-  }
-
-  const updatedExercise = { ...exercise, ...newValues };
-
-  if (onSave) {
-    // Nuovo flusso per workoutEditorModal
-    onSave(updatedExercise);
-  } else {
-    // Flusso vecchio per planner
-    updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
-    openWorkoutEditorModal({ type: 'day', isoDate: returnIsoDate });
-  }
-
-  document.getElementById('exercise-editor-modal').classList.add('modal-hidden');
-}
-
-// Sovrascrive openExerciseEditorModal per intercettare il salvataggio
-// Questo è un workaround per non dover refactorizzare anche exerciseEditorModal
-function openWorkoutExerciseEditor(config) {
-  if (config.context === 'planner' && config.onSave) {
-    log('Modals', 'Intercepting exercise editor for workout editor');
-    // Chiamata standard
-    openExerciseEditorModal(config);
-    // Aggiungi il nostro handler custom
-    const saveBtn = document.getElementById('exercise-editor-save-btn');
-    const newSaveBtn = saveBtn.cloneNode(true); // Clona
-    saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn); // Sostituisci
-    
-    newSaveBtn.onSaveConfig = config; // Allega la config al pulsante
-    newSaveBtn.addEventListener('click', plannerSaveHandler, { once: true });
-  } else {
-    openExerciseEditorModal(config);
-  }
 }
 
 export function openWorkoutEditorModal(config) {

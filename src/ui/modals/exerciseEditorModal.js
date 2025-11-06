@@ -152,7 +152,7 @@ function renderLogForm(body, exercise) {
 }
 
 export function openExerciseEditorModal(config) {
-  const { context, exercise, date, startTime, slotId, returnIsoDate } = config;
+  const { context, exercise, date, startTime, slotId, returnIsoDate, onSaveCallback } = config;
   const isEditing = exercise !== null;
   log('Modals', `Opening exercise editor modal (context: ${context}, editing: ${isEditing})`, { config });
 
@@ -216,9 +216,18 @@ export function openExerciseEditorModal(config) {
               newValues.defaultRepsMax = parseInt(form.elements.defaultRepsMax.value);
           }
           
-          updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
-          modal.classList.add('modal-hidden');
-          openWorkoutEditorModal(returnIsoDate);
+          const updatedExercise = { ...exercise, ...newValues };
+
+          if (onSaveCallback) {
+            // Nuovo flusso per workoutEditorModal
+            onSaveCallback(updatedExercise);
+            modal.classList.add('modal-hidden');
+          } else {
+            // Flusso vecchio per dayEditorModal
+            updateExerciseInstanceInWorkout(slotId, exercise.instanceId, newValues);
+            modal.classList.add('modal-hidden');
+            openWorkoutEditorModal({ type: 'day', isoDate: returnIsoDate });
+          }
       };
 
   } else if (context === 'library') {
