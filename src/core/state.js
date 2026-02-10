@@ -15,7 +15,7 @@ let state = {
   biometricData: [],
   userProfile: {},
   userGoals: {},
-  contentHubUrl: 'https://itbiohackerhub-max.github.io/BiohackerHub/',
+  contentHubUrl: 'https://itbiohacker.github.io/BiohackerHub/BiohackerHub/',
   recipeBaseUrl: '',
   focusedDate: new Date(),
   debugMode: false,
@@ -186,9 +186,9 @@ export function loadStateFromLocalStorage() {
 
   if (url) {
       // Migration for existing users with the old, incorrect URL without the repo name
-      if (url === 'https://itbiohackerhub-max.github.io/') {
+      if (url === 'https://itbiohacker.github.io/BiohackerHub/') {
           log('State', 'Migrating incorrect legacy hub URL.');
-          url = 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+          url = 'https://itbiohacker.github.io/BiohackerHub/BiohackerHub/';
           localStorage.setItem(LOCAL_STORAGE_KEY_URL, url); // Correct it for the future
       }
       state.contentHubUrl = url;
@@ -212,7 +212,7 @@ export function setAppState(backupData) {
   state.weeklyWorkouts = backupData.weeklyWorkouts || {};
   state.workoutHistory = backupData.workoutHistory || {};
   state.masterWorkoutTemplateList = backupData.masterWorkoutTemplateList || [];
-  state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohackerhub-max.github.io/BiohackerHub/';
+  state.contentHubUrl = backupData.contentHubUrl || 'https://itbiohacker.github.io/BiohackerHub/BiohackerHub/';
   state.biometricData = backupData.biometricData || [];
   state.userProfile = backupData.userProfile || {};
   state.userGoals = backupData.userGoals || {};
